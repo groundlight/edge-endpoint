@@ -1,5 +1,5 @@
 # Build args
-ARG APP_PORT=80
+ARG APP_PORT=8080
 ARG APP_ROOT="/groundlight-edge"
 ARG POETRY_HOME="/opt/poetry"
 ARG POETRY_VERSION=1.3.1
@@ -19,7 +19,8 @@ ARG APP_ROOT \
 RUN apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y \
-    curl
+    curl \
+    nginx
 
 # Python environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -61,10 +62,11 @@ WORKDIR ${APP_ROOT}
 
 # Copy application files
 COPY /app ${APP_ROOT}/app/
+COPY nginx.conf /etc/nginx/nginx.conf
 
-# Run the uvicorn application server
+# Run nginx and the application server
 ENV APP_PORT=${APP_PORT}
-CMD poetry run uvicorn --workers 1 --host 0.0.0.0 --port ${APP_PORT} app.main:app
+CMD nginx && poetry run uvicorn --workers 1 --host 0.0.0.0 --port ${APP_PORT} app.main:app
 
 # Document the exposed port which was configured in start_uvicorn.sh
 # https://docs.docker.com/engine/reference/builder/#expose
