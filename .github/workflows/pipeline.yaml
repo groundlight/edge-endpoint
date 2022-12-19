@@ -2,7 +2,7 @@ name: Unit Tests
 on: [push]
 
 jobs:
-  pulumi:
+  unit-test:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
