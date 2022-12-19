@@ -4,10 +4,8 @@ from app.schemas.image_queries import PostImageQueryProps, PostImageQueryRespons
 
 router = APIRouter()
 
-POST_PATH = "/"
 
-
-@router.post(POST_PATH, response_model=PostImageQueryResponse)
+@router.post("", response_model=PostImageQueryResponse)
 async def post_image_query(props: PostImageQueryProps):
     """
     Submit an image query to the detector.
