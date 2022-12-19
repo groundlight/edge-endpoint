@@ -49,3 +49,10 @@ $ curl -X POST "http://localhost/device-api/v1/image-queries" \
     --header "Content-Type: application/json" \
     --data '{"detector_id": "abc"}'
 ```
+
+## Useful references
+
+- [FastAPI](https://fastapi.tiangolo.com)
+- [FastAPI in docker](https://fastapi.tiangolo.com/deployment/docker/)
+- [FastAPI project structure example](https://github.com/tiangolo/full-stack-fastapi-postgresql)
+- [ChatGPT](https://chat.openai.com/chat): It's really good for asking questions like "How do I set up a FastAPI route?", "How do I set up an nginx reverse proxy?", "(code sample) Why is my code not working?", etc.
