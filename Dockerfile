@@ -66,7 +66,7 @@ COPY nginx.conf /etc/nginx/nginx.conf
 
 # Run nginx and the application server
 ENV APP_PORT=${APP_PORT}
-CMD nginx && poetry run uvicorn --workers 1 --host 0.0.0.0 --port ${APP_PORT} app.main:app
+CMD nginx && poetry run uvicorn --workers 1 --host 0.0.0.0 --port ${APP_PORT} --proxy-headers app.main:app
 
 # Document the exposed port which was configured in start_uvicorn.sh
 # https://docs.docker.com/engine/reference/builder/#expose
