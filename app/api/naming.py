@@ -1,6 +1,5 @@
 API_VERSION = "v1"
-API_PREFIX = "/device-api"
-API_BASE_PATH = f"{API_PREFIX}/{API_VERSION}"
+API_BASE_PATH = f"/device-api/{API_VERSION}"
 
 
 def path_prefix(name: str) -> str:
