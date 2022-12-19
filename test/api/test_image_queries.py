@@ -3,7 +3,7 @@ from app.api.naming import full_path
 from app.schemas.image_queries import PostImageQueryProps, PostImageQueryResponse
 
 from ..conftest import TestClient
-from ..parser import parse
+from ..parsing import parse
 
 
 def test_post_image_queries(test_client: TestClient):

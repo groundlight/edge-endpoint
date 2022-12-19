@@ -3,7 +3,7 @@ from app.api.naming import path_prefix
 from app.schemas.ping import Ping
 
 from ..conftest import TestClient
-from ..parser import parse
+from ..parsing import parse
 
 
 def test_ping(test_client: TestClient):
