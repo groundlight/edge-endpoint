@@ -2,17 +2,29 @@
 
 Run groundlight on the edge!
 
-### Development
+## Development
 
-#### Build the image
+### Local (outside docker)
 
 ```BASH
-$ docker build --target production-image --tag groundlight-edge .
+# Install
+$ poetry install
+
+# Run the server (http://localhost:8080)
+# Note: the `--reload` option allows live code changes to be reloaded!
+$ poetry run uvicorn --workers 1 --host 0.0.0.0 --port 8080 app.main:app --reload
+
+# Test
+$ poetry run pytest
 ```
 
-#### Run the server
+### Inside Docker
 
 ```BASH
+# Build the image
+$ docker build --target production-image --tag groundlight-edge .
+
+# Run the server
 $ docker run --rm -it -p 80:80 groundlight-edge
 ```
 
