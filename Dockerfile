@@ -61,8 +61,8 @@ ENV PATH=${POETRY_HOME}/bin:$PATH
 WORKDIR ${APP_ROOT}
 
 # Copy application files
-COPY /app ${APP_ROOT}/app/
 COPY nginx.conf /etc/nginx/nginx.conf
+COPY /app ${APP_ROOT}/app/
 
 # Run nginx and the application server
 ENV APP_PORT=${APP_PORT}
