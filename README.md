@@ -1,6 +1,8 @@
 # groundlight-edge
 
-Run groundlight on the edge!
+Run groundlight on the edge! Before running groundlight on the edge, make
+sure you have your API token set up in your environment variable 
+`GROUNDLIGHT_API_TOKEN`. Checkout [how to create your API token.](https://code.groundlight.ai/python-sdk/docs/getting-started/api-tokens)
 
 ## Development
 
@@ -25,12 +27,13 @@ $ poetry run pytest
 $ docker build --target production-image --tag groundlight-edge .
 
 # Run the server
-$ docker run --rm -it -p 80:80 groundlight-edge
+$ docker run GROUNDLIGHT_API_TOKEN=$GROUNDLIGHT_API_TOKEN --rm -it -p 80:80 groundlight-edge
 ```
 
 #### See the edge API methods
 
-Open a web browser to http://localhost/redoc.
+Open a web browser to http://localhost/redoc. This requires that the application server is already
+running either locally or in a docker container. 
 
 #### Call the edge API
 
@@ -42,12 +45,12 @@ $ curl "http://localhost/ping"
 {"ping":"Hello!"}
 ```
 
-Post an image query (this is just a stub for now):
+Post an image query:
 
 ```BASH
 $ curl -X POST "http://localhost/device-api/v1/image-queries" \
     --header "Content-Type: application/json" \
-    --data '{"detector_id": "abc"}'
+    --data '{"detector_name": "name", "image": "path/to/img", "wait": 30}'
 ```
 
 ## Useful references

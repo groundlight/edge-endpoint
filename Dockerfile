@@ -2,7 +2,7 @@
 ARG APP_PORT=8080
 ARG APP_ROOT="/groundlight-edge"
 ARG POETRY_HOME="/opt/poetry"
-ARG POETRY_VERSION=1.3.1
+ARG POETRY_VERSION=1.5.1
 
 #############
 # Build Stage
@@ -20,7 +20,9 @@ RUN apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y \
     curl \
-    nginx
+    nginx \
+    libglib2.0-0 \
+    libgl1-mesa-glx
 
 # Python environment variables
 ENV PYTHONUNBUFFERED=1 \
