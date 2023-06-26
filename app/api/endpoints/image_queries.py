@@ -2,10 +2,11 @@ from fastapi import APIRouter, Depends
 from starlette.requests import Request
 from app.core.image_utils import get_numpy_image
 from app.schemas.schemas import ImageQueryCreate, ImageQueryResponse
-import logging 
+import logging
 
 
 logger = logging.getLogger(__name__)
+
 
 def get_groundlight_instance(request: Request):
     return request.app.state.groundlight
@@ -16,6 +17,7 @@ def get_motion_detector_instance(request: Request):
 
 
 router = APIRouter()
+
 
 @router.post("", response_model=ImageQueryResponse)
 async def post_image_query(
@@ -43,8 +45,7 @@ async def post_image_query(
             )
             motion_detector.image_query_response = response
             logger.info("Motion detected")
-            return response 
-    
+            return response
+
     logger.info("No motion detected")
     return motion_detector.image_query_response
-

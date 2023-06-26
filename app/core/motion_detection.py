@@ -10,16 +10,15 @@ class AsyncMotionDetector:
         self._detector = MotionDetector(pct_threshold=percentage_threshold, val_threshold=val_threshold)
         self._previous_image = None
         self.lock = Lock()
-        self._image_query_response = None 
-        
+        self._image_query_response = None
+
     @property
     def image_query_response(self):
         return self._image_query_response
-    
+
     @image_query_response.setter
     def image_query_response(self, response: ImageQueryResponse):
-        self._image_query_response = response 
-        
+        self._image_query_response = response
 
     async def motion_detected(self, new_img: np.ndarray) -> bool:
         return await asyncio.to_thread(self._detector.motion_detected, new_img)

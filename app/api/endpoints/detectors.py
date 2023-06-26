@@ -29,4 +29,3 @@ async def list_detectors(gl: Depends = Depends(get_groundlight_instance)):
         count=detectors.count,
         detector_names=[detector.name for detector in detectors.results] if detectors.results is not None else None,
     )
-
