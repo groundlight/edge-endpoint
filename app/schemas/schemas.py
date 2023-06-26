@@ -1,7 +1,7 @@
-from pydantic import BaseModel, Field, confloat, AnyUrl, constr
-from typing import Optional, List
 from datetime import datetime
+from typing import List, Optional
 
+from pydantic import AnyUrl, BaseModel, Field, confloat, constr
 
 # class Detector(BaseModel):
 #     id: str = Field(..., description="A unique ID for this object.")

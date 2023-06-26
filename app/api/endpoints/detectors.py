@@ -1,6 +1,11 @@
 from fastapi import APIRouter, Depends
 from starlette.requests import Request
-from app.schemas.schemas import DetectorCreate, DetectorCreateResponse, DetectorListResponse
+
+from app.schemas.schemas import (
+    DetectorCreate,
+    DetectorCreateResponse,
+    DetectorListResponse,
+)
 
 
 def get_groundlight_instance(request: Request):

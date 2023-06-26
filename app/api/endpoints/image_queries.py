@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends
-from starlette.requests import Request
-from app.core.image_utils import get_numpy_image
-from app.schemas.schemas import ImageQueryCreate, ImageQueryResponse
 import logging
 
+from fastapi import APIRouter, Depends
+from starlette.requests import Request
+
+from app.core.image_utils import get_numpy_image
+from app.schemas.schemas import ImageQueryCreate, ImageQueryResponse
 
 logger = logging.getLogger(__name__)
 

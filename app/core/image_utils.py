@@ -1,7 +1,7 @@
-import numpy as np
-from PIL import Image
-import requests
 import cv2
+import numpy as np
+import requests
+from PIL import Image
 
 
 def get_numpy_image(image_filename: str) -> np.ndarray:

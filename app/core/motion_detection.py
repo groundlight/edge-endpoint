@@ -1,7 +1,9 @@
-from framegrab import MotionDetector
 import asyncio
 from asyncio import Lock
+
 import numpy as np
+from framegrab import MotionDetector
+
 from app.schemas.schemas import ImageQueryResponse
 
 

@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.endpoints import image_queries, ping, detectors
+from app.api.endpoints import detectors, image_queries, ping
 from app.api.naming import path_prefix, tag
 
 IMAGE_QUERIES = "image-queries"
