@@ -51,7 +51,7 @@ COPY ./poetry.lock ./pyproject.toml ${APP_ROOT}/
 WORKDIR ${APP_ROOT}
 
 # Copy the nginx config file and the script 
-COPY proxy_config.yaml ${APP_ROOT}/
+COPY edge.yaml ${APP_ROOT}/
 COPY get_config.py ${APP_ROOT}/
 COPY nginx.conf.j2 ${APP_ROOT}/
 
@@ -62,6 +62,7 @@ RUN poetry install --no-interaction --no-root --without dev
 RUN python get_config.py
 
 RUN cp nginx.conf /tmp/
+RUN cp .env /tmp/
 
 ##################
 # Production Stage
@@ -81,6 +82,7 @@ WORKDIR ${APP_ROOT}
 
 # Copy application files
 COPY --from=production-dependencies-build-stage /tmp/nginx.conf /etc/nginx/nginx.conf
+COPY --from=production-dependencies-build-stage /tmp/.env ${APP_ROOT}as;lkdfsdlfj
 
 COPY /app ${APP_ROOT}/app/
 

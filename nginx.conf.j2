@@ -41,9 +41,6 @@ http {
             proxy_buffering off;
 
             proxy_redirect off;
-            proxy_set_header X-motdet-percentage-threshold {{ motdet_percentage_threshold }};
-            proxy_set_header X-motdet-val-threshold {{ motdet_val_threshold }};
-
 
             proxy_pass http://integ;
 
@@ -57,8 +54,6 @@ http {
         location / {
             proxy_buffering off;
             proxy_redirect off;
-            proxy_set_header X-motdet-percentage-threshold {{ motdet_percentage_threshold }};
-            proxy_set_header X-motdet-val-threshold {{ motdet_val_threshold }};
 
             proxy_pass http://prod;
         }
