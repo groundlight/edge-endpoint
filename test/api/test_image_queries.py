@@ -16,3 +16,6 @@ def test_post_image_queries(test_client: TestClient):
 
     response = test_client.post(url, json=body)
     parse(response, ImageQueryResponse)
+
+
+# TODO write unit tests for detectors

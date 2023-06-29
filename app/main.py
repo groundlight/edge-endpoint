@@ -16,8 +16,8 @@ app.include_router(router=ping_router)
 # Read motion detection environment variables
 load_dotenv()
 
-percentage_threshold = float(os.getenv("MOTDET_PERCENTAGE_THRESHOLD"))
-val_threshold = float(os.getenv("MOTDET_VAL_THRESHOLD"))
+percentage_threshold = float(os.getenv("MOTDET_PERCENTAGE_THRESHOLD").strip())
+val_threshold = float(os.getenv("MOTDET_VAL_THRESHOLD").strip())
 
 # Create global state for Groundlight and Motion Detection
 app.state.groundlight = Groundlight()
