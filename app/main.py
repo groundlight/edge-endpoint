@@ -1,3 +1,6 @@
+import os
+
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from groundlight import Groundlight
 
@@ -10,7 +13,12 @@ app = FastAPI()
 app.include_router(router=api_router, prefix=API_BASE_PATH)
 app.include_router(router=ping_router)
 
+# Read motion detection environment variables
+load_dotenv()
+
+percentage_threshold = float(os.getenv("MOTDET_PERCENTAGE_THRESHOLD"))
+val_threshold = float(os.getenv("MOTDET_VAL_THRESHOLD"))
 
 # Create global state for Groundlight and Motion Detection
 app.state.groundlight = Groundlight()
-app.state.motion_detector = AsyncMotionDetector()
+app.state.motion_detector = AsyncMotionDetector(percentage_threshold=percentage_threshold, val_threshold=val_threshold)

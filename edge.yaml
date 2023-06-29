@@ -1,0 +1,13 @@
+
+# Configure upstream server endpoints for both integ and prod
+server-endpoints:
+  integ-server: localhost:6717
+  prod-server: localhost:6717
+
+motdet:
+  percentage-threshold: 1.0
+  val-threshold: 50 
+
+
+
+

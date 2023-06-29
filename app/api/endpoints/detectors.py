@@ -17,7 +17,7 @@ router = APIRouter()
 
 @router.post("/create", response_model=DetectorCreateResponse)
 async def create_detector(props: DetectorCreate, gl: Depends = Depends(get_groundlight_instance)):
-    detector = gl.create_detector(
+    detector = gl.get_or_create_detector(
         name=props.name,
         query=props.query,
         confidence_threshold=props.confidence_threshold if "confidence_threshold" in props else None,

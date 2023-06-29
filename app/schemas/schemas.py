@@ -3,19 +3,6 @@ from typing import List, Optional
 
 from pydantic import AnyUrl, BaseModel, Field, confloat, constr
 
-# class Detector(BaseModel):
-#     id: str = Field(..., description="A unique ID for this object.")
-#     created_at: datetime = Field(..., description="When this detector was created.")
-#     name: constr(max_length=200) = Field(..., description="A short, descriptive name for the detector.")
-#     query: str = Field(..., description="A question about the image.")
-#     group_name: str = Field(..., description="Which group should this detector be part of?")
-#     confidence_threshold: Optional[confloat(ge=0.0, le=1.0)] = Field(
-#         0.9,
-#         description=(
-#             "If the detector's prediction is below this confidence threshold, send the image query for human review."
-#         ),
-#     )
-
 
 class DetectorCreate(BaseModel):
     name: str = Field(description="Detector name")
@@ -47,6 +34,6 @@ class ClassificationResult(BaseModel):
 
 
 class ImageQueryResponse(BaseModel):
-    created_at: datetime = Field(description="When was the detector created?")
+    created_at: Optional[datetime] = Field(description="When was the detector created?")
     detector_id: str = Field(description="Which detector was used on this image query?")
-    result: ClassificationResult
+    result: Optional[ClassificationResult]

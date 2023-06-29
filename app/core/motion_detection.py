@@ -10,7 +10,7 @@ from app.schemas.schemas import ImageQueryResponse
 class AsyncMotionDetector:
     """Asynchronous motion detector.
     This is a wrapper around MotionDetector that exposes an asynchronous
-    execution of motion_detected. Although this method need not be asynchronous
+    execution of `motion_detected` method. Although this method need not be asynchronous
     from a performance standpoint, we want it to be `async` since it will be
     invoked in an asynchronous block.
     """

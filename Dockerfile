@@ -1,5 +1,5 @@
 # Build args
-ARG APP_PORT=8080
+ARG APP_PORT=6717
 ARG APP_ROOT="/groundlight-edge"
 ARG POETRY_HOME="/opt/poetry"
 ARG POETRY_VERSION=1.5.1
@@ -36,15 +36,33 @@ ENV PYTHONUNBUFFERED=1 \
 # Install poetry
 RUN curl -sSL https://install.python-poetry.org | python -
 
+# Install pyyaml and jinja2. Somehow specifying these two dependencies
+# in [tool.poetry.dependencies] is not sufficient to get these two 
+# installed. We are manually having to install them here separately with pip
+RUN pip3 install pyyaml==6.0
+RUN pip3 install jinja2==3.1.2
+
 # Make sure poetry is in the path
 ENV PATH=${POETRY_HOME}/bin:$PATH
 
 # Install [tool.poetry.dependencies]
 COPY ./poetry.lock ./pyproject.toml ${APP_ROOT}/
+
 WORKDIR ${APP_ROOT}
+
+# Copy the nginx config file and the script 
+COPY edge.yaml ${APP_ROOT}/
+COPY get_config.py ${APP_ROOT}/
+COPY nginx.conf.j2 ${APP_ROOT}/
 
 # Install production dependencies
 RUN poetry install --no-interaction --no-root --without dev
+
+# Run the script to generate the nginx configuration 
+RUN python get_config.py
+
+RUN cp nginx.conf /tmp/
+RUN cp .env /tmp/
 
 ##################
 # Production Stage
@@ -63,12 +81,14 @@ ENV PATH=${POETRY_HOME}/bin:$PATH
 WORKDIR ${APP_ROOT}
 
 # Copy application files
-COPY nginx.conf /etc/nginx/nginx.conf
+COPY --from=production-dependencies-build-stage /tmp/nginx.conf /etc/nginx/nginx.conf
+COPY --from=production-dependencies-build-stage /tmp/.env ${APP_ROOT}as;lkdfsdlfj
+
 COPY /app ${APP_ROOT}/app/
 
 # Run nginx and the application server
 ENV APP_PORT=${APP_PORT}
-CMD nginx && poetry run uvicorn --workers 1 --host 0.0.0.0 --port ${APP_PORT} --proxy-headers app.main:app
+CMD service nginx start && poetry run uvicorn --workers 1 --host 0.0.0.0 --port ${APP_PORT} --proxy-headers app.main:app
 
 # Document the exposed port which was configured in start_uvicorn.sh
 # https://docs.docker.com/engine/reference/builder/#expose
