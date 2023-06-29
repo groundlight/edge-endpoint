@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
-import yaml
 import os
+
+import yaml
 from jinja2 import Environment, FileSystemLoader
 
 

@@ -1,11 +1,11 @@
 import os
+
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from groundlight import Groundlight
-from dotenv import load_dotenv
 
 from app.api.api import api_router, ping_router
 from app.api.naming import API_BASE_PATH
-
 
 from .core.motion_detection import AsyncMotionDetector
 
