@@ -1,10 +1,9 @@
 import logging
-
-from fastapi import APIRouter, Depends
-from starlette.requests import Request
+from fastapi import APIRouter, Depends, Request
 
 from app.core.image_utils import get_numpy_image
 from app.schemas.schemas import ImageQueryCreate, ImageQueryResponse
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -50,3 +49,4 @@ async def post_image_query(
 
     logger.info("No motion detected")
     return motion_detector.image_query_response
+

@@ -1,0 +1,67 @@
+
+events {
+    worker_connections 16;
+}
+
+http {
+    # The following directives configure NGINX's gzip module, which
+    # is used for compressing HTTP responses before they are sent to 
+    # clients. This can help reduce the amount of data sent over the 
+    # network and speed up page load times. 
+    # Compression, however, happens at runtime, so it might be worth 
+    # benchmarking this on a variety of edge devices to examine the 
+    # compression vs runtime performance trade-off. 
+    # https://docs.nginx.com/nginx/admin-guide/web-server/compression/
+
+    gzip on;
+    gzip_disable "msie6";
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 2;
+    gzip_buffers 16 8k;
+    gzip_http_version 1.1;
+    gzip_min_length 1000;
+
+    upstream prod {
+        server {{ prod_server }};
+    }
+
+    upstream integ {
+        server {{ integ_server }};
+    }
+
+    server {
+        listen 80;
+        server_name api.integ.groundlight.ai ;
+
+        location / {
+            # By default, Nginx buffers data to help manage heavy workloads,
+            # but this may be undesirable for our purposes where we require
+            # very low latency and might not have a lot of memory to work with. 
+            proxy_buffering off;
+
+            proxy_redirect off;
+            proxy_set_header X-motdet-percentage-threshold {{ motdet_percentage_threshold }};
+            proxy_set_header X-motdet-val-threshold {{ motdet_val_threshold }};
+
+
+            proxy_pass http://integ;
+
+        }
+    }
+
+    server {
+        listen 80;
+        server_name api.groundlight.ai;
+
+        location / {
+            proxy_buffering off;
+            proxy_redirect off;
+            proxy_set_header X-motdet-percentage-threshold {{ motdet_percentage_threshold }};
+            proxy_set_header X-motdet-val-threshold {{ motdet_val_threshold }};
+
+            proxy_pass http://prod;
+        }
+    }
+}
+
