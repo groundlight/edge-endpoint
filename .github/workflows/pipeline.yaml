@@ -32,5 +32,7 @@ jobs:
         env:
           # This is associated with the "edge-integ-test" user, credentials on 1password
           GROUNDLIGHT_API_TOKEN: ${{ secrets.GROUNDLIGHT_API_TOKEN }}
+          MOTDET_PERCENTAGE_THRESHOLD: 1.0
+          MOTDET_VAL_THRESHOLD: 50
         run: |
           poetry run pytest
