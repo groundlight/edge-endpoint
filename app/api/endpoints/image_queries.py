@@ -36,7 +36,6 @@ async def post_image_query(
     detector = gl.get_detector_by_name(name=detector_name)
 
     async with motion_detector.lock:
-        # Use the motion detector with thread safety
         motion_detected = await motion_detector.motion_detected(new_img=image)
         if motion_detected:
             image_query = gl.submit_image_query(detector=detector, image=image, wait=wait_time)
