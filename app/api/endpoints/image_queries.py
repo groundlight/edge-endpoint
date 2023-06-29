@@ -49,4 +49,3 @@ async def post_image_query(
 
     logger.info("No motion detected")
     return motion_detector.image_query_response
-
