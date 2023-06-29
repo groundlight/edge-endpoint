@@ -1,9 +1,10 @@
 import logging
+
+import requests
 from fastapi import APIRouter, Depends, Request
 
 from app.core.image_utils import get_numpy_image
 from app.schemas.schemas import ImageQueryCreate, ImageQueryResponse
-import requests
 
 logger = logging.getLogger(__name__)
 
