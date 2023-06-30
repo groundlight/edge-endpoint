@@ -82,7 +82,7 @@ WORKDIR ${APP_ROOT}
 
 # Copy application files
 COPY --from=production-dependencies-build-stage /tmp/nginx.conf /etc/nginx/nginx.conf
-COPY --from=production-dependencies-build-stage /tmp/.env ${APP_ROOT}as;lkdfsdlfj
+COPY --from=production-dependencies-build-stage /tmp/.env ${APP_ROOT}
 
 COPY /app ${APP_ROOT}/app/
 
