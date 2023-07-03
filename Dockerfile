@@ -15,7 +15,10 @@ ARG APP_ROOT \
     POETRY_HOME \
     POETRY_VERSION
 
-# Install base OS dependencies
+# Install base OS dependencies. 
+# We need to install libGL dependencies (`libglib2.0-0` and `libgl1-mesa-lgx`) 
+# since they are required by OpenCV 
+
 RUN apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y \
@@ -36,11 +39,6 @@ ENV PYTHONUNBUFFERED=1 \
 # Install poetry
 RUN curl -sSL https://install.python-poetry.org | python -
 
-# Install pyyaml and jinja2. Somehow specifying these two dependencies
-# in [tool.poetry.dependencies] is not sufficient to get these two 
-# installed. We are manually having to install them here separately with pip
-RUN pip3 install pyyaml==6.0
-RUN pip3 install jinja2==3.1.2
 
 # Make sure poetry is in the path
 ENV PATH=${POETRY_HOME}/bin:$PATH
@@ -59,7 +57,7 @@ COPY nginx.conf.j2 ${APP_ROOT}/
 RUN poetry install --no-interaction --no-root --without dev
 
 # Run the script to generate the nginx configuration 
-RUN python get_config.py
+RUN poetry run python get_config.py
 
 RUN cp nginx.conf /tmp/
 RUN cp .env /tmp/
