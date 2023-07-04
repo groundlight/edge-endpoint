@@ -1,7 +1,53 @@
 name: Unit Tests
 on: [push]
 
+env: 
+  PYTHON_VERSION: "3.11"
+  POETRY_VERSION: "1.5.1"
+
 jobs:
+  # Run Groundlight SDK tests against the 
+  # edge proxy endpoint set in nginx.conf file 
+  test-sdk-via-proxy:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+      - name: Set up python 
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install poetry 
+        uses: snok/install-poetry@v1
+        with: 
+          version: ${{ env.POETRY_VERSION }}
+          virtualenvs-create: true 
+          virtualenvs-in-project: true 
+          installer-parallel: true 
+
+      - name: Checkout Groundlight SDK 
+        uses: actions/checkout@v3
+        env: 
+          GROUNDLIGHT_API_TOKEN: ${{ secrets.GROUNDLIGHT_API_TOKEN }}
+        with:
+          repository: groundlight/python-sdk
+          path: groundlight-sdk
+      - name: Install Groundlight SDK dependencies
+        run: |
+          cd groundlight-sdk 
+          poetry install 
+      - name: Install NGINX 
+        run: | 
+          sudo apt-get update 
+          sudo apt-get install -y nginx
+          sudo cp nginx.conf /etc/nginx/nginx.conf 
+          sudo service nginx restart 
+      - name: Run Groundlight SDK tests against Edge Proxy Endpoint
+        run: |
+          cd groundlight-sdk 
+          poetry run pytest 
+
+  # Run unit tests 
   unit-test:
     runs-on: ubuntu-22.04
     steps:
