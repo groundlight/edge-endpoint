@@ -34,12 +34,7 @@ jobs:
         run: |
           cd groundlight-sdk 
           poetry install 
-      - name: Install NGINX 
-        run: | 
-          sudo apt-get update 
-          sudo apt-get install -y nginx
-          sudo cp nginx.conf /etc/nginx/nginx.conf 
-          sudo service nginx restart 
+
       - name: Run Groundlight SDK tests against Edge Proxy Endpoint
         env:
           GROUNDLIGHT_API_TOKEN: ${{ secrets.GROUNDLIGHT_API_TOKEN }}
