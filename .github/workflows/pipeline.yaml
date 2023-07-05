@@ -27,6 +27,8 @@ jobs:
           virtualenvs-in-project: true 
           installer-parallel: true 
 
+      # Note that we're pulling the latest main from the SDK repo
+      # This might be ahead of what's published to pypi, but it's useful to test things before they're released.
       - name: Checkout Groundlight SDK 
         uses: actions/checkout@v3
         with:
