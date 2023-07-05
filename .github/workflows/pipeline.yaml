@@ -35,7 +35,9 @@ jobs:
         run: docker build --target production-image --tag groundlight-edge .
 
       - name: Start Docker container 
-        run: docker run --rm -p 80:80 groundlight-edge
+        id: start_container
+        run: echo "::set-output name=container_id::$(docker run -d --rm -p 80:80 groundlight-edge)"
+
 
       - name: Install poetry 
         uses: snok/install-poetry@v1
@@ -65,6 +67,12 @@ jobs:
         run: |
           cd groundlight-sdk 
           poetry run pytest 
+
+      - name: Stop Docker container
+        # This ensures that we always stop the container regardless of the outcomes of 
+        # the previous steps 
+        if: always()
+        run: docker stop ${{ steps.start_container.outputs.container_id }}
 
   # Run unit tests 
   unit-test:
