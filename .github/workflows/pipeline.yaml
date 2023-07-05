@@ -36,8 +36,7 @@ jobs:
 
       - name: Start Docker container 
         id: start_container
-        run: echo "::set-output name=container_id::$(docker run -d --rm -p 80:80 groundlight-edge)"
-
+        run: echo "::set-output name=container_id::$(docker run -d --rm -p 8080:80 groundlight-edge)"
 
       - name: Install poetry 
         uses: snok/install-poetry@v1
