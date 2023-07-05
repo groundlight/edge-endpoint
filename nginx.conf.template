@@ -4,7 +4,7 @@ events {
 
 http {
     upstream app {
-        server http://localhost:8080;
+        server http://localhost:8080/;
         server ${PROXY_PASS_URL} backup;
     }
     server {
@@ -12,6 +12,8 @@ http {
 
         location / {
             proxy_pass app;
+            proxy_connect_timeout 1s;
+            proxy_read_timeout 1s;
         }
 
     }
