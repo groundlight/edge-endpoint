@@ -36,7 +36,7 @@ jobs:
 
       - name: Start Docker container 
         id: start_container
-        run: echo "::set-output name=container_id::$(docker run -d --rm -p 8080:80 groundlight-edge)"
+        run: echo "::set-output name=container_id::$(docker run -d --rm -p 80:80 groundlight-edge)"
 
       - name: Install poetry 
         uses: snok/install-poetry@v1
@@ -62,7 +62,7 @@ jobs:
         env:
           # This is the token associated with the "edge-integ-user" (with shared credentials on 1password)
           GROUNDLIGHT_API_TOKEN: ${{ secrets.GROUNDLIGHT_API_TOKEN }}
-          GROUNDLIGHT_ENDPOINT: http://localhost:8080/
+          GROUNDLIGHT_ENDPOINT: http://localhost:8080
         run: |
           cd groundlight-sdk 
           poetry run pytest 
