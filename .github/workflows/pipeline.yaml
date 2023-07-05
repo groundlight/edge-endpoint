@@ -4,6 +4,8 @@ on: [push]
 env: 
   PYTHON_VERSION: "3.11"
   POETRY_VERSION: "1.5.1"
+  # This variable is used in the nginx.conf.template file
+  PROXY_PASS_URL: https://app.groundlight.ai
 
 jobs:
   # Run Groundlight SDK tests against the 
@@ -34,6 +36,16 @@ jobs:
         run: |
           cd groundlight-sdk 
           poetry install 
+
+      - name: Prepare NGINX proxy
+        run: envsubst < nginx.conf.template > nginx.conf
+
+      - name: Start NGINX proxy
+        run: | 
+          sudo apt-get update 
+          sudo apt-get install -y nginx 
+          sudo cp nginx.conf /etc/nginx/
+          sudo service nginx start
 
       - name: Run Groundlight SDK tests against Edge Proxy Endpoint
         env:
