@@ -3,16 +3,16 @@ events {
 }
 
 http {
+    upstream app {
+        server http://localhost:8080;
+        server ${PROXY_PASS_URL} backup;
+    }
     server {
         listen 80;
 
         location / {
-            proxy_pass http://localhost:8080;
-            error_page 404 = @fallback;
+            proxy_pass app;
         }
 
-        location @fallback {
-            proxy_pass ${PROXY_PASS_URL};
-        }
     }
 }

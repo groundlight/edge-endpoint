@@ -66,6 +66,10 @@ jobs:
         run: |
           cd groundlight-sdk 
           poetry run pytest 
+      
+      - name: Dump Logs from Docker Container
+        if: always()
+        run: docker logs ${{ steps.start_container.outputs.container_id }}
 
       - name: Stop Docker container
         # This ensures that we always stop the container regardless of the outcomes of 
