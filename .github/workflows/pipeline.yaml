@@ -49,6 +49,7 @@ jobs:
 
       - name: Run Groundlight SDK tests against Edge Proxy Endpoint
         env:
+          GROUNDLIGHT_ENDPOINT: http://localhost:80
           GROUNDLIGHT_API_TOKEN: ${{ secrets.GROUNDLIGHT_API_TOKEN }}
         run: |
           cd groundlight-sdk 
