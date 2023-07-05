@@ -35,7 +35,7 @@ jobs:
         run: docker build --target production-image --tag groundlight-edge .
 
       - name: Start Docker container 
-        run: docker run --rm -it -p 80:80 groundlight-edge
+        run: docker run --rm -p 80:80 groundlight-edge
 
       - name: Install poetry 
         uses: snok/install-poetry@v1
