@@ -5,7 +5,7 @@ env:
   PYTHON_VERSION: "3.11"
   POETRY_VERSION: "1.5.1"
   # This variable is used in the nginx.conf.template file
-  PROXY_PASS_IP: http://35.80.210.16
+  PROXY_PASS_URL: "https://api.groundlight.ai"
 
 jobs:
   # Run Groundlight SDK tests against the 
