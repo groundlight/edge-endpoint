@@ -20,8 +20,8 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      # - name: Prepare NGINX proxy
-      #   run: envsubst < nginx.conf.template > nginx.conf
+      - name: Prepare NGINX proxy
+        run: envsubst < nginx.conf.template > nginx.conf
 
       - name: Install Docker 
         run: | 
