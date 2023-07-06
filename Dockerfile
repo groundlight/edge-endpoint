@@ -22,6 +22,9 @@ RUN apt-get update \
     curl \
     nginx
 
+# Add app.dev.groundlight.ai to /etc/hosts
+RUN echo "35.80.210.16 app.dev.groundlight.ai" >> /etc/hosts
+
 # Python environment variables
 ENV PYTHONUNBUFFERED=1 \
     # Prevents python creating .pyc files
@@ -59,6 +62,9 @@ ENV PATH=${POETRY_HOME}/bin:$PATH
 
 # Set the working directory
 WORKDIR ${APP_ROOT}
+
+# Copy etc/hosts to /etc/hosts from production-dependencies-build-stage
+COPY --from=production-dependencies-build-stage /etc/hosts /etc/hosts
 
 # Copy application files
 COPY nginx.conf /etc/nginx/nginx.conf

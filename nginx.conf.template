@@ -10,9 +10,6 @@ http {
         # Use Docker's internal DNS resolver
         resolver 127.0.0.11 valid=120s;
 
-        extra_hosts:
-            - ${PROXY_PASS_URL}:{PROXY_PASS_IP}
-
         location / {
             proxy_pass ${PROXY_PASS_URL};
         }
