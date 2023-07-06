@@ -11,7 +11,7 @@ http {
         resolver 127.0.0.11 valid=120s;
 
         location / {
-            proxy_pass ${PROXY_PASS_URL};
+            proxy_pass ${PROXY_PASS_IP};
         }
     }
 }
