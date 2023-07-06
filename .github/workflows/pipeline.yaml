@@ -34,7 +34,7 @@ jobs:
       - name: Build Docker Image 
         run: docker build --target production-image --tag groundlight-edge .
 
-      - name: Start Docker container 
+      - name: Start Docker Container 
         id: start_container
         run: echo "::set-output name=container_id::$(docker run -d -p 8080:80 groundlight-edge)"
 
@@ -71,7 +71,7 @@ jobs:
         if: always()
         run: docker logs ${{ steps.start_container.outputs.container_id }}
 
-      - name: Stop Docker container
+      - name: Stop Docker Container
         # This ensures that we always stop the container regardless of the outcomes of 
         # the previous steps 
         if: always()
