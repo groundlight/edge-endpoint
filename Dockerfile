@@ -23,7 +23,7 @@ RUN apt-get update \
     nginx
 
 # Create a file with the desired hosts configuration
-RUN echo "35.80.210.16 app.dev.groundlight.ai" > hosts-config
+RUN echo "35.161.235.25 api.dev.groundlight.ai" > hosts-config
 
 # Python environment variables
 ENV PYTHONUNBUFFERED=1 \
