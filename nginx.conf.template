@@ -7,8 +7,6 @@ http {
         listen 80;
         server_name localhost;
 
-        # Use Docker's internal DNS resolver
-        resolver 127.0.0.11 valid=120s;
 
         location / {
             proxy_pass ${PROXY_PASS_URL};
