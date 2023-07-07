@@ -1,7 +1,83 @@
-name: Unit Tests
+name: cicd
 on: [push]
 
+env: 
+  PYTHON_VERSION: "3.11"
+  POETRY_VERSION: "1.5.1"
+  # This variable is used in the nginx.conf.template file
+  PROXY_PASS_URL: https://api.groundlight.ai
+
 jobs:
+  # Run Groundlight SDK tests against the 
+  # edge proxy endpoint set in nginx.conf file 
+  test-sdk-via-proxy:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+      - name: Set up python 
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Prepare NGINX proxy
+        run: envsubst < nginx.conf.template > nginx.conf
+
+      - name: Install Docker 
+        run: | 
+          sudo apt-get update
+          sudo apt-get install apt-transport-https ca-certificates curl software-properties-common
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+          sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+          sudo apt-get update
+          sudo apt-get install docker-ce
+      - name: Build Docker Image 
+        run: docker build --target production-image --tag groundlight-edge .
+
+      - name: Start Docker Container 
+        id: start_container
+        run: echo "::set-output name=container_id::$(docker run -d -p 8080:80 groundlight-edge)"
+
+      - name: Install poetry 
+        uses: snok/install-poetry@v1
+        with: 
+          version: ${{ env.POETRY_VERSION }}
+          virtualenvs-create: true 
+          virtualenvs-in-project: true 
+          installer-parallel: true 
+
+      # Note that we're pulling the latest main from the SDK repo
+      # This might be ahead of what's published to pypi, but it's useful to test things before they're released.
+      - name: Checkout Groundlight SDK 
+        uses: actions/checkout@v3
+        with:
+          repository: groundlight/python-sdk
+          path: groundlight-sdk
+      - name: Install Groundlight SDK dependencies
+        run: |
+          cd groundlight-sdk 
+          poetry install 
+
+      - name: Run Groundlight SDK tests against Edge Proxy Endpoint
+        env:
+          # This is the token associated with the "edge-integ-user" (with shared credentials on 1password)
+          GROUNDLIGHT_API_TOKEN: ${{ secrets.GROUNDLIGHT_API_TOKEN }}
+          GROUNDLIGHT_ENDPOINT: http://localhost:8080
+        run: |
+          cd groundlight-sdk 
+          poetry run pytest 
+      
+      - name: Dump Logs from Docker Container
+        if: always()
+        run: docker logs ${{ steps.start_container.outputs.container_id }}
+
+      - name: Stop Docker Container
+        # This ensures that we always stop the container regardless of the outcomes of 
+        # the previous steps 
+        if: always()
+        run: docker stop ${{ steps.start_container.outputs.container_id }}
+
+  # Run unit tests 
   unit-test:
     runs-on: ubuntu-22.04
     steps:
@@ -15,7 +91,7 @@ jobs:
       - name: Install Poetry
         uses: snok/install-poetry@v1
         with:
-          version: 1.3.1
+          version: ${{ env.POETRY_VERSION }}
           virtualenvs-create: true
           virtualenvs-in-project: true
           installer-parallel: true
