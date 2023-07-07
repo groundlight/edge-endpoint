@@ -64,6 +64,9 @@ WORKDIR ${APP_ROOT}
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY /app ${APP_ROOT}/app/
 
+# Remove the default nginx configuration 
+RUN rm /etc/nginx/sites-enabled/default
+
 # Run nginx and the application server
 ENV APP_PORT=${APP_PORT}
 CMD nginx && poetry run uvicorn --workers 1 --host 0.0.0.0 --port ${APP_PORT} --proxy-headers app.main:app
