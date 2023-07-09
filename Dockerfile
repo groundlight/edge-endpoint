@@ -1,5 +1,5 @@
 # Build args
-ARG APP_PORT=8080
+ARG APP_PORT=6717
 ARG APP_ROOT="/groundlight-edge"
 ARG POETRY_HOME="/opt/poetry"
 ARG POETRY_VERSION=1.5.1
