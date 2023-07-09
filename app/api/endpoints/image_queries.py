@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("", response_model=ImageQuery)
+@router.post("/submit", response_model=ImageQuery)
 async def post_image_query(props: ImageQueryCreate, gl: Depends = Depends(get_groundlight_instance)):
     """
     Submit an image query to the detector.

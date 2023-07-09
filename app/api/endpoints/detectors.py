@@ -9,7 +9,7 @@ from app.schemas.schemas import DetectorCreate
 router = APIRouter()
 
 
-@router.post("", response_model=Detector)
+@router.post("/create", response_model=Detector)
 async def get_or_create_detector(props: DetectorCreate, gl: Depends = Depends(get_groundlight_instance)):
     return gl.get_or_create_detector(
         name=props.name,
