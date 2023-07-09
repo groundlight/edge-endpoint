@@ -1,7 +1,7 @@
 from typing import Optional, Union
 
-from pydantic import BaseModel, Field, confloat, validator
 import requests
+from pydantic import BaseModel, Field, confloat, validator
 
 
 class DetectorCreate(BaseModel):
