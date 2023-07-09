@@ -54,6 +54,9 @@ RUN poetry install --no-interaction --no-root --without dev
 # Copy the configs directory 
 COPY configs ${APP_ROOT}/configs 
 
+# Generate NGINX configuration 
+RUN poetry run python configs/get_config.py
+
 ##################
 # Production Stage
 ##################
@@ -70,10 +73,8 @@ ENV PATH=${POETRY_HOME}/bin:$PATH
 # Set the working directory
 WORKDIR ${APP_ROOT}
 
-# Generate NGINX configuration 
-RUN poetry run python configs/get_config.py
-COPY nginx.conf ${APP_ROOT}/
-COPY nginx.conf /etc/nginx/nginx.conf
+# Copy NGINX configuration file from build stage
+COPY --from=production-dependencies-build-stage ${APP_ROOT}/nginx.conf /etc/nginx/nginx.conf
 
 COPY /app ${APP_ROOT}/app/
 
