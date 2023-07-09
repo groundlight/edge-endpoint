@@ -1,15 +1,23 @@
-from fastapi import APIRouter
+import logging
 
-from app.schemas.image_queries import ImageQueryCreate, ImageQueryResponse
+from fastapi import APIRouter, Depends
+from app.core.utils import get_groundlight_instance
+from app.schemas.schemas import ImageQueryCreate
+from model import ImageQuery
+
+logger = logging.getLogger(__name__)
+
 
 router = APIRouter()
 
 
-@router.post("", response_model=ImageQueryResponse)
-async def post_image_query(props: ImageQueryCreate):
+@router.post("", response_model=ImageQuery)
+async def post_image_query(props: ImageQueryCreate, gl: Depends = Depends(get_groundlight_instance)):
     """
     Submit an image query to the detector.
     """
-    # TODO: Implement near-duplicate detection!
-
-    return ImageQueryResponse(result=f"Response for {props.detector_id}!")
+    detector_name = props.detector_name
+    wait_time = props.wait
+    detector = gl.get_detector_by_name(name=detector_name)
+    image_query = gl.submit_image_query(detector=detector, image=props.image, wait=wait_time)
+    return image_query

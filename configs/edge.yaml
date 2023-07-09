@@ -1,0 +1,9 @@
+# Configure the edge server
+server-endpoints:
+  edge-server: localhost:8080
+
+# Configure motion detection parameters
+# We should probably not set these here. 
+motdet:
+  percentage-threshold: 1.0
+  val-threshold: 50 

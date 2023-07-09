@@ -1,5 +1,5 @@
 # Build args
-ARG APP_PORT=6717
+ARG APP_PORT=8080
 ARG APP_ROOT="/groundlight-edge"
 ARG POETRY_HOME="/opt/poetry"
 ARG POETRY_VERSION=1.5.1
@@ -47,19 +47,12 @@ COPY ./poetry.lock ./pyproject.toml ${APP_ROOT}/
 
 WORKDIR ${APP_ROOT}
 
-# Copy the nginx config file and the script 
-COPY edge.yaml ${APP_ROOT}/
-COPY get_config.py ${APP_ROOT}/
-COPY nginx.conf ${APP_ROOT}/
-
 # Install production dependencies
 RUN poetry install --no-interaction --no-root --without dev
 
-# Run the script to generate the nginx configuration 
-RUN poetry run python get_config.py
 
-RUN cp nginx.conf /tmp/
-RUN cp .env /tmp/
+# Copy the configs directory 
+COPY configs ${APP_ROOT}/configs 
 
 ##################
 # Production Stage
@@ -77,9 +70,9 @@ ENV PATH=${POETRY_HOME}/bin:$PATH
 # Set the working directory
 WORKDIR ${APP_ROOT}
 
-# Copy application files
-COPY --from=production-dependencies-build-stage /tmp/nginx.conf /etc/nginx/nginx.conf
-COPY --from=production-dependencies-build-stage /tmp/.env ${APP_ROOT}
+# Generate NGINX configuration 
+RUN poetry run python configs/get_config.py
+COPY nginx.conf /etc/nginx/nginx.conf
 
 COPY /app ${APP_ROOT}/app/
 
