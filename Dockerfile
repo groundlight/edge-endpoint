@@ -72,6 +72,7 @@ WORKDIR ${APP_ROOT}
 
 # Generate NGINX configuration 
 RUN poetry run python configs/get_config.py
+COPY nginx.conf ${APP_ROOT}/
 COPY nginx.conf /etc/nginx/nginx.conf
 
 COPY /app ${APP_ROOT}/app/
