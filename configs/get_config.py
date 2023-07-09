@@ -19,7 +19,8 @@ def configure_proxy_template_parameters(config: dict) -> None:
 
     with open("nginx.conf", "w") as config_file:
         config_file.write(output_from_parsed_template)
-        
+
+
 def set_motion_detection_env_vars(config: dict) -> None:
     with open(".env", "a") as envfile:
         percentage_threshold = str(config["motdet"]["percentage-threshold"])
@@ -28,7 +29,7 @@ def set_motion_detection_env_vars(config: dict) -> None:
         envfile.write(f"MOTDET_PERCENTAGE_THRESHOLD={percentage_threshold}\nMOTDET_VAL_THRESHOLD={val_threshold}")
 
 
-
 if __name__ == "__main__":
     config = get_edge_config(filename="configs/edge.yaml")
     configure_proxy_template_parameters(config=config)
+    set_motion_detection_env_vars(config=config)
