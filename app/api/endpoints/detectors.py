@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends
 from typing import Union
-from app.core.utils import get_groundlight_instance
 
-from app.schemas.schemas import DetectorCreate
+from fastapi import APIRouter, Depends
 from model import Detector
+
+from app.core.utils import get_groundlight_instance
+from app.schemas.schemas import DetectorCreate
 
 router = APIRouter()
 
