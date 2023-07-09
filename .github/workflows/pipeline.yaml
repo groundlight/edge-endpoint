@@ -4,6 +4,8 @@ on: [push]
 env: 
   PYTHON_VERSION: "3.11"
   POETRY_VERSION: "1.5.1"
+  # This is the token associated with the "edge-integ-user" (with shared credentials on 1password)
+  GROUNDLIGHT_API_TOKEN: ${{ secrets.GROUNDLIGHT_API_TOKEN }}
 
 jobs:
   # Run Groundlight SDK tests against the 
@@ -17,11 +19,6 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Prepare NGINX proxy
-        run: |
-          # This generates the nginx.conf file 
-          poetry run python configs/get_config.py
 
       - name: Install Docker 
         run: | 
@@ -60,8 +57,6 @@ jobs:
 
       - name: Run Groundlight SDK tests against Edge Proxy Endpoint
         env:
-          # This is the token associated with the "edge-integ-user" (with shared credentials on 1password)
-          GROUNDLIGHT_API_TOKEN: ${{ secrets.GROUNDLIGHT_API_TOKEN }}
           GROUNDLIGHT_ENDPOINT: http://localhost:6717
         run: |
           cd groundlight-sdk 
