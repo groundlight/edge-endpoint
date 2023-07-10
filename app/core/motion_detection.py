@@ -4,7 +4,7 @@ from asyncio import Lock
 import numpy as np
 from framegrab import MotionDetector
 from model import ImageQuery
-from pydantic import BaseSettings
+from pydantic import BaseSettings, Field
 
 
 class MotdetParameterSettings(BaseSettings):
@@ -12,8 +12,8 @@ class MotdetParameterSettings(BaseSettings):
     Read motion detection parameters from environment variables
     """
 
-    motdet_percentage_threshold: float
-    motdet_val_threshold: int
+    motdet_percentage_threshold: float = Field(30.0, description="Percentage threshold for motion detection")
+    motdet_val_threshold: int = Field(50, description="Value threshold for motion detection")
 
     class Config:
         env_file = ".env"
