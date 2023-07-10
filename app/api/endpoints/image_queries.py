@@ -1,8 +1,7 @@
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from model import ImageQuery
-from fastapi import Query
 
 from app.core.utils import get_groundlight_instance
 from app.schemas.schemas import ImageQueryCreate

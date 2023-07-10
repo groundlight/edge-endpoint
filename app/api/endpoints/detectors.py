@@ -1,10 +1,10 @@
 import logging
-from fastapi import APIRouter, Depends, Path, Body
+
+from fastapi import APIRouter, Depends
 from model import Detector
 
 from app.core.utils import get_groundlight_instance
-from app.schemas.schemas import DetectorCreateAndGet, PaginationParams
-from fastapi import Query
+from app.schemas.schemas import DetectorCreateAndGet
 
 logger = logging.getLogger(__name__)
 
