@@ -9,18 +9,19 @@ http {
         location / {
             proxy_pass {{ proxied_edge_server }};
 
-            # This is used to forward all necessary headers to the API server.
-            proxy_set_header Host $host;
-            proxy_set_header X-Forwarded-For $remote_addr;
+            # If local edge server is not up or can't handle the query arguments, 
+            # then fallback to the cloud API server.
+            # 422  - Unprocessable Entity
+            # 404  - Not Found
+            # 405  - Method Not Allowed
+            # 500  - Internal Server Error
+            proxy_intercept_errors on;
+            error_page 422 404 405 500 = @fallback;
         }
-
-        error_page 404 = @fallback;
-        error_page 500 502 503 504 = @fallback;
 
         location @fallback {
             proxy_pass https://api.groundlight.ai;
-            proxy_set_header Host $host;
-            proxy_set_header X-Forwarded-For $remote_addr;
         }
+
     }
 }
