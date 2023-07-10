@@ -4,6 +4,7 @@ from asyncio import Lock
 import numpy as np
 from framegrab import MotionDetector
 from model import ImageQuery
+from pydantic import BaseSettings
 
 
 class MotdetParameterSettings(BaseSettings):
@@ -23,7 +24,7 @@ class AsyncMotionDetector:
     This is a wrapper around MotionDetector that exposes an asynchronous
     execution of `motion_detected` method. Although this method need not be asynchronous
     from a performance standpoint, we want it to be `async` since it will be
-    invoked in an asynchronous block.
+    invoked asynchronously from the API.
     """
 
     def __init__(self, percentage_threshold: float = 1, val_threshold: int = 50):

@@ -5,5 +5,5 @@ server-endpoints:
 # Configure motion detection parameters
 # We should probably not set these here. 
 motdet:
-  percentage-threshold: 1.0
+  percentage-threshold: 30.0
   val-threshold: 50 
