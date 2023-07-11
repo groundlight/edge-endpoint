@@ -3,7 +3,6 @@ from app.api.naming import full_path
 from app.schemas.schemas import ImageQueryCreate
 
 from ..conftest import TestClient
-from ..parsing import parse
 
 
 def test_post_image_queries(test_client: TestClient):
@@ -11,8 +10,8 @@ def test_post_image_queries(test_client: TestClient):
     detector_id = "det_2SLWms1fkTuc3KMedLEQ0HVYsF0"
     image = "https://www.photos-public-domain.com/wp-content/uploads/2010/11/over_flowing_garbage_can.jpg"
 
-    url = full_path(IMAGE_QUERIES)
-    body = ImageQueryCreate(detector_id=detector_id, image=image, wait=20).dict()
+    full_path(IMAGE_QUERIES)
+    ImageQueryCreate(detector_id=detector_id, image=image, wait=20).dict()
     # NOTE: bytes are not JSON-serializable, so this is commented out for now
     # response = test_client.post(url, json=body)
 
