@@ -38,7 +38,7 @@ target-version = ["py37"]
 # https://mypy.readthedocs.io/en/stable/config_file.html
 [tool.mypy]
 ignore_missing_imports = true
-python_version = "3.7"
+python_version = "3.8"
 
 # https://beta.ruff.rs/docs/configuration/#using-pyprojecttoml
 [tool.ruff]
