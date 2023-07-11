@@ -40,10 +40,10 @@ async def post_image_query(
             image_query = gl.submit_image_query(detector=detector_id, image=image, wait=wait_time)
 
             motion_detector.image_query_response = image_query
-            logger.info("Motion detected")
+            logger.debug("Motion detected")
             return image_query
 
-    logger.info("No motion detected")
+    logger.debug("No motion detected")
     return motion_detector.image_query_response
 
 
