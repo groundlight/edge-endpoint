@@ -29,7 +29,7 @@ class AsyncMotionDetector:
 
     def __init__(self, parameters: MotdetParameterSettings):
         self._motion_detector = MotionDetector(
-            pct_threshold=parameters.percentage_threshold, val_threshold=parameters.val_threshold
+            pct_threshold=parameters.motdet_percentage_threshold, val_threshold=parameters.motdet_val_threshold
         )
         self._previous_image = None
         self.lock = Lock()
