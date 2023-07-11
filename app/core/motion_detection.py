@@ -27,8 +27,10 @@ class AsyncMotionDetector:
     invoked asynchronously from the API.
     """
 
-    def __init__(self, percentage_threshold: float = 1, val_threshold: int = 50):
-        self._motion_detector = MotionDetector(pct_threshold=percentage_threshold, val_threshold=val_threshold)
+    def __init__(self, parameters: MotdetParameterSettings):
+        self._motion_detector = MotionDetector(
+            pct_threshold=parameters.percentage_threshold, val_threshold=parameters.val_threshold
+        )
         self._previous_image = None
         self.lock = Lock()
         self._image_query_response = None
