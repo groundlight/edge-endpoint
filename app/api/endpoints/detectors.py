@@ -23,9 +23,7 @@ async def create_detector(props: DetectorCreateAndGet, gl: Depends = Depends(get
 
 
 @router.get("", response_model=Detector)
-async def get_or_create_detector(
-    props: DetectorCreateAndGet = Depends(), gl: Depends = Depends(get_groundlight_instance)
-):
+async def get_or_create_detector(props: DetectorCreateAndGet, gl: Depends = Depends(get_groundlight_instance)):
     return gl.get_or_create_detector(
         name=props.name,
         query=props.query,
