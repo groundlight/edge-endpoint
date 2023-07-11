@@ -30,6 +30,7 @@ flake8 = "^6.0.0"
 mypy = "^0.991"
 isort = "^5.11.3"
 autoflake = "^2.0.0"
+pytest-mock = "^3.6.1"
 
 [tool.pytest.ini_options]
 testpaths = ["test"]
