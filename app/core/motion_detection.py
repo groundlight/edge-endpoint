@@ -12,7 +12,7 @@ class MotdetParameterSettings(BaseSettings):
     Read motion detection parameters from environment variables
     """
 
-    motdet_percentage_threshold: float = Field(30.0, description="Percentage threshold for motion detection")
+    motdet_percentage_threshold: float = Field(5.0, description="Percentage threshold for motion detection")
     motdet_val_threshold: int = Field(50, description="Value threshold for motion detection")
 
     class Config:

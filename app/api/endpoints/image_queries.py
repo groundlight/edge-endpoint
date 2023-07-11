@@ -2,6 +2,9 @@ import logging
 
 from fastapi import APIRouter, Depends, Query
 from model import ImageQuery
+from io import BytesIO
+from PIL import Image
+import numpy as np
 
 from app.core.utils import get_groundlight_instance, get_motion_detector_instance
 from app.schemas.schemas import ImageQueryCreate
@@ -28,8 +31,11 @@ async def post_image_query(
     detector_id = props.detector_id
     wait_time = props.wait
 
+    img = Image.open(BytesIO(image))
+    img_numpy = np.array(img)
+
     async with motion_detector.lock:
-        motion_detected = await motion_detector.detect_motion(image)
+        motion_detected = await motion_detector.motion_detected(new_img=img_numpy)
         if motion_detected:
             image_query = gl.submit_image_query(detector=detector_id, image=image, wait=wait_time)
 
