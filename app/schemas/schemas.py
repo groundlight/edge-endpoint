@@ -1,5 +1,5 @@
 from typing import Optional, Union
-
+import base64
 import requests
 from pydantic import BaseModel, Field, confloat, validator
 
@@ -18,15 +18,15 @@ class DetectorCreateAndGet(BaseModel):
 
 class ImageQueryCreate(BaseModel):
     """
-    NOTE: For the `image` field, types BytesIO, BufferedReader, Image.Image
+    NOTE: For the `image` field, types bytes, BytesIO, BufferedReader, Image.Image
     and numpy.ndarray are not JSON compatible. For now we are only supporting
-    str and bytes types although the Groundlight SDK accepts all the above.
+    str type although the Groundlight SDK accepts all the above.
     Reference: https://fastapi.tiangolo.com/tutorial/encoder/
     """
 
     detector_id: str = Field(description="Detector ID")
-    image: Union[str, bytes] = Field(
-        description="Image to submit to the detector. If the image is a string, it is assumed to be a URL."
+    image: str = Field(
+        description="Image to submit to the detector. The image is expected to be a URL or a base64 encoded string."
     )
     wait: Optional[float] = Field(None, description="How long to wait for a confident response (seconds)")
 
@@ -48,10 +48,12 @@ class ImageQueryCreate(BaseModel):
         Returns:
             bytes: Image bytes.
         """
-        if isinstance(image, str) and image.startswith("http"):
-            # If the image is a URL, get the image bytes
-            return requests.get(image, timeout=5).content
-        elif isinstance(image, bytes):
-            return image
+        if isinstance(image, str):
+            if image.startswith("http"):
+                # If the image is a URL, get the image bytes
+                return requests.get(image, timeout=5).content
+            else:
+                # The image is a base64 encoded string, so decode it
+                return base64.b64decode(image)
 
         raise ValueError(f"Unsupported input image type: {type(image)}")

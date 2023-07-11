@@ -1,32 +1,45 @@
 name: auto-format
 on: pull_request
+
+env: 
+  POETRY_VERSION: "1.5.1"
+  PYTHON_VERSION: "3.11"
 jobs:
   format:
     # Check if the PR is not from a fork
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
+      - name: Get Code 
+        uses: actions/checkout@v1
         with:
           ref: ${{ github.head_ref }}
-      - uses: actions/setup-python@v2
+      - name: Install Python 
+        uses: actions/setup-python@v4
         with:
-          python-version: 3.11
-      - name: Run isort to sort dependencies
-        uses: isort/isort-action@v1.1.0
+          python-version: ${{ env.PYTHON_VERSION }}
+        
+      - name: Install Poetry
+        uses: snok/install-poetry@v1.2.0
         with:
-          configuration: "--profile black"
-        # Run isort before black so that black has the final say in formatting.
-      - name: run black to auto-format python code
-        #uses: lgeiger/black-action@v1.0.1
-        uses: psf/black@stable
-      - name: Check for modified files
+          version: ${{ env.POETRY_VERSION }}
+      - name: Install Linting Dependencies
+        run: |
+          make install-lint
+      - name: Run Formatter 
+        run: |
+          make format
+      - name: Check for Modified Files
         id: git-check
-        run: echo ::set-output name=modified::$(if git diff-index --quiet HEAD --; then echo "false"; else echo "true"; fi)
-      - name: Push changes
+        run: |
+          git status 
+          echo ::set-output name=modified::$(if git diff-index --quiet HEAD --; then echo "false"; else echo "true"; fi)
+
+      - name: Push Changes
         if: steps.git-check.outputs.modified == 'true'
         run: |
           git config --global user.name 'Auto-format Bot'
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git config --global user.email 'autoformatbot@groundlight.ai'
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@${{ github.repository }}
           git commit -am "Automatically reformatting code with black and isort"
           git push
