@@ -1,5 +1,6 @@
-from typing import Optional, Union
 import base64
+from typing import Optional, Union
+
 import requests
 from pydantic import BaseModel, Field, confloat, validator
 
