@@ -33,7 +33,7 @@ jobs:
 
       - name: Start Docker Container 
         id: start_container
-        run: echo "::set-output name=container_id::$(docker run -e GROUNDLIGHT_API_TOKEN=${{ env.GROUNDLIGHT_API_TOKEN }} -d -p 6717:80 groundlight-edge)"
+        run: echo "::set-output name=container_id::$(docker run -e GROUNDLIGHT_API_TOKEN=${{ env.GROUNDLIGHT_API_TOKEN }} -d -p 6717:6717 groundlight-edge)"
 
       - name: Install poetry 
         uses: snok/install-poetry@v1
@@ -57,6 +57,7 @@ jobs:
 
       - name: Run Groundlight SDK tests against Edge Proxy Endpoint
         env:
+          # This is the endpoint on which the NGINX proxy is listening
           GROUNDLIGHT_ENDPOINT: http://localhost:6717
         run: |
           cd groundlight-sdk 
