@@ -27,7 +27,7 @@ def detector_id():
     return response["id"]
 
 
-def test_motion_detection_blur(detector_id):
+def test_motion_detection(detector_id):
     """
     Test motion detection by applying a Gaussian noiser on the query image.
     Every time we submit a new image query, it gets cached in the global motion
