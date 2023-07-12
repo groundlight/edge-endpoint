@@ -1,6 +1,3 @@
-# Configure the edge server
-server-endpoints:
-  edge-server: http://localhost:6717
 
 # Configure motion detection parameters
 # We should probably not set these here. 
