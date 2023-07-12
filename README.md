@@ -8,6 +8,14 @@ how to run Groundlight on the edge, checkout our comprehensive [documentation](h
 
 ## Development
 
+### Common Terms 
+
+* `Edge logic server:` This is running on `http://localhost:6718` inside the docker container. 
+* `NGINX proxy:` This is the proxy server through which we access the edge logic server. It runs on `http://localhost:6717`.
+* `Cloud API:` This is the upstream API that we use as a fallback in case the edge logic server encounters problems. It is set to `https://api.groundlight.ai`. 
+* `Edge endpoint:` This is the user-visible endpoint (i.e., the upstream you can set for the Groundlight application). This is set to `http://localhost:6717`. 
+
+
 ### Local (outside docker)
 
 ```BASH
