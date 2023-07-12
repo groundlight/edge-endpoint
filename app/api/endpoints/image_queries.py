@@ -1,12 +1,12 @@
 import logging
+from io import BytesIO
 
+import numpy as np
 from fastapi import APIRouter, Depends, Query
 from model import ImageQuery
-from io import BytesIO
 from PIL import Image
-import numpy as np
 
-from app.core.utils import get_groundlight_instance, get_motion_detector_instance
+from app.core.utils import get_groundlight_instance, get_motion_detector_instance, prefixed_ksuid
 from app.schemas.schemas import ImageQueryCreate
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,12 @@ async def post_image_query(
             return image_query
 
     logger.debug("No motion detected")
-    return motion_detector.image_query_response
+
+    new_image_query = ImageQuery(**motion_detector.image_query_response.dict())
+    new_image_query.id = prefixed_ksuid(prefix="iq_")
+    motion_detector.image_query_response = new_image_query
+
+    return new_image_query
 
 
 @router.get("", response_model=ImageQuery)
