@@ -1,7 +1,7 @@
 import base64
-from typing import Optional, Union
+import binascii
+from typing import Optional
 
-import requests
 from pydantic import BaseModel, Field, confloat, validator
 
 
@@ -27,7 +27,7 @@ class ImageQueryCreate(BaseModel):
 
     detector_id: str = Field(description="Detector ID")
     image: str = Field(
-        description="Image to submit to the detector. The image is expected to be a URL or a base64 encoded string."
+        description="Image to submit to the detector. The image is expected to be a base64 encoded string."
     )
     wait: Optional[float] = Field(None, description="How long to wait for a confident response (seconds)")
 
@@ -37,11 +37,11 @@ class ImageQueryCreate(BaseModel):
         return cls._sanitize_image_input(image=value)
 
     @classmethod
-    def _sanitize_image_input(cls, image: Union[str, bytes]) -> bytes:
+    def _sanitize_image_input(cls, image: str) -> bytes:
         """Sanitizes the image input to be a bytes object.
 
         Args:
-            image (Union[str, bytes]): Image input. If the image is a string, it is assumed to be a URL.
+            image str: Image input assumed to be a base64 encoded string.
 
         Raises:
             ValueError: In case the image type is not supported.
@@ -50,11 +50,10 @@ class ImageQueryCreate(BaseModel):
             bytes: Image bytes.
         """
         if isinstance(image, str):
-            if image.startswith("http"):
-                # If the image is a URL, get the image bytes
-                return requests.get(image, timeout=5).content
-            else:
-                # The image is a base64 encoded string, so decode it
+            # The image is a base64 encoded string, so decode it
+            try:
                 return base64.b64decode(image)
+            except binascii.Error as e:
+                raise ValueError(f"Invalid base64 string: {e}")
 
         raise ValueError(f"Unsupported input image type: {type(image)}")
