@@ -35,20 +35,20 @@ async def post_image_query(
     img = Image.open(BytesIO(image))
     img_numpy = np.array(img)
 
-    async with motion_detector.lock:
-        motion_detected = await motion_detector.motion_detected(new_img=img_numpy)
-        if motion_detected:
-            image_query = gl.submit_image_query(detector=detector_id, image=image, wait=wait_time)
+    motion_detected = await motion_detector.run_motion_detection(detector_id=detector_id, new_img=img_numpy)
 
-            motion_detector.image_query_response = image_query
-            logger.debug("Motion detected")
-            return image_query
+    if motion_detected:
+        logger.debug(f"Motion detected for detector {detector_id}")
 
-    logger.debug("No motion detected")
+        image_query = gl.submit_image_query(detector=detector_id, image=image, wait=wait_time)
+        motion_detector.update_image_query_response(detector_id=detector_id, response=image_query)
+        return image_query
 
-    new_image_query = ImageQuery(**motion_detector.image_query_response.dict())
+    logger.debug(f"No motion detected for detector {detector_id}")
+
+    new_image_query = ImageQuery(**motion_detector.get_image_query_response(detector_id=detector_id).dict())
     new_image_query.id = prefixed_ksuid(prefix="iq_")
-    motion_detector.image_query_response = new_image_query
+    motion_detector.update_image_query_response(detector_id=detector_id, response=new_image_query)
 
     return new_image_query
 
