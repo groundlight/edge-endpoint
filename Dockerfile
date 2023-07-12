@@ -1,5 +1,5 @@
 # Build args
-ARG APP_PORT=6717
+ARG APP_PORT=6718
 ARG APP_ROOT="/groundlight-edge"
 ARG POETRY_HOME="/opt/poetry"
 ARG POETRY_VERSION=1.5.1
@@ -74,7 +74,7 @@ ENV PATH=${POETRY_HOME}/bin:$PATH
 WORKDIR ${APP_ROOT}
 
 # Copy NGINX configuration file from build stage
-COPY --from=production-dependencies-build-stage ${APP_ROOT}/nginx.conf /etc/nginx/nginx.conf
+COPY --from=production-dependencies-build-stage ${APP_ROOT}/configs/nginx.conf /etc/nginx/nginx.conf
 
 COPY /app ${APP_ROOT}/app/
 

@@ -1,5 +1,6 @@
 import logging
 from io import BytesIO
+from typing import Optional
 
 import numpy as np
 from fastapi import APIRouter, Depends, Query
@@ -53,8 +54,16 @@ async def post_image_query(
 
 
 @router.get("", response_model=ImageQuery)
-async def get_image_query(props: str = Query(...), gl: Depends = Depends(get_groundlight_instance)):
+async def handle_get_requests(
+    page: Optional[int] = Query(...),
+    page_size: Optional[int] = Query(...),
+    query_id: Optional[str] = Query(...),
+    gl: Depends = Depends(get_groundlight_instance),
+):
     """
-    Get an image query by ID.
+    Handles GET requests for image queries endpoint.
     """
-    return gl.get_image_query(image_query_id=props)
+    if query_id is not None:
+        return gl.get_image_query(image_query_id=query_id)
+
+    return gl.list_image_queries(page=page, page_size=page_size)
