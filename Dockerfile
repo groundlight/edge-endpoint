@@ -1,8 +1,8 @@
 # Build args
-ARG APP_PORT=8080
+ARG APP_PORT=6718
 ARG APP_ROOT="/groundlight-edge"
 ARG POETRY_HOME="/opt/poetry"
-ARG POETRY_VERSION=1.3.1
+ARG POETRY_VERSION=1.5.1
 
 #############
 # Build Stage
@@ -15,12 +15,16 @@ ARG APP_ROOT \
     POETRY_HOME \
     POETRY_VERSION
 
-# Install base OS dependencies
+# Install base OS dependencies. 
+# We need to install libGL dependencies (`libglib2.0-0` and `libgl1-mesa-lgx`) 
+# since they are required by OpenCV 
 RUN apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y \
     curl \
-    nginx
+    nginx \
+    libglib2.0-0 \
+    libgl1-mesa-glx
 
 # Python environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -34,15 +38,24 @@ ENV PYTHONUNBUFFERED=1 \
 # Install poetry
 RUN curl -sSL https://install.python-poetry.org | python -
 
+
 # Make sure poetry is in the path
 ENV PATH=${POETRY_HOME}/bin:$PATH
 
 # Install [tool.poetry.dependencies]
 COPY ./poetry.lock ./pyproject.toml ${APP_ROOT}/
+
 WORKDIR ${APP_ROOT}
 
 # Install production dependencies
 RUN poetry install --no-interaction --no-root --without dev
+
+
+# Copy the configs directory 
+COPY configs ${APP_ROOT}/configs 
+
+# Generate NGINX configuration 
+RUN poetry run python configs/get_config.py
 
 ##################
 # Production Stage
@@ -60,8 +73,9 @@ ENV PATH=${POETRY_HOME}/bin:$PATH
 # Set the working directory
 WORKDIR ${APP_ROOT}
 
-# Copy application files
-COPY nginx.conf /etc/nginx/nginx.conf
+# Copy NGINX configuration file from build stage
+COPY --from=production-dependencies-build-stage ${APP_ROOT}/configs/nginx.conf /etc/nginx/nginx.conf
+
 COPY /app ${APP_ROOT}/app/
 
 # Remove the default nginx configuration 
