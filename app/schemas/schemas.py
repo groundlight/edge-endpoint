@@ -14,7 +14,7 @@ class DetectorCreateAndGet(BaseModel):
             "If the detector's prediction is below this confidence threshold, send the image query for human review."
         ),
     )
-    pipeline_config: Optional[str] = Field(description="Pipeline config")
+    pipeline_config: Optional[str] = Field(None, description="Pipeline config")
 
 
 class ImageQueryCreate(BaseModel):

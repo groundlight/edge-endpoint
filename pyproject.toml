@@ -27,6 +27,7 @@ httpx = "^0.23.1"
 flake8 = "^6.0.0"
 isort = "^5.11.3"
 autoflake = "^2.0.0"
+pytest-mock = "^3.6.1"
 
 [tool.poetry.group.lint.dependencies]
 pylint = "^2.15.9"
