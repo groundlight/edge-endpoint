@@ -1097,17 +1097,6 @@ pytest = ">=4.6"
 testing = ["fields", "hunter", "process-tests", "pytest-xdist", "six", "virtualenv"]
 
 [[package]]
-<<<<<<< HEAD
-name = "python-baseconv"
-version = "1.2.2"
-description = "Convert numbers from base 10 integers to base X strings and back again."
-optional = false
-python-versions = "*"
-files = [
-    {file = "python-baseconv-1.2.2.tar.gz", hash = "sha256:0539f8bd0464013b05ad62e0a1673f0ac9086c76b43ebf9f833053527cd9931b"},
-]
-
-=======
 name = "pytest-mock"
 version = "3.11.1"
 description = "Thin-wrapper around the mock package for easier use with pytest"
@@ -1124,7 +1113,16 @@ pytest = ">=5.0"
 [package.extras]
 dev = ["pre-commit", "pytest-asyncio", "tox"]
 
->>>>>>> bcb1c404f55e41b88cf34538dc4a6ee14949f5c0
+[[package]]
+name = "python-baseconv"
+version = "1.2.2"
+description = "Convert numbers from base 10 integers to base X strings and back again."
+optional = false
+python-versions = "*"
+files = [
+    {file = "python-baseconv-1.2.2.tar.gz", hash = "sha256:0539f8bd0464013b05ad62e0a1673f0ac9086c76b43ebf9f833053527cd9931b"},
+]
+
 [[package]]
 name = "python-dateutil"
 version = "2.8.2"
@@ -1686,8 +1684,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-<<<<<<< HEAD
-content-hash = "caf0b5b1fc42ce3808c2912fa392192f9aa8a714157dfc3291dd485a9d6eb82d"
-=======
-content-hash = "d3dda224136c42060f594f425478b3b4b3297accc7d95ee32f8823696b58aa68"
->>>>>>> bcb1c404f55e41b88cf34538dc4a6ee14949f5c0
+content-hash = "ef29c59018347aa0b293b4e827de2675f9308f0be4cf9b7aa555bafc63e7b8ae"

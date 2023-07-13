@@ -7,11 +7,6 @@ from fastapi import APIRouter, Depends, Query
 from model import ImageQuery
 from PIL import Image
 
-from typing import Optional
-
-from fastapi import APIRouter, Depends, Query
-from model import ImageQuery
-
 from app.core.utils import get_groundlight_sdk_instance, get_motion_detector_instance, prefixed_ksuid
 from app.schemas.schemas import ImageQueryCreate
 
@@ -23,8 +18,9 @@ router = APIRouter()
 
 @router.post("", response_model=ImageQuery)
 async def post_image_query(
-    props: ImageQueryCreate = Depends(ImageQueryCreate), gl: Depends = Depends(get_groundlight_sdk_instance), 
-    motion_detector: Depends = Depends(get_motion_detector_instance)
+    props: ImageQueryCreate = Depends(ImageQueryCreate),
+    gl: Depends = Depends(get_groundlight_sdk_instance),
+    motion_detector: Depends = Depends(get_motion_detector_instance),
 ):
     """
     Submit an image query to the detector.
@@ -34,7 +30,7 @@ async def post_image_query(
     """
     image = props.image
     detector_id = props.detector_id
-    wait_time = props.wait    
+    wait_time = props.wait
     img = Image.open(BytesIO(image))
     img_numpy = np.array(img)
 
