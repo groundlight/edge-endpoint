@@ -18,7 +18,7 @@ def detector_id():
     response = client.post(
         full_path(DETECTORS),
         json={
-            "name": "edge-testing-detector",
+            "name": "edge_testing",
             "query": "Is there a dog in the image?",
             "confidence_threshold": 0.9,
         },
@@ -52,6 +52,7 @@ def test_motion_detection(detector_id):
     base_response = client.post(url).json()
 
     for _ in range(10):
+        print(f"[INFO] Simulating motion detection with radius={50}, index = {_}")
         previous_response = base_response
         blurred_image = original_image.filter(ImageFilter.GaussianBlur(radius=50))
         url = get_url(blurred_image)

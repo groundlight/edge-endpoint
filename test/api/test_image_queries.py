@@ -19,7 +19,7 @@ def detector_id():
     response = client.post(
         full_path(DETECTORS),
         json={
-            "name": "edge-testing-detector",
+            "name": "edge_testing",
             "query": "Is there a dog in the image?",
             "confidence_threshold": 0.9,
         },
