@@ -4,7 +4,11 @@ Run Groundlight on the edge, as an API endpoint which either handles requests lo
 Before running groundlight on the edge, make
 sure you have your API token set up in your environment variable 
 `GROUNDLIGHT_API_TOKEN`. Checkout [how to create your API token.](https://code.groundlight.ai/python-sdk/docs/getting-started/api-tokens). For more information on 
+<<<<<<< HEAD
 how to run Groundlight on the edge, checkout our comprehensive [documentation](https://code.groundlight.ai/python-sdk/docs/building-applications/edge)
+=======
+how to run Groundlight on the edge, checkout our [documentation](https://code.groundlight.ai/python-sdk/docs/building-applications/edge)
+>>>>>>> bcb1c404f55e41b88cf34538dc4a6ee14949f5c0
 
 ## Development
 
@@ -22,9 +26,9 @@ how to run Groundlight on the edge, checkout our comprehensive [documentation](h
 # Install
 $ poetry install
 
-# Run the server (http://localhost:6717)
+# Run the server (http://localhost:6718)
 # Note: the `--reload` option allows live code changes to be reloaded!
-$ poetry run uvicorn --workers 1 --host 0.0.0.0 --port 6717 app.main:app --reload
+$ poetry run uvicorn --workers 1 --host 0.0.0.0 --port 6718 app.main:app --reload
 
 # Test
 $ poetry run pytest
@@ -37,7 +41,7 @@ $ poetry run pytest
 $ docker build --target production-image --tag groundlight-edge .
 
 # Run the server
-$ docker run -e GROUNDLIGHT_API_TOKEN=$GROUNDLIGHT_API_TOKEN --rm -it -p 6717:6717 groundlight-edge
+$ docker run -e GROUNDLIGHT_API_TOKEN --rm -it -p 6717:6717 groundlight-edge
 ```
 
 #### See the edge API methods
@@ -58,7 +62,6 @@ gl = Groundlight(endpoint="http://localhost:6717")
 gl = Groundlight()
 det = gl.get_or_create_detector(name="doorway", query="Is the doorway open?")
 img = "./docs/static/img/doorway.jpg"  
-# Image needs to be converted to a bytestream first
 with open(img, "rb") as img_file:
     byte_stream = img_file.read()
 

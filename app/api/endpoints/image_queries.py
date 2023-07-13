@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from model import ImageQuery
 from PIL import Image
 
-from app.core.utils import get_groundlight_instance, get_motion_detector_instance, prefixed_ksuid
+from app.core.utils import get_groundlight_sdk_instance, get_motion_detector_instance, prefixed_ksuid
 from app.schemas.schemas import ImageQueryCreate
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ router = APIRouter()
 @router.post("", response_model=ImageQuery)
 async def post_image_query(
     props: ImageQueryCreate = Depends(ImageQueryCreate),
-    gl: Depends = Depends(get_groundlight_instance),
+    gl: Depends = Depends(get_groundlight_sdk_instance),
     motion_detector: Depends = Depends(get_motion_detector_instance),
 ):
     """
@@ -31,7 +31,6 @@ async def post_image_query(
     image = props.image
     detector_id = props.detector_id
     wait_time = props.wait
-
     img = Image.open(BytesIO(image))
     img_numpy = np.array(img)
 
@@ -58,7 +57,7 @@ async def handle_get_requests(
     page: Optional[int] = Query(...),
     page_size: Optional[int] = Query(...),
     query_id: Optional[str] = Query(...),
-    gl: Depends = Depends(get_groundlight_instance),
+    gl: Depends = Depends(get_groundlight_sdk_instance),
 ):
     """
     Handles GET requests for image queries endpoint.

@@ -11,6 +11,9 @@ app.include_router(router=api_router, prefix=API_BASE_PATH)
 app.include_router(router=ping_router)
 
 
-# Create global state for Groundlight
+# Create global shared Groundlight SDK client object in the app's state
 app.state.groundlight = Groundlight()
+
+# Create global shared motion detector object in the app's state
 app.state.motion_detector = MotionDetectionManager(config=MotdetConfig())
+
