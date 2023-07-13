@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Depends
 from model import Detector
 
-from app.core.utils import get_groundlight_instance
+from app.core.utils import get_groundlight_sdk_instance
 from app.schemas.schemas import DetectorCreateAndGet
 
 logger = logging.getLogger(__name__)
@@ -13,8 +13,8 @@ router = APIRouter()
 
 
 @router.post("", response_model=Detector)
-async def create_detector(props: DetectorCreateAndGet, gl: Depends = Depends(get_groundlight_instance)):
-    return gl.get_or_create_detector(
+async def create_detector(props: DetectorCreateAndGet, gl: Depends = Depends(get_groundlight_sdk_instance)):
+    return gl.create_detector(
         name=props.name,
         query=props.query,
         confidence_threshold=props.confidence_threshold,
@@ -23,8 +23,8 @@ async def create_detector(props: DetectorCreateAndGet, gl: Depends = Depends(get
 
 
 @router.get("", response_model=Detector)
-async def get_or_create_detector(props: DetectorCreateAndGet, gl: Depends = Depends(get_groundlight_instance)):
-    return gl.get_or_create_detector(
+async def get_detector(props: DetectorCreateAndGet, gl: Depends = Depends(get_groundlight_sdk_instance)):
+    return gl.get_detector(
         name=props.name,
         query=props.query,
         confidence_threshold=props.confidence_threshold,

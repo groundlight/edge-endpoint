@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from model import ImageQuery
 
-from app.core.utils import get_groundlight_instance
+from app.core.utils import get_groundlight_sdk_instance
 from app.schemas.schemas import ImageQueryCreate
 
 logger = logging.getLogger(__name__)
@@ -15,7 +15,7 @@ router = APIRouter()
 
 @router.post("", response_model=ImageQuery)
 async def post_image_query(
-    props: ImageQueryCreate = Depends(ImageQueryCreate), gl: Depends = Depends(get_groundlight_instance)
+    props: ImageQueryCreate = Depends(ImageQueryCreate), gl: Depends = Depends(get_groundlight_sdk_instance)
 ):
     """
     Submit an image query to the detector.
@@ -32,7 +32,7 @@ async def handle_get_requests(
     page: Optional[int] = Query(...),
     page_size: Optional[int] = Query(...),
     query_id: Optional[str] = Query(...),
-    gl: Depends = Depends(get_groundlight_instance),
+    gl: Depends = Depends(get_groundlight_sdk_instance),
 ):
     """
     Handles GET requests for image queries endpoint.
