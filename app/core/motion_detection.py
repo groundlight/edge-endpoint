@@ -37,6 +37,11 @@ class AsyncMotionDetector:
 
     @property
     def image_query_response(self):
+        """
+        Get the image query response from the last motion detection. 
+        We are using `image_query_response` as a property so that we can 
+        readily return 
+        """
         return self._image_query_response
 
     @image_query_response.setter

@@ -24,9 +24,9 @@ async def post_image_query(
 ):
     """
     Submit an image query to the detector.
-    NOTE: For now motion detection assumes that images are being to the
+    NOTE: For now motion detection assumes that images are submitted to the
     same detector. If the client sends the same image to multiple detectors
-    we would flag incorrectly flag no motion detected for the second detector.
+    we would incorrectly flag no motion detected for the second detector.
     """
     image = props.image
     detector_id = props.detector_id
@@ -40,10 +40,10 @@ async def post_image_query(
             image_query = gl.submit_image_query(detector=detector_id, image=image, wait=wait_time)
 
             motion_detector.image_query_response = image_query
-            logger.debug("Motion detected")
+            logger.info("Motion detected")
             return image_query
 
-    logger.debug("No motion detected")
+    logger.info("No motion detected")
 
     new_image_query = ImageQuery(**motion_detector.image_query_response.dict())
     new_image_query.id = prefixed_ksuid(prefix="iq_")

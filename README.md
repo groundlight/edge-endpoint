@@ -4,11 +4,7 @@ Run Groundlight on the edge, as an API endpoint which either handles requests lo
 Before running groundlight on the edge, make
 sure you have your API token set up in your environment variable 
 `GROUNDLIGHT_API_TOKEN`. Checkout [how to create your API token.](https://code.groundlight.ai/python-sdk/docs/getting-started/api-tokens). For more information on 
-<<<<<<< HEAD
-how to run Groundlight on the edge, checkout our comprehensive [documentation](https://code.groundlight.ai/python-sdk/docs/building-applications/edge)
-=======
 how to run Groundlight on the edge, checkout our [documentation](https://code.groundlight.ai/python-sdk/docs/building-applications/edge)
->>>>>>> bcb1c404f55e41b88cf34538dc4a6ee14949f5c0
 
 ## Development
 
