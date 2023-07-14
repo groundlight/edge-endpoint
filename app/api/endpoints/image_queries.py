@@ -46,7 +46,7 @@ async def post_image_query(
     logger.debug("No motion detected")
 
     new_image_query = ImageQuery(**motion_detector.image_query_response.dict())
-    new_image_query.id = prefixed_ksuid(prefix="iq_")
+    new_image_query.id = prefixed_ksuid(prefix="iqe_")
     motion_detector.image_query_response = new_image_query
 
     return new_image_query
