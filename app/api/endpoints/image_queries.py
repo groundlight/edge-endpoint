@@ -39,6 +39,8 @@ async def post_image_query(
         if motion_detected:
             image_query = gl.submit_image_query(detector=detector_id, image=image, wait=wait_time)
 
+            # Store the cloud's response so that if the next image has no motion, we will return
+            # the same response.
             motion_detector.image_query_response = image_query
             logger.debug("Motion detected")
             return image_query
