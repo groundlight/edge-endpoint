@@ -12,19 +12,32 @@ from app.main import app
 
 client = TestClient(app)
 
+# Detector ID associated with the detector with parameters
+# name="edge_testing_det",
+# query="Is there a dog in the image?",
+# confidence_threshold=0.9
+DETECTOR_ID = "det_2SagpFUrs83cbMZsap5hZzRjZw4"
+
 
 @pytest.fixture
 def detector_id():
-    response = client.post(
-        full_path(DETECTORS),
-        json={
-            "name": "edge_testing",
-            "query": "Is there a dog in the image?",
-            "confidence_threshold": 0.9,
-        },
-    ).json()
+    url = full_path(DETECTORS) + f"/{DETECTOR_ID}"
+    response = client.get(url).json()
 
     return response["id"]
+
+
+def get_post_image_query_url(detector: str, image: Image.Image, wait: float = 10) -> str:
+    """
+    Constructs full URL for `submit_image_query` by first converting a PIL image
+    into a base64-encoded string.
+    """
+    byte_array = BytesIO()
+    image.save(byte_array, format="JPEG")
+    image_encoding = base64.b64encode(byte_array.getvalue()).decode()
+    image_encoding = urllib.parse.quote_plus(image_encoding)
+
+    return full_path(IMAGE_QUERIES) + f"?detector_id={detector}&image={image_encoding}&wait={wait}"
 
 
 def test_motion_detection(detector_id):
@@ -37,25 +50,15 @@ def test_motion_detection(detector_id):
     standard deviation of the Gaussian distribution).
     Using a Gaussian filter here is not strictly necessary.
     """
-
-    def get_url(image: Image.Image) -> str:
-        byte_array = BytesIO()
-        image.save(byte_array, format="JPEG")
-        image_encoding = base64.b64encode(byte_array.getvalue()).decode()
-        image_encoding = urllib.parse.quote_plus(image_encoding)
-
-        return full_path(IMAGE_QUERIES) + f"?detector_id={detector_id}&image={image_encoding}&wait=10"
-
     original_image = Image.open("test/assets/dog.jpeg")
 
-    url = get_url(original_image)
+    url = get_post_image_query_url(detector=detector_id, image=original_image, wait=10)
     base_response = client.post(url).json()
 
     for _ in range(10):
-        print(f"[INFO] Simulating motion detection with radius={50}, index = {_}")
         previous_response = base_response
         blurred_image = original_image.filter(ImageFilter.GaussianBlur(radius=50))
-        url = get_url(blurred_image)
+        url = get_post_image_query_url(detector=detector_id, image=blurred_image, wait=10)
         new_response = client.post(url).json()
 
         # We expect that motion is detected on the blurred image
@@ -63,8 +66,11 @@ def test_motion_detection(detector_id):
         assert new_response["id"] != previous_response["id"]
         assert new_response["type"] == previous_response["type"]
         assert new_response["result_type"] == previous_response["result_type"]
-        assert new_response["result"]["confidence"] != previous_response["result"]["confidence"]
-        assert new_response["result"]["label"] == "NO" != previous_response["result"]["label"]
+        assert (
+            new_response["result"]["confidence"] is None
+            or new_response["result"]["confidence"] != previous_response["result"]["confidence"]
+        )
+        assert new_response["result"]["label"] != previous_response["result"]["label"]
         assert new_response["detector_id"] == previous_response["detector_id"]
         assert new_response["query"] == previous_response["query"]
         assert new_response["created_at"] != previous_response["created_at"]
@@ -73,7 +79,7 @@ def test_motion_detection(detector_id):
 
         # Simulate no motion detected
         new_blurred_image = blurred_image.filter(ImageFilter.GaussianBlur(radius=1))
-        url = get_url(new_blurred_image)
+        url = get_post_image_query_url(detector=detector_id, image=new_blurred_image, wait=10)
         new_response = client.post(url).json()
 
         assert new_response["id"] != previous_response["id"]

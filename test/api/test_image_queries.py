@@ -13,18 +13,14 @@ from ..conftest import TestClient
 
 client = TestClient(app)
 
+DETECTOR_ID = "det_2SagpFUrs83cbMZsap5hZzRjZw4"
+
 
 @pytest.fixture
 def detector_id():
-    response = client.post(
-        full_path(DETECTORS),
-        json={
-            "name": "edge_testing",
-            "query": "Is there a dog in the image?",
-            "confidence_threshold": 0.9,
-        },
-    ).json()
-    assert "id" in response
+    url = full_path(DETECTORS) + f"/{DETECTOR_ID}"
+    response = client.get(url).json()
+
     return response["id"]
 
 

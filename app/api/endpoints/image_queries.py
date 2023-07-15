@@ -36,7 +36,13 @@ async def post_image_query(
 
     async with motion_detector.lock:
         motion_detected = await motion_detector.motion_detected(new_img=img_numpy)
-        if motion_detected:
+
+        iq_response_is_improvable = (
+            motion_detector.image_query_response is not None
+            and motion_detector.image_query_response.result.label == "UNSURE"
+        )
+
+        if motion_detected or iq_response_is_improvable:
             image_query = gl.submit_image_query(detector=detector_id, image=image, wait=wait_time)
 
             # Store the cloud's response so that if the next image has no motion, we will return
