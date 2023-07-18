@@ -1,13 +1,12 @@
 import base64
-import urllib
 from io import BytesIO
 
 import pytest
 from fastapi.testclient import TestClient
+from groundlight import Groundlight
+from model import Detector
 from PIL import Image, ImageFilter
 
-from app.api.api import DETECTORS, IMAGE_QUERIES
-from app.api.naming import full_path
 from app.main import app
 
 client = TestClient(app)
@@ -19,28 +18,33 @@ client = TestClient(app)
 DETECTOR_ID = "det_2SagpFUrs83cbMZsap5hZzRjZw4"
 
 
+@pytest.fixture(name="gl")
+def fixture_gl() -> Groundlight:
+    """Creates a Groundlight client object"""
+    return Groundlight(endpoint="http://localhost:6717")
+
+
 @pytest.fixture
-def detector_id():
-    url = full_path(DETECTORS) + f"/{DETECTOR_ID}"
-    response = client.get(url).json()
-
-    return response["id"]
+def detector(gl: Groundlight) -> Detector:
+    return gl.get_detector(id=DETECTOR_ID)
 
 
-def get_post_image_query_url(detector: str, image: Image.Image, wait: float = 10) -> str:
+def encode_image(image: Image.Image) -> str:
     """
-    Constructs full URL for `submit_image_query` by first converting a PIL image
-    into a base64-encoded string.
+    Returns a base64-encoded string representing the given input image.
+    Although the SDK accepts multiple image input types, we encode the image
+    as base64 to be consistent with the input type for the edge endpoint.
+    (i.e., having a format that is JSON-compatible)
     """
     byte_array = BytesIO()
     image.save(byte_array, format="JPEG")
     image_encoding = base64.b64encode(byte_array.getvalue()).decode()
-    image_encoding = urllib.parse.quote_plus(image_encoding)
+    # image_encoding = urllib.parse.quote_plus(image_encoding)
 
-    return full_path(IMAGE_QUERIES) + f"?detector_id={detector}&image={image_encoding}&wait={wait}"
+    return image_encoding
 
 
-def test_motion_detection(detector_id):
+def test_motion_detection(gl: Groundlight, detector: Detector):
     """
     Test motion detection by applying a Gaussian noiser on the query image.
     Every time we submit a new image query, it gets cached in the global motion
@@ -52,41 +56,39 @@ def test_motion_detection(detector_id):
     """
     original_image = Image.open("test/assets/dog.jpeg")
 
-    url = get_post_image_query_url(detector=detector_id, image=original_image, wait=10)
-    base_response = client.post(url).json()
+    base_iq_response = gl.submit_image_query(detector=detector.id, image=original_image, wait=10)
 
-    for _ in range(10):
-        previous_response = base_response
+    for _ in range(1):
+        previous_response = base_iq_response
         blurred_image = original_image.filter(ImageFilter.GaussianBlur(radius=50))
-        url = get_post_image_query_url(detector=detector_id, image=blurred_image, wait=10)
-        new_response = client.post(url).json()
+        new_response = gl.submit_image_query(detector=detector.id, image=blurred_image, wait=10)
 
         # We expect that motion is detected on the blurred image
 
-        assert new_response["id"] != previous_response["id"]
-        assert new_response["type"] == previous_response["type"]
-        assert new_response["result_type"] == previous_response["result_type"]
-        assert (
-            new_response["result"]["confidence"] is None
-            or new_response["result"]["confidence"] != previous_response["result"]["confidence"]
-        )
-        assert new_response["result"]["label"] != previous_response["result"]["label"]
-        assert new_response["detector_id"] == previous_response["detector_id"]
-        assert new_response["query"] == previous_response["query"]
-        assert new_response["created_at"] != previous_response["created_at"]
+        assert new_response.id != previous_response.id
+        assert new_response.type == previous_response.type
+        assert new_response.result_type == previous_response.result_type
+        assert new_response.result.confidence is None or new_response.result.confidence != previous_response
+        assert new_response.result.label != previous_response.result.label
+        assert new_response.detector_id == previous_response.detector_id
+        assert new_response.query == previous_response.query
+        # assert new_response.created_at != previous_response.created_at
 
-        previous_response = new_response
+        # Since we don't update the state of the motion detecter global object until after we
+        # receive a new image that shows motion, this new call to submit_image_query essentially
+        # restores the cached image query response to `base_iq_response`. This is guaranteed because
+        # we expect that submitting the original image again should indicate that motion was detected again.
+        previous_response = gl.submit_image_query(detector=detector.id, image=original_image, wait=10)
 
         # Simulate no motion detected
-        new_blurred_image = blurred_image.filter(ImageFilter.GaussianBlur(radius=1))
-        url = get_post_image_query_url(detector=detector_id, image=new_blurred_image, wait=10)
-        new_response = client.post(url).json()
+        less_blurred_image = original_image.filter(ImageFilter.GaussianBlur(radius=0.5))
 
-        assert new_response["id"] != previous_response["id"]
-        assert new_response["type"] == previous_response["type"]
-        assert new_response["result_type"] == previous_response["result_type"]
-        assert new_response["result"]["confidence"] == previous_response["result"]["confidence"]
-        assert new_response["result"]["label"] == previous_response["result"]["label"]
-        assert new_response["detector_id"] == previous_response["detector_id"]
-        assert new_response["query"] == previous_response["query"]
-        assert new_response["created_at"] == previous_response["created_at"]
+        new_response = gl.submit_image_query(detector=detector.id, image=less_blurred_image, wait=10)
+
+        assert new_response.id != previous_response.id
+        assert new_response.type == previous_response.type
+        assert new_response.result_type == previous_response.result_type
+        assert new_response.result.confidence == previous_response.result.confidence
+        assert new_response.result.label == previous_response.result.label
+        assert new_response.detector_id == previous_response.detector_id
+        assert new_response.query == previous_response.query

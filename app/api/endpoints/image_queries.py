@@ -48,14 +48,13 @@ async def post_image_query(
             # Store the cloud's response so that if the next image has no motion, we will return
             # the same response.
             motion_detector.image_query_response = image_query
-            logger.info("Motion detected")
+            logger.debug("Motion detected")
             return image_query
 
-    logger.info("No motion detected")
+    logger.debug("No motion detected")
 
     new_image_query = ImageQuery(**motion_detector.image_query_response.dict())
     new_image_query.id = prefixed_ksuid(prefix="iqe_")
-    motion_detector.image_query_response = new_image_query
 
     return new_image_query
 
