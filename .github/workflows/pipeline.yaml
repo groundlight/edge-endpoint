@@ -10,7 +10,8 @@ env:
 jobs:
   # Run Groundlight SDK tests against the 
   # edge proxy endpoint set in nginx.conf file 
-  test-sdk-via-proxy:
+  # and run unit tests. 
+  tests:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
@@ -62,6 +63,11 @@ jobs:
         run: |
           cd groundlight-sdk 
           poetry run pytest 
+
+      - name: Run Unit Tests
+        run: | 
+          cd $GITHUB_WORKSPACE
+          poetry run pytest 
       
       - name: Dump Logs from Docker Container
         if: always()
@@ -72,34 +78,3 @@ jobs:
         # the previous steps 
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
-
-  # Run unit tests 
-  unit-test:
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v3
-      - name: Set up python
-        id: setup-python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          installer-parallel: true
-      - name: Load cached venv
-        id: cached-poetry-dependencies
-        uses: actions/cache@v3
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
-      - name: Install package
-        run: |
-          poetry install --no-interaction --no-root
-      - name: Run tests
-        run: |
-          poetry run pytest
