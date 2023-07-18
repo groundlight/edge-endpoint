@@ -62,11 +62,21 @@ jobs:
         run: |
           cd groundlight-sdk 
           poetry run pytest 
+          cd .. 
+
+      - name: Load Cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v3
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
+      - name: Install package
+        run: |
+          poetry install --no-interaction --no-root
 
       - name: Run Unit Tests
         if: always()
         run: | 
-          cd ..
           poetry run pytest 
       
       - name: Dump Logs from Docker Container
