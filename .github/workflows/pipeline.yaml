@@ -64,8 +64,9 @@ jobs:
           poetry run pytest 
 
       - name: Run Unit Tests
+        if: always()
         run: | 
-          cd $GITHUB_WORKSPACE
+          cd ..
           poetry run pytest 
       
       - name: Dump Logs from Docker Container
