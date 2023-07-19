@@ -1114,6 +1114,16 @@ pytest = ">=5.0"
 dev = ["pre-commit", "pytest-asyncio", "tox"]
 
 [[package]]
+name = "python-baseconv"
+version = "1.2.2"
+description = "Convert numbers from base 10 integers to base X strings and back again."
+optional = false
+python-versions = "*"
+files = [
+    {file = "python-baseconv-1.2.2.tar.gz", hash = "sha256:0539f8bd0464013b05ad62e0a1673f0ac9086c76b43ebf9f833053527cd9931b"},
+]
+
+[[package]]
 name = "python-dateutil"
 version = "2.8.2"
 description = "Extensions to the standard Python datetime module"
@@ -1308,6 +1318,19 @@ anyio = ">=3.4.0,<5"
 
 [package.extras]
 full = ["httpx (>=0.22.0)", "itsdangerous", "jinja2", "python-multipart", "pyyaml"]
+
+[[package]]
+name = "svix-ksuid"
+version = "0.6.2"
+description = "A pure-Python KSUID implementation"
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "svix-ksuid-0.6.2.tar.gz", hash = "sha256:beb95bd6284bdbd526834e233846653d2bd26eb162b3233513d8f2c853c78964"},
+]
+
+[package.dependencies]
+python-baseconv = "*"
 
 [[package]]
 name = "toml-sort"
@@ -1661,4 +1684,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "d3dda224136c42060f594f425478b3b4b3297accc7d95ee32f8823696b58aa68"
+content-hash = "ef29c59018347aa0b293b4e827de2675f9308f0be4cf9b7aa555bafc63e7b8ae"
