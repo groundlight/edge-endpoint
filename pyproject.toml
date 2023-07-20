@@ -13,7 +13,7 @@ pydantic = "^1.10.2"
 groundlight = "0.9.0"
 opencv-python = "^4.7.0.72"
 pillow = "^9.5.0"
-framegrab = "^0.2"
+framegrab = "^0.2.1"
 pyyaml = "^6.0"
 svix-ksuid = "^0.6.2"
 

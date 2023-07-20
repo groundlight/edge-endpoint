@@ -40,7 +40,7 @@ def prefixed_ksuid(prefix: str = None) -> str:
 
 def pil_image_to_bytes(img: Image.Image, format: str = "JPEG") -> bytes:
     """
-    Convert a PIL Image object to raw bytes.
+    Convert a PIL Image object to JPEG bytes.
 
     Args:
         img (Image.Image): The PIL Image object.

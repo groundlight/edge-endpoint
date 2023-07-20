@@ -13,3 +13,8 @@ class DetectorCreate(BaseModel):
         ),
     )
     pipeline_config: Optional[str] = Field(None, description="Pipeline config")
+
+
+class ImageQueryCreate(BaseModel):
+    detector_id: str = Field(description="Detector ID")
+    wait: float = Field(None, description="How long to wait for a confident response")
