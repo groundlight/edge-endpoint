@@ -1,5 +1,8 @@
+from io import BytesIO
+
 import ksuid
 from fastapi import Request
+from PIL import Image
 
 
 def get_groundlight_sdk_instance(request: Request):
@@ -33,3 +36,19 @@ def prefixed_ksuid(prefix: str = None) -> str:
     k = ksuid.KsuidMs()
     out = f"{prefix}{k}"
     return out
+
+
+def pil_image_to_bytes(img: Image.Image, format: str = "JPEG") -> bytes:
+    """
+    Convert a PIL Image object to JPEG bytes.
+
+    Args:
+        img (Image.Image): The PIL Image object.
+        format (str, optional): The image format. Defaults to "JPEG".
+
+    Returns:
+        bytes: The raw bytes of the image.
+    """
+    with BytesIO() as buffer:
+        img.save(buffer, format=format)
+        return buffer.getvalue()

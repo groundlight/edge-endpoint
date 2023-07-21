@@ -1,50 +1,38 @@
-import base64
-import urllib.parse
-from io import BytesIO
-
 import pytest
+from groundlight import Groundlight
+from model import Detector
 from PIL import Image
 
-from app.api.api import DETECTORS, IMAGE_QUERIES
-from app.api.naming import full_path
+from app.core.utils import pil_image_to_bytes
 from app.main import app
 
 from ..conftest import TestClient
 
 client = TestClient(app)
 
+# Detector ID associated with the detector with parameters
+# name="edge_testing_det",
+# query="Is there a dog in the image?",
+# confidence_threshold=0.9
 DETECTOR_ID = "det_2SagpFUrs83cbMZsap5hZzRjZw4"
 
 
+@pytest.fixture(name="gl")
+def fixture_gl() -> Groundlight:
+    """Creates a Groundlight client object"""
+    return Groundlight(endpoint="http://localhost:6717")
+
+
 @pytest.fixture
-def detector_id():
-    url = full_path(DETECTORS) + f"/{DETECTOR_ID}"
-    response = client.get(url).json()
-
-    return response["id"]
+def detector(gl: Groundlight) -> Detector:
+    return gl.get_detector(id=DETECTOR_ID)
 
 
-def test_post_image_queries(detector_id):
+def test_post_image_queries(gl: Groundlight, detector: Detector):
     """
-    NOTE: We need to encode the image as a base64 string since bytes are not
-    JSON-serializable.
+    Tests that submitting an image query using the edge server proceeds
+    without failure.
     """
     image = Image.open("test/assets/dog.jpeg")
-    byte_array = BytesIO()
-    image.save(byte_array, format="JPEG")
-
-    image_encoding = base64.b64encode(byte_array.getvalue()).decode()
-    image_encoding = urllib.parse.quote_plus(image_encoding)
-
-    url = full_path(IMAGE_QUERIES) + f"?detector_id={detector_id}&image={image_encoding}&wait=10"
-
-    response = client.post(url).json()
-
-    assert "id" in response
-    assert "detector_id" in response
-    assert "query" in response
-    assert "created_at" in response
-    assert "type" in response
-    assert "result" in response
-    assert "result_type" in response
-    assert response["detector_id"] == detector_id
+    image_bytes = pil_image_to_bytes(img=image)
+    gl.submit_image_query(detector=detector.id, image=image_bytes, wait=10.0)

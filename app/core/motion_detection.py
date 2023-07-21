@@ -18,6 +18,7 @@ class MotdetParameterSettings(BaseSettings):
     motdet_val_threshold: int = Field(
         50, description="The minimum brightness change for a pixel for it to be considered changed."
     )
+    enabled: bool = Field(False, description="Determines if motion detection is enabled by default.")
 
     class Config:
         env_file = ".env"
@@ -38,6 +39,14 @@ class AsyncMotionDetector:
         self._previous_image = None
         self.lock = Lock()
         self._image_query_response = None
+        self._motion_detection_enabled = parameters.enabled
+
+    def is_enabled(self) -> bool:
+        return self._motion_detection_enabled
+
+    def enable(self) -> None:
+        if not self._motion_detection_enabled:
+            self._motion_detection_enabled = True
 
     @property
     def image_query_response(self):

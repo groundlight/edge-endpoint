@@ -6,6 +6,7 @@ from PIL import Image, ImageFilter
 
 from app.main import app
 
+app.state.motion_detector.enable()
 client = TestClient(app)
 
 # Detector ID associated with the detector with parameters
