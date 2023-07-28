@@ -1,7 +1,8 @@
 from io import BytesIO
+from typing import Callable
 
 import ksuid
-from fastapi import Request
+from fastapi import HTTPException, Request
 from PIL import Image
 
 
@@ -11,6 +12,21 @@ def get_groundlight_sdk_instance(request: Request):
 
 def get_motion_detector_instance(request: Request):
     return request.app.state.motion_detector
+
+
+def safe_call_api(api_method: Callable, **kwargs):
+    """
+    This ensures that we correctly handle HTTP error status codes. In some cases,
+    for instance, 400 error codes from the SDK are forwarded as 500 by FastAPI,
+    which is not what we want.
+    """
+    try:
+        return api_method(**kwargs)
+
+    except Exception as e:
+        if hasattr(e, "status"):
+            raise HTTPException(status_code=e.status, detail=str(e))
+        raise e
 
 
 def prefixed_ksuid(prefix: str = None) -> str:
