@@ -1,6 +1,13 @@
-# groundlight-edge
+# Groundlight Edge Endpoint
 
-Run Groundlight on the edge, as an API endpoint which either handles requests locally or proxies them to the cloud. 
+Run your Groundlight models on-prem by hosting an Edge Endpoint on your own hardware.  The Edge Endpoint exposes the exact same API as the Groundlight cloud service, so any Groundlight application can point to the Edge Endpoint simply by configuring the `GROUNDLIGHT_ENDPOINT` environment variable as follows:
+
+```
+GROUNDLIGHT_ENDPOINT=http://localhost
+```
+
+The Edge Endpoint will attempt to answer image queries using its local model.  If it can you get faster cheaper responses.  But if it can't, it will escalate the image queries to the cloud for further analysis.
+
 Before running groundlight on the edge, make
 sure you have your API token set up in your environment variable 
 `GROUNDLIGHT_API_TOKEN`. Checkout [how to create your API token.](https://code.groundlight.ai/python-sdk/docs/getting-started/api-tokens). For more information on 
