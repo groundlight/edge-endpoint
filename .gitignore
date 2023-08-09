@@ -1,6 +1,3 @@
-# Don't check in exact versions of dependencies
-poetry.lock
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
