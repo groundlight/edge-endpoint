@@ -4,7 +4,7 @@ Run your Groundlight models on-prem by hosting an Edge Endpoint on your own hard
 
 ```
 GROUNDLIGHT_ENDPOINT=http://localhost:6717
-# This assumes your Groundlight app is running on the same host as the Edge Endpoint.
+# This assumes your Groundlight SDK application is running on the same host as the Edge Endpoint.
 ```
 
 The Edge Endpoint will attempt to answer image queries using local models for your detectors.  If it can do so confidently, you get faster cheaper responses.  But if it can't, it will escalate the image queries to the cloud for further analysis.
@@ -14,7 +14,9 @@ sure you have your API token set up in your environment variable
 `GROUNDLIGHT_API_TOKEN`. Checkout [how to create your API token.](https://code.groundlight.ai/python-sdk/docs/getting-started/api-tokens). For more information on 
 how to run Groundlight on the edge, checkout our [documentation](https://code.groundlight.ai/python-sdk/docs/building-applications/edge)
 
-## Usage
+## Regular Usage in Docker
+
+The recommended way to run the Edge Endpoint is inside a docker container as follows:
 
 ```bash
 docker build --target production-image --tag edge-endpoint .

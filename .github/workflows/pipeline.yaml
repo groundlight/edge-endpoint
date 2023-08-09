@@ -71,7 +71,7 @@ jobs:
         with:
           path: .venv
           key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
-      - name: Install edge-endpoint's python dependencies and generate poetry.lock
+      - name: Install edge-endpoint's python dependencies
         run: |
           poetry install --no-interaction
 
