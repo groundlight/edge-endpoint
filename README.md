@@ -39,24 +39,24 @@ docker run -e GROUNDLIGHT_API_TOKEN --rm -it -p 6717:6717 edge-endpoint
 
 ```BASH
 # Install
-$ poetry install
+poetry install
 
 # Run the server (http://localhost:6718)
 # Note: the `--reload` option allows live code changes to be reloaded!
-$ poetry run uvicorn --workers 1 --host 0.0.0.0 --port 6718 app.main:app --reload
+poetry run uvicorn --workers 1 --host 0.0.0.0 --port 6718 app.main:app --reload
 
 # Test
-$ poetry run pytest
+poetry run pytest
 ```
 
 ### Inside Docker
 
 ```BASH
 # Build the image
-$ docker build --target production-image --tag groundlight-edge .
+docker build --target production-image --tag groundlight-edge .
 
 # Run the server
-$ docker run -e GROUNDLIGHT_API_TOKEN --rm -it -p 6717:6717 groundlight-edge
+docker run -e GROUNDLIGHT_API_TOKEN --rm -it -p 6717:6717 groundlight-edge
 ```
 
 #### See the edge API methods
