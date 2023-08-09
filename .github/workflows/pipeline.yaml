@@ -73,7 +73,7 @@ jobs:
           key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
       - name: Install package
         run: |
-          poetry install --no-interaction --no-root
+          poetry install --no-interaction
 
       - name: Run Unit Tests
         run: | 
