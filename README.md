@@ -14,7 +14,7 @@ sure you have your API token set up in your environment variable
 `GROUNDLIGHT_API_TOKEN`. Checkout [how to create your API token.](https://code.groundlight.ai/python-sdk/docs/getting-started/api-tokens). For more information on 
 how to run Groundlight on the edge, checkout our [documentation](https://code.groundlight.ai/python-sdk/docs/building-applications/edge)
 
-## Regular Usage in Docker
+## Running the Edge Endpoint
 
 The recommended way to run the Edge Endpoint is inside a docker container as follows:
 
@@ -24,6 +24,33 @@ docker build --target production-image --tag edge-endpoint .
 # Run the server
 docker run -e GROUNDLIGHT_API_TOKEN --rm -it -p 6717:6717 edge-endpoint
 ```
+
+### Using the Edge Endpoint with your Groundlight application.
+
+Any application written with the [Groundlight SDK](https://pypi.org/project/groundlight/) can work with an Edge Endpoint without any code changes.  Simply set an environment variable with the URL of your Edge Endpoint like:
+
+```bash
+export GROUNDLIGHT_ENDPOINT=http://localhost:6717
+```
+
+But if you'd like more control, you can also initialize the `Groundlight` SDK object with the endpoint explicitly like this:
+
+```python
+from groundlight import Groundlight
+
+gl = Groundlight(endpoint="http://localhost:6717")
+
+gl = Groundlight()
+det = gl.get_or_create_detector(name="doorway", query="Is the doorway open?")
+img = "./docs/static/img/doorway.jpg"  
+with open(img, "rb") as img_file:
+    byte_stream = img_file.read()
+
+image_query = gl.submit_image_query(detector=det, image=byte_stream)
+print(f"The answer is {image_query.result}")
+```
+
+See the [SDK's getting started guide](https://code.groundlight.ai/python-sdk/docs/getting-started) for more info.
 
 ## Development
 
@@ -37,6 +64,17 @@ docker run -e GROUNDLIGHT_API_TOKEN --rm -it -p 6717:6717 edge-endpoint
 
 ### Local (outside docker)
 
+To develop outside docker, you need to run both the nginx proxy and the edge logic server.
+
+The easiest way to run the nginx proxy is:
+
+```BASH
+# cd to the root of this repo
+sudo nginx -c $(pwd)/configs/nginx.conf
+```
+
+Then you must run the edge logic server like this:
+
 ```BASH
 # Install
 poetry install
@@ -49,45 +87,8 @@ poetry run uvicorn --workers 1 --host 0.0.0.0 --port 6718 app.main:app --reload
 poetry run pytest
 ```
 
-### Inside Docker
-
-```BASH
-# Build the image
-docker build --target production-image --tag groundlight-edge .
-
-# Run the server
-docker run -e GROUNDLIGHT_API_TOKEN --rm -it -p 6717:6717 groundlight-edge
-```
-
-#### See the edge API methods
+### See the edge API methods
 
 Open a web browser to http://localhost/redoc. This requires that the application server is already
 running either locally or in a docker container. 
 
-#### Call the edge API
-
-Just like with the [SDK](https://code.groundlight.ai/python-sdk/docs/getting-started), Groundlight lets
-you build a computer vision system on edge in just a few lines of code. 
-
-```BASH
-from groundlight import Groundlight
-
-gl = Groundlight(endpoint="http://localhost:6717")
-
-gl = Groundlight()
-det = gl.get_or_create_detector(name="doorway", query="Is the doorway open?")
-img = "./docs/static/img/doorway.jpg"  
-with open(img, "rb") as img_file:
-    byte_stream = img_file.read()
-
-image_query = gl.submit_image_query(detector=det, image=byte_stream)
-print(f"The answer is {image_query.result}")
-
-```
-
-## Useful references
-
-- [FastAPI](https://fastapi.tiangolo.com)
-- [FastAPI in docker](https://fastapi.tiangolo.com/deployment/docker/)
-- [FastAPI project structure example](https://github.com/tiangolo/full-stack-fastapi-postgresql)
-- [ChatGPT](https://chat.openai.com/chat): It's really good for asking questions like "How do I set up a FastAPI route?", "How do I set up an nginx reverse proxy?", "(code sample) Why is my code not working?", etc.
