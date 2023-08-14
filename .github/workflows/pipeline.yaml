@@ -10,10 +10,70 @@ env:
   GROUNDLIGHT_ENDPOINT: http://localhost:6717
 
 jobs:
+  test-motion-detection:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+      - name: Set up python
+        uses: actions/setup-python@v4
+        with :
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install Docker 
+        run: | 
+          sudo apt-get update 
+          sudo apt-get remove moby-runc 
+          sudo apt-get install apt-transport-https ca-certificates curl software-properties-common
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+          sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+          sudo apt-get update
+          sudo apt-get install docker-ce
+      - name: Build Docker Image
+        run: docker build --target production-image --tag groundlight-edge .
+      - name: Start Docker Container
+        id: start_container
+        run: echo "::set-output name=container_id::$(docker run \
+              -e LOG_LEVEL=DEBUG \
+              -e MAX_TIME_BETWEEN_IMAGES=60 \
+              -e GROUNDLIGHT_API_TOKEN=${{ env.GROUNDLIGHT_API_TOKEN }} \
+              -d -p 6717:6717 groundlight-edge)"
+
+      - name: Install poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: ${{ env.POETRY_VERSION }}
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: true
+
+      - name: Load Cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v3
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
+      - name: Install package
+        run: |
+          poetry install --no-interaction --no-root
+
+      - name: Run Motion Detection Tests 
+        run: | 
+          poetry run pytest -vs test/api/test_motdet.py
+      
+      - name: Dump Logs from Docker Container
+        if: always()
+        run: docker logs ${{ steps.start_container.outputs.container_id }}
+
+      - name: Stop Docker Container
+        # This ensures that we always stop the container regardless of the outcomes of 
+        # the previous steps 
+        if: always()
+        run: docker stop ${{ steps.start_container.outputs.container_id }}
+
   # Run Groundlight SDK tests against the 
   # edge proxy endpoint set in nginx.conf file 
   # and run unit tests. 
-  tests:
+  test-sdk-and-unit-tests:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code

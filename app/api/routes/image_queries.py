@@ -1,4 +1,5 @@
 import logging
+import time
 from io import BytesIO
 
 import numpy as np
@@ -34,12 +35,20 @@ async def post_image_query(
     async with motion_detector.lock:
         motion_detected = await motion_detector.motion_detected(new_img=img_numpy)
 
-        if motion_detected:
+        max_time_between_images_exceeded = False
+        if motion_detector.previous_iq_cloud_submission_time is not None:
+            current_time = time.time()
+            max_time_between_images_exceeded = (
+                current_time - motion_detector.previous_iq_cloud_submission_time
+            ) > motion_detector.max_time_between_images
+
+        if motion_detected or max_time_between_images_exceeded:
             image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=image, wait=wait)
+            motion_detector.previous_iq_cloud_submission_time = time.time()
             # Store the cloud's response so that if the next image has no motion, we will return
             # the same response
             motion_detector.image_query_response = image_query
-            logger.debug("Motion detected")
+            logger.debug("Motion detected" if motion_detected else "Maximum time between images exceeded")
             return image_query
 
     logger.debug("No motion detected")

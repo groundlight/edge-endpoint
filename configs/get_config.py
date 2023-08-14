@@ -12,9 +12,10 @@ def set_motion_detection_env_vars(config: dict) -> None:
         percentage_threshold = str(config["motdet"]["percentage-threshold"])
         val_threshold = str(config["motdet"]["val-threshold"])
         enabled = str(config["motdet"]["enabled"])
+        max_time_between_images = str(config["motdet"]["max-time-between-images"])
 
         envfile.write(
-            f"MOTDET_PERCENTAGE_THRESHOLD={percentage_threshold}\nMOTDET_VAL_THRESHOLD={val_threshold}\nENABLED={enabled}"
+            f"MOTDET_PERCENTAGE_THRESHOLD={percentage_threshold}\nMOTDET_VAL_THRESHOLD={val_threshold}\nENABLED={enabled}\nMAX_TIME_BETWEEN_IMAGES={max_time_between_images}"
         )
 
 

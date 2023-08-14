@@ -18,7 +18,14 @@ class MotdetParameterSettings(BaseSettings):
     motdet_val_threshold: int = Field(
         50, description="The minimum brightness change for a pixel for it to be considered changed."
     )
-    enabled: bool = Field(False, description="Determines if motion detection is enabled by default.")
+    enabled: bool = Field(True, description="Determines if motion detection is enabled by default.")
+    max_time_between_images: float = Field(
+        3600.0,
+        description=(
+            "Specifies the maximum time (seconds) between images sent to the cloud. This will be honored even if no"
+            " motion has been detected. Defaults to 1 hour."
+        ),
+    )
 
     class Config:
         env_file = ".env"
@@ -40,6 +47,10 @@ class AsyncMotionDetector:
         self.lock = Lock()
         self._image_query_response = None
         self._motion_detection_enabled = parameters.enabled
+        self.max_time_between_images = parameters.max_time_between_images
+
+        # Indicates the last time an image query was submitted to the cloud server.
+        self._previous_iq_cloud_submission_time = None
 
     def is_enabled(self) -> bool:
         return self._motion_detection_enabled
@@ -47,6 +58,14 @@ class AsyncMotionDetector:
     def enable(self) -> None:
         if not self._motion_detection_enabled:
             self._motion_detection_enabled = True
+
+    @property
+    def previous_iq_cloud_submission_time(self):
+        return self._previous_iq_cloud_submission_time
+
+    @previous_iq_cloud_submission_time.setter
+    def previous_iq_cloud_submission_time(self, time: float):
+        self._previous_iq_cloud_submission_time = time
 
     @property
     def image_query_response(self):
