@@ -18,7 +18,7 @@ class MotdetParameterSettings(BaseSettings):
     motdet_val_threshold: int = Field(
         50, description="The minimum brightness change for a pixel for it to be considered changed."
     )
-    enabled: bool = Field(True, description="Determines if motion detection is enabled by default.")
+    enabled: bool = Field(False, description="Determines if motion detection is enabled by default.")
     max_time_between_images: float = Field(
         3600.0,
         description=(

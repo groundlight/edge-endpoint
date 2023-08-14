@@ -1,7 +1,7 @@
 
 # Configure motion detection parameters
 motdet:
-  enabled: true 
+  enabled: false 
   percentage-threshold: 5.0
   val-threshold: 50
   # maximum time (seconds) between images sent to the cloud. This will be honored even if no
