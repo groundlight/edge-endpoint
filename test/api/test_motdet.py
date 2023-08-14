@@ -1,14 +1,14 @@
 import time
+from functools import wraps
+from typing import Callable
 
 import pytest
-from typing import Callable
-from functools import wraps
 from fastapi.testclient import TestClient
 from groundlight import Groundlight
 from model import Detector
 from PIL import Image, ImageFilter
-from app.main import app
 
+from app.main import app
 
 client = TestClient(app)
 
@@ -129,12 +129,12 @@ def test_no_motion_detected_response_is_fast(gl: Groundlight, detector: Detector
 
     image = Image.open("test/assets/dog.jpeg")
     start_time = time.time()
-    image_query = gl.submit_image_query(detector=detector.id, image=image, wait=5)
+    gl.submit_image_query(detector=detector.id, image=image, wait=5)
     total_time_with_motion_detected = time.time() - start_time
 
     start_time = time.time()
     new_image_query = gl.submit_image_query(detector=detector.id, image=image, wait=5)
-    total_time_with_no_motion_detected = time.time() - start_time
+    time.time() - start_time
 
     # Check that motion was indeed detected
     assert new_image_query.id.startswith("iqe_")
@@ -149,7 +149,7 @@ def test_max_time_between_cloud_submitted_images(gl: Groundlight, detector: Dete
     MAX_TIME_BETWEEN_CLOUD_SUBMITTED_IMAGES = 60
 
     image = Image.open("test/assets/dog.jpeg")
-    image_query = gl.submit_image_query(detector=detector.id, image=image, wait=5)
+    gl.submit_image_query(detector=detector.id, image=image, wait=5)
 
     new_image_query = gl.submit_image_query(detector=detector.id, image=image, wait=5)
     # No motion should be flagged this time since we are submitting the exact same image
