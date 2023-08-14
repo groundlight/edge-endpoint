@@ -1,7 +1,7 @@
 import time
 
 import pytest
-from typing import Callable 
+from typing import Callable
 from functools import wraps
 from fastapi.testclient import TestClient
 from groundlight import Groundlight
@@ -19,6 +19,7 @@ class SkipIfMotionDetectionDisabled:
     For now, motion detection has to be explicitly enabled since it is disabled by default.
     This decorator is useful for tests that rely on motion detection being enabled.
     """
+
     def __init__(self, reason: str = "Motion detection is disabled"):
         self.reason = reason
 
@@ -30,6 +31,7 @@ class SkipIfMotionDetectionDisabled:
             return function(*args, **kwargs)
 
         return wrapper
+
 
 # Detector ID associated with the detector with parameters
 # name="edge_testing_det",
