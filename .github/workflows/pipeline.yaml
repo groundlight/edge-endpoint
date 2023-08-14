@@ -32,7 +32,7 @@ jobs:
         run: docker build --target production-image --tag groundlight-edge .
       - name: Start Docker Container
         id: start_container
-        run: echo "::set-output name=container_id::$(docker run -e LOG_LEVEL=DEBUG -e MAX_TIME_BETWEEN_IMAGES=60 -e GROUNDLIGHT_API_TOKEN=${{ env.GROUNDLIGHT_API_TOKEN }} -d -p 6717:6717 groundlight-edge)"
+        run: echo "::set-output name=container_id::$(docker run -e LOG_LEVEL=DEBUG -e ENABLED=True -e MAX_TIME_BETWEEN_IMAGES=60 -e GROUNDLIGHT_API_TOKEN=${{ env.GROUNDLIGHT_API_TOKEN }} -d -p 6717:6717 groundlight-edge)"
 
       - name: Install poetry
         uses: snok/install-poetry@v1
