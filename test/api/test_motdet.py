@@ -144,6 +144,7 @@ def test_no_motion_detected_response_is_fast(gl: Groundlight, detector: Detector
     assert total_time_with_motion_detected > NO_MOTION_DETECTED_RESPONSE_TIME
 
 
+@SkipIfMotionDetectionDisabled()
 def test_max_time_between_cloud_submitted_images(gl: Groundlight, detector: Detector):
     MAX_TIME_BETWEEN_CLOUD_SUBMITTED_IMAGES = 60
 
