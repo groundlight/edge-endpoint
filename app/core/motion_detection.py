@@ -2,6 +2,7 @@ import asyncio
 from asyncio import Lock
 
 import numpy as np
+import time
 from framegrab import MotionDetector
 from model import ImageQuery
 from pydantic import BaseSettings, Field
@@ -12,14 +13,14 @@ class MotdetParameterSettings(BaseSettings):
     Read motion detection parameters from environment variables
     """
 
-    motdet_percentage_threshold: float = Field(
+    motion_detection_percentage_threshold: float = Field(
         5.0, description="Percent of pixels needed to change before motion is detected."
     )
-    motdet_val_threshold: int = Field(
+    motion_detection_val_threshold: int = Field(
         50, description="The minimum brightness change for a pixel for it to be considered changed."
     )
-    enabled: bool = Field(False, description="Determines if motion detection is enabled by default.")
-    max_time_between_images: float = Field(
+    motion_detection_enabled: bool = Field(False, description="Determines if motion detection is enabled by default.")
+    motion_detection_max_time_between_images: float = Field(
         3600.0,
         description=(
             "Specifies the maximum time (seconds) between images sent to the cloud. This will be honored even if no"
@@ -41,16 +42,17 @@ class AsyncMotionDetector:
 
     def __init__(self, parameters: MotdetParameterSettings):
         self._motion_detector = MotionDetector(
-            pct_threshold=parameters.motdet_percentage_threshold, val_threshold=parameters.motdet_val_threshold
+            pct_threshold=parameters.motion_detection_percentage_threshold,
+            val_threshold=parameters.motion_detection_val_threshold,
         )
         self._previous_image = None
         self.lock = Lock()
-        self._image_query_response = None
-        self._motion_detection_enabled = parameters.enabled
-        self.max_time_between_images = parameters.max_time_between_images
+        self.image_query_response = None
+        self._motion_detection_enabled = parameters.motion_detection_enabled
+        self._max_time_between_images = parameters.motion_detection_max_time_between_images
 
         # Indicates the last time an image query was submitted to the cloud server.
-        self._previous_iq_cloud_submission_time = None
+        self.previous_iq_cloud_submission_time = None
 
     def is_enabled(self) -> bool:
         return self._motion_detection_enabled
@@ -59,27 +61,9 @@ class AsyncMotionDetector:
         if not self._motion_detection_enabled:
             self._motion_detection_enabled = True
 
-    @property
-    def previous_iq_cloud_submission_time(self):
-        return self._previous_iq_cloud_submission_time
-
-    @previous_iq_cloud_submission_time.setter
-    def previous_iq_cloud_submission_time(self, time: float):
-        self._previous_iq_cloud_submission_time = time
-
-    @property
-    def image_query_response(self):
-        """
-        Get the image query response from the last motion detection run.
-        We are using `image_query_response` as a property so that we can
-        store the cloud's response and readily return it if the next image
-        has no motion.
-        """
-        return self._image_query_response
-
-    @image_query_response.setter
-    def image_query_response(self, response: ImageQuery):
-        self._image_query_response = response
-
     async def motion_detected(self, new_img: np.ndarray) -> bool:
+        if self.previous_iq_cloud_submission_time is not None:
+            current_time = time.monotonic()
+            if current_time - self.previous_iq_cloud_submission_time > self._max_time_between_images:
+                return True
         return await asyncio.to_thread(self._motion_detector.motion_detected, new_img)

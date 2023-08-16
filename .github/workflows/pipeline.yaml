@@ -62,7 +62,11 @@ jobs:
           poetry install --no-interaction --no-root
 
       - name: Run Motion Detection Tests 
+        # We need to set the MOTION_DETECTION_ENABLED environment variable to True
+        # here in addition to passing it to the docker container because the environment
+        # variables set by `docker run` are not automatically passed to the testing environment
         run: | 
+          export MOTION_DETECTION_ENABLED=True
           poetry run pytest -vs test/api/test_motdet.py
       
       - name: Dump Logs from Docker Container
@@ -102,7 +106,10 @@ jobs:
 
       - name: Start Docker Container 
         id: start_container
-        run: echo "::set-output name=container_id::$(docker run -e GROUNDLIGHT_API_TOKEN=${{ env.GROUNDLIGHT_API_TOKEN }} -d -p 6717:6717 groundlight-edge)"
+        run: echo "::set-output name=container_id::$(docker run \
+              -e GROUNDLIGHT_API_TOKEN=${{ env.GROUNDLIGHT_API_TOKEN }} \
+              -d -p 6717:6717 \
+              groundlight-edge)"
 
       - name: Install poetry 
         uses: snok/install-poetry@v1

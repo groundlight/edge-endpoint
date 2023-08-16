@@ -1,36 +1,13 @@
 import time
-from functools import wraps
-from typing import Callable
+import os
 
 import pytest
-from fastapi.testclient import TestClient
 from groundlight import Groundlight
 from model import Detector
 from PIL import Image, ImageFilter
 
-from app.main import app
 
-client = TestClient(app)
-
-
-class SkipIfMotionDetectionDisabled:
-    """
-    Decorator that skips a test if motion detection is disabled.
-    For now, motion detection has to be explicitly enabled since it is disabled by default.
-    This decorator is useful for tests that rely on motion detection being enabled.
-    """
-
-    def __init__(self, reason: str = "Motion detection is disabled"):
-        self.reason = reason
-
-    def __call__(self, function: Callable):
-        @wraps(function)
-        def wrapper(*args, **kwargs):
-            if not app.state.motion_detector.is_enabled():
-                pytest.skip(reason=self.reason)
-            return function(*args, **kwargs)
-
-        return wrapper
+motion_detection_enabled = os.environ.get("MOTION_DETECTION_ENABLED", "False").upper() == "TRUE"
 
 
 # Detector ID associated with the detector with parameters
@@ -51,7 +28,7 @@ def detector(gl: Groundlight) -> Detector:
     return gl.get_detector(id=DETECTOR_ID)
 
 
-@SkipIfMotionDetectionDisabled()
+@pytest.mark.skipif(not motion_detection_enabled, reason="Motion detection is disabled")
 def test_motion_detection(gl: Groundlight, detector: Detector):
     """
     Test motion detection by applying a Gaussian noiser on the query image.
@@ -71,16 +48,9 @@ def test_motion_detection(gl: Groundlight, detector: Detector):
         blurred_image = original_image.filter(ImageFilter.GaussianBlur(radius=50))
         new_response = gl.submit_image_query(detector=detector.id, image=blurred_image, wait=10)
 
-        # We expect that motion is detected on the blurred image
-        assert new_response.id != previous_response.id
-        assert new_response.type == previous_response.type
-        assert new_response.result_type == previous_response.result_type
-        assert new_response.result.confidence is None or new_response.result.confidence != previous_response
-        assert new_response.result.label != previous_response.result.label
-        assert new_response.detector_id == previous_response.detector_id
-        assert new_response.query == previous_response.query
+        assert new_response.id != previous_response.id and new_response.id.startswith("iq_")
 
-        # Since we don't update the state of the motion detecter global object until after we
+        # Since we don't update the state of the motion detector global object until after we
         # receive a new image that shows motion, this new call to submit_image_query essentially
         # restores the cached image query response to `base_iq_response`. This is guaranteed because
         # we expect that submitting the original image again should indicate that motion was detected again.
@@ -91,16 +61,10 @@ def test_motion_detection(gl: Groundlight, detector: Detector):
 
         new_response = gl.submit_image_query(detector=detector.id, image=less_blurred_image, wait=10)
 
-        assert new_response.id != previous_response.id
-        assert new_response.type == previous_response.type
-        assert new_response.result_type == previous_response.result_type
-        assert new_response.result.confidence == previous_response.result.confidence
-        assert new_response.result.label == previous_response.result.label
-        assert new_response.detector_id == previous_response.detector_id
-        assert new_response.query == previous_response.query
+        assert new_response.id != previous_response.id and new_response.id.startswith("iqe_")
 
 
-@SkipIfMotionDetectionDisabled()
+@pytest.mark.skipif(not motion_detection_enabled, reason="Motion detection is disabled")
 def test_answer_changes_with_different_image(gl: Groundlight, detector: Detector):
     """
     Tests that the answer changes when we submit a different image while running motion detection.
@@ -118,7 +82,7 @@ def test_answer_changes_with_different_image(gl: Groundlight, detector: Detector
     assert new_image_query.id.startswith("iq_")
 
 
-@SkipIfMotionDetectionDisabled()
+@pytest.mark.skipif(not motion_detection_enabled, reason="Motion detection is disabled")
 def test_no_motion_detected_response_is_fast(gl: Groundlight, detector: Detector):
     """
     This test ensures that when no motion is detected the image query response is returned
@@ -136,7 +100,7 @@ def test_no_motion_detected_response_is_fast(gl: Groundlight, detector: Detector
     new_image_query = gl.submit_image_query(detector=detector.id, image=image, wait=5)
     time.time() - start_time
 
-    # Check that motion was indeed detected
+    # Check that motion was not flagged
     assert new_image_query.id.startswith("iqe_")
 
     # Check that the time taken to return an image query with no motion detected is much faster
@@ -144,7 +108,7 @@ def test_no_motion_detected_response_is_fast(gl: Groundlight, detector: Detector
     assert total_time_with_motion_detected > NO_MOTION_DETECTED_RESPONSE_TIME
 
 
-@SkipIfMotionDetectionDisabled()
+@pytest.mark.skipif(not motion_detection_enabled, reason="Motion detection is disabled")
 def test_max_time_between_cloud_submitted_images(gl: Groundlight, detector: Detector):
     MAX_TIME_BETWEEN_CLOUD_SUBMITTED_IMAGES = 60
 

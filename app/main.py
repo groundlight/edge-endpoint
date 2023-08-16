@@ -12,6 +12,7 @@ from .core.motion_detection import AsyncMotionDetector, MotdetParameterSettings
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
 logging.basicConfig(level=LOG_LEVEL)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 app.include_router(router=api_router, prefix=API_BASE_PATH)
@@ -20,6 +21,11 @@ app.include_router(router=ping_router)
 
 # Create global shared Groundlight SDK client object in the app's state
 app.state.groundlight = Groundlight()
+
+parameters = MotdetParameterSettings()
+
+logger.debug(f"Motion detection parameters: {parameters}")
+logger.debug(f"type of motdet-enabled: {type(parameters.motion_detection_enabled)}")
 
 # Create global shared motion detector object in the app's state
 app.state.motion_detector = AsyncMotionDetector(parameters=MotdetParameterSettings())
