@@ -37,7 +37,7 @@ async def post_image_query(
 
         max_time_between_images_exceeded = False
         if motion_detector.previous_iq_cloud_submission_time is not None:
-            current_time = time.time()
+            current_time = time.monotonic()
             max_time_between_images_exceeded = (
                 current_time - motion_detector.previous_iq_cloud_submission_time
             ) > motion_detector.max_time_between_images
