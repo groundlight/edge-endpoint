@@ -20,6 +20,9 @@ jobs:
         with :
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install Docker 
+        # moby-runc is a CLI tool for spawning and running containers according to the Open Container Initiative (OCI) 
+        # specification, and it is used by the Docker runtime. The existing version of moby-runc on the GitHub Actions runner
+        # is often incompatible with the version of Docker we want to install, so we need to remove it first.
         run: | 
           sudo apt-get update 
           sudo apt-get remove moby-runc 
@@ -32,7 +35,13 @@ jobs:
         run: docker build --target production-image --tag groundlight-edge .
       - name: Start Docker Container
         id: start_container
-        run: echo "::set-output name=container_id::$(docker run -e LOG_LEVEL=DEBUG -e ENABLED=True -e MAX_TIME_BETWEEN_IMAGES=60 -e GROUNDLIGHT_API_TOKEN=${{ env.GROUNDLIGHT_API_TOKEN }} -d -p 6717:6717 groundlight-edge)"
+        run: echo "::set-output name=container_id::$(docker run \
+              -e LOG_LEVEL=DEBUG \
+              -e MOTION_DETECTION_ENABLED=True \
+              -e MOTION_DETECTION_MAX_TIME_BETWEEN_IMAGES=60 \
+              -e GROUNDLIGHT_API_TOKEN=${{ env.GROUNDLIGHT_API_TOKEN }} \
+              -d -p 6717:6717 \
+              groundlight-edge)"
 
       - name: Install poetry
         uses: snok/install-poetry@v1
