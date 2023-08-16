@@ -1,10 +1,9 @@
 import asyncio
+import time
 from asyncio import Lock
 
 import numpy as np
-import time
 from framegrab import MotionDetector
-from model import ImageQuery
 from pydantic import BaseSettings, Field
 
 
