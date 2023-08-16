@@ -1,11 +1,10 @@
-import time
 import os
+import time
 
 import pytest
 from groundlight import Groundlight
 from model import Detector
 from PIL import Image, ImageFilter
-
 
 motion_detection_enabled = os.environ.get("MOTION_DETECTION_ENABLED", "False").upper() == "TRUE"
 
