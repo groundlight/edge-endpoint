@@ -10,11 +10,6 @@ from pydantic import BaseSettings, Field
 logger = logging.getLogger(__name__)
 
 
-class IQECache:
-    def __init__(self) -> None:
-        self.cached_iqe = {}
-
-
 class MotdetParameterSettings(BaseSettings):
     """
     Read motion detection parameters from environment variables
@@ -60,6 +55,10 @@ class AsyncMotionDetector:
 
         # Indicates the last time motion was detected.
         self._previous_motion_detection_time = None
+
+        # Cache for image query responses whose IDs start with "iqe_". This is needed
+        # because the cloud API does not currently recognize these IDs.
+        self.iqe_cache = {}
 
     def is_enabled(self) -> bool:
         return self._motion_detection_enabled

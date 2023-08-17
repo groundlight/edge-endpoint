@@ -5,8 +5,8 @@ import numpy as np
 from fastapi import APIRouter, Depends, Request
 from model import ImageQuery
 from PIL import Image, ImageFile
-
-from app.core.utils import get_groundlight_sdk_instance, get_motion_detector_instance, prefixed_ksuid, safe_call_api, get_iqe_cache
+from fastapi import HTTPException
+from app.core.utils import get_groundlight_sdk_instance, get_motion_detector_instance, prefixed_ksuid, safe_call_api
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,6 @@ async def post_image_query(
     request: Request = None,
     gl: Depends = Depends(get_groundlight_sdk_instance),
     motion_detector: Depends = Depends(get_motion_detector_instance),
-    iqe_cache: Depends = Depends(get_iqe_cache)
 ):
     image = await request.body()
     img = Image.open(BytesIO(image))
@@ -45,16 +44,20 @@ async def post_image_query(
     logger.debug("No motion detected")
     new_image_query = ImageQuery(**motion_detector.image_query_response.dict())
     new_image_query.id = prefixed_ksuid(prefix="iqe_")
-    iqe_cache.cached_iqe[new_image_query.id] = new_image_query
-    
+    motion_detector.iqe_cache[new_image_query.id] = new_image_query
+
     return new_image_query
 
 
 @router.get("/{id}", response_model=ImageQuery)
-async def get_image_query(id: str, gl: Depends = Depends(get_groundlight_sdk_instance), iqe_cache: Depends = Depends(get_iqe_cache)):
+async def get_image_query(
+    id: str,
+    gl: Depends = Depends(get_groundlight_sdk_instance),
+    motion_detector: Depends = Depends(get_motion_detector_instance),
+):
     if id.startswith("iqe_"):
-        image_query = iqe_cache.cached_iqe.get(id, None)
+        image_query = motion_detector.iqe_cache.cached_iqe.get(id, None)
         if not image_query:
-            raise ValueError()
+            raise HTTPException(status_code=404, detail="Image query not found")
         return image_query
     return safe_call_api(gl.get_image_query, id=id)
