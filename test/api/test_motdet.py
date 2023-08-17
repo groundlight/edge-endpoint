@@ -109,7 +109,7 @@ def test_no_motion_detected_response_is_fast(gl: Groundlight, detector: Detector
 
 @pytest.mark.skipif(not motion_detection_enabled, reason="Motion detection is disabled")
 def test_max_time_between_cloud_submitted_images(gl: Groundlight, detector: Detector):
-    MAX_TIME_BETWEEN_CLOUD_SUBMITTED_IMAGES = 60
+    MAX_TIME_BETWEEN_CLOUD_SUBMITTED_IMAGES = 30
 
     image = Image.open("test/assets/dog.jpeg")
     gl.submit_image_query(detector=detector.id, image=image, wait=5)
@@ -118,7 +118,7 @@ def test_max_time_between_cloud_submitted_images(gl: Groundlight, detector: Dete
     # No motion should be flagged this time since we are submitting the exact same image
     assert new_image_query.id.startswith("iqe_")
 
-    time.sleep(MAX_TIME_BETWEEN_CLOUD_SUBMITTED_IMAGES + 10)
+    time.sleep(MAX_TIME_BETWEEN_CLOUD_SUBMITTED_IMAGES + 5)
 
     new_image_query = gl.submit_image_query(detector=detector.id, image=image, wait=5)
     # No motion should be detected here, but we should still submit the image query to the cloud server

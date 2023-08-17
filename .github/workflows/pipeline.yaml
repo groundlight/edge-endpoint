@@ -39,7 +39,7 @@ jobs:
           container_id=$(docker run \
             -e LOG_LEVEL=DEBUG \
             -e MOTION_DETECTION_ENABLED=True \
-            -e MOTION_DETECTION_MAX_TIME_BETWEEN_IMAGES=60 \
+            -e MOTION_DETECTION_MAX_TIME_BETWEEN_IMAGES=30 \
             -e GROUNDLIGHT_API_TOKEN=${{ env.GROUNDLIGHT_API_TOKEN }} \
             -d -p 6717:6717 \
             groundlight-edge)
