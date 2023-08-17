@@ -74,5 +74,5 @@ class AsyncMotionDetector:
         motion_is_detected = await asyncio.to_thread(self._motion_detector.motion_detected, new_img)
         if motion_is_detected:
             logger.debug("Motion detected")
-            self.previous_motion_detection_time = time.monotonic()
+            self._previous_motion_detection_time = time.monotonic()
         return motion_is_detected
