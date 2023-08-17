@@ -40,10 +40,6 @@ async def post_image_query(
             # Store the cloud's response so that if the next image has no motion, we will return
             # the same response
             motion_detector.image_query_response = image_query
-            if motion_detected:
-                logger.debug("Motion detected")
-            else:
-                logger.debug("Maximum time between images exceeded")
             return image_query
 
     logger.debug("No motion detected")

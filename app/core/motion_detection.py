@@ -1,10 +1,13 @@
 import asyncio
 import time
 from asyncio import Lock
+import logging
 
 import numpy as np
 from framegrab import MotionDetector
 from pydantic import BaseSettings, Field
+
+logger = logging.getLogger(__name__)
 
 
 class MotdetParameterSettings(BaseSettings):
@@ -65,9 +68,11 @@ class AsyncMotionDetector:
             current_time = time.monotonic()
             if current_time - self._previous_motion_detection_time > self._max_time_between_images:
                 self._previous_motion_detection_time = current_time
+                logger.debug("Maximum time between images exceeded")
                 return True
 
         motion_is_detected = await asyncio.to_thread(self._motion_detector.motion_detected, new_img)
         if motion_is_detected:
+            logger.debug("Motion detected")
             self.previous_motion_detection_time = time.monotonic()
         return motion_is_detected
