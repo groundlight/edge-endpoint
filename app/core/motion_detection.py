@@ -50,8 +50,8 @@ class AsyncMotionDetector:
         self._motion_detection_enabled = parameters.motion_detection_enabled
         self._max_time_between_images = parameters.motion_detection_max_time_between_images
 
-        # Indicates the last time an image query was submitted to the cloud server.
-        self.previous_iq_cloud_submission_time = None
+        # Indicates the last time motion was detected.
+        self._previous_motion_detection_time = None
 
     def is_enabled(self) -> bool:
         return self._motion_detection_enabled
@@ -61,8 +61,13 @@ class AsyncMotionDetector:
             self._motion_detection_enabled = True
 
     async def motion_detected(self, new_img: np.ndarray) -> bool:
-        if self.previous_iq_cloud_submission_time is not None:
+        if self._previous_motion_detection_time is not None:
             current_time = time.monotonic()
-            if current_time - self.previous_iq_cloud_submission_time > self._max_time_between_images:
+            if current_time - self._previous_motion_detection_time > self._max_time_between_images:
+                self._previous_motion_detection_time = current_time
                 return True
-        return await asyncio.to_thread(self._motion_detector.motion_detected, new_img)
+
+        motion_is_detected = await asyncio.to_thread(self._motion_detector.motion_detected, new_img)
+        if motion_is_detected:
+            self.previous_motion_detection_time = time.monotonic()
+        return motion_is_detected
