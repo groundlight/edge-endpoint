@@ -10,6 +10,11 @@ from pydantic import BaseSettings, Field
 logger = logging.getLogger(__name__)
 
 
+class IQECache:
+    def __init__(self) -> None:
+        self.cached_iqe = {}
+
+
 class MotdetParameterSettings(BaseSettings):
     """
     Read motion detection parameters from environment variables

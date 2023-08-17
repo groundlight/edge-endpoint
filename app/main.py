@@ -7,7 +7,7 @@ from groundlight import Groundlight
 from app.api.api import api_router, ping_router
 from app.api.naming import API_BASE_PATH
 
-from .core.motion_detection import AsyncMotionDetector, MotdetParameterSettings
+from .core.motion_detection import AsyncMotionDetector, MotdetParameterSettings, IQECache
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
@@ -21,7 +21,7 @@ app.include_router(router=ping_router)
 # Create global shared Groundlight SDK client object in the app's state
 app.state.groundlight = Groundlight()
 
-parameters = MotdetParameterSettings()
-
 # Create global shared motion detector object in the app's state
 app.state.motion_detector = AsyncMotionDetector(parameters=MotdetParameterSettings())
+
+app.state.iqe_cache = IQECache()

@@ -13,6 +13,9 @@ def get_groundlight_sdk_instance(request: Request):
 def get_motion_detector_instance(request: Request):
     return request.app.state.motion_detector
 
+def get_iqe_cache(request: Request):
+    return request.app.state.iqe_cache
+
 
 def safe_call_api(api_method: Callable, **kwargs):
     """
