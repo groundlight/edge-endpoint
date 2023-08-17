@@ -1,7 +1,7 @@
 import asyncio
+import logging
 import time
 from asyncio import Lock
-import logging
 
 import numpy as np
 from framegrab import MotionDetector
