@@ -2,10 +2,10 @@ import logging
 from io import BytesIO
 
 import numpy as np
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from model import ImageQuery
 from PIL import Image, ImageFile
-from fastapi import HTTPException
+
 from app.core.utils import get_groundlight_sdk_instance, get_motion_detector_instance, prefixed_ksuid, safe_call_api
 
 logger = logging.getLogger(__name__)
