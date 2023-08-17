@@ -1,5 +1,4 @@
 import logging
-import time
 from io import BytesIO
 
 import numpy as np
