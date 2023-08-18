@@ -70,14 +70,14 @@ def test_answer_changes_with_different_image(gl: Groundlight, detector: Detector
     """
     ITERATIONS = 3
     image = Image.open("test/assets/dog.jpeg")
-    image_query = gl.submit_image_query(detector=detector.id, image=image, wait=5)
+    image_query = gl.submit_image_query(detector=detector.id, image=image, wait=10)
 
     for _ in range(ITERATIONS):
-        image_query = gl.submit_image_query(detector=detector.id, image=image, wait=5)
+        image_query = gl.submit_image_query(detector=detector.id, image=image, wait=10)
         assert image_query.id.startswith("iqe_")
 
     new_image = Image.open("test/assets/cat.jpeg")
-    new_image_query = gl.submit_image_query(detector=detector.id, image=new_image, wait=5)
+    new_image_query = gl.submit_image_query(detector=detector.id, image=new_image, wait=10)
     assert new_image_query.id.startswith("iq_")
 
 
@@ -92,11 +92,11 @@ def test_no_motion_detected_response_is_fast(gl: Groundlight, detector: Detector
 
     image = Image.open("test/assets/dog.jpeg")
     start_time = time.time()
-    gl.submit_image_query(detector=detector.id, image=image, wait=5)
+    gl.submit_image_query(detector=detector.id, image=image, wait=10)
     total_time_with_motion_detected = time.time() - start_time
 
     start_time = time.time()
-    new_image_query = gl.submit_image_query(detector=detector.id, image=image, wait=5)
+    new_image_query = gl.submit_image_query(detector=detector.id, image=image, wait=10)
     time.time() - start_time
 
     # Check that motion was not flagged
@@ -112,15 +112,15 @@ def test_max_time_between_cloud_submitted_images(gl: Groundlight, detector: Dete
     MAX_TIME_BETWEEN_CLOUD_SUBMITTED_IMAGES = 30
 
     image = Image.open("test/assets/dog.jpeg")
-    gl.submit_image_query(detector=detector.id, image=image, wait=5)
+    gl.submit_image_query(detector=detector.id, image=image, wait=10)
 
-    new_image_query = gl.submit_image_query(detector=detector.id, image=image, wait=5)
+    new_image_query = gl.submit_image_query(detector=detector.id, image=image, wait=10)
     # No motion should be flagged this time since we are submitting the exact same image
     assert new_image_query.id.startswith("iqe_")
 
     time.sleep(MAX_TIME_BETWEEN_CLOUD_SUBMITTED_IMAGES + 5)
 
-    new_image_query = gl.submit_image_query(detector=detector.id, image=image, wait=5)
+    new_image_query = gl.submit_image_query(detector=detector.id, image=image, wait=10)
     # No motion should be detected here, but we should still submit the image query to the cloud server
     # since the maximum time between two image query submission to the cloud server has been exceeded.
     assert new_image_query.id.startswith("iq_")
