@@ -2,7 +2,7 @@ import logging
 from io import BytesIO
 
 import numpy as np
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from model import ImageQuery
 from PIL import Image, ImageFile
 from fastapi import HTTPException
