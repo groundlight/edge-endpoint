@@ -5,13 +5,13 @@ import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Request
 from model import ImageQuery
 from PIL import Image, ImageFile
-from fastapi import HTTPException
+
 from app.core.utils import (
+    get_edge_detector_manager,
     get_groundlight_sdk_instance,
     get_motion_detector_instance,
     prefixed_ksuid,
     safe_call_api,
-    get_edge_detector_manager,
 )
 
 logger = logging.getLogger(__name__)
