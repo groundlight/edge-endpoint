@@ -56,10 +56,6 @@ class AsyncMotionDetector:
         # Indicates the last time motion was detected.
         self._previous_motion_detection_time = None
 
-        # Cache for image query responses whose IDs start with "iqe_". This is needed
-        # because the cloud API does not currently recognize these IDs.
-        self.iqe_cache = {}
-
     def is_enabled(self) -> bool:
         return self._motion_detection_enabled
 
@@ -72,7 +68,7 @@ class AsyncMotionDetector:
             current_time = time.monotonic()
             if current_time - self._previous_motion_detection_time > self._max_time_between_images:
                 self._previous_motion_detection_time = current_time
-                logger.debug("Maximum time between images exceeded")
+                logger.debug("Maximum time between cloud-submitted images exceeded")
                 return True
 
         motion_is_detected = await asyncio.to_thread(self._motion_detector.motion_detected, new_img)
