@@ -3,7 +3,7 @@ from io import BytesIO
 from typing import Optional
 
 import numpy as np
-from fastapi import APIRouter, Depends, HTTPException, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from model import ImageQuery
 from PIL import Image, ImageFile
 
