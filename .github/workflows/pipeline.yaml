@@ -149,7 +149,7 @@ jobs:
           key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
       - name: Install edge-endpoint's python dependencies
         run: |
-          poetry install --no-interaction
+          poetry install --no-interaction --no-root
 
       - name: Run Unit Tests
         run: | 

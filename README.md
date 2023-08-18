@@ -40,7 +40,6 @@ from groundlight import Groundlight
 
 gl = Groundlight(endpoint="http://localhost:6717")
 
-gl = Groundlight()
 det = gl.get_or_create_detector(name="doorway", query="Is the doorway open?")
 img = "./docs/static/img/doorway.jpg"  
 with open(img, "rb") as img_file:
