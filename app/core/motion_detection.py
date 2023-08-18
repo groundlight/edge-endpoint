@@ -76,3 +76,11 @@ class AsyncMotionDetector:
             logger.debug("Motion detected")
             self._previous_motion_detection_time = time.monotonic()
         return motion_is_detected
+    
+    
+    
+class MotionDetectionManager:
+    def __init__(self) -> None:
+        pass 
+    
+    
