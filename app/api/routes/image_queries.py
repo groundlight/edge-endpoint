@@ -65,6 +65,6 @@ async def get_image_query(
     if id.startswith("iqe_"):
         image_query = edge_detector_manager.iqe_cache.get(id, None)
         if not image_query:
-            raise HTTPException(status_code=404, detail="Image query not found")
+            raise HTTPException(status_code=404, detail=f"Image query with ID {id} not found")
         return image_query
     return safe_call_api(gl.get_image_query, id=id)
