@@ -22,7 +22,7 @@ The recommended way to run the Edge Endpoint is inside a docker container as fol
 docker build --target production-image --tag edge-endpoint .
 
 # Run the endpoint as a container in the background
-docker run -d --name groundlight-edge -e GROUNDLIGHT_API_TOKEN --rm -p 6717 edge-endpoint
+docker run -d --name groundlight-edge -e GROUNDLIGHT_API_TOKEN --rm -p 6717:6717 edge-endpoint
 ```
 
 Then you can follow the logs or stop it with these commands:
