@@ -1,8 +1,7 @@
 import asyncio
 import logging
 import time
-from asyncio import Lock
-
+import threading
 import numpy as np
 from framegrab import MotionDetector
 from pydantic import BaseSettings, Field
@@ -48,7 +47,7 @@ class AsyncMotionDetector:
             val_threshold=parameters.motion_detection_val_threshold,
         )
         self._previous_image = None
-        self.lock = Lock()
+        self.lock = threading.Lock()
         self.image_query_response = None
         self._motion_detection_enabled = parameters.motion_detection_enabled
         self._max_time_between_images = parameters.motion_detection_max_time_between_images
@@ -71,8 +70,9 @@ class AsyncMotionDetector:
                 logger.debug("Maximum time between cloud-submitted images exceeded")
                 return True
 
-        motion_is_detected = await asyncio.to_thread(self._motion_detector.motion_detected, new_img)
-        if motion_is_detected:
-            logger.debug("Motion detected")
-            self._previous_motion_detection_time = time.monotonic()
-        return motion_is_detected
+        with self.lock:
+            motion_is_detected = await asyncio.to_thread(self._motion_detector.motion_detected, new_img)
+            if motion_is_detected:
+                logger.debug("Motion detected")
+                self._previous_motion_detection_time = time.monotonic()
+            return motion_is_detected
