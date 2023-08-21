@@ -80,7 +80,7 @@ class AsyncMotionDetector:
     
     
 class MotionDetectionManager:
-    def __init__(self) -> None:
-        pass 
+    def __init__(self, config: MotionDetectionConfig) -> None:
+        self.detectors = {id: AsyncMotionDetector(config) for id in config.detector_ids}
     
     
