@@ -2,12 +2,17 @@ import asyncio
 import logging
 import time
 from asyncio import Lock
+from model import ImageQuery
 
 import numpy as np
 from framegrab import MotionDetector
 from pydantic import BaseSettings, Field
 
 logger = logging.getLogger(__name__)
+
+
+class MotionDetectionConfig(BaseSettings):
+    pass
 
 
 class MotdetParameterSettings(BaseSettings):
@@ -76,11 +81,37 @@ class AsyncMotionDetector:
             logger.debug("Motion detected")
             self._previous_motion_detection_time = time.monotonic()
         return motion_is_detected
-    
-    
-    
+
+
 class MotionDetectionManager:
     def __init__(self, config: MotionDetectionConfig) -> None:
         self.detectors = {id: AsyncMotionDetector(config) for id in config.detector_ids}
-    
-    
+
+        self.tasks = {id: [] for id in config.detector_ids}
+
+    def update_image_query_response(self, detector_id: str, response: ImageQuery) -> None:
+        self.detectors[detector_id].image_query_response = response
+
+    def get_image_query_response(self, detector_id: str) -> ImageQuery:
+        return self.detectors[detector_id].image_query_response
+
+    async def run_motion_detection(self, detector_id: str, new_img: np.ndarray) -> bool:
+        """
+        Submits a coroutine to run motion detection on the given image in the background.
+        That means motion detection will be run concurrently with the existing tasks in the event loop.
+        This is useful because it allows us to run motdet in parallel for multiple different detectors.
+
+        Args:
+            detector_id: ID of the detector to run motion detection on.
+            image: Image to run motion detection on.
+
+        Returns:
+            True if motion was detected, False otherwise.
+
+        """
+
+        if detector_id not in self.detectors.keys():
+            raise ValueError(f"Detector ID {detector_id} not found")
+
+        task = asyncio.create_task(asyncio.to_thread(self.detectors[detector_id].motion_detected(new_img=image)))
+        self.tasks[detector_id].append(task)

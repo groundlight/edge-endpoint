@@ -10,6 +10,7 @@ from app.core.utils import (
     get_edge_detector_manager,
     get_groundlight_sdk_instance,
     get_motion_detector_instance,
+    get_motion_detection_manager,
     prefixed_ksuid,
     safe_call_api,
 )
@@ -30,12 +31,16 @@ async def post_image_query(
     gl: Depends = Depends(get_groundlight_sdk_instance),
     motion_detector: Depends = Depends(get_motion_detector_instance),
     edge_detector_manager: Depends = Depends(get_edge_detector_manager),
+    motion_detection_manager: Depends = Depends(get_motion_detection_manager),
 ):
     image = await request.body()
     img = Image.open(BytesIO(image))
     img_numpy = np.array(img)
 
-    if not motion_detector.is_enabled():
+    if (
+        detector_id not in motion_detection_manager.detectors
+        or not motion_detection_manager.detectors[detector_id].is_enabled()
+    ):
         return safe_call_api(gl.submit_image_query, detector=detector_id, image=image, wait=wait)
 
     async with motion_detector.lock:

@@ -8,7 +8,7 @@ from app.api.api import api_router, ping_router
 from app.api.naming import API_BASE_PATH
 
 from .core.edge_detector_manager import EdgeDetectorManager
-from .core.motion_detection import AsyncMotionDetector, MotdetParameterSettings
+from .core.motion_detection import AsyncMotionDetector, MotdetParameterSettings, MotionDetectionManager
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
@@ -19,11 +19,14 @@ app.include_router(router=api_router, prefix=API_BASE_PATH)
 app.include_router(router=ping_router)
 
 
-# Create global shared Groundlight SDK client object in the app's state
+# Create a global shared Groundlight SDK client object in the app's state
 app.state.groundlight = Groundlight()
 
-# Create global shared motion detector object in the app's state
+# Create a global shared motion detector object in the app's state
 app.state.motion_detector = AsyncMotionDetector(parameters=MotdetParameterSettings())
 
-# Create global shared edge detector manager object in the app's state
+# Create a global shared edge detector manager object in the app's state
 app.state.edge_detector_manager = EdgeDetectorManager()
+
+# Create a global shared motion detection manager object in the app's state
+app.state.motion_detection_manager = MotionDetectionManager()

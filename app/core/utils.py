@@ -18,6 +18,10 @@ def get_edge_detector_manager(request: Request):
     return request.app.state.edge_detector_manager
 
 
+def get_motion_detection_manager(request: Request):
+    return request.app.state.motion_detection_manager
+
+
 def safe_call_api(api_method: Callable, **kwargs):
     """
     This ensures that we correctly handle HTTP error status codes. In some cases,
