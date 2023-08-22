@@ -6,28 +6,22 @@ from model import ImageQuery
 
 import numpy as np
 from framegrab import MotionDetector
-from pydantic import BaseSettings, Field
+from pydantic import BaseModel, Field
+from typing import List
 
 logger = logging.getLogger(__name__)
 
 
-class MotionDetectionConfig(BaseSettings):
-    pass
-
-
-class MotdetParameterSettings(BaseSettings):
-    """
-    Read motion detection parameters from environment variables
-    """
-
-    motion_detection_percentage_threshold: float = Field(
+class MotionDetectionParams(BaseModel):
+    detector_id: str = Field(..., description="Detector ID")
+    enabled: bool = Field(False, description="Determines if motion detection is enabled for this detector")
+    perdentage_threshold: float = Field(
         5.0, description="Percent of pixels needed to change before motion is detected."
     )
-    motion_detection_val_threshold: int = Field(
+    val_threshold: int = Field(
         50, description="The minimum brightness change for a pixel for it to be considered changed."
     )
-    motion_detection_enabled: bool = Field(False, description="Determines if motion detection is enabled by default.")
-    motion_detection_max_time_between_images: float = Field(
+    max_time_between_images: float = Field(
         3600.0,
         description=(
             "Specifies the maximum time (seconds) between images sent to the cloud. This will be honored even if no"
@@ -35,11 +29,12 @@ class MotdetParameterSettings(BaseSettings):
         ),
     )
 
-    class Config:
-        env_file = ".env"
+
+class RootConfig(BaseModel):
+    motion_detection: List[MotionDetectionParams]
 
 
-class AsyncMotionDetector:
+class MotionDetector:
     """Asynchronous motion detector.
     This is a wrapper around MotionDetector that exposes an asynchronous
     execution of `motion_detected` method. Although this method need not be asynchronous
@@ -47,7 +42,7 @@ class AsyncMotionDetector:
     invoked asynchronously from the API.
     """
 
-    def __init__(self, parameters: MotdetParameterSettings):
+    def __init__(self, parameters: MotionDetectionParams):
         self._motion_detector = MotionDetector(
             pct_threshold=parameters.motion_detection_percentage_threshold,
             val_threshold=parameters.motion_detection_val_threshold,
@@ -68,7 +63,7 @@ class AsyncMotionDetector:
         if not self._motion_detection_enabled:
             self._motion_detection_enabled = True
 
-    async def motion_detected(self, new_img: np.ndarray) -> bool:
+    def motion_detected(self, new_img: np.ndarray) -> bool:
         if self._previous_motion_detection_time is not None:
             current_time = time.monotonic()
             if current_time - self._previous_motion_detection_time > self._max_time_between_images:
@@ -76,7 +71,7 @@ class AsyncMotionDetector:
                 logger.debug("Maximum time between cloud-submitted images exceeded")
                 return True
 
-        motion_is_detected = await asyncio.to_thread(self._motion_detector.motion_detected, new_img)
+        motion_is_detected = self._motion_detector.motion_detected(new_img)
         if motion_is_detected:
             logger.debug("Motion detected")
             self._previous_motion_detection_time = time.monotonic()
@@ -84,8 +79,10 @@ class AsyncMotionDetector:
 
 
 class MotionDetectionManager:
-    def __init__(self, config: MotionDetectionConfig) -> None:
-        self.detectors = {id: AsyncMotionDetector(config) for id in config.detector_ids}
+    def __init__(self, config: RootConfig) -> None:
+        self.detectors = {
+            detector_params.detector_id: MotionDetector(detector_params) for detector_params in config.motion_detection
+        }
 
         self.tasks = {id: [] for id in config.detector_ids}
 
@@ -99,7 +96,7 @@ class MotionDetectionManager:
         """
         Submits a coroutine to run motion detection on the given image in the background.
         That means motion detection will be run concurrently with the existing tasks in the event loop.
-        This is useful because it allows us to run motdet in parallel for multiple different detectors.
+        This is useful because it allows us to run motion detection in parallel for multiple different detectors.
 
         Args:
             detector_id: ID of the detector to run motion detection on.
@@ -113,5 +110,8 @@ class MotionDetectionManager:
         if detector_id not in self.detectors.keys():
             raise ValueError(f"Detector ID {detector_id} not found")
 
-        task = asyncio.create_task(asyncio.to_thread(self.detectors[detector_id].motion_detected(new_img=image)))
+        task = asyncio.create_task(self.detectors[detector_id].motion_detected(new_img=new_img))
         self.tasks[detector_id].append(task)
+
+        # Wait for the task to complete
+        return await task

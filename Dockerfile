@@ -54,8 +54,6 @@ RUN poetry install --no-interaction --no-root --without dev
 # Copy the configs directory 
 COPY configs ${APP_ROOT}/configs 
 
-# Generate NGINX configuration 
-RUN poetry run python configs/get_config.py
 
 ##################
 # Production Stage

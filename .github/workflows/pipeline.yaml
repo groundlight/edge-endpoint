@@ -33,6 +33,20 @@ jobs:
           sudo apt-get install docker-ce
       - name: Build Docker Image
         run: docker build --target production-image --tag groundlight-edge .
+
+      - name: Create Motion Detection Config
+        id: create_motion_detection_config
+        run: |
+          EDGE_CONFIG=$(echo "
+          motion_detection:
+            - detector_id: 'det_2SagpFUrs83cbMZsap5hZzRjZw4'
+              enabled: true
+              percentage_threshold: 5.0
+              val_threshold: 50
+              max_time_between_images: 30
+          " | base64 -w 0)
+          echo "EDGE_CONFIG=${EDGE_CONFIG}" >> $GITHUB_ENV
+
       - name: Start Docker Container
         id: start_container
         run: |
@@ -41,6 +55,7 @@ jobs:
             -e MOTION_DETECTION_ENABLED=True \
             -e MOTION_DETECTION_MAX_TIME_BETWEEN_IMAGES=30 \
             -e GROUNDLIGHT_API_TOKEN=${{ env.GROUNDLIGHT_API_TOKEN }} \
+            -e EDGE_CONFIG=${{ env.EDGE_CONFIG }} \
             -d -p 6717:6717 \
             groundlight-edge)
           echo "::set-output name=container_id::$container_id"
@@ -64,11 +79,7 @@ jobs:
           poetry install --no-interaction --no-root
 
       - name: Run Motion Detection Tests 
-        # We need to set the MOTION_DETECTION_ENABLED environment variable to True
-        # here in addition to passing it to the docker container because the environment
-        # variables set by `docker run` are not automatically passed to the testing environment
         run: | 
-          export MOTION_DETECTION_ENABLED=True
           poetry run pytest -vs test/api/test_motdet.py
       
       - name: Dump Logs from Docker Container
