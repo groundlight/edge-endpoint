@@ -43,7 +43,7 @@ RUN curl -sSL https://install.python-poetry.org | python -
 ENV PATH=${POETRY_HOME}/bin:$PATH
 
 # Install [tool.poetry.dependencies]
-COPY ./poetry.lock ./pyproject.toml ${APP_ROOT}/
+COPY ./pyproject.toml ${APP_ROOT}/
 
 WORKDIR ${APP_ROOT}
 

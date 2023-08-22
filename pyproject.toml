@@ -1,16 +1,16 @@
 [tool.poetry]
 name = "groundlight-edge"
-version = "0.1.0"
+version = "0.2.0"
 description = "Run groundlight on the edge!"
 authors = ["Groundlight AI <support@groundlight.ai>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.9"
 uvicorn = {version = "^0.20.0", extras = ["standard"]}
 fastapi = "^0.88.0"
 pydantic = "^1.10.2"
-groundlight = "0.9.0"
+groundlight = "0.11.0"
 opencv-python = "^4.7.0.72"
 pillow = "^9.5.0"
 framegrab = "^0.2.1"
