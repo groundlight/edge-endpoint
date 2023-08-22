@@ -1,7 +1,8 @@
 import asyncio
 import logging
-import time
 import threading
+import time
+
 import numpy as np
 from framegrab import MotionDetector
 from pydantic import BaseSettings, Field
