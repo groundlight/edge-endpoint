@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import threading
 import time
 
 import numpy as np
@@ -34,12 +33,10 @@ class MotdetParameterSettings(BaseSettings):
         env_file = ".env"
 
 
-class AsyncMotionDetector:
-    """Asynchronous motion detector.
-    This is a wrapper around MotionDetector that exposes an asynchronous
-    execution of `motion_detected` method. Although this method need not be asynchronous
-    from a performance standpoint, we want it to be `async` since it will be
-    invoked asynchronously from the API.
+class MotionDetector:
+    """
+    This is a wrapper around MotionDetector class around the motion detection implementation from
+    the framegrab library.
     """
 
     def __init__(self, parameters: MotdetParameterSettings):
@@ -48,7 +45,6 @@ class AsyncMotionDetector:
             val_threshold=parameters.motion_detection_val_threshold,
         )
         self._previous_image = None
-        self.lock = threading.Lock()
         self.image_query_response = None
         self._motion_detection_enabled = parameters.motion_detection_enabled
         self._max_time_between_images = parameters.motion_detection_max_time_between_images
@@ -63,7 +59,7 @@ class AsyncMotionDetector:
         if not self._motion_detection_enabled:
             self._motion_detection_enabled = True
 
-    async def motion_detected(self, new_img: np.ndarray) -> bool:
+    def motion_detected(self, new_img: np.ndarray) -> bool:
         if self._previous_motion_detection_time is not None:
             current_time = time.monotonic()
             if current_time - self._previous_motion_detection_time > self._max_time_between_images:
@@ -71,9 +67,8 @@ class AsyncMotionDetector:
                 logger.debug("Maximum time between cloud-submitted images exceeded")
                 return True
 
-        with self.lock:
-            motion_is_detected = await asyncio.to_thread(self._motion_detector.motion_detected, new_img)
-            if motion_is_detected:
-                logger.debug("Motion detected")
-                self._previous_motion_detection_time = time.monotonic()
-            return motion_is_detected
+        motion_is_detected = self._motion_detector.motion_detected(new_img)
+        if motion_is_detected:
+            logger.debug("Motion detected")
+            self._previous_motion_detection_time = time.monotonic()
+        return motion_is_detected
