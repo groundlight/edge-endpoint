@@ -149,7 +149,7 @@ def test_max_time_between_cloud_submitted_images(gl: Groundlight, motion_detecti
     detector_id = DETECTORS["dog_detector"]["detector_id"]
     detector = gl.get_detector(id=detector_id)
 
-    MAX_TIME_BETWEEN_CLOUD_SUBMITTED_IMAGES = 30
+    MAX_TIME_BETWEEN_CLOUD_SUBMITTED_IMAGES = 45
 
     image = Image.open("test/assets/dog.jpeg")
     gl.submit_image_query(detector=detector.id, image=image, wait=10)

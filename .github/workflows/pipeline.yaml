@@ -43,13 +43,13 @@ jobs:
               motion_detection_enabled: true
               motion_detection_percentage_threshold: 5.0
               motion_detection_val_threshold: 50
-              motion_detection_max_time_between_images: 30
+              motion_detection_max_time_between_images: 45
 
             - detector_id: 'det_2UOxao4HZyB9gv4ZVtwMOvdqgh9'
               motion_detection_enabled: true
               motion_detection_percentage_threshold: 0.0
               motion_detection_val_threshold: 0
-              motion_detection_max_time_between_images: 30
+              motion_detection_max_time_between_images: 45
           " | base64 -w 0)
           echo "EDGE_CONFIG=${EDGE_CONFIG}" >> $GITHUB_ENV
 

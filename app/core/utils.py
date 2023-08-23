@@ -9,7 +9,7 @@ from fastapi import HTTPException, Request
 from PIL import Image
 
 
-def load_edge_config() -> dict | None:
+def load_edge_config() -> dict:
     """
     Reads the edge config from the EDGE_CONFIG environment variable if it exists.
     If EDGE_CONFIG is not set, reads the default edge config file.
@@ -23,8 +23,8 @@ def load_edge_config() -> dict | None:
     default_config_path = "configs/edge.yaml"
     if os.path.exists(default_config_path):
         return yaml.safe_load(open(default_config_path, "r"))
-
-    return None
+    
+    raise FileNotFoundError(f"Could not find edge config file at {default_config_path}")
 
 
 def get_groundlight_sdk_instance(request: Request):
