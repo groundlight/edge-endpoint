@@ -54,7 +54,7 @@ def test_motion_detection(gl: Groundlight, motion_detection_config: dict):
     if not motion_detection_enabled(motion_detection_config):
         pytest.skip("Motion detection is disabled")
 
-    detector_id = DETECTORS.keys()[0]
+    detector_id = list(DETECTORS.keys())[0]
     detector = gl.get_detector(id=detector_id)
 
     original_image = Image.open("test/assets/dog.jpeg")
@@ -90,7 +90,7 @@ def test_answer_changes_with_different_image(gl: Groundlight, motion_detection_c
     if not motion_detection_enabled(motion_detection_config):
         pytest.skip("Motion detection is disabled")
 
-    detector_id = DETECTORS.keys()[0]
+    detector_id = list(DETECTORS.keys())[0]
     detector = gl.get_detector(id=detector_id)
 
     ITERATIONS = 3
@@ -116,7 +116,7 @@ def test_no_motion_detected_response_is_fast(gl: Groundlight, motion_detection_c
     if not motion_detection_enabled(motion_detection_config):
         pytest.skip("Motion detection is disabled")
 
-    detector_id = DETECTORS.keys()[0]
+    detector_id = list(DETECTORS.keys())[0]
     detector = gl.get_detector(id=detector_id)
 
     NO_MOTION_DETECTED_RESPONSE_TIME = 0.05
@@ -142,7 +142,7 @@ def test_max_time_between_cloud_submitted_images(gl: Groundlight, motion_detecti
     if not motion_detection_enabled(motion_detection_config):
         pytest.skip("Motion detection is disabled")
 
-    detector_id = DETECTORS.keys()[0]
+    detector_id = list(DETECTORS.keys())[0]
     detector = gl.get_detector(id=detector_id)
 
     MAX_TIME_BETWEEN_CLOUD_SUBMITTED_IMAGES = 30
