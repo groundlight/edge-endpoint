@@ -9,12 +9,22 @@ from fastapi import HTTPException, Request
 from PIL import Image
 
 
-def load_edge_config() -> dict:
+def load_edge_config() -> dict | None:
+    """
+    Reads the edge config from the EDGE_CONFIG environment variable if it exists.
+    If EDGE_CONFIG is not set, reads the default edge config file.
+    """
     encoded_yaml_block = os.environ.get("EDGE_CONFIG", None)
+    if encoded_yaml_block is not None:
+        decoded_yaml_block = base64.b64decode(encoded_yaml_block).decode("utf-8")
+        config = yaml.safe_load(decoded_yaml_block)
+        return config
 
-    decoded_yaml_block = base64.b64decode(encoded_yaml_block).decode("utf-8")
-    config = yaml.safe_load(decoded_yaml_block)
-    return config
+    default_config_path = "configs/edge.yaml"
+    if os.path.exists(default_config_path):
+        return yaml.safe_load(open(default_config_path, "r"))
+
+    return None
 
 
 def get_groundlight_sdk_instance(request: Request):

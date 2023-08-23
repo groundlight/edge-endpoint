@@ -10,7 +10,7 @@ from app.api.naming import API_BASE_PATH
 
 from .core.edge_detector_manager import EdgeDetectorManager
 from .core.motion_detection import RootConfig, MotionDetectionManager
-from .core.utils import load_edge_config 
+from .core.utils import load_edge_config
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=LOG_LEVEL)

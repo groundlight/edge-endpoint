@@ -14,14 +14,16 @@ logger = logging.getLogger(__name__)
 
 class MotionDetectionParams(BaseModel):
     detector_id: str = Field(..., description="Detector ID")
-    enabled: bool = Field(False, description="Determines if motion detection is enabled for this detector")
-    perdentage_threshold: float = Field(
+    motion_detection_enabled: bool = Field(
+        False, description="Determines if motion detection is enabled for this detector"
+    )
+    motion_detection_percentage_threshold: float = Field(
         5.0, description="Percent of pixels needed to change before motion is detected."
     )
-    val_threshold: int = Field(
+    motion_detection_val_threshold: int = Field(
         50, description="The minimum brightness change for a pixel for it to be considered changed."
     )
-    max_time_between_images: float = Field(
+    motion_detection_max_time_between_images: float = Field(
         3600.0,
         description=(
             "Specifies the maximum time (seconds) between images sent to the cloud. This will be honored even if no"
@@ -31,15 +33,16 @@ class MotionDetectionParams(BaseModel):
 
 
 class RootConfig(BaseModel):
+    """
+    Main configuration for motion detection across all detectors.
+    """
+
     motion_detection: List[MotionDetectionParams]
 
 
-class MotionDetector:
-    """Asynchronous motion detector.
-    This is a wrapper around MotionDetector that exposes an asynchronous
-    execution of `motion_detected` method. Although this method need not be asynchronous
-    from a performance standpoint, we want it to be `async` since it will be
-    invoked asynchronously from the API.
+class MotionDetectorWrapper:
+    """
+    This is a wrapper around MotionDetector from framegrab.
     """
 
     def __init__(self, parameters: MotionDetectionParams):
@@ -81,10 +84,9 @@ class MotionDetector:
 class MotionDetectionManager:
     def __init__(self, config: RootConfig) -> None:
         self.detectors = {
-            detector_params.detector_id: MotionDetector(detector_params) for detector_params in config.motion_detection
+            detector_params.detector_id: MotionDetectorWrapper(detector_params)
+            for detector_params in config.motion_detection
         }
-
-        self.tasks = {id: [] for id in config.detector_ids}
 
     def update_image_query_response(self, detector_id: str, response: ImageQuery) -> None:
         self.detectors[detector_id].image_query_response = response
@@ -92,7 +94,7 @@ class MotionDetectionManager:
     def get_image_query_response(self, detector_id: str) -> ImageQuery:
         return self.detectors[detector_id].image_query_response
 
-    async def run_motion_detection(self, detector_id: str, new_img: np.ndarray) -> bool:
+    def run_motion_detection(self, detector_id: str, new_img: np.ndarray) -> bool:
         """
         Submits a coroutine to run motion detection on the given image in the background.
         That means motion detection will be run concurrently with the existing tasks in the event loop.
@@ -110,8 +112,4 @@ class MotionDetectionManager:
         if detector_id not in self.detectors.keys():
             raise ValueError(f"Detector ID {detector_id} not found")
 
-        task = asyncio.create_task(self.detectors[detector_id].motion_detected(new_img=new_img))
-        self.tasks[detector_id].append(task)
-
-        # Wait for the task to complete
-        return await task
+        return self.detectors[detector_id].motion_detected(new_img=new_img)

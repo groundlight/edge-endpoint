@@ -43,7 +43,7 @@ async def post_image_query(
     ):
         return safe_call_api(gl.submit_image_query, detector=detector_id, image=image, wait=patience_time)
 
-    motion_detected = await motion_detection_manager.run_motion_detection(detector_id=detector_id, new_img=img_numpy)
+    motion_detected = motion_detection_manager.run_motion_detection(detector_id=detector_id, new_img=img_numpy)
 
     if motion_detected:
         image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=image, wait=patience_time)

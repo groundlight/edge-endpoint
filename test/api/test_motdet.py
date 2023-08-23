@@ -7,23 +7,32 @@ from model import Detector
 from PIL import Image, ImageFilter
 from app.core.utils import load_edge_config
 
-motion_detection_enabled = os.environ.get("MOTION_DETECTION_ENABLED", "False").upper() == "TRUE"
 
+DETECTORS = {
+    "det_2SagpFUrs83cbMZsap5hZzRjZw4": {
+        "name": "edge_testing_det",
+        "query": "Is there a dog in the image?",
+        "confidence_threshold": 0.9,
+    }
+}
 
-# Detector ID associated with the detector with parameters
-# name="edge_testing_det",
-# query="Is there a dog in the image?",
-# confidence_threshold=0.9
-DETECTOR_ID = "det_2SagpFUrs83cbMZsap5hZzRjZw4"
 
 @pytest.fixture(scope="session", autouse=True)
-def detector_ids():
+def motion_detection_config():
     """
     Load up detector IDs from the edge config file prior to running any tests.
     """
     config = load_edge_config()
-    detector_ids = [detector_params.detector_id for detector_params in config["motion_detection"]]
-    assert DETECTOR_ID in detector_ids
+    return config
+
+
+def motion_detection_enabled(motion_detection_config: dict) -> bool:
+    if motion_detection_config is None:
+        return False
+    configured_detector_ids = [
+        detector_params["detector_id"] for detector_params in motion_detection_config["motion_detection"]
+    ]
+    return all(id_ in configured_detector_ids for id_ in DETECTORS.keys())
 
 
 @pytest.fixture(name="gl")
@@ -32,13 +41,7 @@ def fixture_gl() -> Groundlight:
     return Groundlight(endpoint="http://localhost:6717")
 
 
-@pytest.fixture
-def detector(gl: Groundlight) -> Detector:
-    return gl.get_detector(id=DETECTOR_ID)
-
-
-@pytest.mark.skipif(not motion_detection_enabled, reason="Motion detection is disabled")
-def test_motion_detection(gl: Groundlight, detector: Detector):
+def test_motion_detection(gl: Groundlight, motion_detection_config: dict):
     """
     Test motion detection by applying a Gaussian noiser on the query image.
     Every time we submit a new image query, it gets cached in the global motion
@@ -48,6 +51,12 @@ def test_motion_detection(gl: Groundlight, detector: Detector):
     standard deviation of the Gaussian distribution).
     Using a Gaussian filter here is not strictly necessary.
     """
+    if not motion_detection_enabled(motion_detection_config):
+        pytest.skip("Motion detection is disabled")
+
+    detector_id = DETECTORS.keys()[0]
+    detector = gl.get_detector(id=detector_id)
+
     original_image = Image.open("test/assets/dog.jpeg")
 
     base_iq_response = gl.submit_image_query(detector=detector.id, image=original_image, wait=10)
@@ -73,11 +82,17 @@ def test_motion_detection(gl: Groundlight, detector: Detector):
         assert new_response.id != previous_response.id and new_response.id.startswith("iqe_")
 
 
-@pytest.mark.skipif(not motion_detection_enabled, reason="Motion detection is disabled")
-def test_answer_changes_with_different_image(gl: Groundlight, detector: Detector):
+def test_answer_changes_with_different_image(gl: Groundlight, motion_detection_config: dict):
     """
     Tests that the answer changes when we submit a different image while running motion detection.
     """
+
+    if not motion_detection_enabled(motion_detection_config):
+        pytest.skip("Motion detection is disabled")
+
+    detector_id = DETECTORS.keys()[0]
+    detector = gl.get_detector(id=detector_id)
+
     ITERATIONS = 3
     image = Image.open("test/assets/dog.jpeg")
     image_query = gl.submit_image_query(detector=detector.id, image=image, wait=10)
@@ -91,13 +106,19 @@ def test_answer_changes_with_different_image(gl: Groundlight, detector: Detector
     assert new_image_query.id.startswith("iq_")
 
 
-@pytest.mark.skipif(not motion_detection_enabled, reason="Motion detection is disabled")
-def test_no_motion_detected_response_is_fast(gl: Groundlight, detector: Detector):
+def test_no_motion_detected_response_is_fast(gl: Groundlight, motion_detection_config: dict):
     """
     This test ensures that when no motion is detected the image query response is returned
     extremely fast. This is expected since no API call is made to the server code.
 
     """
+
+    if not motion_detection_enabled(motion_detection_config):
+        pytest.skip("Motion detection is disabled")
+
+    detector_id = DETECTORS.keys()[0]
+    detector = gl.get_detector(id=detector_id)
+
     NO_MOTION_DETECTED_RESPONSE_TIME = 0.05
 
     image = Image.open("test/assets/dog.jpeg")
@@ -117,8 +138,13 @@ def test_no_motion_detected_response_is_fast(gl: Groundlight, detector: Detector
     assert total_time_with_motion_detected > NO_MOTION_DETECTED_RESPONSE_TIME
 
 
-@pytest.mark.skipif(not motion_detection_enabled, reason="Motion detection is disabled")
-def test_max_time_between_cloud_submitted_images(gl: Groundlight, detector: Detector):
+def test_max_time_between_cloud_submitted_images(gl: Groundlight, motion_detection_config: dict):
+    if not motion_detection_enabled(motion_detection_config):
+        pytest.skip("Motion detection is disabled")
+
+    detector_id = DETECTORS.keys()[0]
+    detector = gl.get_detector(id=detector_id)
+
     MAX_TIME_BETWEEN_CLOUD_SUBMITTED_IMAGES = 30
 
     image = Image.open("test/assets/dog.jpeg")
