@@ -1,10 +1,10 @@
+import base64
+import os
 from io import BytesIO
 from typing import Callable
-import os
-import yaml
-import base64
 
 import ksuid
+import yaml
 from fastapi import HTTPException, Request
 from PIL import Image
 
