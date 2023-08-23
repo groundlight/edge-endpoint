@@ -4,7 +4,7 @@ on: [push]
 env: 
   PYTHON_VERSION: "3.11"
   POETRY_VERSION: "1.5.1"
-  # This is the token associated with the "edge-integ-user" (with shared credentials on 1password)
+  # This is the token associated with "prod-biggies" (with shared credentials on 1password)
   GROUNDLIGHT_API_TOKEN: ${{ secrets.GROUNDLIGHT_API_TOKEN }}
   # This is the NGINX proxy endpoint
   GROUNDLIGHT_ENDPOINT: http://localhost:6717
@@ -39,10 +39,16 @@ jobs:
         run: |
           EDGE_CONFIG=$(echo "
           motion_detection:
-            - detector_id: 'det_2SagpFUrs83cbMZsap5hZzRjZw4'
+            - detector_id: 'det_2UOxalD1gegjk4TnyLbtGggiJ8p'
               motion_detection_enabled: true
               motion_detection_percentage_threshold: 5.0
               motion_detection_val_threshold: 50
+              motion_detection_max_time_between_images: 30
+
+            - detector_id: 'det_2UOxao4HZyB9gv4ZVtwMOvdqgh9'
+              motion_detection_enabled: true
+              motion_detection_percentage_threshold: 0.0
+              motion_detection_val_threshold: 0
               motion_detection_max_time_between_images: 30
           " | base64 -w 0)
           echo "EDGE_CONFIG=${EDGE_CONFIG}" >> $GITHUB_ENV

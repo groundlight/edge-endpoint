@@ -6,12 +6,18 @@ from PIL import Image, ImageFilter
 
 from app.core.utils import load_edge_config
 
+
 DETECTORS = {
-    "det_2SagpFUrs83cbMZsap5hZzRjZw4": {
-        "name": "edge_testing_det",
+    "dog_detector": {
+        "detector_id": "det_2UOxalD1gegjk4TnyLbtGggiJ8p",
         "query": "Is there a dog in the image?",
         "confidence_threshold": 0.9,
-    }
+    },
+    "cat_detector": {
+        "detector_id": "det_2UOxao4HZyB9gv4ZVtwMOvdqgh9",
+        "query": "Is there a cat in the image?",
+        "confidence_threshold": 0.9,
+    },
 }
 
 
@@ -30,7 +36,8 @@ def motion_detection_enabled(motion_detection_config: dict) -> bool:
     configured_detector_ids = [
         detector_params["detector_id"] for detector_params in motion_detection_config["motion_detection"]
     ]
-    return all(id_ in configured_detector_ids for id_ in DETECTORS.keys())
+    detector_ids = [detector["detector_id"] for detector in DETECTORS.values()]
+    return all(id_ in configured_detector_ids for id_ in detector_ids)
 
 
 @pytest.fixture(name="gl")
@@ -52,7 +59,7 @@ def test_motion_detection(gl: Groundlight, motion_detection_config: dict):
     if not motion_detection_enabled(motion_detection_config):
         pytest.skip("Motion detection is disabled")
 
-    detector_id = list(DETECTORS.keys())[0]
+    detector_id = DETECTORS["dog_detector"]["detector_id"]
     detector = gl.get_detector(id=detector_id)
 
     original_image = Image.open("test/assets/dog.jpeg")
@@ -88,7 +95,7 @@ def test_answer_changes_with_different_image(gl: Groundlight, motion_detection_c
     if not motion_detection_enabled(motion_detection_config):
         pytest.skip("Motion detection is disabled")
 
-    detector_id = list(DETECTORS.keys())[0]
+    detector_id = DETECTORS["dog_detector"]["detector_id"]
     detector = gl.get_detector(id=detector_id)
 
     ITERATIONS = 3
@@ -114,7 +121,7 @@ def test_no_motion_detected_response_is_fast(gl: Groundlight, motion_detection_c
     if not motion_detection_enabled(motion_detection_config):
         pytest.skip("Motion detection is disabled")
 
-    detector_id = list(DETECTORS.keys())[0]
+    detector_id = DETECTORS["dog_detector"]["detector_id"]
     detector = gl.get_detector(id=detector_id)
 
     NO_MOTION_DETECTED_RESPONSE_TIME = 0.05
@@ -140,7 +147,7 @@ def test_max_time_between_cloud_submitted_images(gl: Groundlight, motion_detecti
     if not motion_detection_enabled(motion_detection_config):
         pytest.skip("Motion detection is disabled")
 
-    detector_id = list(DETECTORS.keys())[0]
+    detector_id = DETECTORS["dog_detector"]["detector_id"]
     detector = gl.get_detector(id=detector_id)
 
     MAX_TIME_BETWEEN_CLOUD_SUBMITTED_IMAGES = 30
@@ -158,3 +165,25 @@ def test_max_time_between_cloud_submitted_images(gl: Groundlight, motion_detecti
     # No motion should be detected here, but we should still submit the image query to the cloud server
     # since the maximum time between two image query submission to the cloud server has been exceeded.
     assert new_image_query.id.startswith("iq_")
+
+
+def test_motion_detection_multiple_detectors(gl: Groundlight, motion_detection_config: dict):
+    if not motion_detection_enabled(motion_detection_config):
+        pytest.skip("Motion detection is disabled")
+
+    dog_detector = gl.get_detector(id=DETECTORS["dog_detector"]["detector_id"])
+    cat_detector = gl.get_detector(id=DETECTORS["cat_detector"]["detector_id"])
+
+    dog_image = Image.open("test/assets/dog.jpeg")
+    cat_image = Image.open("test/assets/cat.jpeg")
+
+    dog_image_query = gl.submit_image_query(detector=dog_detector.id, image=dog_image, wait=10)
+    cat_image_query = gl.submit_image_query(detector=cat_detector.id, image=cat_image, wait=10)
+
+    # The configuration for the cat detector has motion_detection_percentage_threshold=0.0 and
+    # motion_detection_val_threshold=0.0, so motion should not be detected every time.
+    assert cat_image_query.id.startswith("iq_")
+
+    # Submit another image query for the dog detector and confirm that no motion is detected.
+    dog_image_query = gl.submit_image_query(detector=dog_detector.id, image=dog_image, wait=10)
+    assert dog_image_query.id.startswith("iqe_")
