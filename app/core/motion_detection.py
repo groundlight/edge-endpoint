@@ -32,7 +32,7 @@ class MotdetParameterSettings(BaseSettings):
         env_file = ".env"
 
 
-class MotionDetector:
+class MotionDetectorWrapper:
     """
     This is a wrapper around MotionDetector class around the motion detection implementation from
     the framegrab library.
