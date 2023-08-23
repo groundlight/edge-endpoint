@@ -6,7 +6,6 @@ from PIL import Image, ImageFilter
 
 from app.core.utils import load_edge_config
 
-
 DETECTORS = {
     "dog_detector": {
         "detector_id": "det_2UOxalD1gegjk4TnyLbtGggiJ8p",
