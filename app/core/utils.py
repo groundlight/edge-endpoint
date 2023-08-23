@@ -1,9 +1,20 @@
 from io import BytesIO
 from typing import Callable
+import os
+import yaml
+import base64
 
 import ksuid
 from fastapi import HTTPException, Request
 from PIL import Image
+
+
+def load_edge_config() -> dict:
+    encoded_yaml_block = os.environ.get("EDGE_CONFIG", None)
+
+    decoded_yaml_block = base64.b64decode(encoded_yaml_block).decode("utf-8")
+    config = yaml.safe_load(decoded_yaml_block)
+    return config
 
 
 def get_groundlight_sdk_instance(request: Request):

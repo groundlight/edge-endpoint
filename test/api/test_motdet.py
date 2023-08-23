@@ -5,6 +5,7 @@ import pytest
 from groundlight import Groundlight
 from model import Detector
 from PIL import Image, ImageFilter
+from app.core.utils import load_edge_config
 
 motion_detection_enabled = os.environ.get("MOTION_DETECTION_ENABLED", "False").upper() == "TRUE"
 
@@ -14,6 +15,15 @@ motion_detection_enabled = os.environ.get("MOTION_DETECTION_ENABLED", "False").u
 # query="Is there a dog in the image?",
 # confidence_threshold=0.9
 DETECTOR_ID = "det_2SagpFUrs83cbMZsap5hZzRjZw4"
+
+@pytest.fixture(scope="session", autouse=True)
+def detector_ids():
+    """
+    Load up detector IDs from the edge config file prior to running any tests.
+    """
+    config = load_edge_config()
+    detector_ids = [detector_params.detector_id for detector_params in config["motion_detection"]]
+    assert DETECTOR_ID in detector_ids
 
 
 @pytest.fixture(name="gl")

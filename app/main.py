@@ -10,14 +10,10 @@ from app.api.naming import API_BASE_PATH
 
 from .core.edge_detector_manager import EdgeDetectorManager
 from .core.motion_detection import RootConfig, MotionDetectionManager
+from .core.utils import load_edge_config 
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
-encoded_yaml_block = os.environ.get("EDGE_CONFIG", None)
-
 logging.basicConfig(level=LOG_LEVEL)
-
-decoded_yaml_block = base64.b64decode(encoded_yaml_block).decode("utf-8")
-config = yaml.safe_load(decoded_yaml_block)
 
 
 app = FastAPI()
@@ -33,4 +29,5 @@ app.state.groundlight = Groundlight()
 app.state.edge_detector_manager = EdgeDetectorManager()
 
 # Create a global shared motion detection manager object in the app's state
-app.state.motion_detection_manager = MotionDetectionManager(config=RootConfig(**config))
+edge_config = load_edge_config()
+app.state.motion_detection_manager = MotionDetectionManager(config=RootConfig(**edge_config))
