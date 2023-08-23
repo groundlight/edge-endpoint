@@ -10,7 +10,6 @@ from PIL import Image, ImageFile
 from app.core.utils import (
     get_edge_detector_manager,
     get_groundlight_sdk_instance,
-    get_motion_detector_instance,
     get_motion_detection_manager,
     prefixed_ksuid,
     safe_call_api,

@@ -1,12 +1,10 @@
-import os
 import time
 
 import pytest
 from groundlight import Groundlight
-from model import Detector
 from PIL import Image, ImageFilter
-from app.core.utils import load_edge_config
 
+from app.core.utils import load_edge_config
 
 DETECTORS = {
     "det_2SagpFUrs83cbMZsap5hZzRjZw4": {

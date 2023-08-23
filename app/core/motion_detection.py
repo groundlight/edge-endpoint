@@ -1,13 +1,12 @@
-import asyncio
 import logging
 import time
 from asyncio import Lock
-from model import ImageQuery
+from typing import List
 
 import numpy as np
 from framegrab import MotionDetector
+from model import ImageQuery
 from pydantic import BaseModel, Field
-from typing import List
 
 logger = logging.getLogger(__name__)
 
