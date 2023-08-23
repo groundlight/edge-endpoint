@@ -95,10 +95,7 @@ class MotionDetectionManager:
 
     def run_motion_detection(self, detector_id: str, new_img: np.ndarray) -> bool:
         """
-        Submits a coroutine to run motion detection on the given image in the background.
-        That means motion detection will be run concurrently with the existing tasks in the event loop.
-        This is useful because it allows us to run motion detection in parallel for multiple different detectors.
-
+        Determine if motion is detected for this detector on the given image.
         Args:
             detector_id: ID of the detector to run motion detection on.
             image: Image to run motion detection on.
