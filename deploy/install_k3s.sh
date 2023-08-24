@@ -20,7 +20,6 @@ else
         echo "K3s installed successfully."
 
         # Configure kubectl for the current user
-        mkdir -p ~/.kube 
         sudo chown $USER:$USER /etc/rancher/k3s/k3s.yaml 
 
         echo "kubectl has been configured for the current user."
