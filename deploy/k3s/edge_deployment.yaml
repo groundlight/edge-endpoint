@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: edge-endpoint
+spec:
+  selector:
+    app: edge-endpoint
+  ports:
+  - protocol: TCP
+    port: 80 
+    targetPort: 6718 # The APP_PORT you specified in Dockerfile
+  type: NodePort
+    nodePort: 30000 # The APP_PORT you specified in Dockerfile
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge-endpoint
+  labels:
+    app: edge-endpoint
+spec:
+  replicas: 1 
+  selector:
+    matchLabels:
+      app: edge-endpoint
+  template:
+    metadata:
+      labels:
+        app: edge-endpoint
+    spec:
+      containers:
+      - name: groundlight-edge 
+        image: your_dockerhub_username/your_image_name:tag
+        ports:
+        - containerPort: 6718 # The APP_PORT you specified in Dockerfile
+        env: # If you need to pass any environment variables
+        - name: SOME_ENV_VARIABLE
+          value: "value_for_variable"
