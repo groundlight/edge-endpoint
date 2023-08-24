@@ -39,15 +39,14 @@ async def post_image_query(
     if not motion_detector.is_enabled():
         return safe_call_api(gl.submit_image_query, detector=detector_id, image=image, wait=patience_time)
 
-    async with motion_detector.lock:
-        motion_detected = await motion_detector.motion_detected(new_img=img_numpy)
+    motion_detected = motion_detector.motion_detected(new_img=img_numpy)
 
-        if motion_detected:
-            image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=image, wait=patience_time)
-            # Store the cloud's response so that if the next image has no motion, we will return
-            # the same response
-            motion_detector.image_query_response = image_query
-            return image_query
+    if motion_detected:
+        image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=image, wait=patience_time)
+        # Store the cloud's response so that if the next image has no motion, we will return
+        # the same response
+        motion_detector.image_query_response = image_query
+        return image_query
 
     logger.debug("No motion detected")
     new_image_query = ImageQuery(**motion_detector.image_query_response.dict())
