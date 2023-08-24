@@ -7,11 +7,9 @@ spec:
     app: edge-endpoint
   ports:
   - protocol: TCP
-    port: 80 
-    targetPort: 6718 # The APP_PORT you specified in Dockerfile
+    # Service port for NGINX 
+    port: 6717 
   type: NodePort
-    nodePort: 30000 # The APP_PORT you specified in Dockerfile
-
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -30,10 +28,19 @@ spec:
         app: edge-endpoint
     spec:
       containers:
-      - name: groundlight-edge 
-        image: your_dockerhub_username/your_image_name:tag
+      - name: edge-endpoint 
+        # Pull the image from ECR
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:setup_k3s-f4ed4c6af-dirty-ffd5cf7460d9bf3
+        imagePullPolicy: Always 
         ports:
-        - containerPort: 6718 # The APP_PORT you specified in Dockerfile
-        env: # If you need to pass any environment variables
-        - name: SOME_ENV_VARIABLE
-          value: "value_for_variable"
+        - containerPort: 6717 
+        env: 
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: GROUNDLIGHT_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: groundlight-secrets
+              key: api-token 
+      imagePullSecrets:
+      - name: registry-credentials
