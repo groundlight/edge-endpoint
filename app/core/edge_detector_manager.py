@@ -11,7 +11,7 @@ class EdgeDetectorManager:
     def __init__(self) -> None:
         # Cache for image query responses whose IDs start with "iqe_". This is needed
         # because the cloud API does not currently recognize these IDs.
-        # This cache maintains a mapping from detector ID's to i
+        # This cache maintains a mapping from detector id to iqe
         self.iqe_cache = {}
 
     def update_cache(self, detector_id: str, image_query: ImageQuery) -> None:

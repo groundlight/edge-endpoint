@@ -23,7 +23,7 @@ def load_edge_config() -> dict:
     default_config_path = "configs/edge.yaml"
     if os.path.exists(default_config_path):
         return yaml.safe_load(open(default_config_path, "r"))
-    
+
     raise FileNotFoundError(f"Could not find edge config file at {default_config_path}")
 
 
