@@ -19,7 +19,7 @@ how to run Groundlight on the edge, checkout our [documentation](https://code.gr
 The recommended way to run the Edge Endpoint is inside a docker container as follows:
 
 ```bash
-export EDGE_CONFIG=$(base64 -w 0 configs/edge.yaml)
+export EDGE_CONFIG=$(cat configs/edge.yaml)
 
 docker build --target production-image --tag edge-endpoint .
 
