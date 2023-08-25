@@ -8,11 +8,18 @@ If you don't have [k3s](https://docs.k3s.io/) installed, go ahead and install it
 ```
 
 Before we can start the edge-endpoint kubernetes deployment, we need to first ensure that 
-the `GROUNDLIGHT_API_TOKEN` is set. Once you have the token, then go ahead and run the following
+the `GROUNDLIGHT_API_TOKEN` is set as well as have the AWS secret for accessing the container
+registry. Once you have the token, go ahead and run the following
 script to create a kubernetes secret for it. 
 
 ```shell
 > ./deploy/make-gl-api-token-secret.sh
+```
+
+Then run the following script to register credentials for accessing ECR in k3s. 
+
+```shell
+> ./deploy/make-aws-secret.sh
 ```
 
 For now we have a hard-coded docker image from ECR in the [edge-endpoint](/edge-endpoint/deploy/k3s/edge_deployment.yaml) 
