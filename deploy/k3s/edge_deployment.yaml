@@ -31,12 +31,9 @@ spec:
       - name: edge-endpoint 
         # Pull the image from ECR
         image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:setup_k3s-f4ed4c6af-dirty-ffd5cf7460d9bf3
-        imagePullPolicy: Always 
+        imagePullPolicy: IfNotPresent 
         ports:
         - containerPort: 6717 
-        volumeMounts:
-        - name: config-volume
-          mountPath: /etc/configs/edge.yaml
         env: 
         - name: LOG_LEVEL
           value: "INFO"
@@ -47,9 +44,3 @@ spec:
               key: api-token 
       imagePullSecrets:
       - name: registry-credentials
-      # We use a ConfigMap to store the edge.yaml file and mount it into the container
-      # as a volume.
-      volumes:
-      - name: config-volume
-        configMap:
-          name: edge-config-yaml
