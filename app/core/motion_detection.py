@@ -1,6 +1,5 @@
 import logging
 import time
-from asyncio import Lock
 from typing import List
 
 import numpy as np
@@ -50,7 +49,6 @@ class MotionDetectorWrapper:
             val_threshold=parameters.motion_detection_val_threshold,
         )
         self._previous_image = None
-        self.lock = Lock()
         self.image_query_response = None
         self._motion_detection_enabled = parameters.motion_detection_enabled
         self._max_time_between_images = parameters.motion_detection_max_time_between_images

@@ -8,8 +8,12 @@ from app.api.api import api_router, ping_router
 from app.api.naming import API_BASE_PATH
 
 from .core.edge_detector_manager import EdgeDetectorManager
+<<<<<<< HEAD
 from .core.motion_detection import MotionDetectionManager, RootConfig
 from .core.utils import load_edge_config
+=======
+from .core.motion_detection import MotdetParameterSettings, MotionDetectorWrapper
+>>>>>>> 4878a516a7aef9c8062b020403ea11dfb00be4be
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=LOG_LEVEL)
