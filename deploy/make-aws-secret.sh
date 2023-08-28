@@ -1,7 +1,10 @@
-#!/bin/bash 
+#!/bin/bash
 
+set -ex
 
-# Enable ECR login - make sure you have the aws client configured properly, or an IAM role 
+K="k3s kubectl"
+
+# Enable ECR login - make sure you have the aws client configured properly, or an IAM role
 # attached to your instance
 aws ecr get-login-password --region us-west-2 | docker login \
     --username AWS \
@@ -10,11 +13,11 @@ aws ecr get-login-password --region us-west-2 | docker login \
 
 
 # Create an AWS secret for the edge-endpoint to properly pull images from ECR
-# Note: needs testing 
-kubectl delete --ignore-not-found secret registry-credentials 
+# Note: needs testing
+$K delete --ignore-not-found secret registry-credentials
 
 PASSWORD=$(aws ecr get-login-password --region us-west-2)
-kubectl create secret docker-registry registry-credentials \
+$K create secret docker-registry registry-credentials \
     --docker-server=723181461334.dkr.ecr.us-west-2.amazonaws.com \
     --docker-username=AWS \
-    --docker-password=$PASSWORD 
+    --docker-password=$PASSWORD
