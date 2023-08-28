@@ -48,29 +48,27 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: triton-inference
+  name: inference-server
   labels:
-    app: triton-inference
+    app: inference-server
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: triton-inference
+      app: inference-server
   template:
     metadata:
       labels:
-        app: triton-inference
+        app: inference-server
     spec:
       containers:
-      - name: triton-inference
+      - name: inference-server
         image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver:main-749c0cca3-dirty-0325a8beabe0d7b
         imagePullPolicy: IfNotPresent
-        args:
         # Tritonserver will look for models in /mnt/models and initialize them on startup
-        # TODO: We only want to shut down an old instance when this tritonsever
-        # gives the "READY" signal for all models
-        - tritonserver
-        - --model-repository=/mnt/models
+        # TODO: We only want to shut down an old instance when this tritonsever gives the "READY" signal for all models
+        command:
+          ["tritonserver", "--model-repository=/mnt/models"]
         volumeMounts:
         - name: model-repo
           mountPath: /mnt/models
