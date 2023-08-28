@@ -1,10 +1,14 @@
 import time
-
+import logging 
 import pytest
 from groundlight import Groundlight
 from PIL import Image, ImageFilter
 
 from app.core.utils import load_edge_config
+
+logger = logging.getLogger(__name__)
+
+print(f"RUNNING TESTS")
 
 DETECTORS = {
     "dog_detector": {
@@ -26,6 +30,7 @@ def motion_detection_config():
     Load up detector IDs from the edge config file prior to running any tests.
     """
     config = load_edge_config()
+    logger.debug(f"Edge config from testing: {config}")
     return config
 
 

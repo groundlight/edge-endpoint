@@ -6,6 +6,9 @@
 # .github/workflows/pipeline.yaml also runs motion detection tests in a similar fashion by injecting a 
 # YAML block. 
 
+# NOTE: The detectors have already been created under the "prod-biggies" account, so make sure to get 
+# an API token from this account if you don't have one already. 
+
 # Use the script as follows:
 # > docker build --target production-image --tag groundlight-edge .
 # > source test/setup_test_env.sh
@@ -14,7 +17,7 @@
 # Then in another terminal, run the motion detection tests:
 # > poetry run pytest -vs test/api/test_motdet.py
 
-CONFIG_CONTENT="
+EDGE_CONFIG="
 motion_detection:
     - detector_id: 'det_2UOxalD1gegjk4TnyLbtGggiJ8p'
       motion_detection_enabled: true
@@ -28,11 +31,5 @@ motion_detection:
       motion_detection_val_threshold: 0
       motion_detection_max_time_between_images: 30
 "
-
-if [[ "$(uname)" == "Linux" ]]; then
-    EDGE_CONFIG=$(echo "$CONFIG_CONTENT" | base64 -w 0)
-else
-    EDGE_CONFIG=$(echo "$CONFIG_CONTENT" | base64)
-fi
 
 export EDGE_CONFIG
