@@ -37,20 +37,7 @@ jobs:
       - name: Create Motion Detection Config
         id: create_motion_detection_config
         run: |
-          EDGE_CONFIG=$(echo "
-          motion_detection:
-            - detector_id: 'det_2UOxalD1gegjk4TnyLbtGggiJ8p'
-              motion_detection_enabled: true
-              motion_detection_percentage_threshold: 5.0
-              motion_detection_val_threshold: 50
-              motion_detection_max_time_between_images: 45
-
-            - detector_id: 'det_2UOxao4HZyB9gv4ZVtwMOvdqgh9'
-              motion_detection_enabled: true
-              motion_detection_percentage_threshold: 0.0
-              motion_detection_val_threshold: 0
-              motion_detection_max_time_between_images: 45
-          " | base64 -w 0)
+          source test/setup_test_env.sh
           echo "EDGE_CONFIG=${EDGE_CONFIG}" >> $GITHUB_ENV
 
       - name: Start Docker Container

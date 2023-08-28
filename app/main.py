@@ -29,5 +29,4 @@ app.state.edge_detector_manager = EdgeDetectorManager()
 
 # Create a global shared motion detection manager object in the app's state
 edge_config = load_edge_config()
-logging.debug(f"Edge config: {edge_config}")
 app.state.motion_detection_manager = MotionDetectionManager(config=RootConfig(**edge_config))

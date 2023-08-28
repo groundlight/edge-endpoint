@@ -1,4 +1,3 @@
-import logging 
 import os
 from io import BytesIO
 from typing import Callable
@@ -9,15 +8,12 @@ from fastapi import HTTPException, Request
 from PIL import Image
 
 
-logger = logging.getLogger(__name__)
-
 def load_edge_config() -> dict:
     """
     Reads the edge config from the EDGE_CONFIG environment variable if it exists.
     If EDGE_CONFIG is not set, reads the default edge config file.
     """
-    
-    logger.debug("Loading edge config")
+
     yaml_config = os.environ.get("EDGE_CONFIG", None)
     if yaml_config:
         return yaml.safe_load(yaml_config)
