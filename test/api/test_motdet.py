@@ -1,5 +1,6 @@
+import logging
 import time
-import logging 
+
 import pytest
 from groundlight import Groundlight
 from PIL import Image, ImageFilter
@@ -8,7 +9,7 @@ from app.core.utils import load_edge_config
 
 logger = logging.getLogger(__name__)
 
-print(f"RUNNING TESTS")
+print("RUNNING TESTS")
 
 DETECTORS = {
     "dog_detector": {
