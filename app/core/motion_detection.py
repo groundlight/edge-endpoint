@@ -100,7 +100,6 @@ class MotionDetectionManager:
 
         Returns:
             True if motion was detected, False otherwise.
-
         """
 
         if detector_id not in self.detectors.keys():
