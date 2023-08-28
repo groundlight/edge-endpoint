@@ -1,10 +1,10 @@
 import time
+
 import pytest
 from groundlight import Groundlight
 from PIL import Image, ImageFilter
 
 from app.core.utils import load_edge_config
-
 
 DETECTORS = {
     "dog_detector": {
