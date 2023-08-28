@@ -36,9 +36,13 @@ jobs:
 
       - name: Create Motion Detection Config
         id: create_motion_detection_config
+        # GITHUB_ENV expects environment variables to be properly escaped, so we have to 
+        # do the following since we have a complex multi-line variable in EDGE_CONFIG
         run: |
           source test/setup_test_env.sh
           echo "EDGE_CONFIG=${EDGE_CONFIG}" >> $GITHUB_ENV
+          EDGE_CONFIG_ESCAPED=$(echo "$EDGE_CONFIG" | sed 's/$/%0A/g')
+          echo "EDGE_CONFIG=${EDGE_CONFIG_ESCAPED}" >> $GITHUB_ENV
 
       - name: Start Docker Container
         id: start_container
