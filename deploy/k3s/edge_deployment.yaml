@@ -7,8 +7,8 @@ spec:
     app: edge-endpoint
   ports:
   - protocol: TCP
-    # Service port for NGINX 
-    port: 6717 
+    # Service port for NGINX
+    port: 6717
   type: NodePort
 ---
 apiVersion: apps/v1
@@ -18,7 +18,7 @@ metadata:
   labels:
     app: edge-endpoint
 spec:
-  replicas: 1 
+  replicas: 1
   selector:
     matchLabels:
       app: edge-endpoint
@@ -28,19 +28,61 @@ spec:
         app: edge-endpoint
     spec:
       containers:
-      - name: edge-endpoint 
+      - name: edge-endpoint
         # Pull the image from ECR
         image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:setup_k3s-f4ed4c6af-dirty-ffd5cf7460d9bf3
-        imagePullPolicy: IfNotPresent 
+        imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 6717 
-        env: 
+        - containerPort: 6717
+        env:
         - name: LOG_LEVEL
           value: "INFO"
         - name: GROUNDLIGHT_API_TOKEN
           valueFrom:
             secretKeyRef:
               name: groundlight-secrets
-              key: api-token 
+              key: api-token
       imagePullSecrets:
       - name: registry-credentials
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: triton-inference
+  labels:
+    app: triton-inference
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: triton-inference
+  template:
+    metadata:
+      labels:
+        app: triton-inference
+    spec:
+      containers:
+      - name: triton-inference
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver:main-749c0cca3-dirty-0325a8beabe0d7b
+        imagePullPolicy: IfNotPresent
+        args:
+        # Tritonserver will look for models in /mnt/models and initialize them on startup
+        # TODO: We only want to shut down an old instance when this tritonsever
+        # gives the "READY" signal for all models
+        - tritonserver
+        - --model-repository=/mnt/models
+        volumeMounts:
+        - name: model-repo
+          mountPath: /mnt/models
+        ports:
+        - containerPort: 8000  # Default tritonserver HTTP port
+      imagePullSecrets:
+      - name: registry-credentials
+      volumes:
+      - name: model-repo
+        hostPath:
+          # A hostPath volume mounts a file or directory from the host node's filesystem into your Pod
+          # This simiplifies things a lot, but only really works for single-node clusters.
+          # TODO: check out k3s local path provisioner: https://docs.k3s.io/storage#setting-up-the-local-storage-provider
+          path: /home/ubuntu/ptdev/zuuul/predictors/serving/model_repository
+          type: DirectoryOrCreate
