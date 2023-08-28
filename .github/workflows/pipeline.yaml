@@ -42,18 +42,17 @@ jobs:
         # decoding it when needed, but this works.
         run: |
           source test/setup_test_env.sh
-          EDGE_CONFIG_BASE64=$(echo $EDGE_CONFIG | base64)
-          echo "EDGE_CONFIG_BASE64=$EDGE_CONFIG_BASE64" >> $GITHUB_ENV
+          ENCODED_EDGE_CONFIG=$(echo -n "$EDGE_CONFIG" | base64 -w0)
+          echo "ENCODED_EDGE_CONFIG=$ENCODED_EDGE_CONFIG" >> $GITHUB_ENV
       - name: Start Docker Container
         id: start_container
         run: |
-          EDGE_CONFIG=$(echo $EDGE_CONFIG_BASE64 | base64 --decode)
           container_id=$(docker run \
             -e LOG_LEVEL=DEBUG \
             -e MOTION_DETECTION_ENABLED=True \
             -e MOTION_DETECTION_MAX_TIME_BETWEEN_IMAGES=30 \
             -e GROUNDLIGHT_API_TOKEN=${{ env.GROUNDLIGHT_API_TOKEN }} \
-            -e EDGE_CONFIG=${{ env.EDGE_CONFIG }} \
+            -e EDGE_CONFIG=$(echo "${{ env.ENCODED_EDGE_CONFIG }}" | base64 -d) \
             -d -p 6717:6717 \
             groundlight-edge)
           echo "::set-output name=container_id::$container_id"
