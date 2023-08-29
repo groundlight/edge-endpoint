@@ -1,5 +1,5 @@
-from model import ImageQuery
 from cachetools import LRUCache
+from model import ImageQuery
 
 
 class IQECache:

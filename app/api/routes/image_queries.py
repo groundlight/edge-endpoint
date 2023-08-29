@@ -8,8 +8,8 @@ from model import ImageQuery
 from PIL import Image, ImageFile
 
 from app.core.utils import (
-    get_iqe_cache,
     get_groundlight_sdk_instance,
+    get_iqe_cache,
     get_motion_detection_manager,
     prefixed_ksuid,
     safe_call_api,
