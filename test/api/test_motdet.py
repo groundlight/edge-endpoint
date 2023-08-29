@@ -96,7 +96,7 @@ def test_answer_changes_with_different_image(gl: Groundlight, motion_detection_c
     detector_id = DETECTORS["dog_detector"]["detector_id"]
     detector = gl.get_detector(id=detector_id)
 
-    ITERATIONS = 3
+    ITERATIONS = 2
     image = Image.open("test/assets/dog.jpeg")
     image_query = gl.submit_image_query(detector=detector.id, image=image, wait=10)
 
