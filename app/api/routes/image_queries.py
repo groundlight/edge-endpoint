@@ -8,7 +8,7 @@ from model import ImageQuery
 from PIL import Image, ImageFile
 
 from app.core.utils import (
-    get_edge_detector_manager,
+    get_iqe_cache,
     get_groundlight_sdk_instance,
     get_motion_detection_manager,
     prefixed_ksuid,
@@ -29,7 +29,7 @@ async def post_image_query(
     patience_time: Optional[float] = Query(None, description="How long to wait for a confident response"),
     request: Request = None,
     gl: Depends = Depends(get_groundlight_sdk_instance),
-    edge_detector_manager: Depends = Depends(get_edge_detector_manager),
+    iqe_cache: Depends = Depends(get_iqe_cache),
     motion_detection_manager: Depends = Depends(get_motion_detection_manager),
 ):
     image = await request.body()
@@ -54,7 +54,7 @@ async def post_image_query(
     logger.debug(f"No motion detected for {detector_id=}")
     new_image_query = ImageQuery(**motion_detection_manager.get_image_query_response(detector_id=detector_id).dict())
     new_image_query.id = prefixed_ksuid(prefix="iqe_")
-    edge_detector_manager.update_cache(detector_id=detector_id, image_query=new_image_query)
+    iqe_cache.update_cache(detector_id=detector_id, image_query=new_image_query)
 
     return new_image_query
 
@@ -63,10 +63,10 @@ async def post_image_query(
 async def get_image_query(
     id: str,
     gl: Depends = Depends(get_groundlight_sdk_instance),
-    edge_detector_manager: Depends = Depends(get_edge_detector_manager),
+    iqe_cache: Depends = Depends(get_iqe_cache),
 ):
     if id.startswith("iqe_"):
-        image_query = edge_detector_manager.get_cached_image_query(image_query_id=id)
+        image_query = iqe_cache.get_cached_image_query(image_query_id=id)
         if not image_query:
             raise HTTPException(status_code=404, detail=f"Image query with ID {id} not found")
         return image_query
