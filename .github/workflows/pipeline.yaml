@@ -42,7 +42,7 @@ jobs:
           container_id=$(docker run \
             -e LOG_LEVEL=DEBUG \
             -e GROUNDLIGHT_API_TOKEN=${{ env.GROUNDLIGHT_API_TOKEN }} \
-            -e $EDGE_CONFIG \
+            -e EDGE_CONFIG \
             -d -p 6717:6717 \
             groundlight-edge)
           echo "::set-output name=container_id::$container_id"
