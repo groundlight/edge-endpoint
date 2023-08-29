@@ -60,8 +60,9 @@ async def post_image_query(
     # Finally, fall back to submitting the image to the cloud
     image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=image, wait=patience_time)
 
-    # Store the cloud's response so that if the next image has no motion, we will return the same response
-    motion_detector.image_query_response = image_query
+    if motion_detector.is_enabled():
+        # Store the cloud's response so that if the next image has no motion, we will return the same response
+        motion_detector.image_query_response = image_query
     return image_query
 
 @router.get("/{id}", response_model=ImageQuery)
