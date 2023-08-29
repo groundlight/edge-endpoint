@@ -23,13 +23,13 @@ motion_detection:
       motion_detection_enabled: true
       motion_detection_percentage_threshold: 5.0
       motion_detection_val_threshold: 50
-      motion_detection_max_time_between_images: 30
+      motion_detection_max_time_between_images: 45
     
     - detector_id: 'det_2UOxao4HZyB9gv4ZVtwMOvdqgh9'
       motion_detection_enabled: true
       motion_detection_percentage_threshold: 0.0
       motion_detection_val_threshold: 0
-      motion_detection_max_time_between_images: 30
+      motion_detection_max_time_between_images: 45
 "
 
 export EDGE_CONFIG

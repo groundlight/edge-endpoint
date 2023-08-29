@@ -32,4 +32,3 @@ class IQECache:
 
     def __str__(self) -> str:
         return str(self.global_cache)
-
