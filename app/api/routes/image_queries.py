@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-async def validate_request_body(request: Request):
+async def validate_request_body(request: Request) -> Image.Image:
     if not request.headers.get("Content-Type", "").startswith("image/"):
         raise HTTPException(status_code=400, detail="Request body must be image bytes")
 
@@ -36,34 +36,30 @@ async def validate_request_body(request: Request):
         # the entire image. If this fails, we know that the image is invalid.
 
         image.load()
+        return image
     except Exception as e:
         logger.error(f"Failed to load image: {e}")
         raise HTTPException(status_code=400, detail="Invalid input image")
-
-    # Cache the image bytes in the state so that we only have to invoke await request.body() once
-    request.state.pil_image = image
-    return request
 
 
 @router.post("", response_model=ImageQuery)
 async def post_image_query(
     detector_id: str = Query(..., description="Detector ID"),
     patience_time: Optional[float] = Query(None, description="How long to wait for a confident response"),
-    request: Request = Depends(validate_request_body),
+    img: Image.Image = Depends(validate_request_body),
     gl: Depends = Depends(get_groundlight_sdk_instance),
     motion_detector: Depends = Depends(get_motion_detector_instance),
     edge_detector_manager: Depends = Depends(get_edge_detector_manager),
 ):
-    img = request.state.pil_image
     img_numpy = np.array(img)
 
     if not motion_detector.is_enabled():
-        return safe_call_api(gl.submit_image_query, detector=detector_id, image=image, wait=patience_time)
+        return safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=patience_time)
 
     motion_detected = motion_detector.motion_detected(new_img=img_numpy)
 
     if motion_detected:
-        image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=image, wait=patience_time)
+        image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=patience_time)
         # Store the cloud's response so that if the next image has no motion, we will return
         # the same response
         motion_detector.image_query_response = image_query
