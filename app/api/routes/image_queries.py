@@ -41,7 +41,7 @@ async def validate_request_body(request: Request):
         raise HTTPException(status_code=400, detail="Invalid input image")
 
     # Cache the image bytes in the state so that we only have to invoke await request.body() once
-    request.state.image_bytes = image_bytes
+    request.state.pil_image = image
     return request
 
 
@@ -54,8 +54,7 @@ async def post_image_query(
     motion_detector: Depends = Depends(get_motion_detector_instance),
     edge_detector_manager: Depends = Depends(get_edge_detector_manager),
 ):
-    image = request.state.image_bytes
-    img = Image.open(BytesIO(image))
+    img = request.state.pil_image
     img_numpy = np.array(img)
 
     if not motion_detector.is_enabled():
