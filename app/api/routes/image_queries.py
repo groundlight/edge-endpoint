@@ -7,9 +7,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from model import ImageQuery
 from PIL import Image, ImageFile
 
+from app.core.edge_inference import edge_inference, is_edge_inference_available
 from app.core.utils import (
     get_edge_detector_manager,
     get_groundlight_sdk_instance,
+    get_inference_client,
     get_motion_detector_instance,
     prefixed_ksuid,
     safe_call_api,
@@ -31,30 +33,42 @@ async def post_image_query(
     gl: Depends = Depends(get_groundlight_sdk_instance),
     motion_detector: Depends = Depends(get_motion_detector_instance),
     edge_detector_manager: Depends = Depends(get_edge_detector_manager),
+    inference_client: Depends = Depends(get_inference_client),
 ):
     image = await request.body()
     img = Image.open(BytesIO(image))
-    img_numpy = np.array(img)
+    img_numpy = np.array(img)  # [H, W, C=3], dtype: uint8, RGB format
 
-    if not motion_detector.is_enabled():
-        return safe_call_api(gl.submit_image_query, detector=detector_id, image=image, wait=patience_time)
+    if motion_detector.is_enabled():
+        motion_detected = motion_detector.motion_detected(new_img=img_numpy)
+        if not motion_detected:
+            # If there is no motion, return a clone of the last image query response
+            logger.debug("No motion detected")
+            new_image_query = ImageQuery(**motion_detector.image_query_response.dict())
+            new_image_query.id = prefixed_ksuid(prefix="iqe_")
+            edge_detector_manager.iqe_cache[new_image_query.id] = new_image_query
 
-    motion_detected = motion_detector.motion_detected(new_img=img_numpy)
+            return new_image_query
 
-    if motion_detected:
-        image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=image, wait=patience_time)
-        # Store the cloud's response so that if the next image has no motion, we will return
-        # the same response
-        motion_detector.image_query_response = image_query
-        return image_query
+    # Try to submit the image to a local edge detector
+    model_name = "det_edgedemo"
+    if is_edge_inference_available(inference_client, model_name):
+        logger.debug("Submitting image to edge detector")
+        results = edge_inference(inference_client, img_numpy, model_name)
+        logger.warning(f"edge detector results: {results}")
+        if results["confidence"] > 0.9:
+            logger.info("Edge detector confidence is high enough to return")
+        # image_query = ImageQuery()
+        # new_image_query.id = prefixed_ksuid(prefix="iqe_")
+        # edge_detector_manager.iqe_cache[new_image_query.id] = new_image_query
+        # return new_image_query
 
-    logger.debug("No motion detected")
-    new_image_query = ImageQuery(**motion_detector.image_query_response.dict())
-    new_image_query.id = prefixed_ksuid(prefix="iqe_")
-    edge_detector_manager.iqe_cache[new_image_query.id] = new_image_query
+    # Finally, fall back to submitting the image to the cloud
+    image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=image, wait=patience_time)
 
-    return new_image_query
-
+    # Store the cloud's response so that if the next image has no motion, we will return the same response
+    motion_detector.image_query_response = image_query
+    return image_query
 
 @router.get("/{id}", response_model=ImageQuery)
 async def get_image_query(
