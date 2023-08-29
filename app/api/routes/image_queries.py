@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from model import ImageQuery
 from PIL import Image, ImageFile
 
-from app.core.edge_inference import edge_inference, is_edge_inference_available
+from app.core.edge_inference import edge_inference, edge_inference_is_available
 from app.core.utils import (
     get_edge_detector_manager,
     get_groundlight_sdk_instance,
@@ -52,16 +52,10 @@ async def post_image_query(
 
     # Try to submit the image to a local edge detector
     model_name = "det_edgedemo"
-    if is_edge_inference_available(inference_client, model_name):
-        logger.debug("Submitting image to edge detector")
+    if edge_inference_is_available(inference_client, model_name):
         results = edge_inference(inference_client, img_numpy, model_name)
-        logger.warning(f"edge detector results: {results}")
         if results["confidence"] > 0.9:
             logger.info("Edge detector confidence is high enough to return")
-        # image_query = ImageQuery()
-        # new_image_query.id = prefixed_ksuid(prefix="iqe_")
-        # edge_detector_manager.iqe_cache[new_image_query.id] = new_image_query
-        # return new_image_query
 
     # Finally, fall back to submitting the image to the cloud
     image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=image, wait=patience_time)

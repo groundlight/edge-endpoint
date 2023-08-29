@@ -13,7 +13,7 @@ OUTPUT_PROBABILITY_NAME = "probability"
 INFERENCE_SERVER_URL = "inference-service:8000"
 
 
-def is_edge_inference_available(inference_client: InferenceServerClient, model_name: str, model_version: str = "") -> bool:
+def edge_inference_is_available(inference_client: InferenceServerClient, model_name: str, model_version: str = "") -> bool:
     """
     Queries the inference server to see if everything is ready to perform inference.
     Args:
@@ -59,6 +59,7 @@ def edge_inference(
     imginput.set_data_from_numpy(img_numpy)
     outputs = [tritonclient.InferRequestedOutput(f) for f in [OUTPUT_SCORE_NAME, OUTPUT_CONFIDENCE_NAME, OUTPUT_PROBABILITY_NAME]]
 
+    logger.debug("Submitting image to edge inference service")
     response = inference_client.infer(
         model_name,
         model_version=model_version,
@@ -72,5 +73,5 @@ def edge_inference(
         OUTPUT_CONFIDENCE_NAME: response.as_numpy(OUTPUT_CONFIDENCE_NAME)[0],
         OUTPUT_PROBABILITY_NAME: response.as_numpy(OUTPUT_PROBABILITY_NAME)[0],
     }
-    logger.debug(f"inference server response for model={model_name}: {output_dict}")
+    logger.debug(f"Inference server response for model={model_name}: {output_dict}")
     return output_dict
