@@ -38,7 +38,7 @@ async def validate_request_body(request: Request) -> Image.Image:
         image.load()
         return image
     except Exception as e:
-        logger.error(f"Failed to load image: {e}")
+        logger.error(f"Failed to load image", exc_info=True)
         raise HTTPException(status_code=400, detail="Invalid input image")
 
 
