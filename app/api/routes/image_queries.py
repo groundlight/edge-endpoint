@@ -51,11 +51,10 @@ async def post_image_query(
     motion_detector: Depends = Depends(get_motion_detector_instance),
     edge_detector_manager: Depends = Depends(get_edge_detector_manager),
 ):
-    img_numpy = np.array(img)
-
     if not motion_detector.is_enabled():
         return safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=patience_time)
 
+    img_numpy = np.array(img)
     motion_detected = motion_detector.motion_detected(new_img=img_numpy)
 
     if motion_detected:
