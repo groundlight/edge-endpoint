@@ -16,7 +16,7 @@ def load_edge_config() -> dict:
     Reads the edge config from the EDGE_CONFIG environment variable if it exists.
     If EDGE_CONFIG is not set, reads the default edge config file.
     """
-    yaml_config = os.environ.get("EDGE_CONFIG", None)
+    yaml_config = os.environ.get("EDGE_CONFIG", "").strip()
     if yaml_config:
         return yaml.safe_load(yaml_config)
 
