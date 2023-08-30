@@ -43,15 +43,16 @@ jobs:
       - name: Start Docker Container
         id: start_container
         run: |
-          EDGE_CONFIG=$(echo "${{ env.ENCODED_EDGE_CONFIG }}" | base64 --decode)
           echo "EDGE_CONFIG=$EDGE_CONFIG"
           container_id=$(docker run \
             -e LOG_LEVEL=DEBUG \
             -e GROUNDLIGHT_API_TOKEN=${{ env.GROUNDLIGHT_API_TOKEN }} \
-            -e EDGE_CONFIG="$EDGE_CONFIG" \
+            -e EDGE_CONFIG \
             -d -p 6717:6717 \
             groundlight-edge)
           echo "::set-output name=container_id::$container_id"
+        env:
+          EDGE_CONFIG: $(echo "${{ env.ENCODED_EDGE_CONFIG }}" | base64 --decode)
             
       - name: Install poetry
         uses: snok/install-poetry@v1
