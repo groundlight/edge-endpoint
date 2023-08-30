@@ -17,7 +17,7 @@ class IQECache:
         # Cache for image query responses whose IDs are prefixed with "iqe_". This is needed
         # because the cloud API does not currently recognize such IDs.
         # The cache maintains a mapping from "iqe"'s to image query objects.
-        # NOTE: This cache is not thread-safe and global across all detectors.
+        # NOTE: This cache is not thread-safe and it is global across all detectors.
         self.global_cache = LRUCache(maxsize=cache_size)
 
     def get_cached_image_query(self, image_query_id: str) -> ImageQuery | None:
