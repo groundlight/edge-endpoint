@@ -1,5 +1,5 @@
-import os
 import logging
+import os
 from io import BytesIO
 from typing import Callable
 
@@ -7,7 +7,6 @@ import ksuid
 import yaml
 from fastapi import HTTPException, Request
 from PIL import Image
-
 
 logger = logging.getLogger(__name__)
 
