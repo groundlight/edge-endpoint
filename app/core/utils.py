@@ -1,4 +1,5 @@
 import os
+import logging
 from io import BytesIO
 from typing import Callable
 
@@ -6,6 +7,9 @@ import ksuid
 import yaml
 from fastapi import HTTPException, Request
 from PIL import Image
+
+
+logger = logging.getLogger(__name__)
 
 
 def load_edge_config() -> dict:
@@ -16,6 +20,8 @@ def load_edge_config() -> dict:
     yaml_config = os.environ.get("EDGE_CONFIG", None)
     if yaml_config:
         return yaml.safe_load(yaml_config)
+
+    logger.warning("EDGE_CONFIG environment variable not set. Using the default edge config file.")
 
     default_config_path = "configs/edge.yaml"
     if os.path.exists(default_config_path):

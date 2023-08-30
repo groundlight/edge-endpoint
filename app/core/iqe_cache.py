@@ -13,11 +13,11 @@ class IQECache:
 
     """
 
-    def __init__(self, cache_size=1000000) -> None:
+    def __init__(self, cache_size=1_000_000) -> None:
         # Cache for image query responses whose IDs are prefixed with "iqe_". This is needed
         # because the cloud API does not currently recognize such IDs.
-        # The cache maintains a mapping from detector id to image query id, and each
-        # image query id is mapped to a corresponding image query.
+        # The cache maintains a mapping from "iqe"'s to image query objects.
+        # NOTE: This cache is not thread-safe and global across all detectors.
         self.global_cache = LRUCache(maxsize=cache_size)
 
     def get_cached_image_query(self, image_query_id: str) -> ImageQuery | None:
