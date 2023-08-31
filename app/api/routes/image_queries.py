@@ -7,6 +7,7 @@ import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from model import ClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
 from PIL import Image
+from starlette.concurrency import run_in_threadpool
 
 from app.core.edge_inference import edge_inference, edge_inference_is_available
 from app.core.utils import (
@@ -17,7 +18,6 @@ from app.core.utils import (
     prefixed_ksuid,
     safe_call_api,
 )
-from starlette.concurrency import run_in_threadpool
 
 logger = logging.getLogger(__name__)
 
