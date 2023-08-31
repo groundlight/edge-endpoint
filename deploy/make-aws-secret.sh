@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -ex
-
 K="k3s kubectl"
 
 # Enable ECR login - make sure you have the aws client configured properly, or an IAM role
