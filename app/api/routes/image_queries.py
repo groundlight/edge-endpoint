@@ -1,10 +1,11 @@
 import logging
+from datetime import datetime
 from io import BytesIO
 from typing import Optional
 
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from model import ImageQuery
+from model import ClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
 from PIL import Image
 
 from app.core.edge_inference import edge_inference, edge_inference_is_available
@@ -61,20 +62,28 @@ async def post_image_query(
         if not motion_detected:
             # If there is no motion, return a clone of the last image query response
             logger.debug("No motion detected")
-            new_image_query = ImageQuery(**motion_detector.image_query_response.dict())
-            new_image_query.id = prefixed_ksuid(prefix="iqe_")
+            new_image_query = motion_detector.image_query_response.copy(
+                deep=True, update={"id": prefixed_ksuid(prefix="iqe_")}
+            )
             edge_detector_manager.iqe_cache[new_image_query.id] = new_image_query
             return new_image_query
 
     # Try to submit the image to a local edge detector
-    model_name = "det_edgedemo"
+    model_name, confidence_threshold = "det_edgedemo", 0.9
+    image_query = None
     if edge_inference_is_available(inference_client, model_name):
         results = edge_inference(inference_client, img_numpy, model_name)
-        if results["confidence"] > 0.9:
+        if results["confidence"] > confidence_threshold:
             logger.info("Edge detector confidence is high enough to return")
+            image_query = _create_image_query(
+                detector_id=detector_id,
+                label=results["label"],
+                confidence=results["confidence"],
+            )
 
     # Finally, fall back to submitting the image to the cloud
-    image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=patience_time)
+    if not image_query:
+        image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=patience_time)
 
     if motion_detector.is_enabled():
         # Store the cloud's response so that if the next image has no motion, we will return the same response
@@ -94,3 +103,19 @@ async def get_image_query(
             raise HTTPException(status_code=404, detail=f"Image query with ID {id} not found")
         return image_query
     return safe_call_api(gl.get_image_query, id=id)
+
+
+def _create_image_query(detector_id: str, label: str, confidence: float) -> ImageQuery:
+    iq = ImageQuery(
+        id=prefixed_ksuid(prefix="iqe_"),
+        type=ImageQueryTypeEnum.image_query,
+        created_at=datetime.utcnow(),
+        query="",
+        detector_id=detector_id,
+        result_type=ResultTypeEnum.binary_classification,
+        result=ClassificationResult(
+            confidence=confidence,
+            label=label,
+        ),
+    )
+    return iq
