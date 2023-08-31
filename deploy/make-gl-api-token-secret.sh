@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -ex
-
 K="k3s kubectl"
 
 $K delete --ignore-not-found secret groundlight-secrets

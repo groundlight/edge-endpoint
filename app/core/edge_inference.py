@@ -26,14 +26,18 @@ def edge_inference_is_available(
     Returns:
         True if edge inference for the specified model is available, False otherwise
     """
-    if not inference_client.is_server_live():
-        logger.debug("Inference server is not live")
-        return False
-    if not inference_client.is_server_ready():
-        logger.debug("Inference server is not ready")
-        return False
-    if not inference_client.is_model_ready(model_name, model_version=model_version):
-        logger.debug(f"Inference model is not ready: {model_name}/{model_version}")
+    try:
+        if not inference_client.is_server_live():
+            logger.debug("Edge inference server is not live")
+            return False
+        if not inference_client.is_server_ready():
+            logger.debug("Edge inference server is not ready")
+            return False
+        if not inference_client.is_model_ready(model_name, model_version=model_version):
+            logger.debug(f"Edge inference model is not ready: {model_name}/{model_version}")
+            return False
+    except ConnectionRefusedError as ex:
+        logger.warning(f"Edge inference server is not available: {ex}")
         return False
     return True
 
