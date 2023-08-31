@@ -13,7 +13,7 @@ router = APIRouter()
 
 
 @router.post("", response_model=Detector)
-async def create_detector(props: DetectorCreate, gl: Depends = Depends(get_groundlight_sdk_instance)):
+def create_detector(props: DetectorCreate, gl: Depends = Depends(get_groundlight_sdk_instance)):
     return safe_call_api(
         gl.create_detector,
         name=props.name,
@@ -24,5 +24,5 @@ async def create_detector(props: DetectorCreate, gl: Depends = Depends(get_groun
 
 
 @router.get("/{id}", response_model=Detector)
-async def get_detector(id: str, gl: Depends = Depends(get_groundlight_sdk_instance)):
+def get_detector(id: str, gl: Depends = Depends(get_groundlight_sdk_instance)):
     return safe_call_api(gl.get_detector, id=id)

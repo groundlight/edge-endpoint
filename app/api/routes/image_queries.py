@@ -17,6 +17,7 @@ from app.core.utils import (
     prefixed_ksuid,
     safe_call_api,
 )
+from starlette.concurrency import run_in_threadpool
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +25,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-async def validate_request_body(request: Request) -> Image.Image:
+def validate_request_body(request: Request) -> Image.Image:
     if not request.headers.get("Content-Type", "").startswith("image/"):
         raise HTTPException(status_code=400, detail="Request body must be image bytes")
 
-    image_bytes = await request.body()
+    image_bytes = run_in_threadpool(request.body)
     try:
         # Attempt to open the image
         image = Image.open(BytesIO(image_bytes))
@@ -46,7 +47,7 @@ async def validate_request_body(request: Request) -> Image.Image:
 
 
 @router.post("", response_model=ImageQuery)
-async def post_image_query(
+def post_image_query(
     detector_id: str = Query(..., description="Detector ID"),
     patience_time: Optional[float] = Query(None, description="How long to wait for a confident response"),
     img: Image.Image = Depends(validate_request_body),
@@ -92,7 +93,7 @@ async def post_image_query(
 
 
 @router.get("/{id}", response_model=ImageQuery)
-async def get_image_query(
+def get_image_query(
     id: str,
     gl: Depends = Depends(get_groundlight_sdk_instance),
     edge_detector_manager: Depends = Depends(get_edge_detector_manager),
