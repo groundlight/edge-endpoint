@@ -40,9 +40,9 @@ async def validate_request_body(request: Request) -> Image.Image:
 
         image.load()
         return image
-    except Exception:
+    except Exception as ex:  # TODO: Specify the exact exceptions we want to catch, eliminate bare except
         logger.error("Failed to load image", exc_info=True)
-        raise HTTPException(status_code=400, detail="Invalid input image")
+        raise HTTPException(status_code=400, detail="Invalid input image") from ex
 
 
 @router.post("", response_model=ImageQuery)
