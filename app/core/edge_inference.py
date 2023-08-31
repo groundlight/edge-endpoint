@@ -1,4 +1,5 @@
 import logging
+import socket
 
 import numpy as np
 import tritonclient.http as tritonclient
@@ -36,7 +37,7 @@ def edge_inference_is_available(
         if not inference_client.is_model_ready(model_name, model_version=model_version):
             logger.debug(f"Edge inference model is not ready: {model_name}/{model_version}")
             return False
-    except ConnectionRefusedError as ex:
+    except (ConnectionRefusedError, socket.gaierror) as ex:
         logger.warning(f"Edge inference server is not available: {ex}")
         return False
     return True
