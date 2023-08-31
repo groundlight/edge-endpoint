@@ -14,7 +14,9 @@ OUTPUT_LABEL_NAME = "label"
 INFERENCE_SERVER_URL = "inference-service:8000"
 
 
-def edge_inference_is_available(inference_client: InferenceServerClient, model_name: str, model_version: str = "") -> bool:
+def edge_inference_is_available(
+    inference_client: InferenceServerClient, model_name: str, model_version: str = ""
+) -> bool:
     """
     Queries the inference server to see if everything is ready to perform inference.
     Args:
@@ -37,10 +39,7 @@ def edge_inference_is_available(inference_client: InferenceServerClient, model_n
 
 
 def edge_inference(
-    inference_client: InferenceServerClient,
-    img_numpy: np.ndarray,
-    model_name: str,
-    model_version: str = ""
+    inference_client: InferenceServerClient, img_numpy: np.ndarray, model_name: str, model_version: str = ""
 ) -> dict:
     """
     Submit an image to the inference server, route to a specific model, and return the results.
@@ -59,7 +58,10 @@ def edge_inference(
     img_numpy = img_numpy.transpose(2, 0, 1)  # [H, W, C=3] -> [C=3, H, W]
     imginput = tritonclient.InferInput(INPUT_IMAGE_NAME, img_numpy.shape, datatype="UINT8")
     imginput.set_data_from_numpy(img_numpy)
-    outputs = [tritonclient.InferRequestedOutput(f) for f in [OUTPUT_SCORE_NAME, OUTPUT_CONFIDENCE_NAME, OUTPUT_PROBABILITY_NAME]]
+    outputs = [
+        tritonclient.InferRequestedOutput(f)
+        for f in [OUTPUT_SCORE_NAME, OUTPUT_CONFIDENCE_NAME, OUTPUT_PROBABILITY_NAME]
+    ]
 
     logger.debug("Submitting image to edge inference service")
     response = inference_client.infer(
