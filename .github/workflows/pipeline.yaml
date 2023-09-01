@@ -130,7 +130,7 @@ jobs:
         with:
           repository: groundlight/python-sdk
           path: groundlight-sdk
-          ref: imroving_tests
+          ref: improving_tests
       - name: Install Groundlight SDK dependencies
         run: |
           cd groundlight-sdk 
