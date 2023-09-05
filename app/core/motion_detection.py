@@ -1,25 +1,26 @@
 import logging
 import time
+from typing import List
 
 import numpy as np
 from framegrab import MotionDetector
-from pydantic import BaseSettings, Field
+from model import ImageQuery
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
 
-class MotdetParameterSettings(BaseSettings):
-    """
-    Read motion detection parameters from environment variables
-    """
-
+class MotionDetectionParams(BaseModel):
+    detector_id: str = Field(..., description="Detector ID")
+    motion_detection_enabled: bool = Field(
+        False, description="Determines if motion detection is enabled for this detector"
+    )
     motion_detection_percentage_threshold: float = Field(
         5.0, description="Percent of pixels needed to change before motion is detected."
     )
     motion_detection_val_threshold: int = Field(
         50, description="The minimum brightness change for a pixel for it to be considered changed."
     )
-    motion_detection_enabled: bool = Field(False, description="Determines if motion detection is enabled by default.")
     motion_detection_max_time_between_images: float = Field(
         3600.0,
         description=(
@@ -28,17 +29,21 @@ class MotdetParameterSettings(BaseSettings):
         ),
     )
 
-    class Config:
-        env_file = ".env"
+
+class RootConfig(BaseModel):
+    """
+    Main configuration for motion detection across all detectors.
+    """
+
+    motion_detection: List[MotionDetectionParams]
 
 
 class MotionDetectorWrapper:
     """
-    This is a wrapper around MotionDetector class around the motion detection implementation from
-    the framegrab library.
+    This is a wrapper around MotionDetector from framegrab.
     """
 
-    def __init__(self, parameters: MotdetParameterSettings):
+    def __init__(self, parameters: MotionDetectionParams):
         self._motion_detector = MotionDetector(
             pct_threshold=parameters.motion_detection_percentage_threshold,
             val_threshold=parameters.motion_detection_val_threshold,
@@ -71,3 +76,33 @@ class MotionDetectorWrapper:
             logger.debug("Motion detected")
             self._previous_motion_detection_time = time.monotonic()
         return motion_is_detected
+
+
+class MotionDetectionManager:
+    def __init__(self, config: RootConfig) -> None:
+        self.detectors = {
+            detector_params.detector_id: MotionDetectorWrapper(detector_params)
+            for detector_params in config.motion_detection
+        }
+
+    def update_image_query_response(self, detector_id: str, response: ImageQuery) -> None:
+        self.detectors[detector_id].image_query_response = response
+
+    def get_image_query_response(self, detector_id: str) -> ImageQuery:
+        return self.detectors[detector_id].image_query_response
+
+    def run_motion_detection(self, detector_id: str, new_img: np.ndarray) -> bool:
+        """
+        Determine if motion is detected for this detector on the given image.
+        Args:
+            detector_id: ID of the detector to run motion detection on.
+            image: Image to run motion detection on.
+
+        Returns:
+            True if motion was detected, False otherwise.
+        """
+
+        if detector_id not in self.detectors.keys():
+            raise ValueError(f"Detector ID {detector_id} not found")
+
+        return self.detectors[detector_id].motion_detected(new_img=new_img)

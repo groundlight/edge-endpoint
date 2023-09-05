@@ -16,6 +16,7 @@ pillow = "^9.5.0"
 framegrab = "^0.2.1"
 pyyaml = "^6.0"
 svix-ksuid = "^0.6.2"
+cachetools = "^5.3.1"
 tritonclient = {extras = ["all"], version = "^2.36.0"}
 
 [tool.poetry.group.dev.dependencies]
