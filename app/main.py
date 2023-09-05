@@ -1,11 +1,13 @@
 import logging
 import os
 
+import tritonclient.http as tritonclient
 from fastapi import FastAPI
 from groundlight import Groundlight
 
 from app.api.api import api_router, ping_router
 from app.api.naming import API_BASE_PATH
+from app.core.edge_inference import INFERENCE_SERVER_URL
 
 from .core.edge_detector_manager import EdgeDetectorManager
 from .core.motion_detection import MotionDetectionManager, RootConfig
@@ -30,3 +32,7 @@ app.state.edge_detector_manager = EdgeDetectorManager()
 # Create a global shared motion detection manager object in the app's state
 edge_config = load_edge_config()
 app.state.motion_detection_manager = MotionDetectionManager(config=RootConfig(**edge_config))
+
+# Create global shared edge inference client object in the app's state
+# NOTE: For now this assumes that there is only one inference container
+app.state.inference_client = tritonclient.InferenceServerClient(url=INFERENCE_SERVER_URL)

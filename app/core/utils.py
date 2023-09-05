@@ -40,6 +40,9 @@ def get_edge_detector_manager(request: Request):
 def get_motion_detection_manager(request: Request):
     return request.app.state.motion_detection_manager
 
+def get_inference_client(request: Request):
+    return request.app.state.inference_client
+
 
 def safe_call_api(api_method: Callable, **kwargs):
     """

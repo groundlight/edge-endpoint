@@ -7,6 +7,7 @@ from requests import Response
 REMOTE_URL = os.getenv("REMOTE_URL", default="https://api.integ.groundlight.ai")
 
 
+# NOTE: this seems to be dead code
 def remote_request(path: str, method: str = "get", body: Optional[dict] = None, url: str = REMOTE_URL) -> Response:
     http_method: Type[requests.get] | Type[requests.post] | Type[requests.patch] = getattr(requests, method)
     full_url = f"{url}{path}"
