@@ -1,3 +1,4 @@
+import logging
 import os
 from io import BytesIO
 from typing import Callable
@@ -7,16 +8,19 @@ import yaml
 from fastapi import HTTPException, Request
 from PIL import Image
 
+logger = logging.getLogger(__name__)
+
 
 def load_edge_config() -> dict:
     """
     Reads the edge config from the EDGE_CONFIG environment variable if it exists.
     If EDGE_CONFIG is not set, reads the default edge config file.
     """
-
-    yaml_config = os.environ.get("EDGE_CONFIG", None)
+    yaml_config = os.environ.get("EDGE_CONFIG", "").strip()
     if yaml_config:
         return yaml.safe_load(yaml_config)
+
+    logger.warning("EDGE_CONFIG environment variable not set. Using the default edge config file.")
 
     default_config_path = "configs/edge.yaml"
     if os.path.exists(default_config_path):
@@ -29,16 +33,13 @@ def get_groundlight_sdk_instance(request: Request):
     return request.app.state.groundlight
 
 
-def get_motion_detector_instance(request: Request):
-    return request.app.state.motion_detector
-
-
-def get_edge_detector_manager(request: Request):
-    return request.app.state.edge_detector_manager
+def get_iqe_cache(request: Request):
+    return request.app.state.iqe_cache
 
 
 def get_motion_detection_manager(request: Request):
     return request.app.state.motion_detection_manager
+
 
 def get_inference_client(request: Request):
     return request.app.state.inference_client

@@ -1,13 +1,8 @@
-import logging
-
 from fastapi import APIRouter, Depends
 from model import Detector
 
 from app.core.utils import get_groundlight_sdk_instance, safe_call_api
 from app.schemas.schemas import DetectorCreate
-
-logger = logging.getLogger(__name__)
-
 
 router = APIRouter()
 

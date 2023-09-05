@@ -9,7 +9,7 @@ from app.api.api import api_router, ping_router
 from app.api.naming import API_BASE_PATH
 from app.core.edge_inference import INFERENCE_SERVER_URL
 
-from .core.edge_detector_manager import EdgeDetectorManager
+from .core.iqe_cache import IQECache
 from .core.motion_detection import MotionDetectionManager, RootConfig
 from .core.utils import load_edge_config
 
@@ -26,8 +26,8 @@ app.include_router(router=ping_router)
 app.state.groundlight = Groundlight()
 
 
-# Create a global shared edge detector manager object in the app's state
-app.state.edge_detector_manager = EdgeDetectorManager()
+# Create a global shared image query ID cache in the app's state
+app.state.iqe_cache = IQECache()
 
 # Create a global shared motion detection manager object in the app's state
 edge_config = load_edge_config()

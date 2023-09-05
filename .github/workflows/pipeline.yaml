@@ -33,25 +33,16 @@ jobs:
           sudo apt-get install docker-ce
       - name: Build Docker Image
         run: docker build --target production-image --tag groundlight-edge .
-
-      - name: Create Motion Detection Config
-        id: create_motion_detection_config
-        # GITHUB_ENV expects environment variables to be properly escaped, so we have to 
-        # do the following since we have a complex multi-line variable in EDGE_CONFIG.
-        # I couldn't find a better way to do this other than base-encoding the config and 
-        # decoding it when needed, but this works.
-        run: |
-          source test/setup_test_env.sh
-          ENCODED_EDGE_CONFIG=$(echo -n "$EDGE_CONFIG" | base64 -w0)
-          echo "ENCODED_EDGE_CONFIG=$ENCODED_EDGE_CONFIG" >> $GITHUB_ENV
+        
       - name: Start Docker Container
         id: start_container
         run: |
-          EDGE_CONFIG=$(echo "$ENCODED_EDGE_CONFIG" | base64 -d)
+          source test/setup_test_env.sh
+          echo "EDGE_CONFIG=$EDGE_CONFIG"
           container_id=$(docker run \
             -e LOG_LEVEL=DEBUG \
             -e GROUNDLIGHT_API_TOKEN=${{ env.GROUNDLIGHT_API_TOKEN }} \
-            -e "EDGE_CONFIG=$EDGE_CONFIG" \
+            -e EDGE_CONFIG \
             -d -p 6717:6717 \
             groundlight-edge)
           echo "::set-output name=container_id::$container_id"
@@ -76,6 +67,7 @@ jobs:
 
       - name: Run Motion Detection Tests 
         run: | 
+          source test/setup_test_env.sh
           poetry run pytest -vs test/api/test_motdet.py
       
       - name: Dump Logs from Docker Container
