@@ -8,4 +8,9 @@ motion_detection:
     # maximum time (seconds) between images sent to the cloud. This will be honored even if no
     # motion has been detected
     motion_detection_max_time_between_images: 3600
+
+    # We cache the last image query from the cloud API. If the cached image query 
+    # still has low confidence after `unconfident_iq_reescalation_internal` seconds,
+    # we will send a new image query to the cloud to try to get a higher confidence. 
+    unconfident_iq_reescalation_interval: 60
   
