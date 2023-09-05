@@ -30,7 +30,7 @@ spec:
       containers:
       - name: edge-endpoint
         # Pull the image from ECR
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:main-39ba8639f-dirty-914eb756cb2740c
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:ce3579bbb-main
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
@@ -76,7 +76,7 @@ spec:
     spec:
       containers:
       - name: inference-server
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver:main-749c0cca3-dirty-0325a8beabe0d7b
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver:158db90ec-main
         imagePullPolicy: IfNotPresent
         # Tritonserver will look for models in /mnt/models and initialize them on startup
         # TODO: We only want to shut down an old instance when this tritonsever gives the "READY" signal for all models

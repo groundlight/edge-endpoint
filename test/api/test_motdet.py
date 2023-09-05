@@ -13,13 +13,13 @@ motion_detection_enabled = os.environ.get("MOTION_DETECTION_ENABLED", "False").u
 # name="edge_testing_det",
 # query="Is there a dog in the image?",
 # confidence_threshold=0.9
-DETECTOR_ID = "det_2SagpFUrs83cbMZsap5hZzRjZw4"
+DETECTOR_ID = "det_2UdWrg7tEIMLqSKkoqt5dPE74s9"
 
 
 @pytest.fixture(name="gl")
 def fixture_gl() -> Groundlight:
     """Creates a Groundlight client object"""
-    return Groundlight(endpoint="http://localhost:6717")
+    return Groundlight(endpoint="http://localhost:31710")
 
 
 @pytest.fixture

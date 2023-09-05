@@ -14,18 +14,23 @@ client = TestClient(app)
 # name="edge_testing_det",
 # query="Is there a dog in the image?",
 # confidence_threshold=0.9
-DETECTOR_ID = "det_2SagpFUrs83cbMZsap5hZzRjZw4"
+DETECTOR_ID = "det_2UdWrg7tEIMLqSKkoqt5dPE74s9"
 
 
 @pytest.fixture(name="gl")
 def fixture_gl() -> Groundlight:
     """Creates a Groundlight client object"""
-    return Groundlight(endpoint="http://localhost:6717")
+    return Groundlight(endpoint="http://localhost:31710")
 
 
 @pytest.fixture
 def detector(gl: Groundlight) -> Detector:
     return gl.get_detector(id=DETECTOR_ID)
+
+
+def test_get_detector(gl: Groundlight):
+    det = gl.get_detector(id=DETECTOR_ID)
+    assert det.name == "edge_testing_det"
 
 
 def test_post_image_queries(gl: Groundlight, detector: Detector):
@@ -35,4 +40,6 @@ def test_post_image_queries(gl: Groundlight, detector: Detector):
     """
     image = Image.open("test/assets/dog.jpeg")
     image_bytes = pil_image_to_bytes(img=image)
-    gl.submit_image_query(detector=detector.id, image=image_bytes, wait=10.0)
+    iq = gl.submit_image_query(detector=detector.id, image=image_bytes, wait=10.0)
+    # TODO: w and w/o motion detection
+    # TODO: w and w/o edge inference
