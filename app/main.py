@@ -9,26 +9,29 @@ from app.api.api import api_router, ping_router
 from app.api.naming import API_BASE_PATH
 from app.core.edge_inference import INFERENCE_SERVER_URL
 
-from .core.edge_detector_manager import EdgeDetectorManager
-from .core.motion_detection import MotdetParameterSettings, MotionDetectorWrapper
+from .core.iqe_cache import IQECache
+from .core.motion_detection import MotionDetectionManager, RootConfig
+from .core.utils import load_edge_config
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
-
 logging.basicConfig(level=LOG_LEVEL)
+
 
 app = FastAPI()
 app.include_router(router=api_router, prefix=API_BASE_PATH)
 app.include_router(router=ping_router)
 
 
-# Create global shared Groundlight SDK client object in the app's state
+# Create a global shared Groundlight SDK client object in the app's state
 app.state.groundlight = Groundlight()
 
-# Create global shared motion detector object in the app's state
-app.state.motion_detector = MotionDetectorWrapper(parameters=MotdetParameterSettings())
 
-# Create global shared edge detector manager object in the app's state
-app.state.edge_detector_manager = EdgeDetectorManager()
+# Create a global shared image query ID cache in the app's state
+app.state.iqe_cache = IQECache()
+
+# Create a global shared motion detection manager object in the app's state
+edge_config = load_edge_config()
+app.state.motion_detection_manager = MotionDetectionManager(config=RootConfig(**edge_config))
 
 # Create global shared edge inference client object in the app's state
 # NOTE: For now this assumes that there is only one inference container

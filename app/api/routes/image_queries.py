@@ -10,10 +10,10 @@ from PIL import Image
 
 from app.core.edge_inference import edge_inference, edge_inference_is_available
 from app.core.utils import (
-    get_edge_detector_manager,
     get_groundlight_sdk_instance,
     get_inference_client,
-    get_motion_detector_instance,
+    get_iqe_cache,
+    get_motion_detection_manager,
     prefixed_ksuid,
     safe_call_api,
 )
@@ -50,21 +50,24 @@ async def post_image_query(
     patience_time: Optional[float] = Query(None, description="How long to wait for a confident response"),
     img: Image.Image = Depends(validate_request_body),
     gl: Depends = Depends(get_groundlight_sdk_instance),
-    motion_detector: Depends = Depends(get_motion_detector_instance),
-    edge_detector_manager: Depends = Depends(get_edge_detector_manager),
+    iqe_cache: Depends = Depends(get_iqe_cache),
+    motion_detection_manager: Depends = Depends(get_motion_detection_manager),
     inference_client: Depends = Depends(get_inference_client),
 ):
     img_numpy = np.array(img)  # [H, W, C=3], dtype: uint8, RGB format
 
-    if motion_detector.is_enabled():
-        motion_detected = motion_detector.motion_detected(new_img=img_numpy)
+    if (
+        detector_id in motion_detection_manager.detectors
+        and motion_detection_manager.detectors[detector_id].is_enabled()
+    ):
+        motion_detected = motion_detection_manager.run_motion_detection(detector_id=detector_id, new_img=img_numpy)
         if not motion_detected:
             # If there is no motion, return a clone of the last image query response
-            logger.debug("No motion detected")
-            new_image_query = motion_detector.image_query_response.copy(
+            logger.debug(f"No motion detected for {detector_id=}")
+            new_image_query = motion_detection_manager.get_image_query_response(detector_id=detector_id).copy(
                 deep=True, update={"id": prefixed_ksuid(prefix="iqe_")}
             )
-            edge_detector_manager.iqe_cache[new_image_query.id] = new_image_query
+            iqe_cache.update_cache(image_query=new_image_query)
             return new_image_query
 
     # Try to submit the image to a local edge detector
@@ -84,9 +87,13 @@ async def post_image_query(
     if not image_query:
         image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=patience_time)
 
-    if motion_detector.is_enabled():
+    if (
+        detector_id in motion_detection_manager.detectors
+        and motion_detection_manager.detectors[detector_id].is_enabled()
+    ):
         # Store the cloud's response so that if the next image has no motion, we will return the same response
-        motion_detector.image_query_response = image_query
+        motion_detection_manager.update_image_query_response(detector_id=detector_id, response=image_query)
+
     return image_query
 
 
@@ -94,10 +101,10 @@ async def post_image_query(
 async def get_image_query(
     id: str,
     gl: Depends = Depends(get_groundlight_sdk_instance),
-    edge_detector_manager: Depends = Depends(get_edge_detector_manager),
+    iqe_cache: Depends = Depends(get_iqe_cache),
 ):
     if id.startswith("iqe_"):
-        image_query = edge_detector_manager.iqe_cache.get(id, None)
+        image_query = iqe_cache.get_cached_image_query(image_query_id=id)
         if not image_query:
             raise HTTPException(status_code=404, detail=f"Image query with ID {id} not found")
         return image_query
