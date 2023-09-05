@@ -11,9 +11,9 @@ from PIL import Image
 from app.core.edge_inference import edge_inference, edge_inference_is_available
 from app.core.utils import (
     get_groundlight_sdk_instance,
+    get_inference_client,
     get_iqe_cache,
     get_motion_detection_manager,
-    get_inference_client,
     prefixed_ksuid,
     safe_call_api,
 )
