@@ -40,6 +40,7 @@ def edge_inference_is_available(
     except (ConnectionRefusedError, socket.gaierror) as ex:
         logger.warning(f"Edge inference server is not available: {ex}")
         return False
+    logger.warning("Edge inference server is available!")
     return True
 
 
@@ -68,7 +69,7 @@ def edge_inference(
         for f in [OUTPUT_SCORE_NAME, OUTPUT_CONFIDENCE_NAME, OUTPUT_PROBABILITY_NAME]
     ]
 
-    logger.debug("Submitting image to edge inference service")
+    logger.warning("Submitting image to edge inference service")
     response = inference_client.infer(
         model_name,
         model_version=model_version,
@@ -84,7 +85,7 @@ def edge_inference(
         OUTPUT_PROBABILITY_NAME: probability,
         OUTPUT_LABEL_NAME: _probability_to_label(probability),
     }
-    logger.debug(f"Inference server response for model={model_name}: {output_dict}")
+    logger.warning(f"Inference server response for model={model_name}: {output_dict}")
     return output_dict
 
 

@@ -30,7 +30,7 @@ spec:
       containers:
       - name: edge-endpoint
         # Pull the image from ECR
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:ce3579bbb-main
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-triton-demo-2bc16c7c3-dirty-0cc92bf31ca529a
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
