@@ -1,0 +1,42 @@
+name: k3s-cicd
+on: [push]
+
+env:
+  PYTHON_VERSION: "3.11"
+  POETRY_VERSION: "1.5.1"
+  # This is the token associated with "prod-biggies" (with shared credentials on 1password)
+  GROUNDLIGHT_API_TOKEN: ${{ secrets.GROUNDLIGHT_API_TOKEN }}
+  # This is the NGINX proxy endpoint
+  GROUNDLIGHT_ENDPOINT: http://localhost:6717
+
+jobs:
+  test-motion-detection:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+      - name: Set up python
+        uses: actions/setup-python@v4
+        with :
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Configure AWS Credentials 
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      - name: Log into Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Install k3s 
+        run: ./deploy/bin/install-k3s.sh
+
+      - name: Deploy to k3s 
+        # Deploys to a Kubernetes cluster running on the GitHub Actions runner
+        # and waits for the pods to be ready 
+        run: |
+          k3s kubectl apply -f deploy/k3s/edge_deployment.yaml
+          k3s kubectl rollout status deployment/edge-endpoint
+          k3s kubectl rollout status deployment/inference-server
+
