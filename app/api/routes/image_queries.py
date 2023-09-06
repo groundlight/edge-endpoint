@@ -102,10 +102,13 @@ async def post_image_query(
                     detector_id
                 ].unconfident_iq_reescalation_interval_exceeded()
 
-                if (
-                    not unconfident_iq_reescalation_interval_exceeded
-                    and iq_response.result.confidence > cached_image_query.result.confidence
-                ):
+                # There's a subtlety here since confidence=None implies human label, which is treated as confident
+                confidence_is_improved = (
+                    iq_response.result.confidence is None
+                    or iq_response.result.confidence > cached_image_query.result.confidence
+                )
+
+                if not unconfident_iq_reescalation_interval_exceeded and confidence_is_improved:
                     logger.debug(
                         f"Image query confidence has improved for {detector_id=}. New confidence:"
                         f" {iq_response.result.confidence}"
