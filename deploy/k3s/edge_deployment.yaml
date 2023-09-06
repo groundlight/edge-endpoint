@@ -44,6 +44,18 @@ spec:
               key: api-token
       imagePullSecrets:
       - name: registry-credentials
+      volumeMounts:
+      - name: edge-config
+        # This is a path inside the container not the host
+        mountPath: /etc/groundlight/edge-config.yaml
+
+    volumes:
+    - name: edge-config
+      configMap:
+        name: edge-config
+        items:
+        - key: edge-config.yaml
+          path: edge-config.yaml
 ---
 apiVersion: v1
 kind: Service
