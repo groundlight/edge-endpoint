@@ -14,7 +14,7 @@
 # > source test/setup_test_env.sh
 # > docker run --name groundlight-edge \
 #      -e LOG_LEVEL=DEBUG \
-#      -e EDGE_CONFIG=$EDGE_CONFIG \
+#      -e "EDGE_CONFIG=$EDGE_CONFIG" \
 #      -e GROUNDLIGHT_API_TOKEN \
 #      --rm -it -p 6717:6717 edge-endpoint
 
@@ -24,7 +24,7 @@
 # The following detector IDs correspond to the "dog" and "cat" detectors. 
 # More information on these detectors in the testing file test/api/test_motdet.py
 
-EDGE_CONFIG="
+EDGE_CONFIG=$(cat <<- EOM
 motion_detection_template:
   default:
     motion_detection_enabled: true
@@ -61,6 +61,7 @@ detectors:
   - detector_id: 'det_2UOxao4HZyB9gv4ZVtwMOvdqgh9'
     motion_detection_template: 'super-sensitive'
     local_inference_template: 'disabled'
-"
+EOM
+)
 
 export EDGE_CONFIG

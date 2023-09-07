@@ -10,6 +10,7 @@ from PIL import Image
 
 from app.core.utils import (
     AppState,
+    get_app_state,
     prefixed_ksuid,
     safe_call_api,
 )
@@ -17,10 +18,6 @@ from app.core.utils import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-def get_app_state(request: Request) -> AppState:
-    return request.app.state.app_state
 
 
 async def validate_request_body(request: Request) -> Image.Image:

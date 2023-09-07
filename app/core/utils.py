@@ -5,7 +5,7 @@ from typing import Callable, Dict
 
 import ksuid
 import yaml
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from groundlight import Groundlight
 from PIL import Image
 
@@ -130,5 +130,9 @@ class AppState:
     def get_motion_detection_manager(self):
         return self.motion_detection_manager
 
-    def get_inference_client(self):
-        return self.inference_client
+    def get_edge_inference_manager(self):
+        return self.edge_inference_manager
+    
+
+def get_app_state(request: Request) -> AppState:
+    return request.app.state.app_state

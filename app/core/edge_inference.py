@@ -20,7 +20,7 @@ class EdgeInferenceManager:
 
     def __init__(self, config: Dict[str, LocalInferenceConfig]) -> None:
         self.inference_client = tritonclient.InferenceServerClient(url=self.INFERENCE_SERVER_URL)
-        self.config = config
+        self.detectors = config
 
     def edge_inference_is_available(self, model_name: str, model_version: str = "") -> bool:
         """
