@@ -4,7 +4,7 @@
 If you don't have [k3s](https://docs.k3s.io/) installed, go ahead and install it by running 
 
 ```shell
-> ./deploy/install_k3s.sh
+> ./deploy/bin/install_k3s.sh
 ```
 
 Before we can start the edge-endpoint kubernetes deployment, we need to first ensure that 
@@ -13,14 +13,25 @@ registry. Once you have the token, go ahead and run the following
 script to create a kubernetes secret for it. 
 
 ```shell
-> ./deploy/make-gl-api-token-secret.sh
+> ./deploy/bin/make-gl-api-token-secret.sh
 ```
 
 Then run the following script to register credentials for accessing ECR in k3s. 
 
 ```shell
-> ./deploy/make-aws-secret.sh
+> ./deploy/bin/make-aws-secret.sh
 ```
+
+The edge endpoint application requires a [YAML config file](/configs/edge.yaml) (currently for setting up necessary parameters 
+for motion detection). In our k3s cluster, we mount this into the edge-endpoint deployment as a configmap, so we need to first
+create this configmap. In order to do so, run 
+
+```shell
+> kubectl create configmap edge-config --from-file=configs/edge.yaml
+```
+
+NOTE: This config will not be automatically synced with the k3s deployment. Thus, every time one needs to 
+edit the config, they should also re-run the above command and other necessary commands as needed. 
 
 For now we have a hard-coded docker image from ECR in the [edge-endpoint](/edge-endpoint/deploy/k3s/edge_deployment.yaml) 
 deployment. If you want to make modifications to the code inside the endpoint and push a different 
@@ -60,7 +71,7 @@ Follow the following steps:
 > docker images 
 
 # Push the image to ECR 
-> ./deploy/push-edge-endpoint-image.sh
+> ./deploy/bin/push-edge-endpoint-image.sh
 
 ```
 

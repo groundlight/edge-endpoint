@@ -15,6 +15,14 @@ ARG APP_ROOT \
     POETRY_HOME \
     POETRY_VERSION
 
+# Ensure that we have the bash shell since it doesn't seem to be included in the slim image.
+# This is useful for exec'ing into the container for debugging purposes.
+# Removes package metadata to keep the image size small after installing bash
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends bash \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install base OS dependencies. 
 # We need to install libGL dependencies (`libglib2.0-0` and `libgl1-mesa-lgx`) 
 # since they are required by OpenCV 
@@ -50,6 +58,8 @@ WORKDIR ${APP_ROOT}
 # Install production dependencies
 RUN poetry install --no-interaction --no-root --without dev
 
+# Create a directory called /etc/groundlight where certain volumes will be mounted
+RUN mkdir /etc/groundlight
 
 # Copy the configs directory 
 COPY configs ${APP_ROOT}/configs 
