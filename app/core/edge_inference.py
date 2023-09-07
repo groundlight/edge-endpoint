@@ -4,7 +4,6 @@ from typing import Dict
 
 import numpy as np
 import tritonclient.http as tritonclient
-from tritonclient.http import InferenceServerClient
 
 from .configs import LocalInferenceConfig
 
