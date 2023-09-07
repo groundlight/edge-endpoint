@@ -8,16 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from model import ClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
 from PIL import Image
 
-from app.core.edge_inference import edge_inference, edge_inference_is_available
 from app.core.utils import (
+    AppState,
     get_groundlight_sdk_instance,
-    get_inference_client,
     get_iqe_cache,
-    get_motion_detection_manager,
     prefixed_ksuid,
     safe_call_api,
 )
-from app.core.utils import AppState
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +60,7 @@ async def post_image_query(
     motion_detection_manager = app_state.get_motion_detection_manager()
     edge_inference_manager = app_state.get_edge_inference_manager()
 
-    inference_client = app_state.get_inference_client()
+    app_state.get_inference_client()
 
     if (
         detector_id in motion_detection_manager.detectors

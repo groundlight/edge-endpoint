@@ -5,12 +5,10 @@ import os
 from fastapi import FastAPI
 
 # from groundlight import Groundlight
-
 from app.api.api import api_router, ping_router
 from app.api.naming import API_BASE_PATH
 
 # from app.core.edge_inference import INFERENCE_SERVER_URL
-
 # from .core.iqe_cache import IQECache
 # from .core.motion_detection import MotionDetectionManager, RootConfig
 # from .core.utils import load_edge_config
