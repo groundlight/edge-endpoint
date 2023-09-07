@@ -1,10 +1,12 @@
 import logging
 import socket
-from .configs import LocalInferenceConfig
 from typing import Dict
+
 import numpy as np
 import tritonclient.http as tritonclient
 from tritonclient.http import InferenceServerClient
+
+from .configs import LocalInferenceConfig
 
 logger = logging.getLogger(__name__)
 

@@ -8,11 +8,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from model import ClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
 from PIL import Image
 
+
 from app.core.utils import (
+    AppState,
     prefixed_ksuid,
     safe_call_api,
 )
-from app.core.utils import AppState
 
 logger = logging.getLogger(__name__)
 
@@ -105,10 +106,12 @@ async def post_image_query(
 @router.get("/{id}", response_model=ImageQuery)
 async def get_image_query(
     id: str,
-    gl: Depends = Depends(get_groundlight_sdk_instance),
-    iqe_cache: Depends = Depends(get_iqe_cache),
+    app_state: AppState = Depends(get_app_state),
 ):
+    gl = app_state.get_groundlight_sdk_instance()
     if id.startswith("iqe_"):
+        iqe_cache = app_state.get_iqe_cache()
+        
         image_query = iqe_cache.get_cached_image_query(image_query_id=id)
         if not image_query:
             raise HTTPException(status_code=404, detail=f"Image query with ID {id} not found")

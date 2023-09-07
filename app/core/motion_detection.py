@@ -1,11 +1,12 @@
 import logging
 import time
-from typing import List, Dict
+from typing import Dict, List
 
 import numpy as np
 from framegrab import MotionDetector
 from model import ImageQuery
 from pydantic import BaseModel, Field
+
 from .configs import MotionDetectionConfig
 
 logger = logging.getLogger(__name__)
