@@ -19,8 +19,18 @@ class EdgeInferenceManager:
     INFERENCE_SERVER_URL = "inference-service:8000"
 
     def __init__(self, config: Dict[str, LocalInferenceConfig]) -> None:
+        """
+        Initializes the edge inference manager.
+        Args:
+            config: Dictionary of detector IDs to LocalInferenceConfig objects
+
+        NOTE: 1) The detector IDs should match the detector IDs in the motion detection config.
+              2) the `LocalInferenceConfig` object determines if local inference is enabled for
+                a specific detector and the refresh rate for the inference server.
+                The refresh rate is currently unused.
+        """
         self.inference_client = tritonclient.InferenceServerClient(url=self.INFERENCE_SERVER_URL)
-        self.detectors = config
+        self.inference_config = config
 
     def edge_inference_is_available(self, model_name: str, model_version: str = "") -> bool:
         """

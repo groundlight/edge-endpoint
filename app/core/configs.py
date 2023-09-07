@@ -27,7 +27,7 @@ class MotionDetectionConfig(BaseModel):
 
 class LocalInferenceConfig(BaseModel):
     enabled: bool = Field(False, description="Determines if local edge inference is enabled for a specific detector.")
-    refresh_rate: float = Field(3600.0, description="How often to refresh the local edge inference model (seconds).")
+    refresh_every: float = Field(3600.0, description="The refresh rate for the inference server (in seconds).")
 
 
 class DetectorConfig(BaseModel):

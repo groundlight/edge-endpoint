@@ -132,7 +132,7 @@ class AppState:
 
     def get_edge_inference_manager(self):
         return self.edge_inference_manager
-    
+
 
 def get_app_state(request: Request) -> AppState:
     return request.app.state.app_state

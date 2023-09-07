@@ -72,7 +72,7 @@ async def post_image_query(
     image_query = None
 
     # Check if edge inference is enabled for this detector
-    if detector_id in edge_inference_manager.detectors:
+    if detector_id in edge_inference_manager.inference_config.keys():
         model_name, confidence_threshold = "det_edgedemo", 0.9
 
         if edge_inference_manager.edge_inference_is_available(model_name):

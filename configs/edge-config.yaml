@@ -20,11 +20,12 @@ motion_detection_template:
 local_inference_template:
   default:
     enabled: true
-    refresh_rate: 3600
+    # The refresh rate in seconds for the local inference server 
+    refresh_every: 3600
 
   super-fast-refresh:
     enabled: true
-    refresh_rate: 60
+    refresh_every: 60
 
   disabled:
     enabled: false

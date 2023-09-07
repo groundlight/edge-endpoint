@@ -53,6 +53,13 @@ class MotionDetectorWrapper:
 
 class MotionDetectionManager:
     def __init__(self, config: Dict[str, MotionDetectionConfig]) -> None:
+        """
+        Initializes the motion detection manager.
+        Args:
+            config: Dictionary of detector IDs to `MotionDetectionConfig` objects
+            `MotionDetectionConfig` objects consist of different parameters needed
+            to run motion detection.
+        """
         self.detectors = {
             detector_id: MotionDetectorWrapper(parameters=motion_detection_config)
             for detector_id, motion_detection_config in config.items()
