@@ -42,8 +42,17 @@ spec:
             secretKeyRef:
               name: groundlight-secrets
               key: api-token
+        volumeMounts:
+        - name: edge-config-volume
+          # This is a path inside the container not the host
+          mountPath: /etc/groundlight
       imagePullSecrets:
       - name: registry-credentials
+
+      volumes:
+      - name: edge-config-volume
+        configMap:
+          name: edge-config
 ---
 apiVersion: v1
 kind: Service
