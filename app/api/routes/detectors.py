@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from model import Detector
 
-from app.core.utils import get_app_state, safe_call_api, AppState
+from app.core.utils import AppState, get_app_state, safe_call_api
 from app.schemas.schemas import DetectorCreate
 
 router = APIRouter()
