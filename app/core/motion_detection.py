@@ -1,43 +1,13 @@
 import logging
 import time
-from typing import Dict, List
+from typing import Dict
 
 import numpy as np
 from framegrab import MotionDetector
 from model import ImageQuery
-from pydantic import BaseModel, Field
-
 from .configs import MotionDetectionConfig
 
 logger = logging.getLogger(__name__)
-
-
-class MotionDetectionParams(BaseModel):
-    detector_id: str = Field(..., description="Detector ID")
-    motion_detection_enabled: bool = Field(
-        False, description="Determines if motion detection is enabled for this detector"
-    )
-    motion_detection_percentage_threshold: float = Field(
-        5.0, description="Percent of pixels needed to change before motion is detected."
-    )
-    motion_detection_val_threshold: int = Field(
-        50, description="The minimum brightness change for a pixel for it to be considered changed."
-    )
-    motion_detection_max_time_between_images: float = Field(
-        3600.0,
-        description=(
-            "Specifies the maximum time (seconds) between images sent to the cloud. This will be honored even if no"
-            " motion has been detected. Defaults to 1 hour."
-        ),
-    )
-
-
-class RootConfig(BaseModel):
-    """
-    Main configuration for motion detection across all detectors.
-    """
-
-    motion_detection: List[MotionDetectionParams]
 
 
 class MotionDetectorWrapper:
