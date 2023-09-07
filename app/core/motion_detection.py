@@ -5,6 +5,7 @@ from typing import Dict
 import numpy as np
 from framegrab import MotionDetector
 from model import ImageQuery
+
 from .configs import MotionDetectionConfig
 
 logger = logging.getLogger(__name__)
