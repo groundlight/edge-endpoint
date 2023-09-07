@@ -1,11 +1,12 @@
 import logging
 import time
-from typing import List
+from typing import List, Dict
 
 import numpy as np
 from framegrab import MotionDetector
 from model import ImageQuery
 from pydantic import BaseModel, Field
+from .configs import MotionDetectionConfig
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ class MotionDetectorWrapper:
     This is a wrapper around MotionDetector from framegrab.
     """
 
-    def __init__(self, parameters: MotionDetectionParams):
+    def __init__(self, parameters: MotionDetectionConfig):
         self._motion_detector = MotionDetector(
             pct_threshold=parameters.motion_detection_percentage_threshold,
             val_threshold=parameters.motion_detection_val_threshold,
@@ -79,10 +80,10 @@ class MotionDetectorWrapper:
 
 
 class MotionDetectionManager:
-    def __init__(self, config: RootConfig) -> None:
+    def __init__(self, config: Dict[str, MotionDetectionConfig]) -> None:
         self.detectors = {
-            detector_params.detector_id: MotionDetectorWrapper(detector_params)
-            for detector_params in config.motion_detection
+            detector_id: MotionDetectorWrapper(parameters=motion_detection_config)
+            for detector_id, motion_detection_config in config.items()
         }
 
     def update_image_query_response(self, detector_id: str, response: ImageQuery) -> None:

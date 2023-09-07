@@ -17,10 +17,15 @@ from app.core.utils import (
     prefixed_ksuid,
     safe_call_api,
 )
+from app.core.utils import AppState
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def get_app_state(request: Request) -> AppState:
+    return request.app.state.app_state
 
 
 async def validate_request_body(request: Request) -> Image.Image:
@@ -49,12 +54,16 @@ async def post_image_query(
     detector_id: str = Query(..., description="Detector ID"),
     patience_time: Optional[float] = Query(None, description="How long to wait for a confident response"),
     img: Image.Image = Depends(validate_request_body),
-    gl: Depends = Depends(get_groundlight_sdk_instance),
-    iqe_cache: Depends = Depends(get_iqe_cache),
-    motion_detection_manager: Depends = Depends(get_motion_detection_manager),
-    inference_client: Depends = Depends(get_inference_client),
+    app_state: AppState = Depends(get_app_state),
 ):
     img_numpy = np.array(img)  # [H, W, C=3], dtype: uint8, RGB format
+
+    gl = app_state.get_groundlight_sdk_instance()
+    iqe_cache = app_state.get_iqe_cache()
+    motion_detection_manager = app_state.get_motion_detection_manager()
+    edge_inference_manager = app_state.get_edge_inference_manager()
+
+    inference_client = app_state.get_inference_client()
 
     if (
         detector_id in motion_detection_manager.detectors
@@ -70,18 +79,21 @@ async def post_image_query(
             iqe_cache.update_cache(image_query=new_image_query)
             return new_image_query
 
-    # Try to submit the image to a local edge detector
-    model_name, confidence_threshold = "det_edgedemo", 0.9
     image_query = None
-    if edge_inference_is_available(inference_client, model_name):
-        results = edge_inference(inference_client, img_numpy, model_name)
-        if results["confidence"] > confidence_threshold:
-            logger.info("Edge detector confidence is high enough to return")
-            image_query = _create_image_query(
-                detector_id=detector_id,
-                label=results["label"],
-                confidence=results["confidence"],
-            )
+
+    # Check if edge inference is enabled for this detector
+    if detector_id in edge_inference_manager.detectors:
+        model_name, confidence_threshold = "det_edgedemo", 0.9
+
+        if edge_inference_manager.edge_inference_is_available(model_name):
+            results = edge_inference_manager.run_inference(img_numpy, model_name)
+            if results["confidence"] > confidence_threshold:
+                logger.info("Edge detector confidence is high enough to return")
+                image_query = _create_image_query(
+                    detector_id=detector_id,
+                    label=results["label"],
+                    confidence=results["confidence"],
+                )
 
     # Finally, fall back to submitting the image to the cloud
     if not image_query:

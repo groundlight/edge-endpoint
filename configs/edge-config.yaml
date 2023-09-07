@@ -1,0 +1,45 @@
+motion_detection_template:
+  default:
+    motion_detection_enabled: true
+    motion_detection_val_threshold: 20
+    motion_detection_percentage_threshold: 5.0
+    motion_detection_max_time_between_images: 3600
+
+  super-sensitive:
+    motion_detection_enabled: true
+    motion_detection_val_threshold: 5
+    motion_detection_percentage_threshold: 2.0
+    motion_detection_max_time_between_images: 3600
+
+  disabled:
+    motion_detection_enabled: false
+
+local_inference_template:
+  default:
+    enabled: true
+    refresh_rate: 3600
+
+  super-fast-refresh:
+    enabled: true
+    refresh_rate: 60
+
+  disabled:
+    enabled: false
+
+detectors:
+  - detector_id: '001'
+    motion_detection_template: "default"
+    local_inference_template: "default"
+
+  - detector_id: '002'
+    motion_detection_template: "super-sensitive"
+    local_inference_template: "disabled"
+
+  - detector_id: '003'
+    motion_detection_template: "disabled"
+    local_inference_template: "super-fast-refresh"
+
+  - detector_id: '004'
+    motion_detection_template: "default"
+    local_inference_template: "disabled"
+

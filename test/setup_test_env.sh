@@ -25,18 +25,42 @@
 # More information on these detectors in the testing file test/api/test_motdet.py
 
 EDGE_CONFIG="
-motion_detection:
-    - detector_id: 'det_2UOxalD1gegjk4TnyLbtGggiJ8p'
-      motion_detection_enabled: true
-      motion_detection_percentage_threshold: 5.0
-      motion_detection_val_threshold: 50
-      motion_detection_max_time_between_images: 45
-    
-    - detector_id: 'det_2UOxao4HZyB9gv4ZVtwMOvdqgh9'
-      motion_detection_enabled: true
-      motion_detection_percentage_threshold: 0.0
-      motion_detection_val_threshold: 0
-      motion_detection_max_time_between_images: 45
+motion_detection_template:
+  default:
+    motion_detection_enabled: true
+    motion_detection_val_threshold: 50
+    motion_detection_percentage_threshold: 5.0
+    motion_detection_max_time_between_images: 45
+
+  super-sensitive:
+    motion_detection_enabled: true
+    motion_detection_val_threshold: 5
+    motion_detection_percentage_threshold: 0.05
+    motion_detection_max_time_between_images: 45
+
+  disabled:
+    motion_detection_enabled: false
+
+local_inference_template:
+  default:
+    enabled: true
+    refresh_rate: 3600
+
+  super-fast-refresh:
+    enabled: true
+    refresh_rate: 60
+
+  disabled:
+    enabled: false
+
+detectors:
+  - detector_id: 'det_2UOxalD1gegjk4TnyLbtGggiJ8p'
+    motion_detection_template: 'default'
+    local_inference_template: 'disabled'
+
+  - detector_id: 'det_2UOxao4HZyB9gv4ZVtwMOvdqgh9'
+    motion_detection_template: 'super-sensitive'
+    local_inference_template: 'disabled'
 "
 
 export EDGE_CONFIG
