@@ -5,7 +5,7 @@ from typing import Callable, Dict
 
 import ksuid
 import yaml
-from fastapi import HTTPException, Request
+from fastapi import HTTPException
 from groundlight import Groundlight
 from PIL import Image
 
