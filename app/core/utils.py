@@ -1,18 +1,19 @@
 import logging
 import os
+from functools import lru_cache
 from io import BytesIO
 from typing import Callable
 
 import ksuid
-from groundlight import Groundlight 
 import yaml
 from fastapi import HTTPException, Request
+from groundlight import Groundlight
 from PIL import Image
-from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
 MAX_SDK_INSTANCES_CACHE_SIZE = 1000
+
 
 def load_edge_config() -> dict:
     """
