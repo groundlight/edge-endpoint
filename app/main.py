@@ -22,10 +22,6 @@ app.include_router(router=api_router, prefix=API_BASE_PATH)
 app.include_router(router=ping_router)
 
 
-# Create a global shared Groundlight SDK client object in the app's state
-app.state.groundlight = Groundlight()
-
-
 # Create a global shared image query ID cache in the app's state
 app.state.iqe_cache = IQECache()
 
