@@ -2,12 +2,13 @@ import logging
 from datetime import datetime
 from io import BytesIO
 from typing import Optional
-
+from groundlight import Groundlight
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from model import ClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
 from PIL import Image
 
+from app.core.motion_detection import MotionDetectionManager
 from app.core.edge_inference import edge_inference, edge_inference_is_available
 from app.core.utils import (
     get_groundlight_sdk_instance,
@@ -83,49 +84,14 @@ async def post_image_query(
     ):
         motion_detected = motion_detection_manager.run_motion_detection(detector_id=detector_id, new_img=img_numpy)
         if not motion_detected:
-            detector = gl.get_detector(id=detector_id)
-            cached_image_query = motion_detection_manager.get_image_query_response(detector_id=detector_id)
-            desired_detector_confidence = detector.confidence_threshold
-
-            iq_confidence_is_improvable = (
-                cached_image_query.result.confidence is not None
-                and cached_image_query.result.confidence < desired_detector_confidence
+            # Try improving the confidence of the cached image query response
+            _improve_cached_image_query_confidence(
+                gl=gl,
+                detector_id=detector_id,
+                motion_detection_manager=motion_detection_manager,
+                img=img,
+                patience_time=patience_time,
             )
-
-            if iq_confidence_is_improvable:
-                logger.debug(
-                    f"Image query confidence is improvable for {detector_id=}. Current confidence:"
-                    f" {cached_image_query.result.confidence}, desired confidence: {desired_detector_confidence}"
-                )
-                iq_response = safe_call_api(gl.get_image_query, id=cached_image_query.id)
-                unconfident_iq_reescalation_interval_exceeded = motion_detection_manager.detectors[
-                    detector_id
-                ].unconfident_iq_reescalation_interval_exceeded()
-
-                # There's a subtlety here since confidence=None implies human label, which is treated as confident
-                confidence_is_improved = (
-                    iq_response.result.confidence is None
-                    or iq_response.result.confidence > cached_image_query.result.confidence
-                )
-
-                if not unconfident_iq_reescalation_interval_exceeded and confidence_is_improved:
-                    logger.debug(
-                        f"Image query confidence has improved for {detector_id=}. New confidence:"
-                        f" {iq_response.result.confidence}"
-                    )
-                    # Replace the cached image query response with the new one since it has a higher confidence
-                    motion_detection_manager.update_image_query_response(detector_id=detector_id, response=iq_response)
-
-                elif unconfident_iq_reescalation_interval_exceeded:
-                    # If the unconfident image query re-escalation interval has been exceeded, we re-escalate the image
-                    # query to the cloud server.
-                    new_image_query = safe_call_api(
-                        gl.submit_image_query, detector=detector_id, image=img, wait=patience_time
-                    )
-                    motion_detection_manager.update_image_query_response(
-                        detector_id=detector_id, response=new_image_query
-                    )
-                    return new_image_query
 
             # If there is no motion, return a clone of the last image query response
             logger.debug(f"No motion detected for {detector_id=}")
@@ -193,3 +159,59 @@ def _create_image_query(detector_id: str, label: str, confidence: float, query: 
         ),
     )
     return iq
+
+
+def _improve_cached_image_query_confidence(
+    gl: Groundlight,
+    detector_id: str,
+    motion_detection_manager: MotionDetectionManager,
+    img: np.ndarray,
+    patience_time: float,
+) -> None:
+    """
+    Try to improve the confidence of the cached image query response for a given detector.
+    :param gl: Application's Groundlight SDK instance
+    :param detector_id: which detector to use
+    :param motion_detection_manager: Application's motion detection manager instance.
+        This manages the motion detection state for all detectors.
+    :param img: the image to submit.
+    :param patience_time: how long to wait for a confident response
+    """
+    detector = gl.get_detector(id=detector_id)
+    cached_image_query = motion_detection_manager.get_image_query_response(detector_id=detector_id)
+    desired_detector_confidence = detector.confidence_threshold
+
+    iq_confidence_is_improvable = (
+        cached_image_query.result.confidence is not None
+        and cached_image_query.result.confidence < desired_detector_confidence
+    )
+
+    if not iq_confidence_is_improvable:
+        return
+
+    logger.debug(
+        f"Image query confidence is improvable for {detector_id=}. Current confidence:"
+        f" {cached_image_query.result.confidence}, desired confidence: {desired_detector_confidence}"
+    )
+    iq_response = safe_call_api(gl.get_image_query, id=cached_image_query.id)
+    unconfident_iq_reescalation_interval_exceeded = motion_detection_manager.detectors[
+        detector_id
+    ].unconfident_iq_reescalation_interval_exceeded()
+
+    # There's a subtlety here since confidence=None implies human label, which is treated as confident
+    confidence_is_improved = (
+        iq_response.result.confidence is None or iq_response.result.confidence > cached_image_query.result.confidence
+    )
+
+    if not unconfident_iq_reescalation_interval_exceeded and confidence_is_improved:
+        logger.debug(
+            f"Image query confidence has improved for {detector_id=}. New confidence: {iq_response.result.confidence}"
+        )
+        # Replace the cached image query response with the new one since it has a higher confidence
+        motion_detection_manager.update_image_query_response(detector_id=detector_id, response=iq_response)
+
+    elif unconfident_iq_reescalation_interval_exceeded:
+        # If the unconfident image query re-escalation interval has been exceeded, we re-escalate the image
+        # query to the cloud server.
+        new_image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=patience_time)
+        motion_detection_manager.update_image_query_response(detector_id=detector_id, response=new_image_query)
