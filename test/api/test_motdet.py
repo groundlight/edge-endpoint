@@ -102,7 +102,7 @@ def test_answer_changes_with_different_image(gl: Groundlight, motion_detection_c
     image_query = gl.submit_image_query(detector=detector.id, image=image, wait=10)
 
     for _ in range(ITERATIONS):
-        image_query = gl.submit_image_query(detector=detector.id, image=image, wait=10)
+        image_query = gl.submit_image_query(detector=detector.id, image=image, wait=0)
         assert image_query.id.startswith("iqe_")
 
     new_image = Image.open("test/assets/cat.jpeg")
