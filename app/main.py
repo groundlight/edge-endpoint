@@ -3,7 +3,6 @@ import os
 
 import tritonclient.http as tritonclient
 from fastapi import FastAPI
-from groundlight import Groundlight
 
 from app.api.api import api_router, ping_router
 from app.api.naming import API_BASE_PATH

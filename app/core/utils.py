@@ -1,5 +1,6 @@
 import logging
 import os
+from functools import lru_cache
 from io import BytesIO
 from typing import Callable
 
@@ -8,7 +9,6 @@ from groundlight import Groundlight
 import yaml
 from fastapi import HTTPException, Request
 from PIL import Image
-from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
