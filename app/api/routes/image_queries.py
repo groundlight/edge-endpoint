@@ -147,8 +147,7 @@ async def get_image_query(
 
 
 def _create_iqe(detector_id: str, label: str, confidence: float, query: str = "") -> ImageQuery:
-    """Creates an edge-only imagequery, or "iqe".
-    """
+    """Creates an edge-only imagequery, or "iqe"."""
     iq = ImageQuery(
         id=prefixed_ksuid(prefix="iqe_"),
         type=ImageQueryTypeEnum.image_query,
