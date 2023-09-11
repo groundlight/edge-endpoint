@@ -110,7 +110,7 @@ async def post_image_query(
             logger.info("Edge detector confidence is high enough to return")
 
             detector = gl.get_detector(id=detector_id)
-            image_query = _create_image_query(
+            image_query = _create_iqe(
                 detector_id=detector_id,
                 label=results["label"],
                 confidence=results["confidence"],
@@ -145,7 +145,7 @@ async def get_image_query(
     return safe_call_api(gl.get_image_query, id=id)
 
 
-def _create_image_query(detector_id: str, label: str, confidence: float, query: str = "") -> ImageQuery:
+def _create_iqe(detector_id: str, label: str, confidence: float, query: str = "") -> ImageQuery:
     iq = ImageQuery(
         id=prefixed_ksuid(prefix="iqe_"),
         type=ImageQueryTypeEnum.image_query,
@@ -169,7 +169,7 @@ def _improve_cached_image_query_confidence(
     patience_time: float,
 ) -> None:
     """
-    Try to improve the confidence of the cached image query response for a given detector.
+    Attempt to improve the confidence of the cached image query response for a given detector.
     :param gl: Application's Groundlight SDK instance
     :param detector_id: which detector to use
     :param motion_detection_manager: Application's motion detection manager instance.
@@ -177,6 +177,7 @@ def _improve_cached_image_query_confidence(
     :param img: the image to submit.
     :param patience_time: how long to wait for a confident response
     """
+
     detector = gl.get_detector(id=detector_id)
     cached_image_query = motion_detection_manager.get_image_query_response(detector_id=detector_id)
     desired_detector_confidence = detector.confidence_threshold
@@ -193,17 +194,17 @@ def _improve_cached_image_query_confidence(
         f"Image query confidence is improvable for {detector_id=}. Current confidence:"
         f" {cached_image_query.result.confidence}, desired confidence: {desired_detector_confidence}"
     )
-    iq_response = safe_call_api(gl.get_image_query, id=cached_image_query.id)
     unconfident_iq_reescalation_interval_exceeded = motion_detection_manager.detectors[
         detector_id
     ].unconfident_iq_reescalation_interval_exceeded()
 
-    # There's a subtlety here since confidence=None implies human label, which is treated as confident
+    iq_response = safe_call_api(gl.get_image_query, id=cached_image_query.id)
+
     confidence_is_improved = (
         iq_response.result.confidence is None or iq_response.result.confidence > cached_image_query.result.confidence
     )
 
-    if not unconfident_iq_reescalation_interval_exceeded and confidence_is_improved:
+    if confidence_is_improved:
         logger.debug(
             f"Image query confidence has improved for {detector_id=}. New confidence: {iq_response.result.confidence}"
         )
@@ -211,7 +212,9 @@ def _improve_cached_image_query_confidence(
         motion_detection_manager.update_image_query_response(detector_id=detector_id, response=iq_response)
 
     elif unconfident_iq_reescalation_interval_exceeded:
-        # If the unconfident image query re-escalation interval has been exceeded, we re-escalate the image
-        # query to the cloud server.
-        new_image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=patience_time)
-        motion_detection_manager.update_image_query_response(detector_id=detector_id, response=new_image_query)
+        logger.debug(
+            f"Unconfident image query re-escalation interval exceeded for {detector_id=}."
+            " Re-escalating image query to the cloud API server"
+        )
+        iq_response = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=patience_time)
+        motion_detection_manager.update_image_query_response(detector_id=detector_id, response=iq_response)

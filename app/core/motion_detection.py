@@ -28,7 +28,9 @@ class MotionDetectionParams(BaseModel):
             " motion has been detected. Defaults to 1 hour."
         ),
     )
-    unconfident_iq_reescalation_interval: float = Field(60.0, description="How often to re-escalate unconfident IQs.")
+    unconfident_iq_reescalation_interval: float = Field(
+        60.0, description="How often to re-escalate unconfident Image queries."
+    )
 
 
 class RootConfig(BaseModel):
