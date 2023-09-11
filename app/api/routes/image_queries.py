@@ -146,7 +146,9 @@ async def get_image_query(
     return safe_call_api(gl.get_image_query, id=id)
 
 
-def _create_image_query(detector_id: str, label: str, confidence: float, query: str = "") -> ImageQuery:
+def _create_iqe(detector_id: str, label: str, confidence: float, query: str = "") -> ImageQuery:
+    """Creates an edge-only imagequery, or "iqe".
+    """
     iq = ImageQuery(
         id=prefixed_ksuid(prefix="iqe_"),
         type=ImageQueryTypeEnum.image_query,
