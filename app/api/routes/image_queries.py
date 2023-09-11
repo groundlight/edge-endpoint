@@ -2,14 +2,15 @@ import logging
 from datetime import datetime
 from io import BytesIO
 from typing import Optional
-from groundlight import Groundlight
+
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from groundlight import Groundlight
 from model import ClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
 from PIL import Image
 
-from app.core.motion_detection import MotionDetectionManager
 from app.core.edge_inference import edge_inference, edge_inference_is_available
+from app.core.motion_detection import MotionDetectionManager
 from app.core.utils import (
     get_groundlight_sdk_instance,
     get_inference_client,
