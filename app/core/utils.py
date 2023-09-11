@@ -5,9 +5,9 @@ from io import BytesIO
 from typing import Callable
 
 import ksuid
-from groundlight import Groundlight
 import yaml
 from fastapi import HTTPException, Request
+from groundlight import Groundlight
 from PIL import Image
 
 logger = logging.getLogger(__name__)
