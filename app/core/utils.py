@@ -33,13 +33,17 @@ def load_edge_config() -> dict:
     raise FileNotFoundError(f"Could not find edge config file at {default_config_path}")
 
 
-@lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE, key=lambda request: request.headers.get("x-api-token"))
+@lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
+def _get_groundlight_sdk_instance_internal(api_token: str):
+    return Groundlight(api_token=api_token)
+
+
 def get_groundlight_sdk_instance(request: Request):
     """
     Returns a Groundlight SDK instance given an API token.
     """
     api_token = request.headers.get("x-api-token")
-    return Groundlight(api_token=api_token)
+    return _get_groundlight_sdk_instance_internal(api_token)
 
 
 def get_iqe_cache(request: Request):
