@@ -76,7 +76,7 @@ async def post_image_query(
         model_name, confidence_threshold = "det_edgedemo", 0.9
 
         if edge_inference_manager.edge_inference_is_available(model_name):
-            results = edge_inference_manager.run_inference(img_numpy, model_name)
+            results = edge_inference_manager.run_inference(img_numpy=img_numpy, model_name=model_name)
             if results["confidence"] > confidence_threshold:
                 logger.info("Edge detector confidence is high enough to return")
                 image_query = _create_image_query(

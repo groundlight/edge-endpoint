@@ -7,16 +7,16 @@ logger = logging.getLogger(__name__)
 
 
 class MotionDetectionConfig(BaseModel):
-    motion_detection_enabled: bool = Field(
+    enabled: bool = Field(
         ..., description="Determines if motion detection is enabled for this detector"
     )
-    motion_detection_percentage_threshold: Optional[float] = Field(
+    percentage_threshold: Optional[float] = Field(
         default=None, description="Percent of pixels needed to change before motion is detected."
     )
-    motion_detection_val_threshold: Optional[int] = Field(
+    val_threshold: Optional[int] = Field(
         default=None, description="The minimum brightness change for a pixel for it to be considered changed."
     )
-    motion_detection_max_time_between_images: Optional[float] = Field(
+    max_time_between_images: Optional[float] = Field(
         default=None,
         description=(
             "Specifies the maximum time (seconds) between images sent to the cloud. This will be honored even if no"

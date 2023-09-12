@@ -27,19 +27,19 @@
 EDGE_CONFIG=$(cat <<- EOM
 motion_detection_template:
   default:
-    motion_detection_enabled: true
-    motion_detection_val_threshold: 50
-    motion_detection_percentage_threshold: 5.0
-    motion_detection_max_time_between_images: 45
+    enabled: true
+    val_threshold: 50
+    percentage_threshold: 5.0
+    max_time_between_images: 45
 
   super-sensitive:
-    motion_detection_enabled: true
-    motion_detection_val_threshold: 5
-    motion_detection_percentage_threshold: 0.05
-    motion_detection_max_time_between_images: 45
+    enabled: true
+    val_threshold: 5
+    percentage_threshold: 0.05
+    max_time_between_images: 45
 
   disabled:
-    motion_detection_enabled: false
+    enabled: false
 
 local_inference_template:
   default:
