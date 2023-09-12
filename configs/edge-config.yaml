@@ -31,6 +31,7 @@ local_inference_template:
     enabled: false
 
 detectors:
+  # Blank id indicates this is the default configuration.
   - detector_id: ''
     motion_detection_template: "default"
     local_inference_template: "default"
