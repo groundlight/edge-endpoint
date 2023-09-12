@@ -45,8 +45,8 @@ class RootEdgeConfig(BaseModel):
     Root configuration for edge inference and motion detection.
     """
 
-    motion_detection_template: Dict[str, MotionDetectionConfig]
-    local_inference_template: Dict[str, LocalInferenceConfig]
+    motion_detection_templates: Dict[str, MotionDetectionConfig]
+    local_inference_templates: Dict[str, LocalInferenceConfig]
     detectors: List[DetectorConfig]
 
     @validator("detectors", each_item=True)
