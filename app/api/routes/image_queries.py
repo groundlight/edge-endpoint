@@ -109,7 +109,7 @@ async def get_image_query(
     id: str, gl: Groundlight = Depends(get_groundlight_sdk_instance), app_state: AppState = Depends(get_app_state)
 ):
     if id.startswith("iqe_"):
-        iqe_cache = app_state.get_iqe_cache()
+        iqe_cache = app_state.iqe_cache
 
         image_query = iqe_cache.get_cached_image_query(image_query_id=id)
         if not image_query:
