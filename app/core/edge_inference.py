@@ -1,6 +1,7 @@
 import logging
 import socket
 from typing import Dict
+import time
 
 import numpy as np
 import tritonclient.http as tritonclient
@@ -18,7 +19,7 @@ class EdgeInferenceManager:
     OUTPUT_LABEL_NAME = "label"
     INFERENCE_SERVER_URL = "inference-service:8000"
 
-    def __init__(self, config: Dict[str, LocalInferenceConfig]) -> None:
+    def __init__(self, config: Dict[str, LocalInferenceConfig], verbose: bool = False) -> None:
         """
         Initializes the edge inference manager.
         Args:
@@ -29,10 +30,10 @@ class EdgeInferenceManager:
                 a specific detector and the refresh rate for the inference server.
                 The refresh rate is currently unused.
         """
-        self.inference_client = tritonclient.InferenceServerClient(url=self.INFERENCE_SERVER_URL)
+        self.inference_client = tritonclient.InferenceServerClient(url=self.INFERENCE_SERVER_URL, verbose=verbose)
         self.inference_config = config
 
-    def edge_inference_is_available(self, model_name: str, model_version: str = "") -> bool:
+    def inference_is_available(self, detector_id: str, model_name: str, model_version: str = "") -> bool:
         """
         Queries the inference server to see if everything is ready to perform inference.
         Args:
@@ -42,6 +43,9 @@ class EdgeInferenceManager:
         Returns:
             True if edge inference for the specified model is available, False otherwise
         """
+        if detector_id not in self.inference_config.keys():
+            logger.debug(f"Edge inference is not enabled for {detector_id=}")
+            return False
         try:
             if not self.inference_client.is_server_live():
                 logger.debug("Edge inference server is not live")
@@ -81,6 +85,7 @@ class EdgeInferenceManager:
         ]
 
         logger.debug("Submitting image to edge inference service")
+        start = time.monotonic()
         response = self.inference_client.infer(
             model_name,
             model_version=model_version,
@@ -88,6 +93,7 @@ class EdgeInferenceManager:
             outputs=outputs,
             request_id="",
         )
+        end = time.monotonic()
 
         probability = response.as_numpy(self.OUTPUT_PROBABILITY_NAME)[0]
         output_dict = {
@@ -96,7 +102,9 @@ class EdgeInferenceManager:
             self.OUTPUT_PROBABILITY_NAME: probability,
             self.OUTPUT_LABEL_NAME: self._probability_to_label(probability),
         }
-        logger.debug(f"Inference server response for model={model_name}: {output_dict}")
+        logger.debug(
+            f"Inference server response for model={model_name}: {output_dict}Inference time: {end - start:.2f} seconds"
+        )
         return output_dict
 
     def _probability_to_label(self, prob: float) -> str:

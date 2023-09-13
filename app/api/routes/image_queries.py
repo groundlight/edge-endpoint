@@ -71,19 +71,18 @@ async def post_image_query(
 
     image_query = None
 
-    # Check if edge inference is enabled for this detector
-    if detector_id in edge_inference_manager.inference_config.keys():
-        model_name, confidence_threshold = "det_edgedemo", 0.9
+    model_name, confidence_threshold = "det_edgedemo", 0.9
 
-        if edge_inference_manager.edge_inference_is_available(model_name):
-            results = edge_inference_manager.run_inference(img_numpy=img_numpy, model_name=model_name)
-            if results["confidence"] > confidence_threshold:
-                logger.info("Edge detector confidence is high enough to return")
-                image_query = _create_image_query(
-                    detector_id=detector_id,
-                    label=results["label"],
-                    confidence=results["confidence"],
-                )
+    # Check if edge inference is enabled for this detector
+    if edge_inference_manager.inference_is_available(detector_id=detector_id, model_name=model_name):
+        results = edge_inference_manager.run_inference(img_numpy=img_numpy, model_name=model_name)
+        if results["confidence"] > confidence_threshold:
+            logger.info("Edge detector confidence is high enough to return")
+            image_query = _create_image_query(
+                detector_id=detector_id,
+                label=results["label"],
+                confidence=results["confidence"],
+            )
 
     # Finally, fall back to submitting the image to the cloud
     if not image_query:

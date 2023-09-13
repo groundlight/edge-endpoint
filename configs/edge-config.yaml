@@ -22,10 +22,17 @@ local_inference_template:
     enabled: true
     # The refresh rate in seconds for the local inference server 
     refresh_every: 3600
+    # Specifies the model name and model version to use for inference. 
+    # If model_name is empty, the default model will be used.
+    # For now we don't have a default model, so we need to specify a model name
+    model_name: ''
+    model_version: ''
 
   super-fast-refresh:
     enabled: true
     refresh_every: 60
+    model_name: ''
+    model_version: ''
 
   disabled:
     enabled: false
