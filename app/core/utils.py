@@ -17,39 +17,6 @@ from .motion_detection import MotionDetectionManager
 
 logger = logging.getLogger(__name__)
 
-MAX_SDK_INSTANCES_CACHE_SIZE = 1000
-
-
-def load_edge_config() -> dict:
-    """
-    Reads the edge config from the EDGE_CONFIG environment variable if it exists.
-    If EDGE_CONFIG is not set, reads the default edge config file.
-    """
-    yaml_config = os.environ.get("EDGE_CONFIG", "").strip()
-    if yaml_config:
-        return yaml.safe_load(yaml_config)
-
-    logger.warning("EDGE_CONFIG environment variable not set. Using the default edge config file.")
-
-    default_config_path = "configs/edge.yaml"
-    if os.path.exists(default_config_path):
-        return yaml.safe_load(open(default_config_path, "r"))
-
-    raise FileNotFoundError(f"Could not find edge config file at {default_config_path}")
-
-
-@lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
-def _get_groundlight_sdk_instance_internal(api_token: str):
-    return Groundlight(api_token=api_token)
-
-
-def get_groundlight_sdk_instance(request: Request):
-    """
-    Returns a Groundlight SDK instance given an API token.
-    """
-    api_token = request.headers.get("x-api-token")
-    return _get_groundlight_sdk_instance_internal(api_token)
-
 
 def safe_call_api(api_method: Callable, **kwargs):
     """
@@ -128,16 +95,15 @@ def load_edge_config() -> RootEdgeConfig:
 
 
 class AppState:
-    def __init__(self):
-        # Create a global shared Groundlight SDK client object in the app's state
-        self.groundlight_sdk = Groundlight()
+    MAX_SDK_INSTANCES_CACHE_SIZE = 1000
 
+    def __init__(self):
         # Create a global shared image query ID cache in the app's state
         self.iqe_cache = IQECache()
 
         edge_config = load_edge_config()
-        motion_detection_templates: Dict[str, MotionDetectionConfig] = edge_config.motion_detection_template
-        edge_inference_templates: Dict[str, LocalInferenceConfig] = edge_config.local_inference_template
+        motion_detection_templates: Dict[str, MotionDetectionConfig] = edge_config.motion_detection_templates
+        edge_inference_templates: Dict[str, LocalInferenceConfig] = edge_config.local_inference_templates
 
         motion_detection_config: Dict[str, MotionDetectionConfig] = {
             detector.detector_id: motion_detection_templates[detector.motion_detection_template]
@@ -155,17 +121,18 @@ class AppState:
         # NOTE: For now this assumes that there is only one inference container
         self.edge_inference_manager = EdgeInferenceManager(config=inference_config)
 
-    def get_groundlight_sdk_instance(self):
-        return self.groundlight_sdk
+    @lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
+    def _get_groundlight_sdk_instance_internal(self, api_token: str):
+        return Groundlight(api_token=api_token)
 
-    def get_iqe_cache(self):
-        return self.iqe_cache
-
-    def get_motion_detection_manager(self):
-        return self.motion_detection_manager
-
-    def get_edge_inference_manager(self):
-        return self.edge_inference_manager
+    def get_groundlight_sdk_instance(self, request: Request):
+        """
+        Returns a Groundlight SDK instance given an API token.
+        The SDK handles validation of the API token token itself, so there's no
+        need to do that here.
+        """
+        api_token = request.headers.get("x-api-token")
+        return self._get_groundlight_sdk_instance_internal(api_token)
 
 
 def get_app_state(request: Request) -> AppState:

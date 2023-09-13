@@ -18,13 +18,13 @@ class MotionDetectorWrapper:
 
     def __init__(self, parameters: MotionDetectionConfig):
         self._motion_detector = MotionDetector(
-            pct_threshold=parameters.motion_detection_percentage_threshold,
-            val_threshold=parameters.motion_detection_val_threshold,
+            pct_threshold=parameters.percentage_threshold,
+            val_threshold=parameters.val_threshold,
         )
         self._previous_image = None
         self.image_query_response = None
-        self._motion_detection_enabled = parameters.motion_detection_enabled
-        self._max_time_between_images = parameters.motion_detection_max_time_between_images
+        self._motion_detection_enabled = parameters.enabled
+        self._max_time_between_images = parameters.max_time_between_images
 
         # Indicates the last time motion was detected.
         self._previous_motion_detection_time = None

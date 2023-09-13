@@ -47,13 +47,14 @@ async def post_image_query(
     patience_time: Optional[float] = Query(None, description="How long to wait for a confident response"),
     img: Image.Image = Depends(validate_request_body),
     app_state: AppState = Depends(get_app_state),
+    request: Request = Depends(),
 ):
     img_numpy = np.array(img)  # [H, W, C=3], dtype: uint8, RGB format
 
-    gl = app_state.get_groundlight_sdk_instance()
-    iqe_cache = app_state.get_iqe_cache()
-    motion_detection_manager = app_state.get_motion_detection_manager()
-    edge_inference_manager = app_state.get_edge_inference_manager()
+    gl = app_state.get_groundlight_sdk_instance(request=request)
+    iqe_cache = app_state.iqe_cache
+    motion_detection_manager = app_state.motion_detection_manager
+    edge_inference_manager = app_state.edge_inference_manager
 
     if (
         detector_id in motion_detection_manager.detectors
@@ -71,11 +72,15 @@ async def post_image_query(
 
     image_query = None
 
-    model_name, confidence_threshold = "det_edgedemo", 0.9
+    # TODO: Make this configurable. We can just get the detector object
+    # by calling `gl.get_detector(detector_id=detector_id)` since this uses the local
+    # detectors route and not the API server's detectors route.
+    confidence_threshold = 0.9
 
     # Check if edge inference is enabled for this detector
-    if edge_inference_manager.inference_is_available(detector_id=detector_id, model_name=model_name):
-        results = edge_inference_manager.run_inference(img_numpy=img_numpy, model_name=model_name)
+    if edge_inference_manager.inference_is_available(detector_id=detector_id):
+        results = edge_inference_manager.run_inference(detector_id=detector_id, img_numpy=img_numpy)
+
         if results["confidence"] > confidence_threshold:
             logger.info("Edge detector confidence is high enough to return")
             image_query = _create_image_query(

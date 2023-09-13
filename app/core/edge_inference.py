@@ -24,6 +24,7 @@ class EdgeInferenceManager:
         Initializes the edge inference manager.
         Args:
             config: Dictionary of detector IDs to LocalInferenceConfig objects
+            verbose: Whether to print verbose logs from the inference server client
 
         NOTE: 1) The detector IDs should match the detector IDs in the motion detection config.
               2) the `LocalInferenceConfig` object determines if local inference is enabled for
@@ -33,19 +34,23 @@ class EdgeInferenceManager:
         self.inference_client = tritonclient.InferenceServerClient(url=self.INFERENCE_SERVER_URL, verbose=verbose)
         self.inference_config = config
 
-    def inference_is_available(self, detector_id: str, model_name: str, model_version: str = "") -> bool:
+    def inference_is_available(self, detector_id: str) -> bool:
         """
         Queries the inference server to see if everything is ready to perform inference.
         Args:
-            inference_client: Inference server client object
-            model_name: Name of the model to route to
-            model_version: Version of the model to route to
+            detector_id: ID of the detector on which to run local edge inference
         Returns:
-            True if edge inference for the specified model is available, False otherwise
+            True if edge inference for the specified detector is available, False otherwise
         """
         if detector_id not in self.inference_config.keys():
-            logger.debug(f"Edge inference is not enabled for {detector_id=}")
+            logger.info(f"Edge inference is not enabled for {detector_id=}")
             return False
+
+        model_name, model_version = (
+            self.inference_config[detector_id].model_name,
+            self.inference_config[detector_id].model_version,
+        )
+
         try:
             if not self.inference_client.is_server_live():
                 logger.debug("Edge inference server is not live")
@@ -61,14 +66,12 @@ class EdgeInferenceManager:
             return False
         return True
 
-    def run_inference(self, img_numpy: np.ndarray, model_name: str, model_version: str = "") -> dict:
+    def run_inference(self, detector_id: str, img_numpy: np.ndarray) -> dict:
         """
         Submit an image to the inference server, route to a specific model, and return the results.
         Args:
-            inference_client: Inference server client object
+            detector_id: ID of the detector on which to run local edge inference
             img_numpy: Image as a numpy array (assumes HWC uint8 RGB image)
-            model_name: Name of the model to route to
-            model_version: Version of the model to route to
         Returns:
             Dictionary of inference results with keys:
                 - "score": float
@@ -83,6 +86,11 @@ class EdgeInferenceManager:
             tritonclient.InferRequestedOutput(f)
             for f in [self.OUTPUT_SCORE_NAME, self.OUTPUT_CONFIDENCE_NAME, self.OUTPUT_PROBABILITY_NAME]
         ]
+
+        model_name, model_version = (
+            self.inference_config[detector_id].model_name,
+            self.inference_config[detector_id].model_version,
+        )
 
         logger.debug("Submitting image to edge inference service")
         start = time.monotonic()

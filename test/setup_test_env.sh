@@ -15,7 +15,6 @@
 # > docker run --name groundlight-edge \
 #      -e LOG_LEVEL=DEBUG \
 #      -e "EDGE_CONFIG=$EDGE_CONFIG" \
-#      -e GROUNDLIGHT_API_TOKEN \
 #      --rm -it -p 6717:6717 edge-endpoint
 
 # Then in another terminal, run the motion detection tests:
@@ -25,7 +24,7 @@
 # More information on these detectors in the testing file test/api/test_motdet.py
 
 EDGE_CONFIG=$(cat <<- EOM
-motion_detection_template:
+motion_detection_templates:
   default:
     enabled: true
     val_threshold: 50
@@ -41,7 +40,7 @@ motion_detection_template:
   disabled:
     enabled: false
 
-local_inference_template:
+local_inference_templates:
   default:
     enabled: true
     refresh_rate: 3600

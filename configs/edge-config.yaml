@@ -1,5 +1,5 @@
 # Configure motion detection 
-motion_detection_template:
+motion_detection_templates:
   default:
     enabled: true
     val_threshold: 20
@@ -17,7 +17,7 @@ motion_detection_template:
   disabled:
     motion_detection_enabled: false
 
-local_inference_template:
+local_inference_templates:
   default:
     enabled: true
     # The refresh rate in seconds for the local inference server 
