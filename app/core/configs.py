@@ -29,7 +29,13 @@ class LocalInferenceConfig(BaseModel):
     """
 
     enabled: bool = Field(False, description="Determines if local edge inference is enabled for a specific detector.")
-    refresh_every: float = Field(3600.0, description="The refresh rate for the inference server (in seconds).")
+    refresh_every: float = Field(
+        3600.0,
+        description=(
+            "The refresh rate for the inference server (in seconds). This means how often to check for an updated model"
+            " binary (currently unused)."
+        ),
+    )
 
     model_name: Optional[str] = Field(default=None, description="The name of the model to use for inference.")
     model_version: Optional[str] = Field(default=None, description="The version of the model to use for inference.")

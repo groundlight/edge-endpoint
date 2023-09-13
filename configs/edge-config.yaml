@@ -20,7 +20,7 @@ motion_detection_templates:
 local_inference_templates:
   default:
     enabled: true
-    # The refresh rate in seconds for the local inference server 
+    # How often to fetch a new model binary (in seconds) 
     refresh_every: 3600
     # Specifies the model name and model version to use for inference. 
     # If model_name is empty, the default model will be used.
