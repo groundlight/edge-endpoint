@@ -15,7 +15,7 @@ motion_detection_templates:
     max_time_between_images: 3600
 
   disabled:
-    motion_detection_enabled: false
+    enabled: false
 
 local_inference_templates:
   default:
