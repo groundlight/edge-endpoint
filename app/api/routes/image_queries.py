@@ -2,17 +2,17 @@ import logging
 from datetime import datetime
 from io import BytesIO
 from typing import Optional
-from groundlight import Groundlight
 
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from groundlight import Groundlight
 from model import ClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
 from PIL import Image
 
 from app.core.utils import (
     AppState,
-    get_groundlight_sdk_instance,
     get_app_state,
+    get_groundlight_sdk_instance,
     prefixed_ksuid,
     safe_call_api,
 )
