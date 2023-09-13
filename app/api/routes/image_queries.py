@@ -2,6 +2,7 @@ import logging
 from datetime import datetime
 from io import BytesIO
 from typing import Optional
+from groundlight import Groundlight
 
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -10,6 +11,7 @@ from PIL import Image
 
 from app.core.utils import (
     AppState,
+    get_groundlight_sdk_instance,
     get_app_state,
     prefixed_ksuid,
     safe_call_api,
@@ -46,12 +48,11 @@ async def post_image_query(
     detector_id: str = Query(..., description="Detector ID"),
     patience_time: Optional[float] = Query(None, description="How long to wait for a confident response"),
     img: Image.Image = Depends(validate_request_body),
+    gl: Groundlight = Depends(get_groundlight_sdk_instance),
     app_state: AppState = Depends(get_app_state),
-    request: Request = Depends(),
 ):
     img_numpy = np.array(img)  # [H, W, C=3], dtype: uint8, RGB format
 
-    gl = app_state.get_groundlight_sdk_instance(request=request)
     iqe_cache = app_state.iqe_cache
     motion_detection_manager = app_state.motion_detection_manager
     edge_inference_manager = app_state.edge_inference_manager
@@ -105,11 +106,8 @@ async def post_image_query(
 
 @router.get("/{id}", response_model=ImageQuery)
 async def get_image_query(
-    id: str,
-    app_state: AppState = Depends(get_app_state),
-    request: Request = Depends(),
+    id: str, gl: Groundlight = Depends(get_groundlight_sdk_instance), app_state: AppState = Depends(get_app_state)
 ):
-    gl = app_state.get_groundlight_sdk_instance(request=request)
     if id.startswith("iqe_"):
         iqe_cache = app_state.get_iqe_cache()
 

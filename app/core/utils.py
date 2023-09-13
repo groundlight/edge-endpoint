@@ -17,6 +17,8 @@ from .motion_detection import MotionDetectionManager
 
 logger = logging.getLogger(__name__)
 
+MAX_SDK_INSTANCES_CACHE_SIZE = 1000
+
 
 def safe_call_api(api_method: Callable, **kwargs):
     """
@@ -94,9 +96,22 @@ def load_edge_config() -> RootEdgeConfig:
     raise FileNotFoundError(f"Could not find edge config file at {default_config_path}")
 
 
-class AppState:
-    MAX_SDK_INSTANCES_CACHE_SIZE = 1000
+@lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
+def _get_groundlight_sdk_instance_internal(api_token: str):
+    return Groundlight(api_token=api_token)
 
+
+def get_groundlight_sdk_instance(request: Request):
+    """
+    Returns a Groundlight SDK instance given an API token.
+    The SDK handles validation of the API token token itself, so there's no
+    need to do that here.
+    """
+    api_token = request.headers.get("x-api-token")
+    return _get_groundlight_sdk_instance_internal(api_token)
+
+
+class AppState:
     def __init__(self):
         # Create a global shared image query ID cache in the app's state
         self.iqe_cache = IQECache()
@@ -120,19 +135,6 @@ class AppState:
         # Create global shared edge inference manager object in the app's state
         # NOTE: For now this assumes that there is only one inference container
         self.edge_inference_manager = EdgeInferenceManager(config=inference_config)
-
-    @lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
-    def _get_groundlight_sdk_instance_internal(self, api_token: str):
-        return Groundlight(api_token=api_token)
-
-    def get_groundlight_sdk_instance(self, request: Request):
-        """
-        Returns a Groundlight SDK instance given an API token.
-        The SDK handles validation of the API token token itself, so there's no
-        need to do that here.
-        """
-        api_token = request.headers.get("x-api-token")
-        return self._get_groundlight_sdk_instance_internal(api_token)
 
 
 def get_app_state(request: Request) -> AppState:
