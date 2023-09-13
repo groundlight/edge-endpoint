@@ -1,5 +1,6 @@
 import logging
 import os
+from functools import lru_cache
 from io import BytesIO
 from typing import Callable, Dict
 
@@ -15,6 +16,39 @@ from .iqe_cache import IQECache
 from .motion_detection import MotionDetectionManager
 
 logger = logging.getLogger(__name__)
+
+MAX_SDK_INSTANCES_CACHE_SIZE = 1000
+
+
+def load_edge_config() -> dict:
+    """
+    Reads the edge config from the EDGE_CONFIG environment variable if it exists.
+    If EDGE_CONFIG is not set, reads the default edge config file.
+    """
+    yaml_config = os.environ.get("EDGE_CONFIG", "").strip()
+    if yaml_config:
+        return yaml.safe_load(yaml_config)
+
+    logger.warning("EDGE_CONFIG environment variable not set. Using the default edge config file.")
+
+    default_config_path = "configs/edge.yaml"
+    if os.path.exists(default_config_path):
+        return yaml.safe_load(open(default_config_path, "r"))
+
+    raise FileNotFoundError(f"Could not find edge config file at {default_config_path}")
+
+
+@lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
+def _get_groundlight_sdk_instance_internal(api_token: str):
+    return Groundlight(api_token=api_token)
+
+
+def get_groundlight_sdk_instance(request: Request):
+    """
+    Returns a Groundlight SDK instance given an API token.
+    """
+    api_token = request.headers.get("x-api-token")
+    return _get_groundlight_sdk_instance_internal(api_token)
 
 
 def safe_call_api(api_method: Callable, **kwargs):
