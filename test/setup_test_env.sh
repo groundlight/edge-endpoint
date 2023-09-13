@@ -41,14 +41,6 @@ motion_detection_templates:
     enabled: false
 
 local_inference_templates:
-  default:
-    enabled: true
-    refresh_rate: 3600
-
-  super-fast-refresh:
-    enabled: true
-    refresh_rate: 60
-
   disabled:
     enabled: false
 

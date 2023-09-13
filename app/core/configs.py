@@ -43,7 +43,7 @@ class LocalInferenceConfig(BaseModel):
     @validator("model_version", "model_name", pre=True, always=True)
     def validate_model(cls, field_value, values, field):
         """
-        With Triton, there can be multiple versions of each model.
+        With Triton, there can be multiple versions for each model.
         And each version is stored in a numerically-named subdirectory.
         For more info: https://www.run.ai/guides/machine-learning-engineering/triton-inference-server
 
