@@ -1,14 +1,18 @@
 import logging
 import os
+from functools import lru_cache
 from io import BytesIO
 from typing import Callable
 
 import ksuid
 import yaml
 from fastapi import HTTPException, Request
+from groundlight import Groundlight
 from PIL import Image
 
 logger = logging.getLogger(__name__)
+
+MAX_SDK_INSTANCES_CACHE_SIZE = 1000
 
 
 def load_edge_config() -> dict:
@@ -29,8 +33,17 @@ def load_edge_config() -> dict:
     raise FileNotFoundError(f"Could not find edge config file at {default_config_path}")
 
 
+@lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
+def _get_groundlight_sdk_instance_internal(api_token: str):
+    return Groundlight(api_token=api_token)
+
+
 def get_groundlight_sdk_instance(request: Request):
-    return request.app.state.groundlight
+    """
+    Returns a Groundlight SDK instance given an API token.
+    """
+    api_token = request.headers.get("x-api-token")
+    return _get_groundlight_sdk_instance_internal(api_token)
 
 
 def get_iqe_cache(request: Request):
