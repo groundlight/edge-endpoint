@@ -1,7 +1,7 @@
 import logging
 import socket
-from typing import Dict
 import time
+from typing import Dict
 
 import numpy as np
 import tritonclient.http as tritonclient
