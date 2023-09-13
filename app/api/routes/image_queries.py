@@ -107,8 +107,9 @@ async def post_image_query(
 async def get_image_query(
     id: str,
     app_state: AppState = Depends(get_app_state),
+    request: Request = Depends(),
 ):
-    gl = app_state.get_groundlight_sdk_instance()
+    gl = app_state.get_groundlight_sdk_instance(request=request)
     if id.startswith("iqe_"):
         iqe_cache = app_state.get_iqe_cache()
 
