@@ -120,12 +120,12 @@ def get_groundlight_sdk_instance(request: Request):
     return _get_groundlight_sdk_instance_internal(api_token)
 
 
-@cachetools.cached(cache=ttl_cache, key=lambda detector_id, _: detector_id)
+@cachetools.cached(cache=ttl_cache, key=lambda detector_id, gl: detector_id)
 def get_detector_confidence(detector_id: str, gl: Groundlight):
     """
     Returns the confidence threshold for a detector.
     """
-    detector = gl.get_detector(id=detector_id)
+    detector = safe_call_api(gl.get_detector, id=detector_id)
     return detector.confidence_threshold
 
 
