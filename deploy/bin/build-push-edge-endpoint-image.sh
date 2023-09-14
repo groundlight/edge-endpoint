@@ -12,7 +12,7 @@ TAG=$(./git-tag-name.sh)
 aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin  723181461334.dkr.ecr.us-west-2.amazonaws.com
 
 # Build image
-docker build --target production-image --tag edge-endpoint ..
+docker build --target production-image --tag edge-endpoint ../..
 
 # Tag image
 docker tag edge-endpoint:latest 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${TAG}

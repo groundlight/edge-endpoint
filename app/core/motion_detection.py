@@ -1,44 +1,14 @@
 import logging
 import time
-from typing import List
+from typing import Dict
 
 import numpy as np
 from framegrab import MotionDetector
 from model import ImageQuery
-from pydantic import BaseModel, Field
+
+from .configs import MotionDetectionConfig
 
 logger = logging.getLogger(__name__)
-
-
-class MotionDetectionParams(BaseModel):
-    detector_id: str = Field(..., description="Detector ID")
-    motion_detection_enabled: bool = Field(
-        False, description="Determines if motion detection is enabled for this detector"
-    )
-    motion_detection_percentage_threshold: float = Field(
-        5.0, description="Percent of pixels needed to change before motion is detected."
-    )
-    motion_detection_val_threshold: int = Field(
-        50, description="The minimum brightness change for a pixel for it to be considered changed."
-    )
-    motion_detection_max_time_between_images: float = Field(
-        3600.0,
-        description=(
-            "Specifies the maximum time (seconds) between images sent to the cloud. This will be honored even if no"
-            " motion has been detected. Defaults to 1 hour."
-        ),
-    )
-    unconfident_iq_reescalation_interval: float = Field(
-        60.0, description="How often to re-escalate unconfident Image queries."
-    )
-
-
-class RootConfig(BaseModel):
-    """
-    Main configuration for motion detection across all detectors.
-    """
-
-    motion_detection: List[MotionDetectionParams]
 
 
 class MotionDetectorWrapper:
@@ -46,15 +16,15 @@ class MotionDetectorWrapper:
     This is a wrapper around MotionDetector from framegrab.
     """
 
-    def __init__(self, parameters: MotionDetectionParams):
+    def __init__(self, parameters: MotionDetectionConfig):
         self._motion_detector = MotionDetector(
-            pct_threshold=parameters.motion_detection_percentage_threshold,
-            val_threshold=parameters.motion_detection_val_threshold,
+            pct_threshold=parameters.percentage_threshold,
+            val_threshold=parameters.val_threshold,
         )
         self._previous_image = None
         self.image_query_response = None
-        self._motion_detection_enabled = parameters.motion_detection_enabled
-        self._max_time_between_images = parameters.motion_detection_max_time_between_images
+        self._motion_detection_enabled = parameters.enabled
+        self._max_time_between_images = parameters.max_time_between_images
         self._unconfident_iq_reescalation_interval = parameters.unconfident_iq_reescalation_interval
 
         # Indicates the last time motion was detected.
@@ -100,11 +70,27 @@ class MotionDetectorWrapper:
 
 
 class MotionDetectionManager:
-    def __init__(self, config: RootConfig) -> None:
+    def __init__(self, config: Dict[str, MotionDetectionConfig]) -> None:
+        """
+        Initializes the motion detection manager.
+        Args:
+            config: Dictionary of detector IDs to `MotionDetectionConfig` objects
+            `MotionDetectionConfig` objects consist of different parameters needed
+            to run motion detection.
+        """
         self.detectors = {
-            detector_params.detector_id: MotionDetectorWrapper(detector_params)
-            for detector_params in config.motion_detection
+            detector_id: MotionDetectorWrapper(parameters=motion_detection_config)
+            for detector_id, motion_detection_config in config.items()
         }
+
+    def motion_detection_is_available(self, detector_id: str) -> bool:
+        """
+        Returns True if motion detection is enabled for the specified detector, False otherwise.
+        """
+        if detector_id not in self.detectors.keys() or not self.detectors[detector_id].is_enabled():
+            logger.info(f"Motion detection is not enabled for {detector_id=}.")
+            return False
+        return True
 
     def update_image_query_response(self, detector_id: str, response: ImageQuery) -> None:
         self.detectors[detector_id].image_query_response = response

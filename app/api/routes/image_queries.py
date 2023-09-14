@@ -9,19 +9,17 @@ from groundlight import Groundlight
 from model import ClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
 from PIL import Image
 
-from app.core.edge_inference import edge_inference, edge_inference_is_available
 from app.core.motion_detection import MotionDetectionManager
 from app.core.utils import (
+    AppState,
+    get_app_state,
+    get_detector_confidence,
     get_groundlight_sdk_instance,
-    get_inference_client,
-    get_iqe_cache,
-    get_motion_detection_manager,
     prefixed_ksuid,
     safe_call_api,
 )
 
 logger = logging.getLogger(__name__)
-
 
 router = APIRouter()
 
@@ -52,10 +50,8 @@ async def post_image_query(
     detector_id: str = Query(..., description="Detector ID"),
     patience_time: Optional[float] = Query(None, description="How long to wait for a confident response"),
     img: Image.Image = Depends(validate_request_body),
-    gl: Depends = Depends(get_groundlight_sdk_instance),
-    iqe_cache: Depends = Depends(get_iqe_cache),
-    motion_detection_manager: Depends = Depends(get_motion_detection_manager),
-    inference_client: Depends = Depends(get_inference_client),
+    gl: Groundlight = Depends(get_groundlight_sdk_instance),
+    app_state: AppState = Depends(get_app_state),
 ):
     """
     Submit an image query for a given detector.
@@ -79,10 +75,11 @@ async def post_image_query(
     """
     img_numpy = np.array(img)  # [H, W, C=3], dtype: uint8, RGB format
 
-    if (
-        detector_id in motion_detection_manager.detectors
-        and motion_detection_manager.detectors[detector_id].is_enabled()
-    ):
+    iqe_cache = app_state.iqe_cache
+    motion_detection_manager = app_state.motion_detection_manager
+    edge_inference_manager = app_state.edge_inference_manager
+
+    if motion_detection_manager.motion_detection_is_available(detector_id=detector_id):
         motion_detected = motion_detection_manager.run_motion_detection(detector_id=detector_id, new_img=img_numpy)
         if not motion_detected:
             # Try improving the confidence of the cached image query response
@@ -102,11 +99,13 @@ async def post_image_query(
             iqe_cache.update_cache(image_query=new_image_query)
             return new_image_query
 
-    # Try to submit the image to a local edge detector
-    model_name, confidence_threshold = "det_edgedemo", 0.9
     image_query = None
-    if edge_inference_is_available(inference_client, model_name):
-        results = edge_inference(inference_client, img_numpy, model_name)
+    confidence_threshold = get_detector_confidence(detector_id=detector_id, gl=gl)
+
+    # Check if edge inference is enabled for this detector
+    if edge_inference_manager.inference_is_available(detector_id=detector_id):
+        results = edge_inference_manager.run_inference(detector_id=detector_id, img_numpy=img_numpy)
+
         if results["confidence"] > confidence_threshold:
             logger.info("Edge detector confidence is high enough to return")
 
@@ -134,11 +133,11 @@ async def post_image_query(
 
 @router.get("/{id}", response_model=ImageQuery)
 async def get_image_query(
-    id: str,
-    gl: Depends = Depends(get_groundlight_sdk_instance),
-    iqe_cache: Depends = Depends(get_iqe_cache),
+    id: str, gl: Groundlight = Depends(get_groundlight_sdk_instance), app_state: AppState = Depends(get_app_state)
 ):
     if id.startswith("iqe_"):
+        iqe_cache = app_state.iqe_cache
+
         image_query = iqe_cache.get_cached_image_query(image_query_id=id)
         if not image_query:
             raise HTTPException(status_code=404, detail=f"Image query with ID {id} not found")
