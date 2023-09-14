@@ -109,12 +109,10 @@ async def post_image_query(
         if results["confidence"] > confidence_threshold:
             logger.info("Edge detector confidence is high enough to return")
 
-            detector = gl.get_detector(id=detector_id)
             image_query = _create_iqe(
                 detector_id=detector_id,
                 label=results["label"],
                 confidence=results["confidence"],
-                query=detector.query,
             )
 
     # Finally, fall back to submitting the image to the cloud
@@ -178,9 +176,8 @@ def _improve_cached_image_query_confidence(
     :param patience_time: how long to wait for a confident response
     """
 
-    detector = gl.get_detector(id=detector_id)
+    desired_detector_confidence = get_detector_confidence(detector_id=detector_id, gl=gl)
     cached_image_query = motion_detection_manager.get_image_query_response(detector_id=detector_id)
-    desired_detector_confidence = detector.confidence_threshold
 
     iq_confidence_is_improvable = (
         cached_image_query.result.confidence is not None
