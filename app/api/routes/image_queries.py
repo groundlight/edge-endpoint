@@ -12,10 +12,10 @@ from PIL import Image
 from app.core.utils import (
     AppState,
     get_app_state,
+    get_detector_confidence,
     get_groundlight_sdk_instance,
     prefixed_ksuid,
     safe_call_api,
-    get_detector_confidence,
 )
 
 logger = logging.getLogger(__name__)
