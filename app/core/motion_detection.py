@@ -25,6 +25,7 @@ class MotionDetectorWrapper:
         self.image_query_response = None
         self._motion_detection_enabled = parameters.enabled
         self._max_time_between_images = parameters.max_time_between_images
+        self._unconfident_iq_reescalation_interval = parameters.unconfident_iq_reescalation_interval
 
         # Indicates the last time motion was detected.
         self._previous_motion_detection_time = None
