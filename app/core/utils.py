@@ -124,7 +124,7 @@ def get_detector_confidence(detector_id: str, gl: Groundlight):
     """
     Returns the confidence threshold for a detector.
     """
-    detector = gl.get_detector(detector_id=detector_id)
+    detector = gl.get_detector(id=detector_id)
     return detector.confidence_threshold
 
 
