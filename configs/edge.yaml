@@ -8,4 +8,6 @@ motion_detection:
     # maximum time (seconds) between images sent to the cloud. This will be honored even if no
     # motion has been detected
     motion_detection_max_time_between_images: 3600
-  
+
+edge_inference:
+  - detector_id: ''

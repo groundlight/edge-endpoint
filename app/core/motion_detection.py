@@ -30,12 +30,18 @@ class MotionDetectionParams(BaseModel):
     )
 
 
+class EdgeInferenceParams(BaseModel):
+    detector_id: str = Field(..., description="Detector ID")
+
+
+# TODO: move root edge configuration to a separate file
 class RootConfig(BaseModel):
     """
     Main configuration for motion detection across all detectors.
     """
 
     motion_detection: List[MotionDetectionParams]
+    edge_inference: list[EdgeInferenceParams]
 
 
 class MotionDetectorWrapper:

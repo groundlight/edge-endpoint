@@ -1,5 +1,8 @@
 import logging
+import os
 import socket
+import requests
+import shutil
 
 import numpy as np
 import tritonclient.http as tritonclient
@@ -13,6 +16,8 @@ OUTPUT_CONFIDENCE_NAME = "confidence"
 OUTPUT_PROBABILITY_NAME = "probability"
 OUTPUT_LABEL_NAME = "label"
 INFERENCE_SERVER_URL = "inference-service:8000"
+
+MODEL_REPOSITORY = "/mnt/models"
 
 
 def edge_inference_is_available(
@@ -91,3 +96,109 @@ def edge_inference(
 def _probability_to_label(prob: float) -> str:
     # TODO: there is a way to get the label string from the inference server. Do that instead.
     return "YES" if prob < 0.5 else "NO"
+
+
+def update_model(inference_client: InferenceServerClient, detector_id: str) -> None:
+    """
+    Request a new model from the cloud and update the local edge inference server.
+    """
+    model_urls = fetch_model_urls(detector_id)
+    model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
+    pipeline_config = model_urls["pipeline_config"]
+
+    old_version, new_version = save_model_to_repository(detector_id, model_buffer, pipeline_config)
+    inference_client.load_model(model_name=detector_id)  # refreshes the model if already loaded
+
+    if edge_inference_is_available(inference_client, detector_id, model_version=str(new_version)):
+        logger.info(f"Now running inference with model version {new_version} for {detector_id}")
+
+        if old_version is not None:
+            delete_model_version(detector_id, old_version)
+    else:
+        logger.warning(f"Inference server is not ready to run model version {new_version} for {detector_id}")
+
+
+def fetch_model_urls(detector_id) -> dict[str, str]:
+    GROUNDLIGHT_API_TOKEN = os.getenv("GROUNDLIGHT_API_TOKEN")
+    if not GROUNDLIGHT_API_TOKEN:
+        raise Exception("GROUNDLIGHT_API_TOKEN environment variable is not set")
+
+    url = f"https://api.groundlight.ai/edge-api/v1/fetch-model-urls/{detector_id}/"
+    headers = {
+        "x-api-token": GROUNDLIGHT_API_TOKEN,
+    }
+    response = requests.get(url, headers=headers, timeout=10)
+
+    if response.status_code == 200:
+        return response.json()
+    else:
+        raise Exception(f"Failed to fetch model URLs for {detector_id=}. HTTP Status code: {response.status_code}")
+
+
+def get_object_using_presigned_url(presigned_url):
+    response = requests.get(presigned_url, timeout=10)
+    if response.status_code == 200:
+        return response.content
+    else:
+        raise Exception("Failed to retrieve data from {presigned_url}. HTTP Status code: {response.status_code}")
+
+
+def save_model_to_repository(detector_id, model_buffer, pipeline_config) -> tuple[int | None, int]:
+    """
+    Make new directory for the model and save the model and pipeline config to it.
+    """
+    model_dir = os.path.join(MODEL_REPOSITORY, detector_id)
+    os.makedirs(model_dir, exist_ok=True)
+
+    # Get the latest model version by inspecting subdirectories
+    model_versions = [int(d) for d in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, d))]
+    if model_versions:
+        old_model_version = max(model_versions)
+        new_model_version = old_model_version + 1
+    else:
+        old_model_version = None
+        new_model_version = 1
+
+    model_version_dir = os.path.join(model_dir, str(new_model_version))
+
+    # Add model-version specific files (model.py and model.buf)
+    # NOTE: these files should be static and not change between model versions
+    create_file_from_template(
+        template_values={"pipeline_config": pipeline_config},
+        destination=os.path.join(model_version_dir, "model.py"),
+        template="app/resources/model_template.py"
+    )
+    with open(os.path.join(model_version_dir, "model.buf"), 'wb') as f:
+        f.write(model_buffer)
+
+    # Add/Overwrite model configuration files (config.pbtxt and binary_labels.txt)
+    create_file_from_template(
+        template_values={"model_name": detector_id},
+        destination=os.path.join(model_dir, "config.pbtxt"),
+        template="app/resources/config_template.py"
+    )
+    shutil.copy2(src='app/resources/binary_labels.txt', dst=os.path.join(model_dir, "config.pbtxt"))
+
+    logger.info(f"Wrote new model version {new_model_version} for {detector_id}")
+    return old_model_version, new_model_version
+
+
+def create_file_from_template(template_values: dict, destination: str, template: str):
+    # Step 1: Read the template file
+    with open(template, 'r') as template_file:
+        template_content = template_file.read()
+
+    # Step 2: Substitute placeholders with actual values
+    filled_content = template_content.format(**template_values)
+
+    # Step 3: Write the filled content to a new file
+    with open(destination, 'w') as output_file:
+        output_file.write(filled_content)
+
+
+def delete_model_version(detector_id: str, model_version: int):
+    # Recursively delete directory detector_id/model_version
+    model_dir = os.path.join(MODEL_REPOSITORY, detector_id)
+    model_version_dir = os.path.join(model_dir, str(model_version))
+    logger.info(f"Deleting model version {model_version} for {detector_id}")
+    shutil.rmtree(model_version_dir)

@@ -72,8 +72,9 @@ async def post_image_query(
             return new_image_query
 
     # Try to submit the image to a local edge detector
-    model_name, confidence_threshold = "det_edgedemo", 0.9
+    model_name, confidence_threshold = detector_id, 0.75
     image_query = None
+    # TODO: ensure that edge inference is enabled in the edge config
     if edge_inference_is_available(inference_client, model_name):
         results = edge_inference(inference_client, img_numpy, model_name)
         if results["confidence"] > confidence_threshold:
