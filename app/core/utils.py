@@ -3,10 +3,11 @@ import os
 from functools import lru_cache
 from io import BytesIO
 from typing import Callable, Dict
+
 import cachetools
-from cachetools import TTLCache
 import ksuid
 import yaml
+from cachetools import TTLCache
 from fastapi import HTTPException, Request
 from groundlight import Groundlight
 from PIL import Image
