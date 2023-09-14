@@ -3,7 +3,8 @@ import os
 from functools import lru_cache
 from io import BytesIO
 from typing import Callable, Dict
-
+import cachetools
+from cachetools import TTLCache
 import ksuid
 import yaml
 from fastapi import HTTPException, Request
@@ -18,6 +19,13 @@ from .motion_detection import MotionDetectionManager
 logger = logging.getLogger(__name__)
 
 MAX_SDK_INSTANCES_CACHE_SIZE = 1000
+MAX_DETECTOR_IDS_TTL_CACHE_SIZE = 1000
+TTL_TIME = 3600  # 1 hour
+
+# Define a TTL (time-to-live) cache for detector IDs.
+# This is used to ensure that we don't make too many requests to the Groundlight API
+# while trying to only get the confidence threshold for a detector.
+ttl_cache = TTLCache(maxsize=MAX_DETECTOR_IDS_TTL_CACHE_SIZE, ttl=TTL_TIME)
 
 
 def safe_call_api(api_method: Callable, **kwargs):
@@ -109,6 +117,15 @@ def get_groundlight_sdk_instance(request: Request):
     """
     api_token = request.headers.get("x-api-token")
     return _get_groundlight_sdk_instance_internal(api_token)
+
+
+@cachetools.cached(cache=ttl_cache)
+def get_detector_confidence(detector_id: str, gl: Groundlight):
+    """
+    Returns the confidence threshold for a detector.
+    """
+    detector = gl.get_detector(detector_id=detector_id)
+    return detector.confidence_threshold
 
 
 class AppState:

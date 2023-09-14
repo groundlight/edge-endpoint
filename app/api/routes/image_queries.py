@@ -15,6 +15,7 @@ from app.core.utils import (
     get_groundlight_sdk_instance,
     prefixed_ksuid,
     safe_call_api,
+    get_detector_confidence,
 )
 
 logger = logging.getLogger(__name__)
@@ -57,10 +58,7 @@ async def post_image_query(
     motion_detection_manager = app_state.motion_detection_manager
     edge_inference_manager = app_state.edge_inference_manager
 
-    if (
-        detector_id in motion_detection_manager.detectors
-        and motion_detection_manager.detectors[detector_id].is_enabled()
-    ):
+    if motion_detection_manager.motion_detection_is_available(detector_id=detector_id):
         motion_detected = motion_detection_manager.run_motion_detection(detector_id=detector_id, new_img=img_numpy)
         if not motion_detected:
             # If there is no motion, return a clone of the last image query response
@@ -72,11 +70,7 @@ async def post_image_query(
             return new_image_query
 
     image_query = None
-
-    # TODO: Make this configurable. We can just get the detector object
-    # by calling `gl.get_detector(detector_id=detector_id)` since this uses the local
-    # detectors route and not the API server's detectors route.
-    confidence_threshold = 0.9
+    confidence_threshold = get_detector_confidence(detector_id=detector_id, gl=gl)
 
     # Check if edge inference is enabled for this detector
     if edge_inference_manager.inference_is_available(detector_id=detector_id):
