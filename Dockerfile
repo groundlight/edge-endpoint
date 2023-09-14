@@ -64,6 +64,13 @@ RUN mkdir /etc/groundlight
 # Copy the configs directory 
 COPY configs ${APP_ROOT}/configs 
 
+# Create a /etc/rancher/k3s directory recursively if it doesn't exist
+RUN mkdir -p /etc/rancher/k3s
+
+# Copy the /etc/rancher/k3s/k3s.yaml file to the /etc/rancher/k3s directory
+# This file is used by the kubernetes client to connect to the k3s cluster
+COPY k3s.yaml /etc/rancher/k3s/k3s.yaml
+
 
 ##################
 # Production Stage
