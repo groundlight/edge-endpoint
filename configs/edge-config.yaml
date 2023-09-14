@@ -38,7 +38,8 @@ local_inference_templates:
     enabled: false
 
 detectors:
-  # Blank id indicates this is the default configuration.
+  # Blank id implies that no detectors have been configured to use motion detection
+  # and/or local edge inference.  
   - detector_id: ''
     motion_detection_template: "default"
     local_inference_template: "default"
