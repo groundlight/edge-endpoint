@@ -7,6 +7,7 @@ import shutil
 import numpy as np
 import tritonclient.http as tritonclient
 from tritonclient.http import InferenceServerClient
+from jinja2 import Template
 
 logger = logging.getLogger(__name__)
 
@@ -102,15 +103,24 @@ def update_model(inference_client: InferenceServerClient, detector_id: str) -> N
     """
     Request a new model from the cloud and update the local edge inference server.
     """
+    logger.warning(f"Attemping to update model for {detector_id}")
+    logger.warning(f"Current working directory: {os.getcwd()}")
+
     model_urls = fetch_model_urls(detector_id)
     model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
-    pipeline_config = model_urls["pipeline_config"]
+    # TODO: remove the fallback to "generic-cached-timm-efficientnetv2s-mlp"
+    pipeline_config = model_urls.get("pipeline_config", "generic-cached-timm-efficientnetv2s-mlp")
 
     old_version, new_version = save_model_to_repository(detector_id, model_buffer, pipeline_config)
-    inference_client.load_model(model_name=detector_id)  # refreshes the model if already loaded
+
+    try:
+        inference_client.load_model(model_name=detector_id)  # refreshes the model if already loaded
+    except (ConnectionRefusedError, socket.gaierror) as ex:
+        logger.warning(f"Edge inference server is not available: {ex}")
+        return
 
     if edge_inference_is_available(inference_client, detector_id, model_version=str(new_version)):
-        logger.info(f"Now running inference with model version {new_version} for {detector_id}")
+        logger.warning(f"Now running inference with model version {new_version} for {detector_id}")
 
         if old_version is not None:
             delete_model_version(detector_id, old_version)
@@ -160,6 +170,7 @@ def save_model_to_repository(detector_id, model_buffer, pipeline_config) -> tupl
         new_model_version = 1
 
     model_version_dir = os.path.join(model_dir, str(new_model_version))
+    os.makedirs(model_version_dir, exist_ok=True)
 
     # Add model-version specific files (model.py and model.buf)
     # NOTE: these files should be static and not change between model versions
@@ -175,11 +186,11 @@ def save_model_to_repository(detector_id, model_buffer, pipeline_config) -> tupl
     create_file_from_template(
         template_values={"model_name": detector_id},
         destination=os.path.join(model_dir, "config.pbtxt"),
-        template="app/resources/config_template.py"
+        template="app/resources/config_template.pbtxt"
     )
-    shutil.copy2(src='app/resources/binary_labels.txt', dst=os.path.join(model_dir, "config.pbtxt"))
+    shutil.copy2(src='app/resources/binary_labels.txt', dst=os.path.join(model_dir, "binary_labels.txt"))
 
-    logger.info(f"Wrote new model version {new_model_version} for {detector_id}")
+    logger.warning(f"Wrote new model version {new_model_version} for {detector_id}")
     return old_model_version, new_model_version
 
 
@@ -189,9 +200,11 @@ def create_file_from_template(template_values: dict, destination: str, template:
         template_content = template_file.read()
 
     # Step 2: Substitute placeholders with actual values
-    filled_content = template_content.format(**template_values)
+    template = Template(template_content)
+    filled_content = template.render(**template_values)
 
     # Step 3: Write the filled content to a new file
+    os.makedirs(os.path.dirname(destination), exist_ok=True)
     with open(destination, 'w') as output_file:
         output_file.write(filled_content)
 
@@ -200,5 +213,6 @@ def delete_model_version(detector_id: str, model_version: int):
     # Recursively delete directory detector_id/model_version
     model_dir = os.path.join(MODEL_REPOSITORY, detector_id)
     model_version_dir = os.path.join(model_dir, str(model_version))
-    logger.info(f"Deleting model version {model_version} for {detector_id}")
-    shutil.rmtree(model_version_dir)
+    logger.warning(f"Deleting model version {model_version} for {detector_id}")
+    if os.path.exists(model_version_dir):
+        shutil.rmtree(model_version_dir)

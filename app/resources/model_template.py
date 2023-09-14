@@ -23,10 +23,6 @@ def load_buffer_from_file(model_dir: str, filename: str = "model.buf") -> bytes:
         return f.read()
 
 
-def get_config_parameter_by_name(model_config: dict, name: str) -> str:
-    return model_config["parameters"][name]["string_value"]
-
-
 class TritonPythonModel:
     """
     Code for integrating Groundlight Pipelines with Triton Inference Server.
@@ -68,7 +64,7 @@ class TritonPythonModel:
         model_dir = os.path.join(args["model_repository"], args["model_version"])
         buffer = load_buffer_from_file(model_dir)
 
-        pipeline_config: str = "{pipeline_config}"  # This is a template value that will be replaced
+        pipeline_config: str = "{{pipeline_config}}"  # This is a template value that will be replaced
         pipeline_config_dict = yaml.safe_load(pipeline_config)
         pipeline_config_dict: dict = (
             pipeline_config_dict if isinstance(pipeline_config_dict, dict) else {"name": pipeline_config_dict}

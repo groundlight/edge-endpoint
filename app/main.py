@@ -40,4 +40,5 @@ async def on_startup():
     On startup, update edge inference models
     """
     for detector_id in app.state.motion_detection_manager.detectors.keys():
-        update_model(app.state.inference_client, detector_id)
+        if len(detector_id) > 0:
+            update_model(app.state.inference_client, detector_id)

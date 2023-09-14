@@ -17,20 +17,22 @@ aws ecr get-login-password --region us-west-2 | docker login --username AWS --pa
 # install buildx manually. Follow these instructions to install docker-buildx-plugin:
 # https://docs.docker.com/engine/install/ubuntu/
 
-# Check if tempbuilder already exists
-if ! docker buildx ls | grep -q tempgroundlightedgebuilder; then
-  # Prep for multiplatform build - the build is done INSIDE a docker container
-  docker buildx create --name tempgroundlightedgebuilder --use
-else
-  # If tempbuilder exists, set it as the current builder
-  docker buildx use tempgroundlightedgebuilder
-fi
+# # Check if tempbuilder already exists
+# if ! docker buildx ls | grep -q tempgroundlightedgebuilder; then
+#   # Prep for multiplatform build - the build is done INSIDE a docker container
+#   docker buildx create --name tempgroundlightedgebuilder --use
+# else
+#   # If tempbuilder exists, set it as the current builder
+#   docker buildx use tempgroundlightedgebuilder
+# fi
 
-# Ensure that the tempbuilder container is running
-docker buildx inspect tempgroundlightedgebuilder --bootstrap
+# # Ensure that the tempbuilder container is running
+# docker buildx inspect tempgroundlightedgebuilder --bootstrap
 
 # Build image for amd64 and arm64
-docker buildx build --platform linux/amd64,linux/arm64 --target production-image --tag edge-endpoint ../..
+# docker buildx build --platform linux/amd64,linux/arm64 --target production-image --tag edge-endpoint ../..
+docker build --target production-image --tag edge-endpoint ../..
+
 
 # Tag image
 docker tag edge-endpoint:latest 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${TAG}
@@ -39,4 +41,4 @@ docker tag edge-endpoint:latest 723181461334.dkr.ecr.us-west-2.amazonaws.com/edg
 docker push 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${TAG}
 
 # Cleanup
-docker buildx rm tempgroundlightedgebuilder
+# docker buildx rm tempgroundlightedgebuilder

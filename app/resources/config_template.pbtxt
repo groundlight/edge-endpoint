@@ -1,5 +1,5 @@
 # https://github.com/triton-inference-server/common/blob/main/protobuf/model_config.proto
-name: "{model_name}"
+name: "{{model_name}}"
 backend: "python"
 max_batch_size: 0
 input [
