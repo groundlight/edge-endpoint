@@ -83,6 +83,7 @@ async def post_image_query(
         motion_detected = motion_detection_manager.run_motion_detection(detector_id=detector_id, new_img=img_numpy)
         if not motion_detected:
             # Try improving the confidence of the cached image query response
+            # (if the cached response is low confidence)
             _improve_cached_image_query_confidence(
                 gl=gl,
                 detector_id=detector_id,
