@@ -101,9 +101,14 @@ async def post_image_query(
             return new_image_query
 
     image_query = None
+    
+    #TODO this shouldn't be here. 
+    app_state.kube_client.check_or_create_detector_deployment(detector_id=detector_id)
 
     # Check if edge inference is enabled for this detector
     if edge_inference_manager.inference_is_available(detector_id=detector_id):
+        # app_state.kube_client.check_or_create_detector_deployment(detector_id=detector_id)
+
         detector_metadata: Detector = get_detector_metadata(detector_id=detector_id, gl=gl)
         results = edge_inference_manager.run_inference(detector_id=detector_id, img_numpy=img_numpy)
 

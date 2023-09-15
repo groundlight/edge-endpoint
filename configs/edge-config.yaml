@@ -30,8 +30,8 @@ local_inference_templates:
     # Specifies the model name and model version to use for inference. 
     # If model_name is empty, the default model will be used.
     # For now we don't have a default model, so we need to specify a model name
-    model_name: ''
-    model_version: ''
+    model_name: 'det_edgedemo'
+    model_version: '1'
 
   super-fast-refresh:
     enabled: true
@@ -46,7 +46,7 @@ detectors:
   # Blank id implies that no detectors have been configured to use motion detection
   # and/or local edge inference. The "default" templates are just examples of how one 
   # might configure these features. 
-  - detector_id: ''
+  - detector_id: 'det_2U80DZ4lmJITkEJCfzlQOGu8SaS'
     motion_detection_template: "default"
     local_inference_template: "default"
 

@@ -14,7 +14,7 @@ fi
 detector_ids=$(yq eval '.motion_detection[].detector_id' configs/edge.yaml | tr '_' '-' | tr 'A-Z' 'a-z')
 
 # Read the deployment template
-template=$(<deploy/k3s/edge_deployment.yaml)
+template=$(<deploy/k3s/deployment_template.yaml)
 
 # Generate deployment for each detector_id and apply directly
 for detector_id in $detector_ids; do

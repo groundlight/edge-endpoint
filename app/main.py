@@ -6,8 +6,6 @@ from fastapi import FastAPI
 from app.api.api import api_router, ping_router
 from app.api.naming import API_BASE_PATH
 
-from kubernetes import client as kube_client 
-from kubernetes import config
 from .core.utils import AppState
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -26,7 +24,7 @@ app.state.app_state = AppState()
 # Load the kubernetes config
 config.load_incluster_config()
 
-# Create an API client 
+# Create an API client
 app.state.kube_client = kube_client.CoreV1Api()
 
 

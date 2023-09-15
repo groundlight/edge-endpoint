@@ -27,11 +27,16 @@ for motion detection). In our k3s cluster, we mount this into the edge-endpoint 
 create this configmap. In order to do so, run 
 
 ```shell
-> kubectl create configmap edge-config --from-file=configs/edge-config.yaml
+> k3s kubectl create configmap edge-config --from-file=configs/edge-config.yaml
 ```
 
 NOTE: This config will not be automatically synced with the k3s deployment. Thus, every time one needs to 
-edit the config, they should also re-run the above command and other necessary commands as needed. 
+edit the config, they shoud first delete the existing configmap and then run the above command and other 
+necessary commands as needed. 
+
+```shell
+> k3s kubectl delete configmap edge-config
+```
 
 For now we have a hard-coded docker image from ECR in the [edge-endpoint](/edge-endpoint/deploy/k3s/edge_deployment.yaml) 
 deployment. If you want to make modifications to the code inside the endpoint and push a different 

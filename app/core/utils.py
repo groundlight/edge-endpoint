@@ -1,3 +1,4 @@
+import time
 import logging
 import os
 from functools import lru_cache
@@ -12,6 +13,8 @@ from fastapi import HTTPException, Request
 from groundlight import Groundlight
 from model import Detector
 from PIL import Image
+from kubernetes import client as kube_client
+from kubernetes import config
 
 from .configs import LocalInferenceConfig, MotionDetectionConfig, RootEdgeConfig
 from .edge_inference import EdgeInferenceManager
@@ -152,6 +155,63 @@ class AppState:
         # Create global shared edge inference manager object in the app's state
         # NOTE: For now this assumes that there is only one inference container
         self.edge_inference_manager = EdgeInferenceManager(config=inference_config)
+
+        # Load the kubernetes config
+        config.load_incluster_config()
+        self.kube_client = kube_client.AppsV1Api()
+
+        self._edge_deployment_template = self._load_k3s_edge_deployment_manifest()
+
+    def _load_k3s_edge_deployment_manifest(self) -> str:
+        """
+        Loads the k3s edge deployment manifest from the file system.
+        """
+        deployment_manifest_path = "configs/k3s/deployment_template.yaml"
+        if os.path.exists(deployment_manifest_path):
+            with open(deployment_manifest_path, "r") as f:
+                manifest = f.read()
+                return manifest
+
+        raise FileNotFoundError(f"Could not find k3s edge deployment manifest at {deployment_manifest_path}")
+
+    def check_or_create_detector_deployment(self, detector_id: str, k3s_namespace: str = "default"):
+        """
+        Checks if the detector deployment exists, and if not, creates it.
+        Running self.kube_client.create_namespaced_deployment() is equivalent to
+        running `k3s kubectl apply -f <deployment-manifest-yaml> -n <namespace>`
+        to create the deployment.
+        """
+
+        def get_deployment_name(detector_id: str) -> str:
+            """
+            Kubernetes deployment names have a strict naming convention.
+            They have to be alphanumeric, lower case, and can only contain dashes.
+            We just use `edge-endpoint-<detector_id>` as the deployment name.
+            """
+            return f"edge-endpoint-{detector_id.replace('_', '-').lower()}"
+
+        deployment_name = get_deployment_name(detector_id=detector_id)
+
+        try:
+            self.kube_client.read_namespaced_deployment(name=deployment_name, namespace=k3s_namespace)
+            logger.info(f"Deployment {deployment_name} already exists")
+
+        except kube_client.rest.ApiException:
+            logger.info(f"Creating deployment {deployment_name}")
+            # Timing this out for now to see how long creating a deployment takes
+            start = time.monotonic()
+
+            deployment_manifest = self._edge_deployment_template
+            deployment_manifest.replace("{{ DETECTOR_ID }}", deployment_name)
+
+            self.kube_client.create_namespaced_deployment(
+                namespace=k3s_namespace, body=yaml.safe_load(deployment_manifest)
+            )
+            end = time.monotonic()
+
+            logger.info(
+                f"Created deployment {deployment_name} in namespace {k3s_namespace} in {end - start:.3f} seconds"
+            )
 
 
 def get_app_state(request: Request) -> AppState:
