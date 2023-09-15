@@ -7,6 +7,7 @@ from typing import Callable, Dict
 import cachetools
 import ksuid
 import yaml
+from model import Detector
 from cachetools import TTLCache
 from fastapi import HTTPException, Request
 from groundlight import Groundlight
@@ -22,11 +23,6 @@ logger = logging.getLogger(__name__)
 MAX_SDK_INSTANCES_CACHE_SIZE = 1000
 MAX_DETECTOR_IDS_TTL_CACHE_SIZE = 1000
 TTL_TIME = 3600  # 1 hour
-
-# Define a TTL (time-to-live) cache for detector IDs.
-# This is used to ensure that we don't make too many requests to the Groundlight API
-# while trying to only get the confidence threshold for a detector.
-ttl_cache = TTLCache(maxsize=MAX_DETECTOR_IDS_TTL_CACHE_SIZE, ttl=TTL_TIME)
 
 
 def safe_call_api(api_method: Callable, **kwargs):
@@ -120,13 +116,16 @@ def get_groundlight_sdk_instance(request: Request):
     return _get_groundlight_sdk_instance_internal(api_token)
 
 
-@cachetools.cached(cache=ttl_cache, key=lambda detector_id, gl: detector_id)
-def get_detector_confidence(detector_id: str, gl: Groundlight):
+@cachetools.cached(
+    cache=TTLCache(maxsize=MAX_DETECTOR_IDS_TTL_CACHE_SIZE, ttl=TTL_TIME), key=lambda detector_id, gl: detector_id
+)
+def get_detector_metadata(detector_id: str, gl: Groundlight) -> Detector:
     """
-    Returns the confidence threshold for a detector.
+    Returns detector metadata from the Groundlight API.
+    Caches the result so that we don't have to make an expensive API call every time.
     """
     detector = safe_call_api(gl.get_detector, id=detector_id)
-    return detector.confidence_threshold
+    return detector
 
 
 class AppState:

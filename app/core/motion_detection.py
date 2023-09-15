@@ -88,7 +88,7 @@ class MotionDetectionManager:
         Returns True if motion detection is enabled for the specified detector, False otherwise.
         """
         if detector_id not in self.detectors.keys() or not self.detectors[detector_id].is_enabled():
-            logger.info(f"Motion detection is not enabled for {detector_id=}.")
+            logger.debug(f"Motion detection is not enabled for {detector_id=}.")
             return False
         return True
 

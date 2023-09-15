@@ -110,7 +110,8 @@ class EdgeInferenceManager:
             self.OUTPUT_LABEL_NAME: self._probability_to_label(probability),
         }
         logger.debug(
-            f"Inference server response for model={model_name}: {output_dict}Inference time: {end - start:.2f} seconds"
+            f"Inference server response for model={model_name}: {output_dict}.\n"
+            f"Inference time: {end - start:.3f} seconds"
         )
         return output_dict
 

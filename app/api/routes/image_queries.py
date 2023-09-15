@@ -6,14 +6,14 @@ from typing import Optional
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from groundlight import Groundlight
-from model import ClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
+from model import ClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum, Detector
 from PIL import Image
 
 from app.core.motion_detection import MotionDetectionManager
 from app.core.utils import (
     AppState,
     get_app_state,
-    get_detector_confidence,
+    get_detector_metadata,
     get_groundlight_sdk_instance,
     prefixed_ksuid,
     safe_call_api,
@@ -100,19 +100,26 @@ async def post_image_query(
             return new_image_query
 
     image_query = None
-    confidence_threshold = get_detector_confidence(detector_id=detector_id, gl=gl)
 
     # Check if edge inference is enabled for this detector
     if edge_inference_manager.inference_is_available(detector_id=detector_id):
+        detector_metadata: Detector = get_detector_metadata(detector_id=detector_id, gl=gl)
         results = edge_inference_manager.run_inference(detector_id=detector_id, img_numpy=img_numpy)
 
-        if results["confidence"] > confidence_threshold:
+        if results["confidence"] > detector_metadata.confidence_threshold:
             logger.info("Edge detector confidence is high enough to return")
 
             image_query = _create_iqe(
                 detector_id=detector_id,
                 label=results["label"],
                 confidence=results["confidence"],
+                query=detector_metadata.query,
+            )
+        else:
+            logger.info(
+                "Ran inference locally, but detector confidence is not high enough to return."
+                f" Current confidence: {results['confidence']}, detector confidence threshold: {confidence_threshold}."
+                " Escalating to the cloud API server."
             )
 
     # Finally, fall back to submitting the image to the cloud
@@ -176,7 +183,8 @@ def _improve_cached_image_query_confidence(
     :param patience_time: how long to wait for a confident response
     """
 
-    desired_detector_confidence = get_detector_confidence(detector_id=detector_id, gl=gl)
+    detector_metadata: Detector = get_detector_metadata(detector_id=detector_id, gl=gl)
+    desired_detector_confidence = detector_metadata.confidence_threshold
     cached_image_query = motion_detection_manager.get_image_query_response(detector_id=detector_id)
 
     iq_confidence_is_improvable = (
