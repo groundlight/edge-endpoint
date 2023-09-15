@@ -9,10 +9,7 @@ GROUNDLIGHT_ENDPOINT=http://localhost:6717
 
 The Edge Endpoint will attempt to answer image queries using local models for your detectors.  If it can do so confidently, you get faster cheaper responses.  But if it can't, it will escalate the image queries to the cloud for further analysis.
 
-Before running groundlight on the edge, make
-sure you have your API token set up in your environment variable 
-`GROUNDLIGHT_API_TOKEN`. Checkout [how to create your API token.](https://code.groundlight.ai/python-sdk/docs/getting-started/api-tokens). For more information on 
-how to run Groundlight on the edge, checkout our [documentation](https://code.groundlight.ai/python-sdk/docs/building-applications/edge)
+For more information on how to run Groundlight on the edge, checkout our [documentation](https://code.groundlight.ai/python-sdk/docs/building-applications/edge)
 
 ## Running the Edge Endpoint
 
@@ -20,9 +17,9 @@ The recommended way to run the Edge Endpoint is inside a docker container as fol
 
 ```bash
 docker build --target production-image --tag edge-endpoint .
-export EDGE_CONFIG=$(cat configs/edge.yaml)
+export EDGE_CONFIG=$(cat configs/edge-config.yaml)
 # Run the endpoint as a container in the background
-docker run -d --name groundlight-edge -e GROUNDLIGHT_API_TOKEN -e EDGE_CONFIG --rm -p 6717:6717 edge-endpoint
+docker run -d --name groundlight-edge -e EDGE_CONFIG --rm -p 6717:6717 edge-endpoint
 ```
 
 Then you can follow the logs or stop it with these commands:
