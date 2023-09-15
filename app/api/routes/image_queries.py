@@ -101,8 +101,8 @@ async def post_image_query(
             return new_image_query
 
     image_query = None
-    
-    #TODO this shouldn't be here. 
+
+    # TODO this shouldn't be here.
     app_state.kube_client.check_or_create_detector_deployment(detector_id=detector_id)
 
     # Check if edge inference is enabled for this detector
@@ -123,8 +123,8 @@ async def post_image_query(
             )
         else:
             logger.info(
-                "Ran inference locally, but detector confidence is not high enough to return."
-                f" Current confidence: {results['confidence']}, detector confidence threshold: {confidence_threshold}."
+                "Ran inference locally, but detector confidence is not high enough to return. Current confidence:"
+                f" {results['confidence']}, detector confidence threshold: {detector_metadata.confidence_threshold}."
                 " Escalating to the cloud API server."
             )
 

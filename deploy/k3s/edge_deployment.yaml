@@ -11,6 +11,55 @@ spec:
     port: 6717
   type: NodePort
 ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge-endpoint
+  labels:
+    app: edge-endpoint
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edge-endpoint
+  template:
+    metadata:
+      labels:
+        app: edge-endpoint
+    spec:
+      # This service account is used by the edge-endpoint pod to access the Kubernetes API
+      # from within the pod. See deploy/k3s/service_account.yaml for more details
+      serviceAccountName: edge-endpoint-service-account
+      containers:
+      - name: edge-endpoint
+        # Pull the image from ECR
+        # image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:main-39ba8639f-dirty-914eb756cb2740c
+        # image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:state-management-via-k3s-df4d0e3a3-dirty-05e8069241b8299
+        # image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:state-management-via-k3s-b63da0466-dirty-bf8a29788509e10
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:state-management-via-k3s-b63da0466-dirty-6279e6706d84e1a
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 6717
+        env:
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: GROUNDLIGHT_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: groundlight-secrets
+              key: api-token
+        volumeMounts:
+        - name: edge-config-volume
+          # This is a path inside the container not the host
+          mountPath: /etc/groundlight
+      imagePullSecrets:
+      - name: registry-credentials
+
+      volumes:
+      - name: edge-config-volume
+        configMap:
+          name: edge-config
+---
 apiVersion: v1
 kind: Service
 metadata:
