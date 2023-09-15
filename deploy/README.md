@@ -22,12 +22,12 @@ Then run the following script to register credentials for accessing ECR in k3s.
 > ./deploy/bin/make-aws-secret.sh
 ```
 
-The edge endpoint application requires a [YAML config file](/configs/edge.yaml) (currently for setting up necessary parameters 
+The edge endpoint application requires a [YAML config file](/configs/edge-config.yaml) (currently for setting up necessary parameters 
 for motion detection). In our k3s cluster, we mount this into the edge-endpoint deployment as a configmap, so we need to first
 create this configmap. In order to do so, run 
 
 ```shell
-> kubectl create configmap edge-config --from-file=configs/edge.yaml
+> kubectl create configmap edge-config --from-file=configs/edge-config.yaml
 ```
 
 NOTE: This config will not be automatically synced with the k3s deployment. Thus, every time one needs to 
