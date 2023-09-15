@@ -22,7 +22,8 @@ spec:
         # Pull the image from ECR
         # image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:main-39ba8639f-dirty-914eb756cb2740c
         # image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:state-management-via-k3s-df4d0e3a3-dirty-05e8069241b8299
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:state-management-via-k3s-b63da0466-dirty-bf8a29788509e10
+        # image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:state-management-via-k3s-b63da0466-dirty-bf8a29788509e10
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:state-management-via-k3s-b63da0466-dirty-6279e6706d84e1a
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
