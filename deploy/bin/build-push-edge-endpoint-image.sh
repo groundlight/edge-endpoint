@@ -37,6 +37,3 @@ docker tag edge-endpoint:latest 723181461334.dkr.ecr.us-west-2.amazonaws.com/edg
 
 # Push image to ECR
 docker push 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${TAG}
-
-# Cleanup
-docker buildx rm tempgroundlightedgebuilder
