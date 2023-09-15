@@ -7,10 +7,10 @@ from typing import Callable, Dict
 import cachetools
 import ksuid
 import yaml
-from model import Detector
 from cachetools import TTLCache
 from fastapi import HTTPException, Request
 from groundlight import Groundlight
+from model import Detector
 from PIL import Image
 
 from .configs import LocalInferenceConfig, MotionDetectionConfig, RootEdgeConfig

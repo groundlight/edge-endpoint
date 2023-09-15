@@ -6,7 +6,7 @@ from typing import Optional
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from groundlight import Groundlight
-from model import ClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum, Detector
+from model import ClassificationResult, Detector, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
 from PIL import Image
 
 from app.core.motion_detection import MotionDetectionManager
