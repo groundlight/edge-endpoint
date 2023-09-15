@@ -42,19 +42,15 @@ app.state.motion_detection_manager = MotionDetectionManager(config=RootConfig(**
 app.state.inference_client = tritonclient.InferenceServerClient(url=INFERENCE_SERVER_URL)
 
 
-# Load the kubernetes config file 
-config.load_kube_config(config_file="/etc/rancher/k3s/k3s.yaml")
-
-configuration = client.Configuration()
-configuration.host = "https://host.docker.internal:6443"
-
-client.Configuration.set_default(configuration)
+# Load the kubernetes config
+config.load_incluster_config()
 
 # Create an API client 
-kube_client = client.CoreV1Api()
+app.state.kube_client = client.CoreV1Api()
 
 
-
-pod_list = kube_client.list_namespaced_pod(namespace="default")
+pod_list = app.state.kube_client.list_namespaced_pod(namespace="default")
 for pod in pod_list.items:
-    logger.debug(f"{pod.metadata.name}/{pod.metadata.ip}")
+    logger.info(f"pod = {pod.metadata.name}\n")
+    logger.info(f"status = {pod.status}\n")
+    logger.info(f"ip = {pod.status.pod_ip}\n")

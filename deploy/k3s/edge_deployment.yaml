@@ -14,9 +14,9 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: edge-endpoint
+  name: edge-endpoint-{{ DETECTOR_ID }}
   labels:
-    app: edge-endpoint
+    app: edge-endpoint-{{ DETECTOR_ID }}
 spec:
   replicas: 1
   selector:
@@ -27,10 +27,14 @@ spec:
       labels:
         app: edge-endpoint
     spec:
+      # This service account is used by the edge-endpoint pod to access the Kubernetes API
+      # from within the pod. See deploy/k3s/service_account.yaml for more details
+      serviceAccountName: edge-endpoint-service-account
       containers:
       - name: edge-endpoint
         # Pull the image from ECR
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:main-39ba8639f-dirty-914eb756cb2740c
+        # image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:main-39ba8639f-dirty-914eb756cb2740c
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:state-management-via-k3s-df4d0e3a3-dirty-05e8069241b8299
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
