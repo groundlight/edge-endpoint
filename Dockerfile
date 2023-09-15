@@ -43,10 +43,11 @@ COPY ./pyproject.toml ${APP_ROOT}/
 
 WORKDIR ${APP_ROOT}
 
-# Install production dependencies only and create /etc/groundlight directory
-# where edge-config.yaml will be mounted
-RUN poetry install --no-interaction --no-root --without dev \
-    && mkdir /etc/groundlight
+# Install production dependencies only 
+RUN poetry install --no-interaction --no-root --without dev 
+
+# Create /etc/groundlight directory where edge-config.yaml will be mounted 
+RUN mkdir /etc/groundlight
 
 # Copy configs
 COPY configs ${APP_ROOT}/configs 
