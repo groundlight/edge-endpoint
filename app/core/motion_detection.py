@@ -39,6 +39,8 @@ class MotionDetectorWrapper:
         If the old image query still has low confidence, and it's been more than
         `unconfident_iq_reescalation_interval` seconds, we pretend we have motion.
         This is to force the cloud to "think harder" about images which the customer is still seeing
+        This is to force the cloud to "think harder" about images which the customer is still seeing,
+        for which we still haven't gotten to a confidence response.
         """
 
         if self._previous_motion_detection_time is not None:
