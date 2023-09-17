@@ -157,8 +157,11 @@ class AppState:
         self.edge_inference_manager = EdgeInferenceManager(config=inference_config)
 
         # Load the kubernetes config
+        logger.debug("Loading kubernetes config")
         config.load_incluster_config()
         self.kube_client = kube_client.AppsV1Api()
+        
+        logger.debug(f"Kube client: {self.kube_client}")
 
         self._edge_deployment_template = self._load_k3s_edge_deployment_manifest()
 
@@ -181,6 +184,9 @@ class AppState:
         running `k3s kubectl apply -f <deployment-manifest-yaml> -n <namespace>`
         to create the deployment.
         """
+        
+        logger.debug(f"Checking if deployment {detector_id} exists")
+        logger.info(f"Checking if deployment {detector_id} exists")
 
         def get_deployment_name(detector_id: str) -> str:
             """

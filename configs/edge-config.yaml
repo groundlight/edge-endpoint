@@ -49,6 +49,9 @@ detectors:
   - detector_id: 'det_2U80DZ4lmJITkEJCfzlQOGu8SaS'
     motion_detection_template: "default"
     local_inference_template: "default"
+  - detector_id: 'det_2VSCHUvWYX9O5f1jqGzz5Jn3sNE'
+    motion_detection_template: "super-sensitive"
+    local_inference_template: "disabled"
 
 
 
