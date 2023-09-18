@@ -1,12 +1,12 @@
 import logging
 import os
-import socket
-from typing import Dict
-import requests
 import shutil
+import socket
 import time
+from typing import Dict
 
 import numpy as np
+import requests
 import tritonclient.http as tritonclient
 from jinja2 import Template
 
@@ -75,9 +75,7 @@ class EdgeInferenceManager:
         img_numpy = img_numpy.transpose(2, 0, 1)  # [H, W, C=3] -> [C=3, H, W]
         imginput = tritonclient.InferInput(self.INPUT_IMAGE_NAME, img_numpy.shape, datatype="UINT8")
         imginput.set_data_from_numpy(img_numpy)
-        outputs = [
-            tritonclient.InferRequestedOutput(f) for f in self.MODEL_OUTPUTS
-        ]
+        outputs = [tritonclient.InferRequestedOutput(f) for f in self.MODEL_OUTPUTS]
 
         logger.debug("Submitting image to edge inference service")
         start = time.monotonic()
@@ -120,7 +118,9 @@ class EdgeInferenceManager:
         retries = 6
         while not self.inference_is_available(detector_id, model_version=str(new_version)):
             if retries == 0:
-                logger.warning(f"Edge inference server is not ready to run model version {new_version} for {detector_id}")
+                logger.warning(
+                    f"Edge inference server is not ready to run model version {new_version} for {detector_id}"
+                )
                 return
             retries -= 1
             time.sleep(5)  # Wait up to 30 seconds for model to be ready
@@ -179,18 +179,18 @@ def save_model_to_repository(detector_id, model_buffer, pipeline_config) -> tupl
     create_file_from_template(
         template_values={"pipeline_config": pipeline_config},
         destination=os.path.join(model_version_dir, "model.py"),
-        template="app/resources/model_template.py"
+        template="app/resources/model_template.py",
     )
-    with open(os.path.join(model_version_dir, "model.buf"), 'wb') as f:
+    with open(os.path.join(model_version_dir, "model.buf"), "wb") as f:
         f.write(model_buffer)
 
     # Add/Overwrite model configuration files (config.pbtxt and binary_labels.txt)
     create_file_from_template(
         template_values={"model_name": detector_id},
         destination=os.path.join(model_dir, "config.pbtxt"),
-        template="app/resources/config_template.pbtxt"
+        template="app/resources/config_template.pbtxt",
     )
-    shutil.copy2(src='app/resources/binary_labels.txt', dst=os.path.join(model_dir, "binary_labels.txt"))
+    shutil.copy2(src="app/resources/binary_labels.txt", dst=os.path.join(model_dir, "binary_labels.txt"))
 
     logger.warning(f"Wrote new model version {new_model_version} for {detector_id}")
     return old_model_version, new_model_version
@@ -198,7 +198,7 @@ def save_model_to_repository(detector_id, model_buffer, pipeline_config) -> tupl
 
 def create_file_from_template(template_values: dict, destination: str, template: str):
     # Step 1: Read the template file
-    with open(template, 'r') as template_file:
+    with open(template, "r") as template_file:
         template_content = template_file.read()
 
     # Step 2: Substitute placeholders with actual values
@@ -207,7 +207,7 @@ def create_file_from_template(template_values: dict, destination: str, template:
 
     # Step 3: Write the filled content to a new file
     os.makedirs(os.path.dirname(destination), exist_ok=True)
-    with open(destination, 'w') as output_file:
+    with open(destination, "w") as output_file:
         output_file.write(filled_content)
 
 

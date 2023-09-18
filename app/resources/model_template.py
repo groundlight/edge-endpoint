@@ -5,7 +5,6 @@ import numpy as np
 import triton_python_backend_utils as pb_utils
 import yaml
 from PIL import Image
-
 from predictors.datasets.dataset import Example
 from predictors.pipeline.pipeline import Pipeline
 
@@ -120,7 +119,9 @@ class TritonPythonModel:
 
             # Create output tensors. You need pb_utils.Tensor objects to create pb_utils.InferenceResponse.
             out_tensor_score = pb_utils.Tensor("score", preds.scores.astype(self.output_score_dtype))
-            out_tensor_confidence = pb_utils.Tensor("confidence", preds.confidences.astype(self.output_confidence_dtype))
+            out_tensor_confidence = pb_utils.Tensor(
+                "confidence", preds.confidences.astype(self.output_confidence_dtype)
+            )
             out_tensor_probability = pb_utils.Tensor("probability", prob.astype(self.output_probability_dtype))
             out_tensor_label = pb_utils.Tensor("label", preds.labels.astype(self.output_label_dtype))
 
