@@ -111,7 +111,7 @@ async def post_image_query(
 
             image_query = _create_iqe(
                 detector_id=detector_id,
-                label=results["label"],
+                label="NO" if results["label"] else "YES",  # TODO: double check this...
                 confidence=results["confidence"],
                 query=detector_metadata.query,
             )

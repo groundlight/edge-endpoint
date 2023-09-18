@@ -16,10 +16,7 @@ logger = logging.getLogger(__name__)
 
 class EdgeInferenceManager:
     INPUT_IMAGE_NAME = "image"
-    OUTPUT_SCORE_NAME = "score"
-    OUTPUT_CONFIDENCE_NAME = "confidence"
-    OUTPUT_PROBABILITY_NAME = "probability"
-    OUTPUT_LABEL_NAME = "label"
+    MODEL_OUTPUTS = ["score", "confidence", "probability", "label"]
     INFERENCE_SERVER_URL = "inference-service:8000"
     MODEL_REPOSITORY = "/mnt/models"
 
@@ -78,8 +75,7 @@ class EdgeInferenceManager:
         imginput = tritonclient.InferInput(self.INPUT_IMAGE_NAME, img_numpy.shape, datatype="UINT8")
         imginput.set_data_from_numpy(img_numpy)
         outputs = [
-            tritonclient.InferRequestedOutput(f)
-            for f in [self.OUTPUT_SCORE_NAME, self.OUTPUT_CONFIDENCE_NAME, self.OUTPUT_PROBABILITY_NAME]
+            tritonclient.InferRequestedOutput(f) for f in self.MODEL_OUTPUTS
         ]
 
         logger.debug("Submitting image to edge inference service")
@@ -92,13 +88,8 @@ class EdgeInferenceManager:
         )
         end = time.monotonic()
 
-        probability = response.as_numpy(self.OUTPUT_PROBABILITY_NAME)[0]
-        output_dict = {
-            self.OUTPUT_SCORE_NAME: response.as_numpy(self.OUTPUT_SCORE_NAME)[0],
-            self.OUTPUT_CONFIDENCE_NAME: response.as_numpy(self.OUTPUT_CONFIDENCE_NAME)[0],
-            self.OUTPUT_PROBABILITY_NAME: probability,
-            self.OUTPUT_LABEL_NAME: _probability_to_label(probability),
-        }
+        output_dict = {k: response.as_numpy(k)[0] for k in self.MODEL_OUTPUTS}
+
         logger.debug(
             f"Inference server response for model={detector_id}: {output_dict}.\n"
             f"Inference time: {end - start:.3f} seconds"

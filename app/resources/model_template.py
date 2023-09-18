@@ -54,11 +54,13 @@ class TritonPythonModel:
         output_score_config = pb_utils.get_output_config_by_name(model_config, "score")
         output_confidence_config = pb_utils.get_output_config_by_name(model_config, "confidence")
         output_probability_config = pb_utils.get_output_config_by_name(model_config, "probability")
+        output_label_config = pb_utils.get_output_config_by_name(model_config, "label")
 
         # Convert Triton types to numpy types
         self.output_score_dtype = pb_utils.triton_string_to_numpy(output_score_config["data_type"])
         self.output_confidence_dtype = pb_utils.triton_string_to_numpy(output_confidence_config["data_type"])
         self.output_probability_dtype = pb_utils.triton_string_to_numpy(output_probability_config["data_type"])
+        self.output_label_dtype = pb_utils.triton_string_to_numpy(output_label_config["data_type"])
 
         # Setup pipeline
         model_dir = os.path.join(args["model_repository"], args["model_version"])
@@ -72,7 +74,7 @@ class TritonPythonModel:
 
         self.pipeline = Pipeline.create(
             buffer=buffer,
-            text_query="example text query",
+            text_query="text_query_is_unavailable",
             **pipeline_config_dict,
         )
 
@@ -116,11 +118,11 @@ class TritonPythonModel:
             if prob is None:
                 raise ValueError("Pipeline did not return probabilities")
 
-            # Create output tensors. You need pb_utils.Tensor
-            # objects to create pb_utils.InferenceResponse.
-            out_tensor_score = pb_utils.Tensor("score", prob.astype(self.output_score_dtype))
-            out_tensor_confidence = pb_utils.Tensor("confidence", prob.astype(self.output_confidence_dtype))
+            # Create output tensors. You need pb_utils.Tensor objects to create pb_utils.InferenceResponse.
+            out_tensor_score = pb_utils.Tensor("score", preds.scores.astype(self.output_score_dtype))
+            out_tensor_confidence = pb_utils.Tensor("confidence", preds.confidences.astype(self.output_confidence_dtype))
             out_tensor_probability = pb_utils.Tensor("probability", prob.astype(self.output_probability_dtype))
+            out_tensor_label = pb_utils.Tensor("labels", preds.labels.astype(self.output_label_dtype))
 
             # Create InferenceResponse. You can set an error here in case
             # there was a problem with handling this inference request.
@@ -129,6 +131,7 @@ class TritonPythonModel:
                     out_tensor_score,
                     out_tensor_confidence,
                     out_tensor_probability,
+                    out_tensor_label,
                 ]
             )
             responses.append(inference_response)
