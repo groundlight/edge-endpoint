@@ -41,4 +41,7 @@ async def on_startup():
     """
     for detector_id in app.state.motion_detection_manager.detectors.keys():
         if len(detector_id) > 0:
+            # NOTE: It is entirely possible that the inference container
+            # is slower than edge-endpoint to get up intiially and thus
+            # is available.
             update_model(app.state.inference_client, detector_id)

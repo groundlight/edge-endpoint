@@ -23,16 +23,20 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install base OS dependencies. 
-# We need to install libGL dependencies (`libglib2.0-0` and `libgl1-mesa-lgx`) 
-# since they are required by OpenCV 
+# Install base OS dependencies.
+# We need to install libGL dependencies (`libglib2.0-0` and `libgl1-mesa-lgx`)
+# since they are required by OpenCV
 RUN apt-get update \
     && apt-get upgrade -y \
-    && apt-get install -y \
+    && apt-get install -y --fix-missing \
     curl \
     nginx \
     libglib2.0-0 \
-    libgl1-mesa-glx
+    libgl1-mesa-glx \
+    dnsutils \
+    iputils-ping \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Python environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -45,7 +49,6 @@ ENV PYTHONUNBUFFERED=1 \
 
 # Install poetry
 RUN curl -sSL https://install.python-poetry.org | python -
-
 
 # Make sure poetry is in the path
 ENV PATH=${POETRY_HOME}/bin:$PATH
@@ -61,8 +64,8 @@ RUN poetry install --no-interaction --no-root --without dev
 # Create a directory called /etc/groundlight where certain volumes will be mounted
 RUN mkdir /etc/groundlight
 
-# Copy the configs directory 
-COPY configs ${APP_ROOT}/configs 
+# Copy the configs directory
+COPY configs ${APP_ROOT}/configs
 
 
 ##################
@@ -86,7 +89,7 @@ COPY --from=production-dependencies-build-stage ${APP_ROOT}/configs/nginx.conf /
 
 COPY /app ${APP_ROOT}/app/
 
-# Remove the default nginx configuration 
+# Remove the default nginx configuration
 RUN rm /etc/nginx/sites-enabled/default
 
 # Run nginx and the application server

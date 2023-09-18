@@ -37,9 +37,6 @@ def edge_inference_is_available(
         if not inference_client.is_server_live():
             logger.debug("Edge inference server is not live")
             return False
-        if not inference_client.is_server_ready():
-            logger.debug("Edge inference server is not ready")
-            return False
         if not inference_client.is_model_ready(model_name, model_version=model_version):
             logger.debug(f"Edge inference model is not ready: {model_name}/{model_version}")
             return False
@@ -103,8 +100,7 @@ def update_model(inference_client: InferenceServerClient, detector_id: str) -> N
     """
     Request a new model from the cloud and update the local edge inference server.
     """
-    logger.warning(f"Attemping to update model for {detector_id}")
-    logger.warning(f"Current working directory: {os.getcwd()}")
+    logger.info(f"Attemping to update model for {detector_id}")
 
     model_urls = fetch_model_urls(detector_id)
     model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
@@ -120,7 +116,7 @@ def update_model(inference_client: InferenceServerClient, detector_id: str) -> N
         return
 
     if edge_inference_is_available(inference_client, detector_id, model_version=str(new_version)):
-        logger.warning(f"Now running inference with model version {new_version} for {detector_id}")
+        logger.info(f"Now running inference with model version {new_version} for {detector_id}")
 
         if old_version is not None:
             delete_model_version(detector_id, old_version)
@@ -213,6 +209,6 @@ def delete_model_version(detector_id: str, model_version: int):
     # Recursively delete directory detector_id/model_version
     model_dir = os.path.join(MODEL_REPOSITORY, detector_id)
     model_version_dir = os.path.join(model_dir, str(model_version))
-    logger.warning(f"Deleting model version {model_version} for {detector_id}")
+    logger.info(f"Deleting model version {model_version} for {detector_id}")
     if os.path.exists(model_version_dir):
         shutil.rmtree(model_version_dir)
