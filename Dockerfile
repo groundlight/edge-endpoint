@@ -78,24 +78,3 @@ CMD nginx && poetry run uvicorn --workers 1 --host 0.0.0.0 --port ${APP_PORT} --
 # https://docs.docker.com/engine/reference/builder/#expose
 EXPOSE ${APP_PORT}
 
-#########################
-# Development Build Stage
-#########################
-FROM production-dependencies-build-stage as dev-dependencies-build-stage
-
-RUN poetry install --no-interaction --no-root
-
-###################
-# Development Stage
-###################
-FROM production-dependencies-build-stage as development-image
-
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    UVICORN_RELOAD=1 \
-    UVICORN_LOG_LEVEL=debug
-
-WORKDIR ${APP_ROOT}
-
-# Copy all files for development
-COPY . ${APP_ROOT}/
