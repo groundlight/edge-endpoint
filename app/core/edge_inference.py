@@ -1,6 +1,7 @@
 import logging
 import os
 import socket
+from typing import Dict
 import requests
 import shutil
 import time
@@ -20,7 +21,7 @@ class EdgeInferenceManager:
     INFERENCE_SERVER_URL = "inference-service:8000"
     MODEL_REPOSITORY = "/mnt/models"
 
-    def __init__(self, config: dict[str, LocalInferenceConfig], verbose: bool = False) -> None:
+    def __init__(self, config: Dict[str, LocalInferenceConfig], verbose: bool = False) -> None:
         """
         Initializes the edge inference manager.
         Args:
@@ -217,8 +218,3 @@ def delete_model_version(detector_id: str, model_version: int):
     logger.info(f"Deleting model version {model_version} for {detector_id}")
     if os.path.exists(model_version_dir):
         shutil.rmtree(model_version_dir)
-
-
-def _probability_to_label(prob: float) -> str:
-    # TODO: there is a way to get the label string from the inference server. Do that instead.
-    return "YES" if prob < 0.5 else "NO"
