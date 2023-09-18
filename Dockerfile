@@ -7,28 +7,22 @@ ARG POETRY_VERSION=1.5.1
 #############
 # Build Stage
 #############
-# Base image
 FROM python:3.11-slim-bullseye as production-dependencies-build-stage
 
 # Args that are needed in this stage
-ARG APP_ROOT \
-    POETRY_HOME \
-    POETRY_VERSION
+ARG APP_ROOT
+ARG POETRY_HOME
+ARG POETRY_VERSION
 
+# Install required dependencies and tools
+# Combine the installations into a single RUN command
 # Ensure that we have the bash shell since it doesn't seem to be included in the slim image.
 # This is useful for exec'ing into the container for debugging purposes.
-# Removes package metadata to keep the image size small after installing bash
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends bash \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install base OS dependencies.
 # We need to install libGL dependencies (`libglib2.0-0` and `libgl1-mesa-lgx`)
 # since they are required by OpenCV
 RUN apt-get update \
-    && apt-get upgrade -y \
-    && apt-get install -y --fix-missing \
+    && apt-get install -y --no-install-recommends \
+    bash \
     curl \
     nginx \
     libglib2.0-0 \
@@ -36,64 +30,50 @@ RUN apt-get update \
     dnsutils \
     iputils-ping \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -sSL https://install.python-poetry.org | python -
 
-# Python environment variables
+# Set Python and Poetry ENV vars
 ENV PYTHONUNBUFFERED=1 \
-    # Prevents python creating .pyc files
     PYTHONDONTWRITEBYTECODE=1 \
-    # Make poetry install to this location
     POETRY_HOME=${POETRY_HOME} \
-    # Poetry version
-    POETRY_VERSION=${POETRY_VERSION}
+    POETRY_VERSION=${POETRY_VERSION} \
+    PATH=${POETRY_HOME}/bin:$PATH
 
-# Install poetry
-RUN curl -sSL https://install.python-poetry.org | python -
-
-# Make sure poetry is in the path
-ENV PATH=${POETRY_HOME}/bin:$PATH
-
-# Install [tool.poetry.dependencies]
+# Copy only required files first to leverage Docker caching
 COPY ./pyproject.toml ${APP_ROOT}/
 
 WORKDIR ${APP_ROOT}
 
-# Install production dependencies
+# Install production dependencies only
 RUN poetry install --no-interaction --no-root --without dev
 
-# Create a directory called /etc/groundlight where certain volumes will be mounted
+# Create /etc/groundlight directory where edge-config.yaml will be mounted
 RUN mkdir /etc/groundlight
 
-# Copy the configs directory
+# Copy configs
 COPY configs ${APP_ROOT}/configs
-
 
 ##################
 # Production Stage
 ##################
 FROM production-dependencies-build-stage as production-image
 
-# Args that are needed in this stage
-ARG POETRY_HOME \
-    APP_ROOT \
-    APP_PORT
+ARG APP_ROOT
+ARG APP_PORT
 
-# Make sure poetry is in the path
-ENV PATH=${POETRY_HOME}/bin:$PATH
+ENV PATH=${POETRY_HOME}/bin:$PATH \
+    APP_PORT=${APP_PORT}
 
-# Set the working directory
 WORKDIR ${APP_ROOT}
 
-# Copy NGINX configuration file from build stage
+# Copy the remaining files
+COPY /app ${APP_ROOT}/app/
 COPY --from=production-dependencies-build-stage ${APP_ROOT}/configs/nginx.conf /etc/nginx/nginx.conf
 
-COPY /app ${APP_ROOT}/app/
-
-# Remove the default nginx configuration
+# Remove default nginx config
 RUN rm /etc/nginx/sites-enabled/default
 
-# Run nginx and the application server
-ENV APP_PORT=${APP_PORT}
 CMD nginx && poetry run uvicorn --workers 1 --host 0.0.0.0 --port ${APP_PORT} --proxy-headers app.main:app
 
 # Document the exposed port which was configured in start_uvicorn.sh
@@ -105,7 +85,6 @@ EXPOSE ${APP_PORT}
 #########################
 FROM production-dependencies-build-stage as dev-dependencies-build-stage
 
-# Install [tool.poetry.dev-dependencies]
 RUN poetry install --no-interaction --no-root
 
 ###################
@@ -115,11 +94,10 @@ FROM production-dependencies-build-stage as development-image
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    # Code reloading
     UVICORN_RELOAD=1 \
-    # Enable debug logging
     UVICORN_LOG_LEVEL=debug
 
 WORKDIR ${APP_ROOT}
 
+# Copy all files for development
 COPY . ${APP_ROOT}/

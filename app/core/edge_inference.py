@@ -3,125 +3,143 @@ import os
 import socket
 import requests
 import shutil
+import time
 
 import numpy as np
 import tritonclient.http as tritonclient
-from tritonclient.http import InferenceServerClient
 from jinja2 import Template
+
+from .configs import LocalInferenceConfig
 
 logger = logging.getLogger(__name__)
 
-INPUT_IMAGE_NAME = "image"
-OUTPUT_SCORE_NAME = "score"
-OUTPUT_CONFIDENCE_NAME = "confidence"
-OUTPUT_PROBABILITY_NAME = "probability"
-OUTPUT_LABEL_NAME = "label"
-INFERENCE_SERVER_URL = "inference-service:8000"
 
-MODEL_REPOSITORY = "/mnt/models"
+class EdgeInferenceManager:
+    INPUT_IMAGE_NAME = "image"
+    OUTPUT_SCORE_NAME = "score"
+    OUTPUT_CONFIDENCE_NAME = "confidence"
+    OUTPUT_PROBABILITY_NAME = "probability"
+    OUTPUT_LABEL_NAME = "label"
+    INFERENCE_SERVER_URL = "inference-service:8000"
+    MODEL_REPOSITORY = "/mnt/models"
 
+    def __init__(self, config: dict[str, LocalInferenceConfig], verbose: bool = False) -> None:
+        """
+        Initializes the edge inference manager.
+        Args:
+            config: Dictionary of detector IDs to LocalInferenceConfig objects
+            verbose: Whether to print verbose logs from the inference server client
 
-def edge_inference_is_available(
-    inference_client: InferenceServerClient, model_name: str, model_version: str = ""
-) -> bool:
-    """
-    Queries the inference server to see if everything is ready to perform inference.
-    Args:
-        inference_client: Inference server client object
-        model_name: Name of the model to route to
-        model_version: Version of the model to route to
-    Returns:
-        True if edge inference for the specified model is available, False otherwise
-    """
-    try:
-        if not inference_client.is_server_live():
-            logger.debug("Edge inference server is not live")
+        NOTE: 1) The detector IDs should match the detector IDs in the motion detection config.
+              2) the `LocalInferenceConfig` object determines if local inference is enabled for
+                a specific detector and the model name and version to use for inference.
+        """
+        self.inference_client = tritonclient.InferenceServerClient(url=self.INFERENCE_SERVER_URL, verbose=verbose)
+        self.inference_config = config
+
+    def inference_is_available(self, detector_id: str, model_version: str = "") -> bool:
+        """
+        Queries the inference server to see if everything is ready to perform inference.
+        Args:
+            detector_id: ID of the detector on which to run local edge inference
+        Returns:
+            True if edge inference for the specified detector is available, False otherwise
+        """
+        if detector_id not in self.inference_config.keys():
+            logger.debug(f"Edge inference is not enabled for {detector_id=}")
             return False
-        if not inference_client.is_model_ready(model_name, model_version=model_version):
-            logger.debug(f"Edge inference model is not ready: {model_name}/{model_version}")
+
+        model_name = self.inference_config[detector_id].model_name
+
+        try:
+            if not self.inference_client.is_server_live():
+                logger.debug("Edge inference server is not live")
+                return False
+            if not self.inference_client.is_model_ready(model_name, model_version=model_version):
+                logger.debug(f"Edge inference model is not ready: {model_name}/{model_version}")
+                return False
+        except (ConnectionRefusedError, socket.gaierror) as ex:
+            logger.warning(f"Edge inference server is not available: {ex}")
             return False
-    except (ConnectionRefusedError, socket.gaierror) as ex:
-        logger.warning(f"Edge inference server is not available: {ex}")
-        return False
-    return True
+        return True
 
+    def run_inference(self, detector_id: str, img_numpy: np.ndarray) -> dict:
+        """
+        Submit an image to the inference server, route to a specific model, and return the results.
+        Args:
+            detector_id: ID of the detector on which to run local edge inference
+            img_numpy: Image as a numpy array (assumes HWC uint8 RGB image)
+        Returns:
+            Dictionary of inference results with keys:
+                - "score": float
+                - "confidence": float
+                - "probability": float
+                - "label": str
+        """
+        img_numpy = img_numpy.transpose(2, 0, 1)  # [H, W, C=3] -> [C=3, H, W]
+        imginput = tritonclient.InferInput(self.INPUT_IMAGE_NAME, img_numpy.shape, datatype="UINT8")
+        imginput.set_data_from_numpy(img_numpy)
+        outputs = [
+            tritonclient.InferRequestedOutput(f)
+            for f in [self.OUTPUT_SCORE_NAME, self.OUTPUT_CONFIDENCE_NAME, self.OUTPUT_PROBABILITY_NAME]
+        ]
 
-def edge_inference(
-    inference_client: InferenceServerClient, img_numpy: np.ndarray, model_name: str, model_version: str = ""
-) -> dict:
-    """
-    Submit an image to the inference server, route to a specific model, and return the results.
-    Args:
-        inference_client: Inference server client object
-        img_numpy: Image as a numpy array (assumes HWC uint8 RGB image)
-        model_name: Name of the model to route to
-        model_version: Version of the model to route to
-    Returns:
-        Dictionary of inference results with keys:
-            - "score": float
-            - "confidence": float
-            - "probability": float
-            - "label": str
-    """
-    img_numpy = img_numpy.transpose(2, 0, 1)  # [H, W, C=3] -> [C=3, H, W]
-    imginput = tritonclient.InferInput(INPUT_IMAGE_NAME, img_numpy.shape, datatype="UINT8")
-    imginput.set_data_from_numpy(img_numpy)
-    outputs = [
-        tritonclient.InferRequestedOutput(f)
-        for f in [OUTPUT_SCORE_NAME, OUTPUT_CONFIDENCE_NAME, OUTPUT_PROBABILITY_NAME]
-    ]
+        model_name = self.inference_config[detector_id].model_name
 
-    logger.debug("Submitting image to edge inference service")
-    response = inference_client.infer(
-        model_name,
-        model_version=model_version,
-        inputs=[imginput],
-        outputs=outputs,
-        request_id="",
-    )
+        logger.debug("Submitting image to edge inference service")
+        start = time.monotonic()
+        response = self.inference_client.infer(
+            model_name,
+            inputs=[imginput],
+            outputs=outputs,
+            request_id="",
+        )
+        end = time.monotonic()
 
-    probability = response.as_numpy(OUTPUT_PROBABILITY_NAME)[0]
-    output_dict = {
-        OUTPUT_SCORE_NAME: response.as_numpy(OUTPUT_SCORE_NAME)[0],
-        OUTPUT_CONFIDENCE_NAME: response.as_numpy(OUTPUT_CONFIDENCE_NAME)[0],
-        OUTPUT_PROBABILITY_NAME: probability,
-        OUTPUT_LABEL_NAME: _probability_to_label(probability),
-    }
-    logger.debug(f"Inference server response for model={model_name}: {output_dict}")
-    return output_dict
+        probability = response.as_numpy(self.OUTPUT_PROBABILITY_NAME)[0]
+        output_dict = {
+            self.OUTPUT_SCORE_NAME: response.as_numpy(self.OUTPUT_SCORE_NAME)[0],
+            self.OUTPUT_CONFIDENCE_NAME: response.as_numpy(self.OUTPUT_CONFIDENCE_NAME)[0],
+            self.OUTPUT_PROBABILITY_NAME: probability,
+            self.OUTPUT_LABEL_NAME: _probability_to_label(probability),
+        }
+        logger.debug(
+            f"Inference server response for model={model_name}: {output_dict}.\n"
+            f"Inference time: {end - start:.3f} seconds"
+        )
+        return output_dict
 
+    def update_model(self, detector_id: str) -> None:
+        """
+        Request a new model from the cloud and update the local edge inference server.
+        """
+        logger.info(f"Attemping to update model for {detector_id}")
 
-def _probability_to_label(prob: float) -> str:
-    # TODO: there is a way to get the label string from the inference server. Do that instead.
-    return "YES" if prob < 0.5 else "NO"
+        model_urls = fetch_model_urls(detector_id)
+        model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
 
+        # TODO: remove the fallback to "generic-cached-timm-efficientnetv2s-mlp"
+        pipeline_config = model_urls.get("pipeline_config", "generic-cached-timm-efficientnetv2s-mlp")
 
-def update_model(inference_client: InferenceServerClient, detector_id: str) -> None:
-    """
-    Request a new model from the cloud and update the local edge inference server.
-    """
-    logger.info(f"Attemping to update model for {detector_id}")
+        old_version, new_version = save_model_to_repository(detector_id, model_buffer, pipeline_config)
 
-    model_urls = fetch_model_urls(detector_id)
-    model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
-    # TODO: remove the fallback to "generic-cached-timm-efficientnetv2s-mlp"
-    pipeline_config = model_urls.get("pipeline_config", "generic-cached-timm-efficientnetv2s-mlp")
+        try:
+            self.inference_client.load_model(model_name=detector_id)  # refreshes the model if already loaded
+        except (ConnectionRefusedError, socket.gaierror) as ex:
+            logger.warning(f"Edge inference server is not available: {ex}")
+            return
 
-    old_version, new_version = save_model_to_repository(detector_id, model_buffer, pipeline_config)
+        retries = 6
+        while not self.inference_is_available(detector_id, model_version=str(new_version)):
+            if retries == 0:
+                logger.warning(f"Edge inference server is not ready to run model version {new_version} for {detector_id}")
+                return
+            retries -= 1
+            time.sleep(5)  # Wait up to 30 seconds for model to be ready
 
-    try:
-        inference_client.load_model(model_name=detector_id)  # refreshes the model if already loaded
-    except (ConnectionRefusedError, socket.gaierror) as ex:
-        logger.warning(f"Edge inference server is not available: {ex}")
-        return
-
-    if edge_inference_is_available(inference_client, detector_id, model_version=str(new_version)):
         logger.info(f"Now running inference with model version {new_version} for {detector_id}")
-
         if old_version is not None:
             delete_model_version(detector_id, old_version)
-    else:
-        logger.warning(f"Inference server is not ready to run model version {new_version} for {detector_id}")
 
 
 def fetch_model_urls(detector_id) -> dict[str, str]:
@@ -153,7 +171,7 @@ def save_model_to_repository(detector_id, model_buffer, pipeline_config) -> tupl
     """
     Make new directory for the model and save the model and pipeline config to it.
     """
-    model_dir = os.path.join(MODEL_REPOSITORY, detector_id)
+    model_dir = os.path.join(EdgeInferenceManager.MODEL_REPOSITORY, detector_id)
     os.makedirs(model_dir, exist_ok=True)
 
     # Get the latest model version by inspecting subdirectories
@@ -207,8 +225,13 @@ def create_file_from_template(template_values: dict, destination: str, template:
 
 def delete_model_version(detector_id: str, model_version: int):
     # Recursively delete directory detector_id/model_version
-    model_dir = os.path.join(MODEL_REPOSITORY, detector_id)
+    model_dir = os.path.join(EdgeInferenceManager.MODEL_REPOSITORY, detector_id)
     model_version_dir = os.path.join(model_dir, str(model_version))
     logger.info(f"Deleting model version {model_version} for {detector_id}")
     if os.path.exists(model_version_dir):
         shutil.rmtree(model_version_dir)
+
+
+def _probability_to_label(prob: float) -> str:
+    # TODO: there is a way to get the label string from the inference server. Do that instead.
+    return "YES" if prob < 0.5 else "NO"
