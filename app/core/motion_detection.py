@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Dict
+from typing import Dict, Optional
 
 import numpy as np
 from framegrab import MotionDetector
@@ -22,7 +22,7 @@ class MotionDetectorWrapper:
             val_threshold=parameters.val_threshold,
         )
         self._previous_image = None
-        self.image_query_response = None
+        self.image_query_response: Optional[ImageQuery] = None
         self._motion_detection_enabled = parameters.enabled
         self._max_time_between_images = parameters.max_time_between_images
         self._unconfident_iq_reescalation_interval = parameters.unconfident_iq_reescalation_interval
@@ -96,7 +96,7 @@ class MotionDetectionManager:
     def update_image_query_response(self, detector_id: str, response: ImageQuery) -> None:
         self.detectors[detector_id].image_query_response = response
 
-    def get_image_query_response(self, detector_id: str) -> ImageQuery:
+    def get_image_query_response(self, detector_id: str) -> Optional[ImageQuery]:
         return self.detectors[detector_id].image_query_response
 
     def run_motion_detection(self, detector_id: str, new_img: np.ndarray) -> bool:

@@ -122,7 +122,7 @@ class TritonPythonModel:
             out_tensor_score = pb_utils.Tensor("score", preds.scores.astype(self.output_score_dtype))
             out_tensor_confidence = pb_utils.Tensor("confidence", preds.confidences.astype(self.output_confidence_dtype))
             out_tensor_probability = pb_utils.Tensor("probability", prob.astype(self.output_probability_dtype))
-            out_tensor_label = pb_utils.Tensor("labels", preds.labels.astype(self.output_label_dtype))
+            out_tensor_label = pb_utils.Tensor("label", preds.labels.astype(self.output_label_dtype))
 
             # Create InferenceResponse. You can set an error here in case
             # there was a problem with handling this inference request.

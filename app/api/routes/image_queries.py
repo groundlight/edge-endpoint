@@ -81,7 +81,7 @@ async def post_image_query(
 
     if motion_detection_manager.motion_detection_is_available(detector_id=detector_id):
         motion_detected = motion_detection_manager.run_motion_detection(detector_id=detector_id, new_img=img_numpy)
-        if not motion_detected:
+        if not motion_detected and motion_detection_manager.get_image_query_response(detector_id=detector_id):
             # Try improving the cached image query response's confidence
             # (if the cached response is low confidence)
             _improve_cached_image_query_confidence(
@@ -115,6 +115,7 @@ async def post_image_query(
                 confidence=results["confidence"],
                 query=detector_metadata.query,
             )
+            iqe_cache.update_cache(image_query=image_query)
         else:
             logger.info(
                 "Ran inference locally, but detector confidence is not high enough to return. Current confidence:"
