@@ -106,7 +106,7 @@ class EdgeInferenceManager:
         model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
 
         # TODO: remove the fallback to "generic-cached-timm-efficientnetv2s-mlp"
-        pipeline_config = model_urls.get("pipeline_config", "generic-cached-timm-efficientnetv2s-mlp")
+        pipeline_config = model_urls.get("pipeline_config", "generic-cached-timm-efficientnetv2s-xgb")
 
         old_version, new_version = save_model_to_repository(detector_id, model_buffer, pipeline_config)
 

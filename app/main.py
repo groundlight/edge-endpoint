@@ -27,4 +27,4 @@ async def on_startup():
     """
     for detector_id, inference_config in app.state.app_state.edge_inference_manager.inference_config.items():
         if inference_config.enabled:
-            app.state.edge_inference_manager.update_model(detector_id)
+            app.state.app_state.edge_inference_manager.update_model(detector_id)
