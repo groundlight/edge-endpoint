@@ -23,10 +23,8 @@ app.state.app_state = AppState()
 @app.on_event("startup")
 async def on_startup():
     """
-    On startup, update edge inference models
+    On startup, update edge inference models.
     """
-    for detector_id in app.state.app_state.edge_inference_manager.inference_config.keys():
-        # NOTE: It is entirely possible that the inference container
-        # is slower than edge-endpoint to get up intially and thus
-        # is not available.
-        app.state.edge_inference_manager.update_model(detector_id)
+    for detector_id, inference_config in app.state.app_state.edge_inference_manager.inference_config.items():
+        if inference_config.enabled:
+            app.state.edge_inference_manager.update_model(detector_id)

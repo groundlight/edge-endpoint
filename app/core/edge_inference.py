@@ -49,14 +49,12 @@ class EdgeInferenceManager:
             logger.debug(f"Edge inference is not enabled for {detector_id=}")
             return False
 
-        model_name = self.inference_config[detector_id].model_name
-
         try:
             if not self.inference_client.is_server_live():
                 logger.debug("Edge inference server is not live")
                 return False
-            if not self.inference_client.is_model_ready(model_name, model_version=model_version):
-                logger.debug(f"Edge inference model is not ready: {model_name}/{model_version}")
+            if not self.inference_client.is_model_ready(detector_id, model_version=model_version):
+                logger.debug(f"Edge inference model is not ready: {detector_id}/{model_version}")
                 return False
         except (ConnectionRefusedError, socket.gaierror) as ex:
             logger.warning(f"Edge inference server is not available: {ex}")
@@ -84,12 +82,10 @@ class EdgeInferenceManager:
             for f in [self.OUTPUT_SCORE_NAME, self.OUTPUT_CONFIDENCE_NAME, self.OUTPUT_PROBABILITY_NAME]
         ]
 
-        model_name = self.inference_config[detector_id].model_name
-
         logger.debug("Submitting image to edge inference service")
         start = time.monotonic()
         response = self.inference_client.infer(
-            model_name,
+            model_name=detector_id,
             inputs=[imginput],
             outputs=outputs,
             request_id="",
@@ -104,7 +100,7 @@ class EdgeInferenceManager:
             self.OUTPUT_LABEL_NAME: _probability_to_label(probability),
         }
         logger.debug(
-            f"Inference server response for model={model_name}: {output_dict}.\n"
+            f"Inference server response for model={detector_id}: {output_dict}.\n"
             f"Inference time: {end - start:.3f} seconds"
         )
         return output_dict
