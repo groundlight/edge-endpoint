@@ -10,7 +10,7 @@
 # an API token from this account if you don't have one already. 
 
 # Use the script as follows:
-# > docker build --target production-image --tag edge-endpoint .
+# > docker build --tag edge-endpoint .
 # > source test/setup_test_env.sh
 # > docker run --name groundlight-edge \
 #      -e LOG_LEVEL=DEBUG \

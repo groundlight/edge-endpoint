@@ -70,7 +70,7 @@ Follow the following steps:
 
 ```shell
 # Creating our edge-endpoint docker image. Make sure you are in the root directory
-> docker build --target production-image --tag edge-endpoint .
+> docker build --tag edge-endpoint .
 
 # Check that the image was created successfully
 > docker images 

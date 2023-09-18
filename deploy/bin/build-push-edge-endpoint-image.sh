@@ -30,7 +30,7 @@ fi
 docker buildx inspect tempgroundlightedgebuilder --bootstrap
 
 # Build image for amd64 and arm64
-docker buildx build --platform linux/amd64,linux/arm64 --target production-image --tag edge-endpoint ../..
+docker buildx build --platform linux/amd64,linux/arm64 --tag edge-endpoint ../..
 
 # Tag image
 docker tag edge-endpoint:latest 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${TAG}
