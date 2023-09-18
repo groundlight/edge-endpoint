@@ -33,4 +33,7 @@ fi
 docker buildx inspect tempgroundlightedgebuilder --bootstrap
 
 # Build image for amd64 and arm64
-docker buildx build --platform linux/arm64,linux/amd64 --target production-image --tag 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${TAG} ../.. --push
+docker buildx build \
+  --platform linux/arm64,linux/amd64 \
+  --tag 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${TAG} \
+  ../.. --push
