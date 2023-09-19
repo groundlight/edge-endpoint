@@ -1,3 +1,10 @@
+# Required runtime class for GPU use in k3s
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: nvidia
+handler: nvidia
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -92,6 +99,7 @@ spec:
       labels:
         app: inference-server
     spec:
+      runtimeClassName: nvidia  # Required for GPU use in k3s
       containers:
       - name: inference-server
         image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver:tyler-multiplatform-triton-build-06c8914c5-dirty-fe27f23cb32f186
