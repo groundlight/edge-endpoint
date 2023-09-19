@@ -36,6 +36,7 @@ class EdgeInferenceManager:
                 url=self._inference_server_url(detector_id), verbose=verbose
             )
             for detector_id in self.inference_config.keys()
+            if self.detector_configured_for_local_inference(detector_id)
         }
 
     def _inference_server_url(self, detector_id: str) -> str:
@@ -50,7 +51,7 @@ class EdgeInferenceManager:
         Returns:
             True if the detector is configured to run local inference, False otherwise
         """
-        return detector_id in self.inference_config.keys()
+        return detector_id in self.inference_config.keys() and self.inference_config[detector_id].enabled
 
     def inference_is_available(self, detector_id: str) -> bool:
         """
