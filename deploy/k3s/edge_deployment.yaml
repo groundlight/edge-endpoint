@@ -27,14 +27,14 @@ spec:
       labels:
         app: edge-logic-server
     spec:
-      # This service account is used by the edge-endpoint pod to access the Kubernetes API
+      # This service account is used by the edge logic to access the Kubernetes API
       # from within the pod. See deploy/k3s/service_account.yaml for more details
       serviceAccountName: edge-endpoint-service-account
       containers:
       - name: edge-endpoint
         # Pull the image from ECR
         # image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:main-39ba8639f-dirty-914eb756cb2740c
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:state-management-via-k3s-7bd94141a-dirty-461ecb38a645c37
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:state-management-via-k3s-10b2ad156-dirty-ade09994cea50a7
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
@@ -50,6 +50,8 @@ spec:
         - name: edge-config-volume
           # This is a path inside the container not the host
           mountPath: /etc/groundlight
+        - name: inference-deployment-template-volume
+          mountPath: /etc/groundlight
       imagePullSecrets:
       - name: registry-credentials
 
@@ -57,4 +59,8 @@ spec:
       - name: edge-config-volume
         configMap:
           name: edge-config
+      - name: inference-deployment-template-volume
+        configMap:
+          name: inference-deployment-template
+
 

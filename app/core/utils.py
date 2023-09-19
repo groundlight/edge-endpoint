@@ -158,8 +158,6 @@ class AppState:
         # NOTE: For now this assumes that there is only one inference container
         self.edge_inference_manager = EdgeInferenceManager(config=inference_config)
 
-        # Load the kubernetes config
-        logger.debug("Loading kubernetes config")
 
         # Use the service account k3s gives to pods to connect to the kubernetes cluster.
         # It is intended for clients that expect to be running inside a pod running on the cluster.
@@ -171,6 +169,10 @@ class AppState:
             # TODO better handling of this exception.
             raise e
 
+        # Kubernetes resources are split across various API groups based on their functionality.
+        # The `AppsV1Api` client manages resources related to workloads, such as Deployments, StatefulSets, etc.
+        # The `CoreV1Api` client, on the other hand, handles core cluster resources like Pods, Services, and Namespaces.
+        # Using both clients in order to create the deployment and service for the inference container.
         self.app_kube_client = kube_client.AppsV1Api()
         self.core_kube_client = kube_client.CoreV1Api()
 
@@ -178,9 +180,9 @@ class AppState:
 
     def _load_k3s_edge_deployment_manifest(self) -> str:
         """
-        Loads the k3s edge deployment manifest from the file system.
+        Loads the k3s edge deployment manifest template.
         """
-        deployment_manifest_path = "deploy/k3s/deployment_template.yaml"
+        deployment_manifest_path = "/etc/groundlight/inference_deployment.yaml"
         if os.path.exists(deployment_manifest_path):
             with open(deployment_manifest_path, "r") as f:
                 manifest = f.read()

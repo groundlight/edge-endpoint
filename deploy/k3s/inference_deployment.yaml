@@ -27,9 +27,6 @@ spec:
       labels:
         app: inference-server
     spec:
-      # This service account is used by the edge-endpoint pod to access the Kubernetes API
-      # from within the pod. See deploy/k3s/service_account.yaml for more details
-      serviceAccountName: edge-endpoint-service-account
       containers:
       - name: inference-server
         image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver:main-749c0cca3-dirty-0325a8beabe0d7b
