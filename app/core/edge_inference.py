@@ -17,7 +17,6 @@ class EdgeInferenceManager:
     OUTPUT_CONFIDENCE_NAME = "confidence"
     OUTPUT_PROBABILITY_NAME = "probability"
     OUTPUT_LABEL_NAME = "label"
-    INFERENCE_SERVER_URL = "inference-service:8000"
 
     def __init__(self, config: Dict[str, LocalInferenceConfig], verbose: bool = False) -> None:
         """
@@ -30,8 +29,18 @@ class EdgeInferenceManager:
               2) the `LocalInferenceConfig` object determines if local inference is enabled for
                 a specific detector and the model name and version to use for inference.
         """
-        self.inference_client = tritonclient.InferenceServerClient(url=self.INFERENCE_SERVER_URL, verbose=verbose)
         self.inference_config = config
+
+        self.inference_clients = {
+            detector_id: tritonclient.InferenceServerClient(
+                url=self._inference_server_url(detector_id), verbose=verbose
+            )
+            for detector_id in self.inference_config.keys()
+        }
+
+    def _inference_server_url(self, detector_id: str) -> str:
+        inference_service_name = f"inference-service-{detector_id.replace('_', '-').lower()}"
+        return f"{inference_service_name}:8000"
 
     def inference_is_available(self, detector_id: str) -> bool:
         """
@@ -50,14 +59,16 @@ class EdgeInferenceManager:
             self.inference_config[detector_id].model_version,
         )
 
+        inference_client = self.inference_clients[detector_id]
+
         try:
-            if not self.inference_client.is_server_live():
+            if not inference_client.is_server_live():
                 logger.debug("Edge inference server is not live")
                 return False
-            if not self.inference_client.is_server_ready():
+            if not inference_client.is_server_ready():
                 logger.debug("Edge inference server is not ready")
                 return False
-            if not self.inference_client.is_model_ready(model_name, model_version=model_version):
+            if not inference_client.is_model_ready(model_name, model_version=model_version):
                 logger.debug(f"Edge inference model is not ready: {model_name}/{model_version}")
                 return False
         except (ConnectionRefusedError, socket.gaierror) as ex:
@@ -90,10 +101,11 @@ class EdgeInferenceManager:
             self.inference_config[detector_id].model_name,
             self.inference_config[detector_id].model_version,
         )
+        inference_client = self.inference_clients[detector_id]
 
         logger.debug("Submitting image to edge inference service")
         start = time.monotonic()
-        response = self.inference_client.infer(
+        response = inference_client.infer(
             model_name,
             model_version=model_version,
             inputs=[imginput],

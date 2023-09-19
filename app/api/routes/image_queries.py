@@ -28,6 +28,8 @@ async def validate_request_body(request: Request) -> Image.Image:
     if not request.headers.get("Content-Type", "").startswith("image/"):
         raise HTTPException(status_code=400, detail="Request body must be image bytes")
 
+    logger.debug(f"request-headers = {request.headers}")
+
     image_bytes = await request.body()
     try:
         # Attempt to open the image
@@ -102,13 +104,9 @@ async def post_image_query(
 
     image_query = None
 
-    # TODO this shouldn't be here.
-    app_state.check_or_create_detector_deployment(detector_id=detector_id)
-
-    # Check if edge inference is enabled for this detector
-    if edge_inference_manager.inference_is_available(detector_id=detector_id):
-        # app_state.kube_client.check_or_create_detector_deployment(detector_id=detector_id)
-
+    if app_state.inference_deployment_is_ready(
+        detector_id=detector_id, create_if_absent=True
+    ) and edge_inference_manager.inference_is_available(detector_id=detector_id):
         detector_metadata: Detector = get_detector_metadata(detector_id=detector_id, gl=gl)
         results = edge_inference_manager.run_inference(detector_id=detector_id, img_numpy=img_numpy)
 

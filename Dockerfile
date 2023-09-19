@@ -52,6 +52,11 @@ RUN mkdir /etc/groundlight
 # Copy configs
 COPY configs ${APP_ROOT}/configs 
 
+# Create deploy/k3s/ directory and copy the file deploy/k3s/deployment_template.yaml
+# This file will be used to generate the final deployment.yaml file
+RUN mkdir -p ${APP_ROOT}/deploy/k3s
+COPY deploy/k3s/deployment_template.yaml ${APP_ROOT}/deploy/k3s/deployment_template.yaml
+
 ##################
 # Production Stage
 ##################

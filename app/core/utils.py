@@ -158,9 +158,19 @@ class AppState:
 
         # Load the kubernetes config
         logger.debug("Loading kubernetes config")
-        config.load_incluster_config()
+
+        # Use the service account k3s gives to pods to connect to the kubernetes cluster.
+        # It is intended for clients that expect to be running inside a pod running on the cluster.
+        # It will raise a ConfigException if called from a process not running inside a kubernetes
+        # environment.
+        try:
+            config.load_incluster_config()
+        except config.config_exception.ConfigException as e:
+            # TODO better handling of this exception.
+            raise e
+
         self.kube_client = kube_client.AppsV1Api()
-        
+
         logger.debug(f"Kube client: {self.kube_client}")
 
         self._edge_deployment_template = self._load_k3s_edge_deployment_manifest()
@@ -169,7 +179,7 @@ class AppState:
         """
         Loads the k3s edge deployment manifest from the file system.
         """
-        deployment_manifest_path = "configs/k3s/deployment_template.yaml"
+        deployment_manifest_path = "deploy/k3s/deployment_template.yaml"
         if os.path.exists(deployment_manifest_path):
             with open(deployment_manifest_path, "r") as f:
                 manifest = f.read()
@@ -177,47 +187,63 @@ class AppState:
 
         raise FileNotFoundError(f"Could not find k3s edge deployment manifest at {deployment_manifest_path}")
 
-    def check_or_create_detector_deployment(self, detector_id: str, k3s_namespace: str = "default"):
+    def _apply_kube_manifest(self, k3s_namespace, manifest):
+        """
+        Applies the kubernetes manifest to the kubernetes cluster.
+        """
+        for document in yaml.safe_load_all(manifest):
+            if document["kind"] == "Service":
+                self.kube_client.create_namespaced_service(namespace=k3s_namespace, body=document)
+            elif document["kind"] == "Deployment":
+                self.kube_client.create_namespaced_deployment(namespace=k3s_namespace, body=document)
+            else:
+                raise ValueError(f"Unknown kubernetes manifest kind: {document['kind']}")
+
+    def inference_deployment_is_ready(
+        self, detector_id: str, k3s_namespace: str = "default", create_if_absent: bool = False
+    ):
         """
         Checks if the detector deployment exists, and if not, creates it.
         Running self.kube_client.create_namespaced_deployment() is equivalent to
         running `k3s kubectl apply -f <deployment-manifest-yaml> -n <namespace>`
         to create the deployment.
+
+        :param detector_id: ID of the detector on which to run local edge inference
+        :param k3s_namespace: Namespace in which to create the deployment
+        :param create_if_absent: Whether to create the deployment if it doesn't exist
         """
-        
-        logger.debug(f"Checking if deployment {detector_id} exists")
-        logger.info(f"Checking if deployment {detector_id} exists")
 
-        def get_deployment_name(detector_id: str) -> str:
+        def get_service_and_deployment_names(detector_id: str) -> str:
             """
-            Kubernetes deployment names have a strict naming convention.
-            They have to be alphanumeric, lower case, and can only contain dashes.
-            We just use `edge-endpoint-<detector_id>` as the deployment name.
+            Kubernetes service/deployment names have a strict naming convention.
+            They have to be alphanumeric, lower cased, and can only contain dashes.
+            We just use `inferencemodel-<detector_id>` as the deployment name and
+            `inference-service-<detector_id>` as the service name.
             """
-            return f"edge-endpoint-{detector_id.replace('_', '-').lower()}"
+            service_name = f"inference-service-{detector_id.replace('_', '-').lower()}"
+            deployment_name = f"inferencemodel-{detector_id.replace('_', '-').lower()}"
 
-        deployment_name = get_deployment_name(detector_id=detector_id)
+            return service_name, deployment_name
+
+        service_name, deployment_name = get_service_and_deployment_names(detector_id=detector_id)
 
         try:
-            self.kube_client.read_namespaced_deployment(name=deployment_name, namespace=k3s_namespace)
-            logger.info(f"Deployment {deployment_name} already exists")
+            deployment = self.kube_client.read_namespaced_deployment(name=deployment_name, namespace=k3s_namespace)
+            if deployment.status.ready_replicas == deployment.spec.replicas:
+                logger.debug(f"Deployment {deployment_name} is ready")
+                return True
 
         except kube_client.rest.ApiException:
-            logger.info(f"Creating deployment {deployment_name}")
-            # Timing this out for now to see how long creating a deployment takes
-            start = time.monotonic()
+            logger.debug(f"Deployment {deployment_name} does not currently exist in namespace {k3s_namespace}.")
+            if create_if_absent:
+                logger.debug(f"Creating deployment {deployment_name} in namespace {k3s_namespace}")
+                deployment_manifest = self._edge_deployment_template
+                deployment_manifest = deployment_manifest.replace("{{ INFERENCE_SERVICE_NAME }}", service_name)
+                deployment_manifest = deployment_manifest.replace("{{ DEPLOYMENT_NAME }}", deployment_name)
 
-            deployment_manifest = self._edge_deployment_template
-            deployment_manifest.replace("{{ DETECTOR_ID }}", deployment_name)
+                self._apply_kube_manifest(k3s_namespace=k3s_namespace, manifest=deployment_manifest)
 
-            self.kube_client.create_namespaced_deployment(
-                namespace=k3s_namespace, body=yaml.safe_load(deployment_manifest)
-            )
-            end = time.monotonic()
-
-            logger.info(
-                f"Created deployment {deployment_name} in namespace {k3s_namespace} in {end - start:.3f} seconds"
-            )
+        return False
 
 
 def get_app_state(request: Request) -> AppState:
