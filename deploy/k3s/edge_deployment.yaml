@@ -100,6 +100,9 @@ spec:
         # TODO: We only want to shut down an old instance when this tritonsever gives the "READY" signal for all models
         command:
           ["tritonserver", "--model-repository=/mnt/models", "--load-model=*", "--model-control-mode=explicit"]
+        resources:
+          limits:
+            nvidia.com/gpu: 1
         volumeMounts:
         - name: model-repo
           mountPath: /mnt/models

@@ -4,6 +4,9 @@
 # Tested on an AWS EC2 G4 instance using the following AMI:
 # Deep Learning AMI GPU PyTorch 2.0.1 (Ubuntu 20.04) 20230827
 
+# This guide was more helpful than others fwiw:
+# https://support.tools/post/nvidia-gpus-on-k3s/
+
 set -e
 
 # Check if k3s is installed
@@ -45,12 +48,14 @@ else
     exit 0
 fi
 
-sleep 5  # Sometimes the following wget fails initially, but after waiting a few seconds it works
-
 # Configure k3s to use nvidia-container-runtime
 # See guide here: https://k3d.io/v5.3.0/usage/advanced/cuda/#configure-containerd
 echo "Configuring k3s to use nvidia-container-runtime..."
-sudo wget https://k3d.io/v5.3.0/usage/advanced/cuda/config.toml.tmpl -O /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
+for i in {1..10}; do
+  # Sometimes the following wget fails initially but works after a few seconds
+  sleep 2
+  sudo wget https://k3d.io/v5.3.0/usage/advanced/cuda/config.toml.tmpl -O /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl && break
+done
 
 # Enable nvidia-device-plugin via a DaemonSet and add a RuntimeClass definition for it
 # https://github.com/NVIDIA/k8s-device-plugin/?tab=readme-ov-file#enabling-gpu-support-in-kubernetes
