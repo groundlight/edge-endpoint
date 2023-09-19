@@ -28,8 +28,6 @@ async def validate_request_body(request: Request) -> Image.Image:
     if not request.headers.get("Content-Type", "").startswith("image/"):
         raise HTTPException(status_code=400, detail="Request body must be image bytes")
 
-    logger.debug(f"request-headers = {request.headers}")
-
     image_bytes = await request.body()
     try:
         # Attempt to open the image
