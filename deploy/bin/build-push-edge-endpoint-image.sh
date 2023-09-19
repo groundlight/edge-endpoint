@@ -29,7 +29,7 @@ else
   docker buildx use tempgroundlightedgebuilder
 fi
 
-# # Ensure that the tempbuilder container is running
+# Ensure that the tempbuilder container is running
 docker buildx inspect tempgroundlightedgebuilder --bootstrap
 
 # Build image for amd64 and arm64

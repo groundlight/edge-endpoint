@@ -1,23 +1,25 @@
-#!/bin/bash 
+#!/bin/bash
 
-# Check if k3s is installed 
+set -e
+
+# Check if k3s is installed
 if command -v k3s &> /dev/null; then
     echo "k3s is already installed."
     exit 0
-fi 
+fi
 
 
 echo "Installing k3s..."
 
-# Update system 
-sudo apt update && sudo apt upgrade -y 
+# Update system
+sudo apt update && sudo apt upgrade -y
 
 # Install k3s
 curl -sfL https://get.k3s.io | sh -
 
 
 check_k3s_is_running() {
-    local TIMEOUT=20 # Maximum wait time of 30 seconds
+    local TIMEOUT=30 # Maximum wait time of 30 seconds
     local COUNT=0
 
     while [ $COUNT -lt $TIMEOUT ]; do
@@ -33,7 +35,7 @@ check_k3s_is_running() {
 }
 
 if check_k3s_is_running; then
-   # Configure kubectl for the current user 
+   # Configure kubectl for the current user
    sudo chmod 666 /etc/rancher/k3s/k3s.yaml
    echo "kubectl has been configured for the current user."
 else
