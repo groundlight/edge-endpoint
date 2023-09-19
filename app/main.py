@@ -9,6 +9,8 @@ from app.api.naming import API_BASE_PATH
 from .core.utils import AppState
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+DEPLOY_INFERENCE_PER_DETECTOR = os.environ.get("DEPLOY_INFERENCE_PER_DETECTOR", "True").lower() == "true"
+
 logging.basicConfig(level=LOG_LEVEL)
 
 

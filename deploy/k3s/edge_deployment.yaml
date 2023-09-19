@@ -62,5 +62,3 @@ spec:
       - name: inference-deployment-template-volume
         configMap:
           name: inference-deployment-template
-
-

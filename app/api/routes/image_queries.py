@@ -102,9 +102,11 @@ async def post_image_query(
 
     image_query = None
 
-    if app_state.inference_deployment_is_ready(
+    inference_deployment_is_ready = app_state.inference_deployment_is_ready(
         detector_id=detector_id, create_if_absent=True
-    ) and edge_inference_manager.inference_is_available(detector_id=detector_id):
+    )
+
+    if inference_deployment_is_ready:
         detector_metadata: Detector = get_detector_metadata(detector_id=detector_id, gl=gl)
         results = edge_inference_manager.run_inference(detector_id=detector_id, img_numpy=img_numpy)
 

@@ -23,19 +23,24 @@ Then run the following script to register credentials for accessing ECR in k3s.
 ```
 
 The edge endpoint application requires a [YAML config file](/configs/edge-config.yaml) (currently for setting up necessary parameters 
-for motion detection). In our k3s cluster, we mount this into the edge-endpoint deployment as a configmap, so we need to first
+for motion detection and local edge inference). In our k3s cluster, we mount this into the edge-endpoint deployment as a configmap, so we need to first
 create this configmap. In order to do so, run 
+
+The edge endpoint application requires a [YAML config file](/configs/edge-config.yaml) (currently for setting up necessary parameters 
+for motion detection and local edge inference). In addition, it also requires a [templated inference model deployment](/deploy/k3s/inference_deployment.yaml). In the k3s cluster, we mount these files as configmaps by running
 
 ```shell
 > k3s kubectl create configmap edge-config --from-file=configs/edge-config.yaml
+> k3s kubectl create configmap inference-deployment-template --from-file=deploy/k3s/inference_deployment.yaml 
 ```
 
-NOTE: This config will not be automatically synced with the k3s deployment. Thus, every time one needs to 
-edit the config, they shoud first delete the existing configmap and then run the above command and other 
+NOTE: These configmaps will not be automatically synced with the edge logic deployment. Thus, every time one needs to 
+edit them, they shoud first delete the existing ones and then run the above commands and other 
 necessary commands as needed. 
 
 ```shell
 > k3s kubectl delete configmap edge-config
+> k3s kubectl delete configmap inference-deployment-template 
 ```
 
 For now we have a hard-coded docker image from ECR in the [edge-endpoint](/edge-endpoint/deploy/k3s/edge_deployment.yaml) 

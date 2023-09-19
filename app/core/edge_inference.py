@@ -42,6 +42,16 @@ class EdgeInferenceManager:
         inference_service_name = f"inference-service-{detector_id.replace('_', '-').lower()}"
         return f"{inference_service_name}:8000"
 
+    def detector_configured_for_local_inference(self, detector_id: str) -> bool:
+        """
+        Checks if the detector is configured to run local inference.
+        Args:
+            detector_id: ID of the detector on which to run local edge inference
+        Returns:
+            True if the detector is configured to run local inference, False otherwise
+        """
+        return detector_id in self.inference_config.keys()
+
     def inference_is_available(self, detector_id: str) -> bool:
         """
         Queries the inference server to see if everything is ready to perform inference.
@@ -50,9 +60,6 @@ class EdgeInferenceManager:
         Returns:
             True if edge inference for the specified detector is available, False otherwise
         """
-        if detector_id not in self.inference_config.keys():
-            logger.info(f"Edge inference is not enabled for {detector_id=}")
-            return False
 
         model_name, model_version = (
             self.inference_config[detector_id].model_name,

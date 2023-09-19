@@ -134,7 +134,7 @@ class AppState:
     # TTL cache for k3s health checks on inference deployments. Checks are cached for 10 minutes.
     KUBERNETES_HEALTH_CHECKS_TTL_CACHE = TTLCache(maxsize=MAX_DETECTOR_IDS_TTL_CACHE_SIZE, ttl=600)
 
-    def __init__(self):
+    def __init__(self, deploy_inference_per_detector: bool = True):
         # Create a global shared image query ID cache in the app's state
         self.iqe_cache = IQECache()
 
@@ -155,10 +155,15 @@ class AppState:
         self.motion_detection_manager = MotionDetectionManager(config=motion_detection_config)
 
         # Create global shared edge inference manager object in the app's state
-        # NOTE: For now this assumes that there is only one inference container
         self.edge_inference_manager = EdgeInferenceManager(config=inference_config)
 
+        if deploy_inference_per_detector:
+            self._setup_kube_client()
 
+    def _setup_kube_client(self) -> None:
+        """
+        Sets up the kubernetes client in order to access resources in the cluster.
+        """
         # Use the service account k3s gives to pods to connect to the kubernetes cluster.
         # It is intended for clients that expect to be running inside a pod running on the cluster.
         # It will raise a ConfigException if called from a process not running inside a kubernetes
@@ -230,6 +235,10 @@ class AppState:
         :param create_if_absent: Whether to create the deployment if it doesn't exist
         """
 
+        if not self.edge_inference_manager.detector_configured_for_local_inference(detector_id=detector_id):
+            logger.debug(f"Detector {detector_id} is not configured for local inference")
+            return False
+
         def get_service_and_deployment_names(detector_id: str) -> str:
             """
             Kubernetes service/deployment names have a strict naming convention.
@@ -248,7 +257,9 @@ class AppState:
             deployment = self.app_kube_client.read_namespaced_deployment(name=deployment_name, namespace=k3s_namespace)
             if deployment.status.ready_replicas == deployment.spec.replicas:
                 logger.debug(f"Deployment {deployment_name} is ready")
-                return True
+
+                # Check that the model in the deployment is also ready to server inference requests
+                return self.edge_inference_manager.inference_is_available(detector_id=detector_id)
 
         except kube_client.rest.ApiException:
             logger.debug(f"Deployment {deployment_name} does not currently exist in namespace {k3s_namespace}.")
