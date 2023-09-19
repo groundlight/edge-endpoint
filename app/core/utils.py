@@ -164,15 +164,9 @@ class AppState:
         """
         Sets up the kubernetes client in order to access resources in the cluster.
         """
-        # Use the service account k3s gives to pods to connect to the kubernetes cluster.
-        # It is intended for clients that expect to be running inside a pod running on the cluster.
-        # It will raise a ConfigException if called from a process not running inside a kubernetes
-        # environment.
-        try:
-            config.load_incluster_config()
-        except config.config_exception.ConfigException as e:
-            # TODO better handling of this exception.
-            raise e
+
+        # Requires the application to be running inside kubernetes.
+        config.load_incluster_config()
 
         # Kubernetes resources are split across various API groups based on their functionality.
         # The `AppsV1Api` client manages resources related to workloads, such as Deployments, StatefulSets, etc.
