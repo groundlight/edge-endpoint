@@ -1,4 +1,3 @@
-import time
 import logging
 import os
 from functools import lru_cache
@@ -11,10 +10,10 @@ import yaml
 from cachetools import TTLCache
 from fastapi import HTTPException, Request
 from groundlight import Groundlight
-from model import Detector
-from PIL import Image
 from kubernetes import client as kube_client
 from kubernetes import config
+from model import Detector
+from PIL import Image
 
 from .configs import LocalInferenceConfig, MotionDetectionConfig, RootEdgeConfig
 from .edge_inference import EdgeInferenceManager
