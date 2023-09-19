@@ -158,7 +158,6 @@ class AppState:
         # NOTE: For now this assumes that there is only one inference container
         self.edge_inference_manager = EdgeInferenceManager(config=inference_config)
 
-
         # Use the service account k3s gives to pods to connect to the kubernetes cluster.
         # It is intended for clients that expect to be running inside a pod running on the cluster.
         # It will raise a ConfigException if called from a process not running inside a kubernetes
