@@ -131,6 +131,9 @@ def get_detector_metadata(detector_id: str, gl: Groundlight) -> Detector:
 
 
 class AppState:
+    # TTL cache for k3s health checks on inference deployments. Checks are cached for 10 minutes.
+    KUBERNETES_HEALTH_CHECKS_TTL_CACHE = TTLCache(maxsize=MAX_DETECTOR_IDS_TTL_CACHE_SIZE, ttl=600)
+
     def __init__(self):
         # Create a global shared image query ID cache in the app's state
         self.iqe_cache = IQECache()
@@ -168,9 +171,8 @@ class AppState:
             # TODO better handling of this exception.
             raise e
 
-        self.kube_client = kube_client.AppsV1Api()
-
-        logger.debug(f"Kube client: {self.kube_client}")
+        self.app_kube_client = kube_client.AppsV1Api()
+        self.core_kube_client = kube_client.CoreV1Api()
 
         self._edge_deployment_template = self._load_k3s_edge_deployment_manifest()
 
@@ -186,24 +188,38 @@ class AppState:
 
         raise FileNotFoundError(f"Could not find k3s edge deployment manifest at {deployment_manifest_path}")
 
-    def _apply_kube_manifest(self, k3s_namespace, manifest):
+    def _apply_kube_manifest(self, k3s_namespace, manifest) -> None:
         """
         Applies the kubernetes manifest to the kubernetes cluster.
         """
         for document in yaml.safe_load_all(manifest):
-            if document["kind"] == "Service":
-                self.kube_client.create_namespaced_service(namespace=k3s_namespace, body=document)
-            elif document["kind"] == "Deployment":
-                self.kube_client.create_namespaced_deployment(namespace=k3s_namespace, body=document)
-            else:
-                raise ValueError(f"Unknown kubernetes manifest kind: {document['kind']}")
+            try:
+                if document["kind"] == "Service":
+                    self.core_kube_client.create_namespaced_service(namespace=k3s_namespace, body=document)
+                elif document["kind"] == "Deployment":
+                    self.app_kube_client.create_namespaced_deployment(namespace=k3s_namespace, body=document)
+                else:
+                    raise ValueError(f"Unknown kubernetes manifest kind: {document['kind']}")
 
+            except kube_client.rest.ApiException as e:
+                # TODO better handling of this exception.
+                # Currently not raising the exception (which from the app's perspective is a 500 error) so that
+                # we can continue to serve requests through the cloud API even if a specific inference
+                # deployment creation fails.
+                logger.warning(f"Failed to create a kubernetes deployment: {e}")
+
+        logger.debug(f"Successfully applied kubernetes manifest to namespace `{k3s_namespace}`")
+
+    @cachetools.cached(
+        cache=KUBERNETES_HEALTH_CHECKS_TTL_CACHE,
+        key=lambda self, detector_id, *args, **kwargs: detector_id,
+    )
     def inference_deployment_is_ready(
         self, detector_id: str, k3s_namespace: str = "default", create_if_absent: bool = False
-    ):
+    ) -> bool:
         """
         Checks if the detector deployment exists, and if not, creates it.
-        Running self.kube_client.create_namespaced_deployment() is equivalent to
+        Running self.app_kube_client.create_namespaced_deployment() is equivalent to
         running `k3s kubectl apply -f <deployment-manifest-yaml> -n <namespace>`
         to create the deployment.
 
@@ -227,7 +243,7 @@ class AppState:
         service_name, deployment_name = get_service_and_deployment_names(detector_id=detector_id)
 
         try:
-            deployment = self.kube_client.read_namespaced_deployment(name=deployment_name, namespace=k3s_namespace)
+            deployment = self.app_kube_client.read_namespaced_deployment(name=deployment_name, namespace=k3s_namespace)
             if deployment.status.ready_replicas == deployment.spec.replicas:
                 logger.debug(f"Deployment {deployment_name} is ready")
                 return True
