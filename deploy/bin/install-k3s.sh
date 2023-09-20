@@ -2,12 +2,6 @@
 
 set -e
 
-# Check if k3s is installed
-if command -v k3s &> /dev/null; then
-    echo "k3s is already installed."
-    exit 0
-fi
-
 K="k3s kubectl"
 
 # Update system

@@ -7,13 +7,7 @@
 # This guide was more helpful than others fwiw:
 # https://support.tools/post/nvidia-gpus-on-k3s/
 
-set -e
-
-# Check if k3s is installed
-if command -v k3s &> /dev/null; then
-    echo "k3s is already installed."
-    exit 0
-fi
+set -ex
 
 K="k3s kubectl"
 
@@ -22,7 +16,9 @@ sudo apt update && sudo apt upgrade -y
 
 # Install k3s
 echo "Installing k3s..."
-curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" sh -
+EXTERNAL_IP=$(curl ifconfig.me)
+curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" sh -s - \
+  server --node-external-ip=${EXTERNAL_IP}  # Set the external IP of the k3s node
 
 check_k3s_is_running() {
     local TIMEOUT=30 # Maximum wait time of 30 seconds

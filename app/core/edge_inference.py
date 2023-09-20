@@ -88,6 +88,7 @@ class EdgeInferenceManager:
         end = time.monotonic()
 
         output_dict = {k: response.as_numpy(k)[0] for k in self.MODEL_OUTPUTS}
+        output_dict["label"] = "NO" if output_dict["label"] else "YES"  # map false / 0 to "YES" and true / 1 to "NO"
 
         logger.debug(
             f"Inference server response for model={detector_id}: {output_dict}.\n"
@@ -105,7 +106,7 @@ class EdgeInferenceManager:
         model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
 
         # TODO: remove the fallback to "generic-cached-timm-efficientnetv2s-mlp"
-        pipeline_config = model_urls.get("pipeline_config", "generic-cached-timm-efficientnetv2s-xgb")
+        pipeline_config = model_urls.get("pipeline_config", "generic-cached-timm-efficientnetv2s-mlp")
 
         old_version, new_version = save_model_to_repository(detector_id, model_buffer, pipeline_config)
 
