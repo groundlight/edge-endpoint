@@ -81,7 +81,7 @@ async def post_image_query(
 
     if motion_detection_manager.motion_detection_is_available(detector_id=detector_id):
         motion_detected = motion_detection_manager.run_motion_detection(detector_id=detector_id, new_img=img_numpy)
-        if not motion_detected and motion_detection_manager.get_image_query_response(detector_id=detector_id):
+        if not motion_detected:
             # Try improving the cached image query response's confidence
             # (if the cached response is low confidence)
             _improve_cached_image_query_confidence(
@@ -127,10 +127,7 @@ async def post_image_query(
     if not image_query:
         image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=patience_time)
 
-    if (
-        detector_id in motion_detection_manager.detectors
-        and motion_detection_manager.detectors[detector_id].is_enabled()
-    ):
+    if motion_detection_manager.motion_detection_is_enabled(detector_id=detector_id):
         # Store the cloud's response so that if the next image has no motion, we will return the same response
         motion_detection_manager.update_image_query_response(detector_id=detector_id, response=image_query)
 

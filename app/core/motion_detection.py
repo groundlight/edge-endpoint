@@ -84,7 +84,7 @@ class MotionDetectionManager:
             for detector_id, motion_detection_config in config.items()
         }
 
-    def motion_detection_is_available(self, detector_id: str) -> bool:
+    def motion_detection_is_enabled(self, detector_id: str) -> bool:
         """
         Returns True if motion detection is enabled for the specified detector, False otherwise.
         """
@@ -92,6 +92,15 @@ class MotionDetectionManager:
             logger.debug(f"Motion detection is not enabled for {detector_id=}.")
             return False
         return True
+
+    def motion_detection_is_available(self, detector_id: str) -> bool:
+        """
+        Returns True if motion detection is currently available for the specified detector, False otherwise.
+        """
+        return (
+            self.motion_detection_is_enabled(detector_id=detector_id) and
+            self.get_image_query_response(detector_id=detector_id) is not None
+        )
 
     def update_image_query_response(self, detector_id: str, response: ImageQuery) -> None:
         self.detectors[detector_id].image_query_response = response
