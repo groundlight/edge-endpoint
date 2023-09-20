@@ -4,10 +4,12 @@ import shutil
 import socket
 import time
 from typing import Dict, Optional
+from fastapi import HTTPException
 
 import numpy as np
 import requests
 import tritonclient.http as tritonclient
+from app.core.utils import prefixed_ksuid
 from jinja2 import Template
 
 from .configs import LocalInferenceConfig
@@ -77,13 +79,14 @@ class EdgeInferenceManager:
         imginput.set_data_from_numpy(img_numpy)
         outputs = [tritonclient.InferRequestedOutput(f) for f in self.MODEL_OUTPUTS]
 
-        logger.debug("Submitting image to edge inference service")
+        request_id = prefixed_ksuid(prefix="einf_")
+        logger.debug(f"Submitting image to edge inference service. {request_id=}")
         start = time.monotonic()
         response = self.inference_client.infer(
             model_name=detector_id,
             inputs=[imginput],
             outputs=outputs,
-            request_id="",
+            request_id=request_id,
         )
         end = time.monotonic()
 
@@ -130,20 +133,22 @@ class EdgeInferenceManager:
 
 
 def fetch_model_urls(detector_id) -> dict[str, str]:
-    GROUNDLIGHT_API_TOKEN = os.getenv("GROUNDLIGHT_API_TOKEN")
-    if not GROUNDLIGHT_API_TOKEN:
-        raise Exception("GROUNDLIGHT_API_TOKEN environment variable is not set")
+    try:
+        groundlight_api_token = os.environ["GROUNDLIGHT_API_TOKEN"]
+    except KeyError as ex:
+        logger.error("GROUNDLIGHT_API_TOKEN environment variable is not set")
+        raise ex
 
     url = f"https://api.groundlight.ai/edge-api/v1/fetch-model-urls/{detector_id}/"
     headers = {
-        "x-api-token": GROUNDLIGHT_API_TOKEN,
+        "x-api-token": groundlight_api_token,
     }
     response = requests.get(url, headers=headers, timeout=10)
 
     if response.status_code == 200:
         return response.json()
     else:
-        raise Exception(f"Failed to fetch model URLs for {detector_id=}. HTTP Status code: {response.status_code}")
+        raise HTTPException(status_code=response.status_code, detail=f"Failed to fetch model URLs for {detector_id=}.")
 
 
 def get_object_using_presigned_url(presigned_url):
@@ -151,7 +156,7 @@ def get_object_using_presigned_url(presigned_url):
     if response.status_code == 200:
         return response.content
     else:
-        raise Exception("Failed to retrieve data from {presigned_url}. HTTP Status code: {response.status_code}")
+        raise HTTPException(status_code=response.status_code, detail=f"Failed to retrieve data from {presigned_url}.")
 
 
 def save_model_to_repository(detector_id, model_buffer, pipeline_config) -> tuple[Optional[int], int]:
