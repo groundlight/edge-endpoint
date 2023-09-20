@@ -4,13 +4,14 @@ import shutil
 import socket
 import time
 from typing import Dict, Optional
-from fastapi import HTTPException
 
 import numpy as np
 import requests
 import tritonclient.http as tritonclient
-from app.core.utils import prefixed_ksuid
+from fastapi import HTTPException
 from jinja2 import Template
+
+from app.core.utils import prefixed_ksuid
 
 from .configs import LocalInferenceConfig
 
