@@ -102,7 +102,7 @@ spec:
       runtimeClassName: nvidia  # Required for GPU use in k3s
       containers:
       - name: inference-server
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver:tyler-multiplatform-triton-build-06c8914c5-dirty-fe27f23cb32f186
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver:313680099-main
         imagePullPolicy: IfNotPresent
         # Tritonserver will look for models in /mnt/models and initialize them on startup
         # TODO: We only want to shut down an old instance when this tritonsever gives the "READY" signal for all models
