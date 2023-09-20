@@ -98,8 +98,8 @@ class MotionDetectionManager:
         Returns True if motion detection is currently available for the specified detector, False otherwise.
         """
         return (
-            self.motion_detection_is_enabled(detector_id=detector_id) and
-            self.get_image_query_response(detector_id=detector_id) is not None
+            self.motion_detection_is_enabled(detector_id=detector_id)
+            and self.get_image_query_response(detector_id=detector_id) is not None
         )
 
     def update_image_query_response(self, detector_id: str, response: ImageQuery) -> None:
