@@ -152,8 +152,7 @@ jobs:
 
       - name: Run Unit Tests
         run: | 
-          source test/setup_test_env.sh
-          poetry run pytest 
+          DEPLOY_INFERENCE_PER_DETECTOR=False poetry run pytest 
       
       - name: Dump Logs from Docker Container
         if: always()
