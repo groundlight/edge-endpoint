@@ -10,14 +10,13 @@ from model import ClassificationResult, Detector, ImageQuery, ImageQueryTypeEnum
 from PIL import Image
 
 from app.core.motion_detection import MotionDetectionManager
-from app.core.utils import (
+from app.core.app_state import (
     AppState,
     get_app_state,
     get_detector_metadata,
     get_groundlight_sdk_instance,
-    prefixed_ksuid,
-    safe_call_api,
 )
+from app.core.utils import safe_call_api, prefixed_ksuid
 
 logger = logging.getLogger(__name__)
 
