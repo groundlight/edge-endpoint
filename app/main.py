@@ -27,4 +27,7 @@ async def on_startup():
     """
     for detector_id, inference_config in app.state.app_state.edge_inference_manager.inference_config.items():
         if inference_config.enabled:
-            app.state.app_state.edge_inference_manager.update_model(detector_id)
+            try:
+                app.state.app_state.edge_inference_manager.update_model(detector_id)
+            except Exception as ex:
+                logging.warning(f"Failed to update model for {detector_id}: {ex}")
