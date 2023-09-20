@@ -13,9 +13,13 @@ DEPLOY_INFERENCE_PER_DETECTOR = os.environ.get("DEPLOY_INFERENCE_PER_DETECTOR", 
 
 logging.basicConfig(level=LOG_LEVEL)
 
+logger = logging.getLogger(__name__)
+
 
 app = FastAPI()
 app.include_router(router=api_router, prefix=API_BASE_PATH)
 app.include_router(router=ping_router)
+
+logger.debug(f"{DEPLOY_INFERENCE_PER_DETECTOR=}")
 
 app.state.app_state = AppState(deploy_inference_per_detector=DEPLOY_INFERENCE_PER_DETECTOR)
