@@ -134,7 +134,7 @@ class AppState:
     # TTL cache for k3s health checks on inference deployments. Checks are cached for 10 minutes.
     KUBERNETES_HEALTH_CHECKS_TTL_CACHE = TTLCache(maxsize=MAX_DETECTOR_IDS_TTL_CACHE_SIZE, ttl=600)
 
-    def __init__(self, deploy_inference_per_detector: bool = False):
+    def __init__(self, deploy_inference_per_detector: bool = True):
         # Create a global shared image query ID cache in the app's state
         self.iqe_cache = IQECache()
 
