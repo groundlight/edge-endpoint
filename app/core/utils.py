@@ -6,7 +6,6 @@ from fastapi import HTTPException
 from PIL import Image
 
 
-
 def safe_call_api(api_method: Callable, **kwargs):
     """
     This ensures that we correctly handle HTTP error status codes. In some cases,

@@ -5,8 +5,8 @@ import pytest
 from groundlight import Groundlight
 from PIL import Image, ImageEnhance, ImageFilter
 
-from app.core.configs import RootEdgeConfig
 from app.core.app_state import load_edge_config
+from app.core.configs import RootEdgeConfig
 
 DETECTORS = {
     "dog_detector": {

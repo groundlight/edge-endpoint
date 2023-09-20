@@ -9,14 +9,14 @@ from groundlight import Groundlight
 from model import ClassificationResult, Detector, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
 from PIL import Image
 
-from app.core.motion_detection import MotionDetectionManager
 from app.core.app_state import (
     AppState,
     get_app_state,
     get_detector_metadata,
     get_groundlight_sdk_instance,
 )
-from app.core.utils import safe_call_api, prefixed_ksuid
+from app.core.motion_detection import MotionDetectionManager
+from app.core.utils import prefixed_ksuid, safe_call_api
 
 logger = logging.getLogger(__name__)
 
