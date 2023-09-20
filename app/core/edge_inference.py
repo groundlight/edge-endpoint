@@ -3,7 +3,7 @@ import os
 import shutil
 import socket
 import time
-from typing import Dict
+from typing import Dict, Optional
 
 import numpy as np
 import requests
@@ -103,10 +103,8 @@ class EdgeInferenceManager:
         logger.info(f"Attemping to update model for {detector_id}")
 
         model_urls = fetch_model_urls(detector_id)
+        pipeline_config = model_urls["pipeline_config"]
         model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
-
-        # TODO: remove the fallback to "generic-cached-timm-efficientnetv2s-mlp"
-        pipeline_config = model_urls.get("pipeline_config", "generic-cached-timm-efficientnetv2s-mlp")
 
         old_version, new_version = save_model_to_repository(detector_id, model_buffer, pipeline_config)
 
@@ -156,21 +154,28 @@ def get_object_using_presigned_url(presigned_url):
         raise Exception("Failed to retrieve data from {presigned_url}. HTTP Status code: {response.status_code}")
 
 
-def save_model_to_repository(detector_id, model_buffer, pipeline_config) -> tuple[int | None, int]:
+def save_model_to_repository(detector_id, model_buffer, pipeline_config) -> tuple[Optional[int], int]:
     """
-    Make new directory for the model and save the model and pipeline config to it.
+    Make new version-directory for the model and save the new version of the model and pipeline config to it.
+    Model repository directory structure:
+    ```
+    <model-repository-path>/
+        <model-name>/
+            [config.pbtxt]
+            [<output-labels-file> ...]
+            <version>/
+                <model-definition-file (e.g. model.py, model.buf, etc)>
+    ```
+    See the following resources for more information:
+    - https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/model_repository.html
+    - https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/model_repository.html#python-models
+    - https://github.com/triton-inference-server/python_backend?tab=readme-ov-file#usage
     """
     model_dir = os.path.join(EdgeInferenceManager.MODEL_REPOSITORY, detector_id)
     os.makedirs(model_dir, exist_ok=True)
 
-    # Get the latest model version by inspecting subdirectories
-    model_versions = [int(d) for d in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, d))]
-    if model_versions:
-        old_model_version = max(model_versions)
-        new_model_version = old_model_version + 1
-    else:
-        old_model_version = None
-        new_model_version = 1
+    old_model_version = get_current_model_version(model_dir)
+    new_model_version = 1 if old_model_version is None else old_model_version + 1
 
     model_version_dir = os.path.join(model_dir, str(new_model_version))
     os.makedirs(model_version_dir, exist_ok=True)
@@ -197,7 +202,22 @@ def save_model_to_repository(detector_id, model_buffer, pipeline_config) -> tupl
     return old_model_version, new_model_version
 
 
+def get_current_model_version(model_dir: str) -> Optional[int]:
+    """Triton inference server model_repositories contain model versions in subdirectories. These subdirectories
+    are named with integers. This function returns the highest integer in the model repository directory.
+    """
+    model_versions = [int(d) for d in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, d))]
+    return max(model_versions) if model_versions else None
+
+
 def create_file_from_template(template_values: dict, destination: str, template: str):
+    """
+    This is a helper function to create a file from a Jinja2 template. In your template file,
+    place template values in {{ template_value }} blocks. Then pass in a dictionary mapping template
+    keys to values. The template will be filled with the values and written to the destination file.
+
+    See https://jinja.palletsprojects.com/en/3.1.x/templates/ for more information on Jinja2 templates.
+    """
     # Step 1: Read the template file
     with open(template, "r") as template_file:
         template_content = template_file.read()
@@ -213,7 +233,7 @@ def create_file_from_template(template_values: dict, destination: str, template:
 
 
 def delete_model_version(detector_id: str, model_version: int):
-    # Recursively delete directory detector_id/model_version
+    """Recursively delete directory detector_id/model_version"""
     model_dir = os.path.join(EdgeInferenceManager.MODEL_REPOSITORY, detector_id)
     model_version_dir = os.path.join(model_dir, str(model_version))
     logger.info(f"Deleting model version {model_version} for {detector_id}")
