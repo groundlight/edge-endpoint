@@ -34,14 +34,16 @@ def load_edge_config() -> RootEdgeConfig:
         config = yaml.safe_load(yaml_config)
         return RootEdgeConfig(**config)
 
-    logger.warning("EDGE_CONFIG environment variable not set. Using the default edge config file.")
+    logger.warning("EDGE_CONFIG environment variable not set. Checking default locations.")
 
-    default_config_path = "configs/edge-config.yaml"
-    if os.path.exists(default_config_path):
-        config = yaml.safe_load(open(default_config_path, "r"))
-        return RootEdgeConfig(**config)
+    default_config_paths = ["/etc/groundlight/edge-config.yaml", "configs/edge-config.yaml"]
+    for default_config_path in default_config_paths:
+        if os.path.exists(default_config_path):
+            logger.info(f"Loading edge config from {default_config_path}")
+            config = yaml.safe_load(open(default_config_path, "r"))
+            return RootEdgeConfig(**config)
 
-    raise FileNotFoundError(f"Could not find edge config file at {default_config_path}")
+    raise FileNotFoundError(f"Could not find edge config file in default locations: {default_config_paths}")
 
 
 @lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
