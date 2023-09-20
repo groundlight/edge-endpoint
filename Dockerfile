@@ -18,17 +18,15 @@ ARG POETRY_VERSION
 # Combine the installations into a single RUN command
 # Ensure that we have the bash shell since it doesn't seem to be included in the slim image.
 # This is useful for exec'ing into the container for debugging purposes.
-# We need to install libGL dependencies (`libglib2.0-0` and `libgl1-mesa-lgx`)
-# since they are required by OpenCV
+# We need to install libGL dependencies (`libglib2.0-0` and `libgl1-mesa-lgx`) 
+# since they are required by OpenCV 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-    bash \
-    curl \
-    nginx \
-    libglib2.0-0 \
-    libgl1-mesa-glx \
-    dnsutils \
-    iputils-ping \
+       bash \
+       curl \
+       nginx \
+       libglib2.0-0 \
+       libgl1-mesa-glx \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && curl -sSL https://install.python-poetry.org | python -
@@ -45,14 +43,14 @@ COPY ./pyproject.toml ${APP_ROOT}/
 
 WORKDIR ${APP_ROOT}
 
-# Install production dependencies only
-RUN poetry install --no-interaction --no-root --without dev
+# Install production dependencies only 
+RUN poetry install --no-interaction --no-root --without dev 
 
-# Create /etc/groundlight directory where edge-config.yaml will be mounted
+# Create /etc/groundlight directory where edge-config.yaml will be mounted 
 RUN mkdir /etc/groundlight
 
 # Copy configs
-COPY configs ${APP_ROOT}/configs
+COPY configs ${APP_ROOT}/configs 
 
 ##################
 # Production Stage
