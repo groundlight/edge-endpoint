@@ -33,14 +33,13 @@ spec:
       containers:
       - name: edge-endpoint
         # Pull the image from ECR
-        # image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:main-39ba8639f-dirty-914eb756cb2740c
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:state-management-via-k3s-10b2ad156-dirty-ade09994cea50a7
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:main-39ba8639f-dirty-914eb756cb2740c
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
         env:
         - name: LOG_LEVEL
-          value: "DEBUG"
+          value: "INFO"
         - name: GROUNDLIGHT_API_TOKEN
           valueFrom:
             secretKeyRef:
