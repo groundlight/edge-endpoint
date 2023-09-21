@@ -25,9 +25,16 @@ jobs:
           ln -s /etc/rancher/k3s/k3s.yaml ~/.kube/config
       - name: Check k3s status
         run: |
+          set -ex
           kubectl config view
           kubectl get nodes
           kubectl get pods --all-namespaces
+      - name: Deploy the edge-endpoint yaml
+        run: |
+          set -ex
+          kubectl apply -f deploy/k3s/edge_deployment.yaml
+          # wait for the edge-endpoint pod to be ready
+          kubectl wait --for=condition=ready pod -l app=edge-endpoint --timeout=180s
 
   test-motion-detection:
     runs-on: ubuntu-22.04
