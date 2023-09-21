@@ -20,12 +20,12 @@ jobs:
           curl -sfL https://get.k3s.io | sh -
           sudo chmod 644 /etc/rancher/k3s/k3s.yaml
           sudo chown $USER /etc/rancher/k3s/k3s.yaml
+          # symlink to kubeconfig
+          mkdir -p ~/.kube
+          ln -s /etc/rancher/k3s/k3s.yaml ~/.kube/config
       - name: Check k3s status
         run: |
           kubectl config view
-          sleep 5
-          kubectl config view
-          sleep 5
           kubectl get nodes
           kubectl get pods --all-namespaces
 
