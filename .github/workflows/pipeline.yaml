@@ -33,8 +33,11 @@ jobs:
         run: |
           set -ex
           kubectl apply -f deploy/k3s/edge_deployment.yaml
-          # wait for the edge-endpoint pod to be ready
-          kubectl wait --for=condition=ready pod -l app=edge-endpoint --timeout=180s
+          kubectl describe deployment
+      - name: Wait for edge-endpoint pod to be ready
+        run: |
+          set -ex
+          kubectl rollout status deployment edge-endpoint --timeout=5m
 
   test-motion-detection:
     runs-on: ubuntu-22.04
