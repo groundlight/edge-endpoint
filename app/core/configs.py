@@ -40,33 +40,6 @@ class LocalInferenceConfig(BaseModel):
         ),
     )
 
-    model_name: Optional[str] = Field(default=None, description="The name of the model to use for inference.")
-    model_version: Optional[str] = Field(default=None, description="The version of the model to use for inference.")
-
-    @validator("model_version", "model_name", pre=True, always=True)
-    def validate_model(cls, field_value, values, field):
-        """
-        With Triton, there can be multiple versions for each model.
-        And each version is stored in a numerically-named subdirectory.
-        For more info: https://www.run.ai/guides/machine-learning-engineering/triton-inference-server
-
-        :param field_value: The value of the field being validated.
-        :param values: The values passed to the validator.
-        :param field: The field being validated.
-        """
-        if values.get("enabled"):
-            if field == "model_name" and not field_value:
-                raise ValueError("`model_name` must be set if edge inference is enabled")
-
-            if field == "model_version":
-                if not field_value:
-                    logger.warning("`model_version` not set. Defaulting to version=1")
-                    field_value = "1"
-                elif not field_value.isdigit():
-                    raise ValueError(f"`model_version` must be a numeric string. Got {field_value} instead.")
-
-        return field_value
-
 
 class DetectorConfig(BaseModel):
     """
@@ -107,9 +80,7 @@ class RootEdgeConfig(BaseModel):
                 'local_inference_templates': {
                     'default': LocalInferenceConfig(
                                     enabled=True,
-                                    refresh_every=3600.0,
-                                    model_name='det_edgedemo',
-                                    model_version='1'
+                                    refresh_every=3600.0
                                 )
                 }
             }

@@ -8,8 +8,13 @@ spec:
   ports:
     - protocol: TCP
       port: 8000
+      name: http
       targetPort: 8000
-  type: ClusterIP
+    - protocol: TCP
+      port: 8002
+      name: metrics  # From the edge machine, run curl localhost:<nodeport>/metrics to see metrics summary
+      targetPort: 8002
+  type: NodePort
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -27,21 +32,34 @@ spec:
       labels:
         app: inference-server
     spec:
+      runtimeClassName: nvidia  # Required for GPU use in k3s
       containers:
       - name: inference-server
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver:main-749c0cca3-dirty-0325a8beabe0d7b
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver:313680099-main
         imagePullPolicy: IfNotPresent
         # Tritonserver will look for models in /mnt/models and initialize them on startup
         # TODO: We only want to shut down an old instance when this tritonsever gives the "READY" signal for all models
         command:
-          ["tritonserver", "--model-repository=/mnt/models"]
+          [
+            "tritonserver",
+            "--model-repository=/mnt/models",
+            "--load-model=*",
+            "--model-control-mode=explicit",
+            "--metrics-config=summary_latencies=true"
+          ]
+        resources:
+          limits:
+            nvidia.com/gpu: 1
         volumeMounts:
         - name: model-repo
           mountPath: /mnt/models
         - name: dshm
           mountPath: /dev/shm
         ports:
-        - containerPort: 8000  # Default tritonserver HTTP port
+        - containerPort: 8000
+          name: http-triton
+        - containerPort: 8002
+          name: metrics-triton
       imagePullSecrets:
       - name: registry-credentials
       volumes:
