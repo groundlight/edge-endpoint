@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends
 from groundlight import Groundlight
 from model import Detector
 
-from app.core.utils import get_groundlight_sdk_instance, safe_call_api
+from app.core.app_state import get_groundlight_sdk_instance
+from app.core.utils import safe_call_api
 from app.schemas.schemas import DetectorCreate
 
 router = APIRouter()

@@ -1,3 +1,10 @@
+# Required runtime class for GPU use in k3s
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: nvidia
+handler: nvidia
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -9,6 +16,7 @@ spec:
   - protocol: TCP
     # Service port for NGINX
     port: 6717
+    nodePort: 30101
   type: NodePort
 ---
 apiVersion: apps/v1
@@ -29,14 +37,13 @@ spec:
     spec:
       containers:
       - name: edge-endpoint
-        # Pull the image from ECR
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:main-39ba8639f-dirty-914eb756cb2740c
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-fetch-model-7d240259d-dirty-9317aac2d1d4b1b
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
         env:
         - name: LOG_LEVEL
-          value: "INFO"
+          value: "DEBUG"
         - name: GROUNDLIGHT_API_TOKEN
           valueFrom:
             secretKeyRef:
@@ -46,13 +53,21 @@ spec:
         - name: edge-config-volume
           # This is a path inside the container not the host
           mountPath: /etc/groundlight
+        - name: model-repo
+          mountPath: /mnt/models
       imagePullSecrets:
       - name: registry-credentials
-
       volumes:
       - name: edge-config-volume
         configMap:
           name: edge-config
+      - name: model-repo
+        hostPath:
+          # A hostPath volume mounts a file or directory from the host node's filesystem into your Pod
+          # This simiplifies things a lot, but only really works for single-node clusters.
+          # TODO: check out k3s local path provisioner: https://docs.k3s.io/storage#setting-up-the-local-storage-provider
+          path: /home/ubuntu/ptdev/zuuul2/predictors/serving/model_repository
+          type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: Service
@@ -64,8 +79,13 @@ spec:
   ports:
     - protocol: TCP
       port: 8000
+      name: http
       targetPort: 8000
-  type: ClusterIP
+    - protocol: TCP
+      port: 8002
+      name: metrics  # From the edge machine, run curl localhost:<nodeport>/metrics to see metrics summary
+      targetPort: 8002
+  type: NodePort
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -83,21 +103,34 @@ spec:
       labels:
         app: inference-server
     spec:
+      runtimeClassName: nvidia  # Required for GPU use in k3s
       containers:
       - name: inference-server
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver:main-749c0cca3-dirty-0325a8beabe0d7b
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver:313680099-main
         imagePullPolicy: IfNotPresent
         # Tritonserver will look for models in /mnt/models and initialize them on startup
         # TODO: We only want to shut down an old instance when this tritonsever gives the "READY" signal for all models
         command:
-          ["tritonserver", "--model-repository=/mnt/models"]
+          [
+            "tritonserver",
+            "--model-repository=/mnt/models",
+            "--load-model=*",
+            "--model-control-mode=explicit",
+            "--metrics-config=summary_latencies=true"
+          ]
+        resources:
+          limits:
+            nvidia.com/gpu: 1
         volumeMounts:
         - name: model-repo
           mountPath: /mnt/models
         - name: dshm
           mountPath: /dev/shm
         ports:
-        - containerPort: 8000  # Default tritonserver HTTP port
+        - containerPort: 8000
+          name: http-triton
+        - containerPort: 8002
+          name: metrics-triton
       imagePullSecrets:
       - name: registry-credentials
       volumes:

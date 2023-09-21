@@ -1,4 +1,4 @@
-# Configure motion detection 
+# Configure motion detection
 motion_detection_templates:
   default:
     enabled: true
@@ -7,9 +7,9 @@ motion_detection_templates:
     # maximum time (seconds) between images sent to the cloud. This will be honored even if no
     # motion has been detected
     max_time_between_images: 3600
-    # We cache the last image query from the cloud API. If the cached image query 
+    # We cache the last image query from the cloud API. If the cached image query
     # still has low confidence after `unconfident_iq_reescalation_internal` seconds,
-    # we will send a new image query to the cloud to try to get a higher confidence. 
+    # we will send a new image query to the cloud to try to get a higher confidence.
     unconfident_iq_reescalation_interval: 60
 
   super-sensitive:
@@ -25,30 +25,20 @@ motion_detection_templates:
 local_inference_templates:
   default:
     enabled: true
-    # How often to fetch a new model binary (in seconds) 
+    # How often to fetch a new model binary (in seconds)
     refresh_every: 3600
-    # Specifies the model name and model version to use for inference. 
-    # If model_name is empty, the default model will be used.
-    # For now we don't have a default model, so we need to specify a model name
-    model_name: ''
-    model_version: ''
 
   super-fast-refresh:
     enabled: true
     refresh_every: 60
-    model_name: ''
-    model_version: ''
 
   disabled:
     enabled: false
 
 detectors:
   # Blank id implies that no detectors have been configured to use motion detection
-  # and/or local edge inference. The "default" templates are just examples of how one 
-  # might configure these features. 
+  # and/or local edge inference. The "default" templates are just examples of how one
+  # might configure these features.
   - detector_id: ''
     motion_detection_template: "default"
     local_inference_template: "default"
-
-
-

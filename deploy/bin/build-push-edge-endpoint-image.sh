@@ -17,6 +17,9 @@ aws ecr get-login-password --region us-west-2 | docker login --username AWS --pa
 # install buildx manually. Follow these instructions to install docker-buildx-plugin:
 # https://docs.docker.com/engine/install/ubuntu/
 
+# Install QEMU, a generic and open-source machine emulator and virtualizer
+docker run --rm --privileged linuxkit/binfmt:af88a591f9cc896a52ce596b9cf7ca26a061ef97
+
 # Check if tempbuilder already exists
 if ! docker buildx ls | grep -q tempgroundlightedgebuilder; then
   # Prep for multiplatform build - the build is done INSIDE a docker container
@@ -30,10 +33,7 @@ fi
 docker buildx inspect tempgroundlightedgebuilder --bootstrap
 
 # Build image for amd64 and arm64
-docker buildx build --platform linux/amd64,linux/arm64 --tag edge-endpoint ../..
-
-# Tag image
-docker tag edge-endpoint:latest 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${TAG}
-
-# Push image to ECR
-docker push 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${TAG}
+docker buildx build \
+  --platform linux/arm64,linux/amd64 \
+  --tag 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${TAG} \
+  ../.. --push

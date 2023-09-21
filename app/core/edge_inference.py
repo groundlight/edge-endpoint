@@ -1,10 +1,17 @@
 import logging
+import os
+import shutil
 import socket
 import time
-from typing import Dict
+from typing import Dict, Optional
 
 import numpy as np
+import requests
 import tritonclient.http as tritonclient
+from fastapi import HTTPException
+from jinja2 import Template
+
+from app.core.utils import prefixed_ksuid
 
 from .configs import LocalInferenceConfig
 
@@ -13,11 +20,9 @@ logger = logging.getLogger(__name__)
 
 class EdgeInferenceManager:
     INPUT_IMAGE_NAME = "image"
-    OUTPUT_SCORE_NAME = "score"
-    OUTPUT_CONFIDENCE_NAME = "confidence"
-    OUTPUT_PROBABILITY_NAME = "probability"
-    OUTPUT_LABEL_NAME = "label"
+    MODEL_OUTPUTS = ["score", "confidence", "probability", "label"]
     INFERENCE_SERVER_URL = "inference-service:8000"
+    MODEL_REPOSITORY = "/mnt/models"
 
     def __init__(self, config: Dict[str, LocalInferenceConfig], verbose: bool = False) -> None:
         """
@@ -33,7 +38,7 @@ class EdgeInferenceManager:
         self.inference_client = tritonclient.InferenceServerClient(url=self.INFERENCE_SERVER_URL, verbose=verbose)
         self.inference_config = config
 
-    def inference_is_available(self, detector_id: str) -> bool:
+    def inference_is_available(self, detector_id: str, model_version: str = "") -> bool:
         """
         Queries the inference server to see if everything is ready to perform inference.
         Args:
@@ -42,23 +47,15 @@ class EdgeInferenceManager:
             True if edge inference for the specified detector is available, False otherwise
         """
         if detector_id not in self.inference_config.keys():
-            logger.info(f"Edge inference is not enabled for {detector_id=}")
+            logger.debug(f"Edge inference is not enabled for {detector_id=}")
             return False
-
-        model_name, model_version = (
-            self.inference_config[detector_id].model_name,
-            self.inference_config[detector_id].model_version,
-        )
 
         try:
             if not self.inference_client.is_server_live():
                 logger.debug("Edge inference server is not live")
                 return False
-            if not self.inference_client.is_server_ready():
-                logger.debug("Edge inference server is not ready")
-                return False
-            if not self.inference_client.is_model_ready(model_name, model_version=model_version):
-                logger.debug(f"Edge inference model is not ready: {model_name}/{model_version}")
+            if not self.inference_client.is_model_ready(detector_id, model_version=model_version):
+                logger.debug(f"Edge inference model is not ready: {detector_id}/{model_version}")
                 return False
         except (ConnectionRefusedError, socket.gaierror) as ex:
             logger.warning(f"Edge inference server is not available: {ex}")
@@ -78,43 +75,172 @@ class EdgeInferenceManager:
                 - "probability": float
                 - "label": str
         """
-        img_numpy = img_numpy.transpose(2, 0, 1)  # [H, W, C=3] -> [C=3, H, W]
         imginput = tritonclient.InferInput(self.INPUT_IMAGE_NAME, img_numpy.shape, datatype="UINT8")
         imginput.set_data_from_numpy(img_numpy)
-        outputs = [
-            tritonclient.InferRequestedOutput(f)
-            for f in [self.OUTPUT_SCORE_NAME, self.OUTPUT_CONFIDENCE_NAME, self.OUTPUT_PROBABILITY_NAME]
-        ]
+        outputs = [tritonclient.InferRequestedOutput(f) for f in self.MODEL_OUTPUTS]
 
-        model_name, model_version = (
-            self.inference_config[detector_id].model_name,
-            self.inference_config[detector_id].model_version,
-        )
-
-        logger.debug("Submitting image to edge inference service")
+        request_id = prefixed_ksuid(prefix="einf_")
+        logger.debug(f"Submitting image to edge inference service. {request_id=}")
         start = time.monotonic()
         response = self.inference_client.infer(
-            model_name,
-            model_version=model_version,
+            model_name=detector_id,
             inputs=[imginput],
             outputs=outputs,
-            request_id="",
+            request_id=request_id,
         )
         end = time.monotonic()
 
-        probability = response.as_numpy(self.OUTPUT_PROBABILITY_NAME)[0]
-        output_dict = {
-            self.OUTPUT_SCORE_NAME: response.as_numpy(self.OUTPUT_SCORE_NAME)[0],
-            self.OUTPUT_CONFIDENCE_NAME: response.as_numpy(self.OUTPUT_CONFIDENCE_NAME)[0],
-            self.OUTPUT_PROBABILITY_NAME: probability,
-            self.OUTPUT_LABEL_NAME: self._probability_to_label(probability),
-        }
+        output_dict = {k: response.as_numpy(k)[0] for k in self.MODEL_OUTPUTS}
+        output_dict["label"] = "NO" if output_dict["label"] else "YES"  # map false / 0 to "YES" and true / 1 to "NO"
+
         logger.debug(
-            f"Inference server response for model={model_name}: {output_dict}.\n"
+            f"Inference server response for model={detector_id}: {output_dict}.\n"
             f"Inference time: {end - start:.3f} seconds"
         )
         return output_dict
 
-    def _probability_to_label(self, prob: float) -> str:
-        # TODO: there is a way to get the label string from the inference server. Do that instead.
-        return "YES" if prob < 0.5 else "NO"
+    def update_model(self, detector_id: str) -> None:
+        """
+        Request a new model from the cloud and update the local edge inference server.
+        """
+        logger.info(f"Attemping to update model for {detector_id}")
+
+        model_urls = fetch_model_urls(detector_id)
+        pipeline_config = model_urls["pipeline_config"]
+        model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
+
+        old_version, new_version = save_model_to_repository(detector_id, model_buffer, pipeline_config)
+
+        try:
+            self.inference_client.load_model(model_name=detector_id)  # refreshes the model if already loaded
+        except (ConnectionRefusedError, socket.gaierror) as ex:
+            logger.warning(f"Edge inference server is not available: {ex}")
+            return
+
+        retries = 6
+        while not self.inference_is_available(detector_id, model_version=str(new_version)):
+            if retries == 0:
+                logger.warning(
+                    f"Edge inference server is not ready to run model version {new_version} for {detector_id}"
+                )
+                return
+            retries -= 1
+            time.sleep(5)  # Wait up to 30 seconds for model to be ready
+
+        logger.info(f"Now running inference with model version {new_version} for {detector_id}")
+        if old_version is not None:
+            delete_model_version(detector_id, old_version)
+
+
+def fetch_model_urls(detector_id) -> dict[str, str]:
+    try:
+        groundlight_api_token = os.environ["GROUNDLIGHT_API_TOKEN"]
+    except KeyError as ex:
+        logger.error("GROUNDLIGHT_API_TOKEN environment variable is not set")
+        raise ex
+
+    url = f"https://api.groundlight.ai/edge-api/v1/fetch-model-urls/{detector_id}/"
+    headers = {
+        "x-api-token": groundlight_api_token,
+    }
+    response = requests.get(url, headers=headers, timeout=10)
+
+    if response.status_code == 200:
+        return response.json()
+    else:
+        raise HTTPException(status_code=response.status_code, detail=f"Failed to fetch model URLs for {detector_id=}.")
+
+
+def get_object_using_presigned_url(presigned_url):
+    response = requests.get(presigned_url, timeout=10)
+    if response.status_code == 200:
+        return response.content
+    else:
+        raise HTTPException(status_code=response.status_code, detail=f"Failed to retrieve data from {presigned_url}.")
+
+
+def save_model_to_repository(detector_id, model_buffer, pipeline_config) -> tuple[Optional[int], int]:
+    """
+    Make new version-directory for the model and save the new version of the model and pipeline config to it.
+    Model repository directory structure:
+    ```
+    <model-repository-path>/
+        <model-name>/
+            [config.pbtxt]
+            [<output-labels-file> ...]
+            <version>/
+                <model-definition-file (e.g. model.py, model.buf, etc)>
+    ```
+    See the following resources for more information:
+    - https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/model_repository.html
+    - https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/model_repository.html#python-models
+    - https://github.com/triton-inference-server/python_backend?tab=readme-ov-file#usage
+    """
+    model_dir = os.path.join(EdgeInferenceManager.MODEL_REPOSITORY, detector_id)
+    os.makedirs(model_dir, exist_ok=True)
+
+    old_model_version = get_current_model_version(model_dir)
+    new_model_version = 1 if old_model_version is None else old_model_version + 1
+
+    model_version_dir = os.path.join(model_dir, str(new_model_version))
+    os.makedirs(model_version_dir, exist_ok=True)
+
+    # Add model-version specific files (model.py and model.buf)
+    # NOTE: these files should be static and not change between model versions
+    create_file_from_template(
+        template_values={"pipeline_config": pipeline_config},
+        destination=os.path.join(model_version_dir, "model.py"),
+        template="app/resources/model_template.py",
+    )
+    with open(os.path.join(model_version_dir, "model.buf"), "wb") as f:
+        f.write(model_buffer)
+
+    # Add/Overwrite model configuration files (config.pbtxt and binary_labels.txt)
+    create_file_from_template(
+        template_values={"model_name": detector_id},
+        destination=os.path.join(model_dir, "config.pbtxt"),
+        template="app/resources/config_template.pbtxt",
+    )
+    shutil.copy2(src="app/resources/binary_labels.txt", dst=os.path.join(model_dir, "binary_labels.txt"))
+
+    logger.info(f"Wrote new model version {new_model_version} for {detector_id}")
+    return old_model_version, new_model_version
+
+
+def get_current_model_version(model_dir: str) -> Optional[int]:
+    """Triton inference server model_repositories contain model versions in subdirectories. These subdirectories
+    are named with integers. This function returns the highest integer in the model repository directory.
+    """
+    model_versions = [int(d) for d in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, d))]
+    return max(model_versions) if model_versions else None
+
+
+def create_file_from_template(template_values: dict, destination: str, template: str):
+    """
+    This is a helper function to create a file from a Jinja2 template. In your template file,
+    place template values in {{ template_value }} blocks. Then pass in a dictionary mapping template
+    keys to values. The template will be filled with the values and written to the destination file.
+
+    See https://jinja.palletsprojects.com/en/3.1.x/templates/ for more information on Jinja2 templates.
+    """
+    # Step 1: Read the template file
+    with open(template, "r") as template_file:
+        template_content = template_file.read()
+
+    # Step 2: Substitute placeholders with actual values
+    template = Template(template_content)
+    filled_content = template.render(**template_values)
+
+    # Step 3: Write the filled content to a new file
+    os.makedirs(os.path.dirname(destination), exist_ok=True)
+    with open(destination, "w") as output_file:
+        output_file.write(filled_content)
+
+
+def delete_model_version(detector_id: str, model_version: int):
+    """Recursively delete directory detector_id/model_version"""
+    model_dir = os.path.join(EdgeInferenceManager.MODEL_REPOSITORY, detector_id)
+    model_version_dir = os.path.join(model_dir, str(model_version))
+    logger.info(f"Deleting model version {model_version} for {detector_id}")
+    if os.path.exists(model_version_dir):
+        shutil.rmtree(model_version_dir)

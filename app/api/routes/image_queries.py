@@ -9,15 +9,14 @@ from groundlight import Groundlight
 from model import ClassificationResult, Detector, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
 from PIL import Image
 
-from app.core.motion_detection import MotionDetectionManager
-from app.core.utils import (
+from app.core.app_state import (
     AppState,
     get_app_state,
     get_detector_metadata,
     get_groundlight_sdk_instance,
-    prefixed_ksuid,
-    safe_call_api,
 )
+from app.core.motion_detection import MotionDetectionManager
+from app.core.utils import prefixed_ksuid, safe_call_api
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +72,7 @@ async def post_image_query(
         This manages the motion detection state for all detectors.
     :param inference_client: Application's triton inference client.
     """
-    img_numpy = np.array(img)  # [H, W, C=3], dtype: uint8, RGB format
+    img_numpy = np.asarray(img)  # [H, W, C=3], dtype: uint8, RGB format
 
     iqe_cache = app_state.iqe_cache
     motion_detection_manager = app_state.motion_detection_manager
@@ -101,7 +100,6 @@ async def post_image_query(
             return new_image_query
 
     image_query = None
-
     # Check if edge inference is enabled for this detector
     if edge_inference_manager.inference_is_available(detector_id=detector_id):
         detector_metadata: Detector = get_detector_metadata(detector_id=detector_id, gl=gl)
@@ -116,6 +114,7 @@ async def post_image_query(
                 confidence=results["confidence"],
                 query=detector_metadata.query,
             )
+            iqe_cache.update_cache(image_query=image_query)
         else:
             logger.info(
                 "Ran inference locally, but detector confidence is not high enough to return. Current confidence:"
@@ -127,10 +126,7 @@ async def post_image_query(
     if not image_query:
         image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=patience_time)
 
-    if (
-        detector_id in motion_detection_manager.detectors
-        and motion_detection_manager.detectors[detector_id].is_enabled()
-    ):
+    if motion_detection_manager.motion_detection_is_enabled(detector_id=detector_id):
         # Store the cloud's response so that if the next image has no motion, we will return the same response
         motion_detection_manager.update_image_query_response(detector_id=detector_id, response=image_query)
 
