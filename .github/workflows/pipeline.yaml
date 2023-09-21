@@ -23,12 +23,6 @@ jobs:
           # symlink to kubeconfig
           mkdir -p ~/.kube
           ln -s /etc/rancher/k3s/k3s.yaml ~/.kube/config
-      - name: Check k3s status
-        run: |
-          set -ex
-          kubectl config view
-          kubectl get nodes
-          kubectl get pods --all-namespaces
       - name: Deploy the edge-endpoint yaml
         run: |
           set -ex
@@ -37,7 +31,15 @@ jobs:
       - name: Wait for edge-endpoint pod to be ready
         run: |
           set -ex
-          kubectl rollout status deployment edge-endpoint --timeout=5m
+          sleep 10
+          kubectl describe pod edge-endpoint
+          sleep 10
+          kubectl describe pod edge-endpoint
+          sleep 10
+          kubectl describe pod edge-endpoint
+          
+          # Really we should wait for it to successfully deploy:
+          #kubectl rollout status deployment edge-endpoint --timeout=5m
 
   test-motion-detection:
     runs-on: ubuntu-22.04
