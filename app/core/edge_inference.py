@@ -75,7 +75,6 @@ class EdgeInferenceManager:
                 - "probability": float
                 - "label": str
         """
-        img_numpy = img_numpy.transpose(2, 0, 1)  # [H, W, C=3] -> [C=3, H, W]
         imginput = tritonclient.InferInput(self.INPUT_IMAGE_NAME, img_numpy.shape, datatype="UINT8")
         imginput.set_data_from_numpy(img_numpy)
         outputs = [tritonclient.InferRequestedOutput(f) for f in self.MODEL_OUTPUTS]

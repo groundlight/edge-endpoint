@@ -12,7 +12,7 @@ from predictors.pipeline.pipeline import Pipeline
 
 def request_to_pil_image(request: "pb_utils.InferenceRequest") -> Image.Image:
     """
-    Assumes that the input tensor is a 3-channel (CHW) uint8 RGB image with values in [0, 255].
+    Assumes that the input tensor is a 3-channel (HWC) uint8 RGB image with values in [0, 255].
     """
     numpy_image = pb_utils.get_input_tensor_by_name(request, "image").as_numpy()
     return Image.fromarray(numpy_image, mode="RGB")
@@ -94,7 +94,7 @@ class TritonPythonModel:
             description="Cumulative time spent running inference through pipeline in microseconds",
             kind=pb_utils.MetricFamily.COUNTER,  # or pb_utils.MetricFamily.GAUGE
         )
-        self.pipeline_counter = self.preprocess_metric_family.Metric(
+        self.pipeline_counter = self.pipeline_metric_family.Metric(
             labels={"model": args["model_name"], "version": args["model_version"]}
         )
         self.response_metric_family = pb_utils.MetricFamily(
@@ -102,7 +102,7 @@ class TritonPythonModel:
             description="Cumulative time spent constructing response in microseconds",
             kind=pb_utils.MetricFamily.COUNTER,  # or pb_utils.MetricFamily.GAUGE
         )
-        self.response_counter = self.preprocess_metric_family.Metric(
+        self.response_counter = self.response_metric_family.Metric(
             labels={"model": args["model_name"], "version": args["model_version"]}
         )
 

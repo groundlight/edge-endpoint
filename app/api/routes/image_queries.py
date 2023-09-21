@@ -72,7 +72,7 @@ async def post_image_query(
         This manages the motion detection state for all detectors.
     :param inference_client: Application's triton inference client.
     """
-    img_numpy = np.array(img)  # [H, W, C=3], dtype: uint8, RGB format
+    img_numpy = np.asarray(img)  # [H, W, C=3], dtype: uint8, RGB format
 
     iqe_cache = app_state.iqe_cache
     motion_detection_manager = app_state.motion_detection_manager

@@ -37,7 +37,7 @@ spec:
     spec:
       containers:
       - name: edge-endpoint
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-fetch-model-97d752cf1-dirty-64efc3abc1edd7e
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-fetch-model-7d240259d-dirty-9317aac2d1d4b1b
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
@@ -83,7 +83,7 @@ spec:
       targetPort: 8000
     - protocol: TCP
       port: 8002
-      name: metrics
+      name: metrics  # From the edge machine, run curl localhost:<nodeport>/metrics to see metrics summary
       targetPort: 8002
   type: NodePort
 ---
@@ -111,7 +111,13 @@ spec:
         # Tritonserver will look for models in /mnt/models and initialize them on startup
         # TODO: We only want to shut down an old instance when this tritonsever gives the "READY" signal for all models
         command:
-          ["tritonserver", "--model-repository=/mnt/models", "--load-model=*", "--model-control-mode=explicit", "--metrics-config", "summary_latencies=true"]
+          [
+            "tritonserver",
+            "--model-repository=/mnt/models",
+            "--load-model=*",
+            "--model-control-mode=explicit",
+            "--metrics-config=summary_latencies=true"
+          ]
         resources:
           limits:
             nvidia.com/gpu: 1
