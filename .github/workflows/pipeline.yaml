@@ -22,6 +22,10 @@ jobs:
           sudo chown $USER /etc/rancher/k3s/k3s.yaml
       - name: Check k3s status
         run: |
+          kubectl config view
+          sleep 5
+          kubectl config view
+          sleep 5
           kubectl get nodes
           kubectl get pods --all-namespaces
 
