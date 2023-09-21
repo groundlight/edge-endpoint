@@ -204,7 +204,7 @@ def save_model_to_repository(detector_id, model_buffer, pipeline_config) -> tupl
     )
     shutil.copy2(src="app/resources/binary_labels.txt", dst=os.path.join(model_dir, "binary_labels.txt"))
 
-    logger.warning(f"Wrote new model version {new_model_version} for {detector_id}")
+    logger.info(f"Wrote new model version {new_model_version} for {detector_id}")
     return old_model_version, new_model_version
 
 

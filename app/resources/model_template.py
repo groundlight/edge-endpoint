@@ -1,5 +1,6 @@
 import json
 import os
+import time
 
 import numpy as np
 import triton_python_backend_utils as pb_utils
@@ -45,7 +46,8 @@ class TritonPythonModel:
           * model_name: Model name
           * model_version: Model version
         """
-        print(args)
+        self.logger = pb_utils.Logger
+        self.logger.log_info(f"initialize args={args}")
         # You must parse model_config. JSON string is not parsed here
         self.model_config = model_config = json.loads(args["model_config"])
 
@@ -70,12 +72,38 @@ class TritonPythonModel:
         pipeline_config_dict: dict = (
             pipeline_config_dict if isinstance(pipeline_config_dict, dict) else {"name": pipeline_config_dict}
         )
-        print("Pipeline config:", pipeline_config_dict)
+        self.logger.log_info(f"{pipeline_config_dict=}")
 
         self.pipeline = Pipeline.create(
             buffer=buffer,
             text_query="text_query_is_unavailable",
             **pipeline_config_dict,
+        )
+
+        # Setup Metrics
+        self.preprocess_metric_family = pb_utils.MetricFamily(
+            name="gl_inference_compute_preprocess_duration_us",
+            description="Cumulative time spent converting requests to PIL images in microseconds",
+            kind=pb_utils.MetricFamily.COUNTER,  # or pb_utils.MetricFamily.GAUGE
+        )
+        self.preprocess_counter = self.preprocess_metric_family.Metric(
+            labels={"model": args["model_name"], "version": args["model_version"]}
+        )
+        self.pipeline_metric_family = pb_utils.MetricFamily(
+            name="gl_inference_compute_pipeline_duration_us",
+            description="Cumulative time spent running inference through pipeline in microseconds",
+            kind=pb_utils.MetricFamily.COUNTER,  # or pb_utils.MetricFamily.GAUGE
+        )
+        self.pipeline_counter = self.preprocess_metric_family.Metric(
+            labels={"model": args["model_name"], "version": args["model_version"]}
+        )
+        self.response_metric_family = pb_utils.MetricFamily(
+            name="gl_inference_compute_response_duration_us",
+            description="Cumulative time spent constructing response in microseconds",
+            kind=pb_utils.MetricFamily.COUNTER,  # or pb_utils.MetricFamily.GAUGE
+        )
+        self.response_counter = self.preprocess_metric_family.Metric(
+            labels={"model": args["model_name"], "version": args["model_version"]}
         )
 
     def execute(self, requests: list["pb_utils.InferenceRequest"]) -> list["pb_utils.InferenceResponse"]:
@@ -107,13 +135,20 @@ class TritonPythonModel:
         # the underlying NumPy array and store it if it is required.
         for request in requests:
             # Get PIL image from request
+            start_ns = time.time_ns()
             image = request_to_pil_image(request)
+            end_ns = time.time_ns()
+            self.preprocess_counter.increment((end_ns - start_ns) / 1000)
 
+            start_ns = time.time_ns()
             preds = self.pipeline.run(
                 examples=[Example(data=image, example_id=None, annotations_requested=[])],
                 return_rois=False,
             )
+            end_ns = time.time_ns()
+            self.pipeline_counter.increment((end_ns - start_ns) / 1000)
 
+            start_ns = time.time_ns()
             prob: np.ndarray | None = preds.probabilities
             if prob is None:
                 raise ValueError("Pipeline did not return probabilities")
@@ -136,6 +171,8 @@ class TritonPythonModel:
                     out_tensor_label,
                 ]
             )
+            end_ns = time.time_ns()
+            self.response_counter.increment((end_ns - start_ns) / 1000)
             responses.append(inference_response)
 
         return responses

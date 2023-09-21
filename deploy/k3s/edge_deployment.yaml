@@ -37,13 +37,13 @@ spec:
     spec:
       containers:
       - name: edge-endpoint
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-fetch-model-67973dc2b-dirty-987c93ee417bd38
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-fetch-model-97d752cf1-dirty-64efc3abc1edd7e
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
         env:
         - name: LOG_LEVEL
-          value: "INFO"
+          value: "DEBUG"
         - name: GROUNDLIGHT_API_TOKEN
           valueFrom:
             secretKeyRef:
@@ -79,8 +79,13 @@ spec:
   ports:
     - protocol: TCP
       port: 8000
+      name: http
       targetPort: 8000
-  type: ClusterIP
+    - protocol: TCP
+      port: 8002
+      name: metrics
+      targetPort: 8002
+  type: NodePort
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -106,7 +111,7 @@ spec:
         # Tritonserver will look for models in /mnt/models and initialize them on startup
         # TODO: We only want to shut down an old instance when this tritonsever gives the "READY" signal for all models
         command:
-          ["tritonserver", "--model-repository=/mnt/models", "--load-model=*", "--model-control-mode=explicit"]
+          ["tritonserver", "--model-repository=/mnt/models", "--load-model=*", "--model-control-mode=explicit", "--metrics-config", "summary_latencies=true"]
         resources:
           limits:
             nvidia.com/gpu: 1
@@ -116,7 +121,10 @@ spec:
         - name: dshm
           mountPath: /dev/shm
         ports:
-        - containerPort: 8000  # Default tritonserver HTTP port
+        - containerPort: 8000
+          name: http-triton
+        - containerPort: 8002
+          name: metrics-triton
       imagePullSecrets:
       - name: registry-credentials
       volumes:
