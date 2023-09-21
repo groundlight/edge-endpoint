@@ -8,8 +8,8 @@ import yaml
 from cachetools import TTLCache
 from fastapi import Request
 from groundlight import Groundlight
-from kubernetes import client as kube_client 
-from kubernetes import config 
+from kubernetes import client as kube_client
+from kubernetes import config
 from model import Detector
 
 from app.core.utils import safe_call_api

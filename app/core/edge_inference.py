@@ -67,7 +67,7 @@ class EdgeInferenceManager:
         Returns:
             True if edge inference for the specified detector is available, False otherwise
         """
-        
+
         inference_client = self.inference_clients[detector_id]
 
         try:
@@ -101,7 +101,7 @@ class EdgeInferenceManager:
 
         request_id = prefixed_ksuid(prefix="einf_")
         inference_client = self.inference_clients[detector_id]
-        
+
         logger.debug(f"Submitting image to edge inference service. {request_id=}")
         start = time.monotonic()
         response = inference_client.infer(
