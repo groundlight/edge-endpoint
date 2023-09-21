@@ -1,4 +1,5 @@
 from io import BytesIO
+import time
 from typing import Callable
 
 import ksuid
@@ -60,3 +61,16 @@ def pil_image_to_bytes(img: Image.Image, format: str = "JPEG") -> bytes:
     with BytesIO() as buffer:
         img.save(buffer, format=format)
         return buffer.getvalue()
+
+
+def timing_decorator(logger):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            start_time = time.time()
+            result = func(*args, **kwargs)
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            logger.info(f"{func.__name__} took {elapsed_time * 1000} milliseconds to run.")
+            return result
+        return wrapper
+    return decorator

@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime
 from io import BytesIO
+import time
 from typing import Optional
 
 import numpy as np
@@ -72,6 +73,7 @@ async def post_image_query(
         This manages the motion detection state for all detectors.
     :param inference_client: Application's triton inference client.
     """
+    start = time.time()
     img_numpy = np.asarray(img)  # [H, W, C=3], dtype: uint8, RGB format
 
     iqe_cache = app_state.iqe_cache
@@ -130,6 +132,8 @@ async def post_image_query(
         # Store the cloud's response so that if the next image has no motion, we will return the same response
         motion_detection_manager.update_image_query_response(detector_id=detector_id, response=image_query)
 
+    end = time.time()
+    logger.info(f"post_image_query took {(end - start)*1000} milliseconds to run.")
     return image_query
 
 

@@ -11,7 +11,7 @@ import tritonclient.http as tritonclient
 from fastapi import HTTPException
 from jinja2 import Template
 
-from app.core.utils import prefixed_ksuid
+from app.core.utils import prefixed_ksuid, timing_decorator
 
 from .configs import LocalInferenceConfig
 
@@ -38,6 +38,7 @@ class EdgeInferenceManager:
         self.inference_client = tritonclient.InferenceServerClient(url=self.INFERENCE_SERVER_URL, verbose=verbose)
         self.inference_config = config
 
+    @timing_decorator(logger)
     def inference_is_available(self, detector_id: str, model_version: str = "") -> bool:
         """
         Queries the inference server to see if everything is ready to perform inference.
@@ -62,6 +63,7 @@ class EdgeInferenceManager:
             return False
         return True
 
+    @timing_decorator(logger)
     def run_inference(self, detector_id: str, img_numpy: np.ndarray) -> dict:
         """
         Submit an image to the inference server, route to a specific model, and return the results.
