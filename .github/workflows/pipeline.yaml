@@ -10,6 +10,21 @@ env:
   GROUNDLIGHT_ENDPOINT: http://localhost:6717
 
 jobs:
+  test-in-k3s:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+      - name: Install k3s
+        run: |
+          curl -sfL https://get.k3s.io | sh -
+          sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+          sudo chown $USER /etc/rancher/k3s/k3s.yaml
+      - name: Check k3s status
+        run: |
+          kubectl get nodes
+          kubectl get pods --all-namespaces
+
   test-motion-detection:
     runs-on: ubuntu-22.04
     steps:
