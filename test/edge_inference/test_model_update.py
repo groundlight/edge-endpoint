@@ -25,8 +25,8 @@ def test_save_model_to_repository():
         id_file = os.path.join(temp_dir, "test_detector", "1", "model_id.txt")
         assert os.path.exists(id_file)
 
-        with open(id_file, "r"):
-            assert "ksu_1" == id_file.read()
+        with open(id_file, "r") as f:
+            assert "ksu_1" == f.read()
 
         save_model_to_repository(
             detector_id="test_detector",
@@ -42,8 +42,8 @@ def test_save_model_to_repository():
         id_file = os.path.join(temp_dir, "test_detector", "2", "model_id.txt")
         assert os.path.exists(id_file)
 
-        with open(id_file, "r"):
-            assert "ksu_1" == id_file.read()
+        with open(id_file, "r") as f:
+            assert "ksu_1" == f.read()
 
         delete_model_version("test_detector", "1")
         assert not os.path.exists(os.path.join(temp_dir, "test_detector", "1"))
