@@ -1,9 +1,8 @@
 import os
 import tempfile
-import pytest
-import unittest.mock as mock
+from unittest import mock
 
-from app.core.edge_inference import delete_model_version, save_model_to_repository, EdgeInferenceManager
+from app.core.edge_inference import EdgeInferenceManager, delete_model_version, save_model_to_repository
 
 
 def test_save_model_to_repository():
