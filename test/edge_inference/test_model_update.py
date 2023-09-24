@@ -45,6 +45,7 @@ def test_save_model_to_repository():
         with open(id_file, "r") as f:
             assert "ksu_1" == f.read()
 
+        # Also test deleting a model version
         delete_model_version("test_detector", "1")
         assert not os.path.exists(os.path.join(temp_dir, "test_detector", "1"))
         assert not os.path.exists(os.path.join(temp_dir, "test_detector", "1", "model.buf"))
@@ -54,6 +55,7 @@ def test_save_model_to_repository():
 
 def test_update_model_with_no_new_model_available():
     with tempfile.TemporaryDirectory() as temp_dir:
+        # Setup a basic model repository
         save_model_to_repository(
             detector_id="test_detector",
             model_buffer=b"test_model1",
@@ -68,5 +70,6 @@ def test_update_model_with_no_new_model_available():
                     "model_binary_id": "ksu_1",
                 }
                 edge_manager = EdgeInferenceManager(config=None)
-                edge_manager.update_model("test_detector")  # Should return quickly because no new ksuid
+                edge_manager.update_model("test_detector")
+                # We shouldnt be pulling a model from s3 if we know there is nothing new available
                 mock_get_from_s3.assert_not_called()
