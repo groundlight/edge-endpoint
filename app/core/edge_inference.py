@@ -106,7 +106,10 @@ class EdgeInferenceManager:
         logger.info(f"Checking if there is a new model available for {detector_id}")
         model_urls = fetch_model_urls(detector_id)
 
-        cloud_binary_ksuid = model_urls["model_binary_id"]
+        cloud_binary_ksuid = model_urls.get("model_binary_id", None)
+        if cloud_binary_ksuid is None:
+            raise ValueError(f"No model binary ksuid returned for {detector_id}")
+
         edge_binary_ksuid = get_current_model_ksuid(detector_id)
         if edge_binary_ksuid and cloud_binary_ksuid <= edge_binary_ksuid:
             logger.info(f"No new model available for {detector_id}")
