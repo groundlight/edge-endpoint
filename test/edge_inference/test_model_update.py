@@ -1,5 +1,5 @@
 import os
-from tempfile import tempdir
+import tempfile
 import pytest
 import unittest.mock as mock
 
@@ -7,7 +7,7 @@ from app.core.edge_inference import delete_model_version, save_model_to_reposito
 
 
 def test_save_model_to_repository():
-    with tempdir.TemporaryDirectory() as temp_dir:
+    with tempfile.TemporaryDirectory() as temp_dir:
         save_model_to_repository(
             detector_id="test_detector",
             model_buffer=b"test_model1",
@@ -54,7 +54,7 @@ def test_save_model_to_repository():
 
 
 def test_update_model_with_no_new_model_available():
-    with tempdir.TemporaryDirectory() as temp_dir:
+    with tempfile.TemporaryDirectory() as temp_dir:
         save_model_to_repository(
             detector_id="test_detector",
             model_buffer=b"test_model1",
