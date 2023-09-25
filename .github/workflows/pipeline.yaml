@@ -26,13 +26,8 @@ jobs:
       - name: Deploy the edge-endpoint yaml
         run: |
           set -ex
-          ./deploy/bin/make-gl-api-token-secret.sh
-          ./deploy/bin/make-aws-secret.sh 
-          kubectl create configmap edge-config --from-file=configs/edge-config.yaml 
-          kubectl create configmap inference-deployment-template \
-            --from-file=deploy/k3s/inference_deployment.yaml
-          kubectl apply -f deploy/k3s/edge_deployment.yaml
-          kubectl describe deployment
+          chmod +x deploy/k3s/cluster_setup.sh
+          ./deploy/k3s/cluster_setup.sh
       - name: Wait for edge-endpoint pod to be ready
         run: |
           set -ex

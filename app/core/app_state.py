@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from functools import lru_cache
 from typing import Dict
 
@@ -107,6 +108,23 @@ class AppState:
         if deploy_inference_per_detector:
             self._setup_kube_client()
 
+    def _get_inference_flavor(self, namespace: str) -> str:
+        """
+        Returns the inference flavor to use for the given namespace.
+        NOTE we don't need to mount the `inference-flavor` ConfigMap in the inference container as a volume.
+        As long as the ConfigMap exists in the namespace, we can read it using the kubernetes client.
+        """
+        try:
+            config_map = self._core_kube_client.read_namespaced_config_map(name="inference-flavor", namespace=namespace)
+            return config_map.data["INFERENCE_FLAVOR"]
+        except kube_client.rest.ApiException as e:
+            if e.status == 404:
+                logger.debug(f"ConfigMap `inference-flavor` does not exist in namespace {namespace}.")
+            else:
+                logger.error(f"Failed to read ConfigMap `inference-flavor`: {e}", exc_info=True)
+
+            return "CPU"
+
     def _setup_kube_client(self) -> None:
         """
         Sets up the kubernetes client in order to access resources in the cluster.
@@ -158,6 +176,24 @@ class AppState:
 
         logger.debug(f"Applying kubernetes manifest to namespace `{namespace}`...")
 
+    def _substitute_placeholders(self, service_name: str, deployment_name: str, inference_flavor: str) -> str:
+        inference_deployment = self._inference_deployment_template
+        inference_deployment = inference_deployment.replace("{{ INFERENCE_SERVICE_NAME }}", service_name)
+        inference_deployment = inference_deployment.replace("{{ DEPLOYMENT_NAME }}", deployment_name)
+
+        if inference_flavor == "GPU":
+            inference_deployment = inference_deployment.replace("{{ - if .USE_GPU }}", "")  # remove the placeholder
+            inference_deployment = inference_deployment.replace("{{ - end }}", "")  # remove the placeholder
+        else:
+            # If not using GPU, remove the GPU resources from the manifest
+            pattern_gpu_resource = r"{{ - if .USE_GPU }}.*?{{ - end }}"
+            pattern_runtime_class = r"{{ - if .USE_GPU }}.*?{{ - end }}"
+
+            inference_deployment = re.sub(pattern_gpu_resource, "", inference_deployment, flags=re.DOTALL)
+            inference_deployment = re.sub(pattern_runtime_class, "", inference_deployment, flags=re.DOTALL)
+
+        return inference_deployment.strip()
+
     @cachetools.cached(
         cache=KUBERNETES_HEALTH_CHECKS_TTL_CACHE,
         key=lambda self, detector_id, *args, **kwargs: detector_id,
@@ -208,11 +244,13 @@ class AppState:
 
                 if create_if_absent:
                     logger.info(f"Creating deployment {deployment_name} in namespace {namespace}")
-                    deployment_manifest = self._inference_deployment_template
-                    deployment_manifest = deployment_manifest.replace("{{ INFERENCE_SERVICE_NAME }}", service_name)
-                    deployment_manifest = deployment_manifest.replace("{{ DEPLOYMENT_NAME }}", deployment_name)
 
-                    self._apply_kube_manifest(namespace=namespace, manifest=deployment_manifest)
+                    inference_flavor = self._get_inference_flavor(namespace)
+                    inference_deployment = self._substitute_placeholders(
+                        service_name=service_name, deployment_name=deployment_name, inference_flavor=inference_flavor
+                    )
+
+                    self._apply_kube_manifest(namespace=namespace, manifest=inference_deployment)
 
             else:
                 logger.error(f"Failed to read deployment {deployment_name}: {e}", exc_info=True)

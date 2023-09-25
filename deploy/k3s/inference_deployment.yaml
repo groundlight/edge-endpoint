@@ -32,7 +32,9 @@ spec:
       labels:
         app: inference-server
     spec:
+      {{ - if .USE_GPU }}
       runtimeClassName: nvidia  # Required for GPU use in k3s
+      {{ - end }}
       containers:
       - name: inference-server
         image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver:313680099-main
@@ -52,8 +54,10 @@ spec:
             "--backend-config=python,shm-region-prefix-name={{ DEPLOYMENT_NAME }}"
           ]
         resources:
+          {{ - if .USE_GPU }}
           limits:
             nvidia.com/gpu: 1
+          {{ - end }}
         volumeMounts:
         - name: model-repo
           mountPath: /mnt/models
