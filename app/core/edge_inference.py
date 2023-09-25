@@ -110,12 +110,13 @@ class EdgeInferenceManager:
         if cloud_binary_ksuid is None:
             raise ValueError(f"No model binary ksuid returned for {detector_id}")
 
-        edge_binary_ksuid = get_current_model_ksuid(detector_id)
+        model_dir = os.path.join(self.MODEL_REPOSITORY, detector_id)
+        edge_binary_ksuid = get_current_model_ksuid(model_dir)
         if edge_binary_ksuid and cloud_binary_ksuid <= edge_binary_ksuid:
             logger.info(f"No new model available for {detector_id}")
             return
 
-        logger.info(f"New model available, attemping to update model for {detector_id}")
+        logger.info(f"New model binary available ({cloud_binary_ksuid}), attemping to update model for {detector_id}")
         pipeline_config: str = model_urls["pipeline_config"]
         model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
         old_version, new_version = save_model_to_repository(
@@ -132,7 +133,7 @@ class EdgeInferenceManager:
             logger.warning(f"Edge inference server is not available: {ex}")
             return
 
-        retries = 6
+        retries = 15
         while not self.inference_is_available(detector_id, model_version=str(new_version)):
             if retries == 0:
                 logger.warning(
@@ -140,11 +141,11 @@ class EdgeInferenceManager:
                 )
                 return
             retries -= 1
-            time.sleep(5)  # Wait up to 30 seconds for model to be ready
+            time.sleep(2)  # Wait up to 30 seconds for model to be ready
 
-        logger.info(f"Now running inference with model version {new_version} for {detector_id}")
+        logger.info(f"Now running inference with model version {new_version} for {detector_id} using binary_ksuid={cloud_binary_ksuid}")
         if old_version is not None:
-            delete_model_version(detector_id, old_version)
+            delete_model_version(detector_id, old_version, repository_root=self.MODEL_REPOSITORY)
 
 
 def fetch_model_urls(detector_id: str) -> dict[str, str]:
@@ -179,7 +180,7 @@ def save_model_to_repository(
     model_buffer: bytes,
     pipeline_config: str,
     binary_ksuid: str,
-    repository_root: str = EdgeInferenceManager.MODEL_REPOSITORY,
+    repository_root: str,
 ) -> tuple[Optional[int], int]:
     """
     Make new version-directory for the model and save the new version of the model and pipeline config to it.
@@ -226,7 +227,7 @@ def save_model_to_repository(
     )
     shutil.copy2(src="app/resources/binary_labels.txt", dst=os.path.join(model_dir, "binary_labels.txt"))
 
-    logger.info(f"Wrote new model version {new_model_version} for {detector_id}")
+    logger.info(f"Wrote new model version {new_model_version} for {detector_id} with {binary_ksuid=}")
     return old_model_version, new_model_version
 
 
@@ -234,6 +235,7 @@ def get_current_model_version(model_dir: str) -> Optional[int]:
     """Triton inference server model_repositories contain model versions in subdirectories. These subdirectories
     are named with integers. This function returns the highest integer in the model repository directory.
     """
+    logger.info(f"Checking for current model version in {model_dir}")
     if not os.path.exists(model_dir):
         return None
     model_versions = [int(d) for d in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, d))]
@@ -246,12 +248,14 @@ def get_current_model_ksuid(model_dir: str) -> Optional[str]:
     """
     v = get_current_model_version(model_dir)
     if v is None:
+        logger.info(f"No current model version found in {model_dir}")
         return None
-    id_file = os.path.join(model_dir, v, "model_id.txt")
+    id_file = os.path.join(model_dir, str(v), "model_id.txt")
     if os.path.exists(id_file):
         with open(id_file, "r") as f:
             return f.read()
     else:
+        logger.warning(f"No existing model_id.txt file found in {os.path.join(model_dir, v)}")
         return None
 
 
@@ -277,10 +281,9 @@ def create_file_from_template(template_values: dict, destination: str, template:
         output_file.write(filled_content)
 
 
-def delete_model_version(detector_id: str, model_version: int) -> None:
+def delete_model_version(detector_id: str, model_version: int, repository_root: str) -> None:
     """Recursively delete directory detector_id/model_version"""
-    model_dir = os.path.join(EdgeInferenceManager.MODEL_REPOSITORY, detector_id)
-    model_version_dir = os.path.join(model_dir, str(model_version))
+    model_version_dir = os.path.join(repository_root, detector_id, str(model_version))
     logger.info(f"Deleting model version {model_version} for {detector_id}")
     if os.path.exists(model_version_dir):
         shutil.rmtree(model_version_dir)

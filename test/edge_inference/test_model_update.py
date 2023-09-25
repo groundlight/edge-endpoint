@@ -50,7 +50,7 @@ def test_save_model_to_repository():
             assert ksuid_2 == f.read()
 
         # Also test deleting a model version
-        delete_model_version(detector_id, model_version=1)
+        delete_model_version(detector_id, model_version=1, repository_root=temp_dir)
         assert not os.path.exists(os.path.join(temp_dir, detector_id, "1", "model.buf"))
         assert not os.path.exists(os.path.join(temp_dir, detector_id, "1", "model.py"))
         assert not os.path.exists(os.path.join(temp_dir, detector_id, "1", "model_id.txt"))
