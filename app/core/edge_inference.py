@@ -118,7 +118,13 @@ class EdgeInferenceManager:
         logger.info(f"New model available, attemping to update model for {detector_id}")
         pipeline_config: str = model_urls["pipeline_config"]
         model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
-        old_version, new_version = save_model_to_repository(detector_id, model_buffer, pipeline_config)
+        old_version, new_version = save_model_to_repository(
+            detector_id,
+            model_buffer,
+            pipeline_config,
+            binary_ksuid=cloud_binary_ksuid,
+            repository_root=self.MODEL_REPOSITORY
+        )
 
         try:
             self.inference_client.load_model(model_name=detector_id)  # refreshes the model if already loaded
