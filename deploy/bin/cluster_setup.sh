@@ -36,5 +36,6 @@ fi
 
 # Edge Deployment
 $K delete --ignore-not-found deployment edge-endpoint
+$K apply -f deploy/k3s/service_account.yaml 
 $K apply -f deploy/k3s/edge_deployment.yaml
 $K describe deployment edge-endpoint
