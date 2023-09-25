@@ -123,7 +123,7 @@ class EdgeInferenceManager:
             model_buffer,
             pipeline_config,
             binary_ksuid=cloud_binary_ksuid,
-            repository_root=self.MODEL_REPOSITORY
+            repository_root=self.MODEL_REPOSITORY,
         )
 
         try:
