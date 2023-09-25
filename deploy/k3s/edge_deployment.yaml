@@ -55,9 +55,9 @@ spec:
         volumeMounts:
         - name: edge-config-volume
           # This is a path inside the container not the host
-          mountPath: /etc/groundlight
+          mountPath: /etc/groundlight/edge-config
         - name: inference-deployment-template-volume
-          mountPath: /etc/groundlight
+          mountPath: /etc/groundlight/inference-deployment 
         - name: model-repo
           mountPath: /mnt/models
       imagePullSecrets:
