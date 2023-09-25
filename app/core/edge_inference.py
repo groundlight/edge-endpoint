@@ -143,7 +143,10 @@ class EdgeInferenceManager:
             retries -= 1
             time.sleep(2)  # Wait up to 30 seconds for model to be ready
 
-        logger.info(f"Now running inference with model version {new_version} for {detector_id} using binary_ksuid={cloud_binary_ksuid}")
+        logger.info(
+            f"Now running inference with model version {new_version} for {detector_id} using"
+            f" binary_ksuid={cloud_binary_ksuid}"
+        )
         if old_version is not None:
             delete_model_version(detector_id, old_version, repository_root=self.MODEL_REPOSITORY)
 
