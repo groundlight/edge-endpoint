@@ -60,4 +60,3 @@ def pil_image_to_bytes(img: Image.Image, format: str = "JPEG") -> bytes:
     with BytesIO() as buffer:
         img.save(buffer, format=format)
         return buffer.getvalue()
-

@@ -8,8 +8,8 @@ import yaml
 from cachetools import TTLCache
 from fastapi import Request
 from groundlight import Groundlight
-from kubernetes import client as kube_client 
-from kubernetes import config 
+from kubernetes import client as kube_client
+from kubernetes import config
 from model import Detector
 
 from app.core.utils import safe_call_api
@@ -79,7 +79,7 @@ class AppState:
     # TTL cache for k3s health checks on inference deployments. Checks are cached for 10 minutes.
     KUBERNETES_HEALTH_CHECKS_TTL_CACHE = TTLCache(maxsize=MAX_DETECTOR_IDS_TTL_CACHE_SIZE, ttl=600)
 
-    def __init__(self, deploy_inference_per_detector: bool = True):
+    def __init__(self):
         # Create a global shared image query ID cache in the app's state
         self.iqe_cache = IQECache()
 
@@ -101,6 +101,8 @@ class AppState:
 
         # Create global shared edge inference manager object in the app's state
         self.edge_inference_manager = EdgeInferenceManager(config=inference_config)
+
+        deploy_inference_per_detector = os.environ.get("DEPLOY_INFERENCE_PER_DETECTOR", None)
 
         if deploy_inference_per_detector:
             self._setup_kube_client()
@@ -152,7 +154,7 @@ class AppState:
                 # Currently not raising the exception (which from the app's perspective is a 500 error) so that
                 # we can continue to serve requests through the cloud API even if a specific inference
                 # deployment creation fails.
-                logger.warning(f"Failed to create a kubernetes deployment: {e}")
+                logger.warning(f"Failed to create a kubernetes deployment: {e}", exc_info=True)
 
         logger.debug(f"Successfully applied kubernetes manifest to namespace `{k3s_namespace}`")
 
