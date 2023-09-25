@@ -30,17 +30,17 @@ jobs:
           ./deploy/bin/cluster_setup.sh
       - name: Wait for edge-endpoint pod to be ready
         run: |
-          set -ex
-          kubectl describe deployment edge-endpoint
-          sleep 10
-          kubectl describe pod edge-endpoint || echo "not ready yet"
-          sleep 10
-          kubectl describe pod edge-endpoint || echo "not ready yet"
-          sleep 10
-          kubectl describe pod edge-endpoint  # at least the pod should be ready by now
+          # set -ex
+          # kubectl describe deployment edge-endpoint
+          # sleep 10
+          # kubectl describe pod edge-endpoint || echo "not ready yet"
+          # sleep 10
+          # kubectl describe pod edge-endpoint || echo "not ready yet"
+          # sleep 10
+          # kubectl describe pod edge-endpoint  # at least the pod should be ready by now
           
           # Really we should wait for it to successfully deploy:
-          #kubectl rollout status deployment edge-endpoint --timeout=5m
+          kubectl rollout status deployment edge-endpoint --timeout=5m
 
       - name: Checkout Groundlight SDK 
         uses: actions/checkout@v3
