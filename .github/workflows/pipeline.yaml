@@ -49,6 +49,10 @@ jobs:
           # Really we should wait for it to successfully deploy:
           kubectl rollout status deployment edge-endpoint --timeout=5m
 
+      - name: Get pods
+        run: |
+          kubectl get pods
+
       - name: Checkout Groundlight SDK 
         uses: actions/checkout@v3
         with:

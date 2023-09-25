@@ -2,6 +2,11 @@
 
 set -ex 
 
+fail() {
+    echo $1 
+    exit 1
+}
+
 K="k3s kubectl"
 INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"CPU"}
 
@@ -19,6 +24,15 @@ $K create configmap inference-flavor --from-literal=inference-flavor=${INFERENCE
 # Secrets 
 ./deploy/bin/make-gl-api-token-secret.sh
 ./deploy/bin/make-aws-secret.sh 
+
+# Verify secrets have been properly created
+if ! $K get secret registry-credentials; then 
+    fail "registry-credentials secret not found"
+fi
+
+if ! $K get secret groundlight-secrets; then 
+    fail "groundlight-secrets secret not found"
+fi
 
 # Edge Deployment
 $K delete --ignore-not-found deployment edge-endpoint
