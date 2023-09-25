@@ -22,6 +22,7 @@ jobs:
           sudo chown $USER /etc/rancher/k3s/k3s.yaml
           # symlink to kubeconfig
           mkdir -p ~/.kube
+          mkdir -p /var/groundlight/serving/model_repository 
           ln -s /etc/rancher/k3s/k3s.yaml ~/.kube/config
 
       - name: Configure AWS credentials 
