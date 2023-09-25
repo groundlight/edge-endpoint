@@ -6,9 +6,9 @@ K="k3s kubectl"
 INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"CPU"}
 
 # Configmaps 
-$K delete --ignore-not-found edge-config 
-$K delete --ignore-not-found inference-deployment-template 
-$K delete --ignore-not-found inference-flavor || echo "No inference flavor found - this is expected"
+$K delete configmap --ignore-not-found edge-config 
+$K delete configmap --ignore-not-found inference-deployment-template 
+$K delete configmap --ignore-not-found inference-flavor || echo "No inference flavor found - this is expected"
 
 $K create configmap edge-config --from-file=deploy/edge-config.yaml
 $K create configmap inference-deployment-template \
