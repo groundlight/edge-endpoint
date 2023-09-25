@@ -51,10 +51,14 @@ jobs:
       - name: Run SDK tests against edge-endpoint
         run: |
           set -ex
-          source test/setup_test_env.sh
           cd groundlight-sdk 
           poetry install 
           poetry run pytest test/api/test_sdk.py
+
+      - name: Check the deployments 
+        if : always()
+        run: |
+          kubectl describe pods 
 
   test-motion-detection:
     runs-on: ubuntu-22.04
