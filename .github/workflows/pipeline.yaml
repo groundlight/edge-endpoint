@@ -23,6 +23,13 @@ jobs:
           # symlink to kubeconfig
           mkdir -p ~/.kube
           ln -s /etc/rancher/k3s/k3s.yaml ~/.kube/config
+
+      - name: Configure AWS credentials 
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
       - name: Deploy the edge-endpoint yaml
         run: |
           set -ex

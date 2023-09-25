@@ -18,7 +18,7 @@ $K create configmap inference-flavor --from-literal=inference-flavor=${INFERENCE
 
 # Secrets 
 ./deploy/bin/make-gl-api-token-secret.sh
-# ./deploy/bin/make-aws-secret.sh 
+./deploy/bin/make-aws-secret.sh 
 
 # Edge Deployment
 $K delete --ignore-not-found deployment edge-endpoint
