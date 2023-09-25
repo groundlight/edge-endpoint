@@ -37,7 +37,7 @@ spec:
     spec:
       containers:
       - name: edge-endpoint
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-fetch-model-7d240259d-dirty-9317aac2d1d4b1b
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-fix-patience-time-0d64ab0df-dirty-19cac12e4adca89
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
