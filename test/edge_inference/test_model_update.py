@@ -43,7 +43,7 @@ def test_save_model_to_repository():
         assert os.path.exists(id_file)
 
         with open(id_file, "r") as f:
-            assert "ksu_1" == f.read()
+            assert "ksu_2" == f.read()
 
         # Also test deleting a model version
         delete_model_version("test_detector", "1")

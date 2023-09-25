@@ -228,6 +228,8 @@ def get_current_model_version(model_dir: str) -> Optional[int]:
     """Triton inference server model_repositories contain model versions in subdirectories. These subdirectories
     are named with integers. This function returns the highest integer in the model repository directory.
     """
+    if not os.path.exists(model_dir):
+        return None
     model_versions = [int(d) for d in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, d))]
     return max(model_versions) if model_versions else None
 
