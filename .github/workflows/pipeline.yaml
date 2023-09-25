@@ -42,6 +42,20 @@ jobs:
           # Really we should wait for it to successfully deploy:
           #kubectl rollout status deployment edge-endpoint --timeout=5m
 
+      - name: Checkout Groundlight SDK 
+        uses: actions/checkout@v3
+        with:
+          repository: groundlight/python-sdk
+          path: groundlight-sdk
+
+      - name: Run SDK tests against edge-endpoint
+        run: |
+          set -ex
+          source test/setup_test_env.sh
+          cd groundlight-sdk 
+          poetry install 
+          poetry run pytest test/api/test_sdk.py
+
   test-motion-detection:
     runs-on: ubuntu-22.04
     steps:
