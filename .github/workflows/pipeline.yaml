@@ -10,6 +10,38 @@ env:
   GROUNDLIGHT_ENDPOINT: http://localhost:6717
 
 jobs:
+  test-in-k3s:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+      - name: Install k3s
+        run: |
+          curl -sfL https://get.k3s.io | sh -
+          sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+          sudo chown $USER /etc/rancher/k3s/k3s.yaml
+          # symlink to kubeconfig
+          mkdir -p ~/.kube
+          ln -s /etc/rancher/k3s/k3s.yaml ~/.kube/config
+      - name: Deploy the edge-endpoint yaml
+        run: |
+          set -ex
+          kubectl apply -f deploy/k3s/edge_deployment.yaml
+          kubectl describe deployment
+      - name: Wait for edge-endpoint pod to be ready
+        run: |
+          set -ex
+          kubectl describe deployment edge-endpoint
+          sleep 10
+          kubectl describe pod edge-endpoint || echo "not ready yet"
+          sleep 10
+          kubectl describe pod edge-endpoint || echo "not ready yet"
+          sleep 10
+          kubectl describe pod edge-endpoint  # at least the pod should be ready by now
+          
+          # Really we should wait for it to successfully deploy:
+          #kubectl rollout status deployment edge-endpoint --timeout=5m
+
   test-motion-detection:
     runs-on: ubuntu-22.04
     steps:
