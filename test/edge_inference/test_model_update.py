@@ -31,7 +31,7 @@ def test_save_model_to_repository():
         with open(id_file, "r") as f:
             assert ksuid_1 == f.read()
 
-        ksuid_2= prefixed_ksuid("test_")
+        ksuid_2 = prefixed_ksuid("test_")
         save_model_to_repository(
             detector_id=detector_id,
             model_buffer=b"test_model2",
