@@ -128,7 +128,12 @@ async def post_image_query(
 
     # Finally, fall back to submitting the image to the cloud
     if not image_query:
-        image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=patience_time)
+        # NOTE: Waiting is done on the customer's client, not here. Otherwise we would be blocking the
+        # response to the customer's client from the edge-endpoint for many seconds. This has the
+        # side effect of not allowing customers to update their detector's patience_time through the
+        # edge-endpoint. But instead we could ask them to do that through the web app.
+        # wait=0 sets patience_time=DEFAULT_PATIENCE_TIME and disables polling.
+        image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=0)
 
     if motion_detection_manager.motion_detection_is_enabled(detector_id=detector_id):
         # Store the cloud's response so that if the next image has no motion, we will return the same response
