@@ -26,8 +26,8 @@ jobs:
       - name: Deploy the edge-endpoint yaml
         run: |
           set -ex
-          chmod +x deploy/k3s/cluster_setup.sh
-          ./deploy/k3s/cluster_setup.sh
+          chmod +x deploy/bin/cluster_setup.sh
+          ./deploy/bin/cluster_setup.sh
       - name: Wait for edge-endpoint pod to be ready
         run: |
           set -ex
