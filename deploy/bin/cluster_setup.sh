@@ -30,7 +30,6 @@ fi
 # Configmaps and deployments
 $K delete configmap --ignore-not-found edge-config 
 $K delete configmap --ignore-not-found inference-deployment-template 
-$K delete configmap --ignore-not-found inference-flavor || echo "No inference flavor found - this is expected"
 
 if [[ -n "{EDGE_CONFIG}" ]]; then 
     announce "Creating config from `EDGE_CONFIG` env var"
@@ -41,8 +40,6 @@ fi
 
 if [[ "$INFERENCE_FLAVOR" == "CPU" ]]; then 
     announce "Preparing inference deployments with CPU flavor"
-    $K create configmap inference-flavor \
-            --from-literal="DEFAULT_PIPELINE_CONFIG=generic-cached-timm-resnet18-knn"
 
     # Customize edge_deployment and inference_deployment_template with the CPU patch
     $K kustomize deploy/k3s/inference_deployment > inference_deployment.yaml 
@@ -55,9 +52,6 @@ else
     $K create configmap inference-deployment-template \
             --from-file=deploy/k3s/inference_deployment/inference_deployment_template.yaml
 fi
-
-
-$K create configmap inference-flavor --from-literal=inference-flavor=${INFERENCE_FLAVOR}
 
 
 # Edge Deployment
