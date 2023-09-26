@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ INFERENCE_SERVICE_NAME }}
+  name: placeholder-inference-service-name
 spec:
   selector:
-    app: inference-server
+    app: placeholder-inference-service-name
   ports:
     - protocol: TCP
       port: 8000
@@ -19,9 +19,9 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ DEPLOYMENT_NAME }}
+  name: placeholder-inference-deployment-name
   labels:
-    app: {{ DEPLOYMENT_NAME }}
+    name: placeholder-inference-deployment-name
 spec:
   replicas: 1
   selector:
@@ -32,9 +32,7 @@ spec:
       labels:
         app: inference-server
     spec:
-      {{ - if .USE_GPU }}
       runtimeClassName: nvidia  # Required for GPU use in k3s
-      {{ - end }}
       containers:
       - name: inference-server
         image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver:313680099-main
@@ -50,14 +48,12 @@ spec:
             "--model-repository=/mnt/models",
             "--load-model=*",
             "--model-control-mode=explicit",
-            "--metrics-config=summary_latencies=true"
-            "--backend-config=python,shm-region-prefix-name={{ DEPLOYMENT_NAME }}"
+            "--metrics-config=summary_latencies=true",
+            "--backend-config=python,shm-region-prefix-name={{ INFERENCE_DEPLOYMENT_NAME }}",
           ]
         resources:
-          {{ - if .USE_GPU }}
           limits:
             nvidia.com/gpu: 1
-          {{ - end }}
         volumeMounts:
         - name: model-repo
           mountPath: /mnt/models

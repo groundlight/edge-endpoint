@@ -1,0 +1,5 @@
+resources:
+  - inference_deployment_template.yaml 
+
+patchesStrategicMerge:
+  - no_gpu_resources.yaml

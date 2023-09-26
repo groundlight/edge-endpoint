@@ -40,7 +40,8 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       containers:
       - name: edge-endpoint
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-fix-patience-time-0d64ab0df-dirty-19cac12e4adca89
+        # image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-fix-patience-time-0d64ab0df-dirty-19cac12e4adca89
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:test-kubernetes-be1985574-dirty-ff9d85366b649cc
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717

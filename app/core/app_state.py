@@ -39,7 +39,7 @@ def load_edge_config() -> RootEdgeConfig:
 
     logger.warning("EDGE_CONFIG environment variable not set. Checking default locations.")
 
-    default_config_paths = ["/etc/groundlight/edge-config.yaml", "configs/edge-config.yaml"]
+    default_config_paths = ["/etc/groundlight/edge-config/edge-config.yaml", "configs/edge-config.yaml"]
     for default_config_path in default_config_paths:
         if os.path.exists(default_config_path):
             logger.info(f"Loading edge config from {default_config_path}")
@@ -85,6 +85,10 @@ class AppState:
         self.iqe_cache = IQECache()
 
         edge_config = load_edge_config()
+
+        detectors = edge_config.detectors
+        logger.info(f"Detectors: {detectors}")
+
         motion_detection_templates: Dict[str, MotionDetectionConfig] = edge_config.motion_detection_templates
         edge_inference_templates: Dict[str, LocalInferenceConfig] = edge_config.local_inference_templates
 
@@ -108,22 +112,6 @@ class AppState:
         if deploy_inference_per_detector:
             self._setup_kube_client()
 
-    def _get_inference_flavor(self, namespace: str) -> str:
-        """
-        Returns the inference flavor to use for the given namespace.
-        NOTE we don't need to mount the `inference-flavor` ConfigMap in the inference container as a volume.
-        As long as the ConfigMap exists in the namespace, we can read it using the kubernetes client.
-        """
-        try:
-            config_map = self._core_kube_client.read_namespaced_config_map(name="inference-flavor", namespace=namespace)
-            return config_map.data["INFERENCE_FLAVOR"]
-        except kube_client.rest.ApiException as e:
-            if e.status == 404:
-                logger.debug(f"ConfigMap `inference-flavor` does not exist in namespace {namespace}.")
-            else:
-                logger.error(f"Failed to read ConfigMap `inference-flavor`: {e}", exc_info=True)
-
-            return "CPU"
 
     def _setup_kube_client(self) -> None:
         """
@@ -146,7 +134,7 @@ class AppState:
         """
         Loads the inference deployment template.
         """
-        deployment_template_path = "/etc/groundlight/inference_deployment.yaml"
+        deployment_template_path = "/etc/groundlight/inference-deployment"
         if os.path.exists(deployment_template_path):
             with open(deployment_template_path, "r") as f:
                 manifest = f.read()
@@ -176,21 +164,10 @@ class AppState:
 
         logger.debug(f"Applying kubernetes manifest to namespace `{namespace}`...")
 
-    def _substitute_placeholders(self, service_name: str, deployment_name: str, inference_flavor: str) -> str:
+    def _substitute_placeholders(self, service_name: str, deployment_name: str) -> str:
         inference_deployment = self._inference_deployment_template
-        inference_deployment = inference_deployment.replace("{{ INFERENCE_SERVICE_NAME }}", service_name)
-        inference_deployment = inference_deployment.replace("{{ DEPLOYMENT_NAME }}", deployment_name)
-
-        if inference_flavor == "GPU":
-            inference_deployment = inference_deployment.replace("{{ - if .USE_GPU }}", "")  # remove the placeholder
-            inference_deployment = inference_deployment.replace("{{ - end }}", "")  # remove the placeholder
-        else:
-            # If not using GPU, remove the GPU resources from the manifest
-            pattern_gpu_resource = r"{{ - if .USE_GPU }}.*?{{ - end }}"
-            pattern_runtime_class = r"{{ - if .USE_GPU }}.*?{{ - end }}"
-
-            inference_deployment = re.sub(pattern_gpu_resource, "", inference_deployment, flags=re.DOTALL)
-            inference_deployment = re.sub(pattern_runtime_class, "", inference_deployment, flags=re.DOTALL)
+        inference_deployment = inference_deployment.replace("placeholder-inference-service-name", service_name)
+        inference_deployment = inference_deployment.replace("placeholder-inference-deployment-name", deployment_name)
 
         return inference_deployment.strip()
 
@@ -245,9 +222,8 @@ class AppState:
                 if create_if_absent:
                     logger.info(f"Creating deployment {deployment_name} in namespace {namespace}")
 
-                    inference_flavor = self._get_inference_flavor(namespace)
                     inference_deployment = self._substitute_placeholders(
-                        service_name=service_name, deployment_name=deployment_name, inference_flavor=inference_flavor
+                        service_name=service_name, deployment_name=deployment_name
                     )
 
                     self._apply_kube_manifest(namespace=namespace, manifest=inference_deployment)

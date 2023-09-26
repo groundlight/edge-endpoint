@@ -41,6 +41,8 @@ motion_detection_templates:
     enabled: false
 
 local_inference_templates:
+  default:
+    enabled: true 
   disabled:
     enabled: false
 

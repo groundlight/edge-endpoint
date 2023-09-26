@@ -128,13 +128,19 @@ class EdgeInferenceManager:
         logger.info(f"Attemping to update model for {detector_id}")
 
         model_urls = fetch_model_urls(detector_id)
-        pipeline_config = model_urls["pipeline_config"]
+
+        # We use the `DEFAULT_PIPELINE_CONFIG` when running inference on a CPU.
+        pipeline_config = os.environ.get("DEFAULT_PIPELINE_CONFIG", None) or model_urls["pipeline_config"]
+        logger.info(f"Model URLs = {model_urls['pipeline_config']}")
+        logger.info(f"Pipeline config = {pipeline_config}")
+
         model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
 
         old_version, new_version = save_model_to_repository(detector_id, model_buffer, pipeline_config)
 
         try:
-            self.inference_client.load_model(model_name=detector_id)  # refreshes the model if already loaded
+            inference_client = self.inference_clients[detector_id]
+            inference_client.load_model(model_name=detector_id)  # refreshes the model if already loaded
         except (ConnectionRefusedError, socket.gaierror) as ex:
             logger.warning(f"Edge inference server is not available: {ex}")
             return
