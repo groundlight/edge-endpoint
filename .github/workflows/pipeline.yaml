@@ -34,6 +34,7 @@ jobs:
       - name: Deploy the edge-endpoint yaml
         run: |
           set -ex
+          ./test/setup_test_env.sh
           chmod +x deploy/bin/cluster_setup.sh
           ./deploy/bin/cluster_setup.sh
       - name: Wait for edge-endpoint pod to be ready
@@ -41,29 +42,35 @@ jobs:
           set -ex
           kubectl rollout status deployment edge-endpoint --timeout=5m
 
-          kubectl describe pod edge-endpoint || echo "not ready yet"
+          kubectl describe pod edge-endpoint
 
-      - name: Get pods
-        run: |
-          kubectl get pods
-
-      - name: Checkout Groundlight SDK 
-        uses: actions/checkout@v3
+      - name: Install poetry
+        uses: snok/install-poetry@v1
         with:
-          repository: groundlight/python-sdk
-          path: groundlight-sdk
+          version: ${{ env.POETRY_VERSION }}
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: true
 
-      - name: Run SDK tests against edge-endpoint
+      - name: Load Cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v3
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
+      - name: Install package
         run: |
-          set -ex
-          cd groundlight-sdk 
-          poetry install 
-          poetry run pytest test/api/test_sdk.py
+          poetry install --no-interaction --no-root
+
+      - name: Run Motion Detection Tests 
+        run: | 
+          source test/setup_test_env.sh
+          poetry run pytest -vs test/api/test_motdet.py
 
       - name: Check the deployments 
         if : always()
         run: |
-          kubectl describe pods 
+          kubectl get pods 
 
   test-motion-detection:
     runs-on: ubuntu-22.04

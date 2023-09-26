@@ -15,7 +15,12 @@ $K delete configmap --ignore-not-found edge-config
 $K delete configmap --ignore-not-found inference-deployment-template 
 $K delete configmap --ignore-not-found inference-flavor || echo "No inference flavor found - this is expected"
 
-$K create configmap edge-config --from-file=configs/edge-config.yaml
+if [[ -n "{EDGE_CONFIG}" ]]; then 
+    echo "Creating config from EDGE_CONFIG env var"
+    $K create configmap edge-config --from-literal=edge-config=${EDGE_CONFIG}
+else 
+    $K create configmap edge-config --from-file=configs/edge-config.yaml
+fi
 $K create configmap inference-deployment-template \
         --from-file=deploy/k3s/inference_deployment.yaml
 $K create configmap inference-flavor --from-literal=inference-flavor=${INFERENCE_FLAVOR}
