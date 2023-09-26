@@ -108,11 +108,11 @@ class EdgeInferenceManager:
 
         cloud_binary_ksuid = model_urls.get("model_binary_id", None)
         if cloud_binary_ksuid is None:
-            raise ValueError(f"No model binary ksuid returned for {detector_id}")
+            logger.warning(f"No model binary ksuid returned for {detector_id}")
 
         model_dir = os.path.join(self.MODEL_REPOSITORY, detector_id)
         edge_binary_ksuid = get_current_model_ksuid(model_dir)
-        if edge_binary_ksuid and cloud_binary_ksuid <= edge_binary_ksuid:
+        if edge_binary_ksuid and not cloud_binary_ksuid is None and cloud_binary_ksuid <= edge_binary_ksuid:
             logger.info(f"No new model available for {detector_id}")
             return
 
@@ -182,7 +182,7 @@ def save_model_to_repository(
     detector_id: str,
     model_buffer: bytes,
     pipeline_config: str,
-    binary_ksuid: str,
+    binary_ksuid: Optional[str],
     repository_root: str,
 ) -> tuple[Optional[int], int]:
     """
@@ -219,8 +219,9 @@ def save_model_to_repository(
     )
     with open(os.path.join(model_version_dir, "model.buf"), "wb") as f:
         f.write(model_buffer)
-    with open(os.path.join(model_version_dir, "model_id.txt"), "w") as f:
-        f.write(binary_ksuid)
+    if binary_ksuid:
+        with open(os.path.join(model_version_dir, "model_id.txt"), "w") as f:
+            f.write(binary_ksuid)
 
     # Add/Overwrite model configuration files (config.pbtxt and binary_labels.txt)
     create_file_from_template(
@@ -238,7 +239,7 @@ def get_current_model_version(model_dir: str) -> Optional[int]:
     """Triton inference server model_repositories contain model versions in subdirectories. These subdirectories
     are named with integers. This function returns the highest integer in the model repository directory.
     """
-    logger.info(f"Checking for current model version in {model_dir}")
+    logger.debug(f"Checking for current model version in {model_dir}")
     if not os.path.exists(model_dir):
         return None
     model_versions = [int(d) for d in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, d))]
@@ -258,7 +259,7 @@ def get_current_model_ksuid(model_dir: str) -> Optional[str]:
         with open(id_file, "r") as f:
             return f.read()
     else:
-        logger.warning(f"No existing model_id.txt file found in {os.path.join(model_dir, v)}")
+        logger.warning(f"No existing model_id.txt file found in {os.path.join(model_dir, str(v))}")
         return None
 
 
