@@ -112,7 +112,7 @@ class EdgeInferenceManager:
 
         model_dir = os.path.join(self.MODEL_REPOSITORY, detector_id)
         edge_binary_ksuid = get_current_model_ksuid(model_dir)
-        if edge_binary_ksuid and not cloud_binary_ksuid is None and cloud_binary_ksuid <= edge_binary_ksuid:
+        if edge_binary_ksuid and cloud_binary_ksuid is not None and cloud_binary_ksuid <= edge_binary_ksuid:
             logger.info(f"No new model available for {detector_id}")
             return
 
