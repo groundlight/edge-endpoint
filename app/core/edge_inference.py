@@ -103,13 +103,29 @@ class EdgeInferenceManager:
         """
         Request a new model from the cloud and update the local edge inference server.
         """
-        logger.info(f"Attemping to update model for {detector_id}")
-
+        logger.info(f"Checking if there is a new model available for {detector_id}")
         model_urls = fetch_model_urls(detector_id)
-        pipeline_config = model_urls["pipeline_config"]
-        model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
 
-        old_version, new_version = save_model_to_repository(detector_id, model_buffer, pipeline_config)
+        cloud_binary_ksuid = model_urls.get("model_binary_id", None)
+        if cloud_binary_ksuid is None:
+            logger.warning(f"No model binary ksuid returned for {detector_id}")
+
+        model_dir = os.path.join(self.MODEL_REPOSITORY, detector_id)
+        edge_binary_ksuid = get_current_model_ksuid(model_dir)
+        if edge_binary_ksuid and cloud_binary_ksuid is not None and cloud_binary_ksuid <= edge_binary_ksuid:
+            logger.info(f"No new model available for {detector_id}")
+            return
+
+        logger.info(f"New model binary available ({cloud_binary_ksuid}), attemping to update model for {detector_id}")
+        pipeline_config: str = model_urls["pipeline_config"]
+        model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
+        old_version, new_version = save_model_to_repository(
+            detector_id,
+            model_buffer,
+            pipeline_config,
+            binary_ksuid=cloud_binary_ksuid,
+            repository_root=self.MODEL_REPOSITORY,
+        )
 
         try:
             self.inference_client.load_model(model_name=detector_id)  # refreshes the model if already loaded
@@ -117,7 +133,7 @@ class EdgeInferenceManager:
             logger.warning(f"Edge inference server is not available: {ex}")
             return
 
-        retries = 6
+        retries = 15
         while not self.inference_is_available(detector_id, model_version=str(new_version)):
             if retries == 0:
                 logger.warning(
@@ -125,14 +141,17 @@ class EdgeInferenceManager:
                 )
                 return
             retries -= 1
-            time.sleep(5)  # Wait up to 30 seconds for model to be ready
+            time.sleep(2)  # Wait up to 30 seconds for model to be ready
 
-        logger.info(f"Now running inference with model version {new_version} for {detector_id}")
+        logger.info(
+            f"Now running inference with model version {new_version} for {detector_id} using"
+            f" binary_ksuid={cloud_binary_ksuid}"
+        )
         if old_version is not None:
-            delete_model_version(detector_id, old_version)
+            delete_model_version(detector_id, old_version, repository_root=self.MODEL_REPOSITORY)
 
 
-def fetch_model_urls(detector_id) -> dict[str, str]:
+def fetch_model_urls(detector_id: str) -> dict[str, str]:
     try:
         groundlight_api_token = os.environ["GROUNDLIGHT_API_TOKEN"]
     except KeyError as ex:
@@ -151,7 +170,7 @@ def fetch_model_urls(detector_id) -> dict[str, str]:
         raise HTTPException(status_code=response.status_code, detail=f"Failed to fetch model URLs for {detector_id=}.")
 
 
-def get_object_using_presigned_url(presigned_url):
+def get_object_using_presigned_url(presigned_url: str) -> bytes:
     response = requests.get(presigned_url, timeout=10)
     if response.status_code == 200:
         return response.content
@@ -159,7 +178,13 @@ def get_object_using_presigned_url(presigned_url):
         raise HTTPException(status_code=response.status_code, detail=f"Failed to retrieve data from {presigned_url}.")
 
 
-def save_model_to_repository(detector_id, model_buffer, pipeline_config) -> tuple[Optional[int], int]:
+def save_model_to_repository(
+    detector_id: str,
+    model_buffer: bytes,
+    pipeline_config: str,
+    binary_ksuid: Optional[str],
+    repository_root: str,
+) -> tuple[Optional[int], int]:
     """
     Make new version-directory for the model and save the new version of the model and pipeline config to it.
     Model repository directory structure:
@@ -169,14 +194,14 @@ def save_model_to_repository(detector_id, model_buffer, pipeline_config) -> tupl
             [config.pbtxt]
             [<output-labels-file> ...]
             <version>/
-                <model-definition-file (e.g. model.py, model.buf, etc)>
+                <model-definition-file (e.g. model.py, model.buf, model_id.txt, etc)>
     ```
     See the following resources for more information:
     - https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/model_repository.html
     - https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/model_repository.html#python-models
     - https://github.com/triton-inference-server/python_backend?tab=readme-ov-file#usage
     """
-    model_dir = os.path.join(EdgeInferenceManager.MODEL_REPOSITORY, detector_id)
+    model_dir = os.path.join(repository_root, detector_id)
     os.makedirs(model_dir, exist_ok=True)
 
     old_model_version = get_current_model_version(model_dir)
@@ -194,6 +219,9 @@ def save_model_to_repository(detector_id, model_buffer, pipeline_config) -> tupl
     )
     with open(os.path.join(model_version_dir, "model.buf"), "wb") as f:
         f.write(model_buffer)
+    if binary_ksuid:
+        with open(os.path.join(model_version_dir, "model_id.txt"), "w") as f:
+            f.write(binary_ksuid)
 
     # Add/Overwrite model configuration files (config.pbtxt and binary_labels.txt)
     create_file_from_template(
@@ -203,7 +231,7 @@ def save_model_to_repository(detector_id, model_buffer, pipeline_config) -> tupl
     )
     shutil.copy2(src="app/resources/binary_labels.txt", dst=os.path.join(model_dir, "binary_labels.txt"))
 
-    logger.info(f"Wrote new model version {new_model_version} for {detector_id}")
+    logger.info(f"Wrote new model version {new_model_version} for {detector_id} with {binary_ksuid=}")
     return old_model_version, new_model_version
 
 
@@ -211,11 +239,31 @@ def get_current_model_version(model_dir: str) -> Optional[int]:
     """Triton inference server model_repositories contain model versions in subdirectories. These subdirectories
     are named with integers. This function returns the highest integer in the model repository directory.
     """
+    logger.debug(f"Checking for current model version in {model_dir}")
+    if not os.path.exists(model_dir):
+        return None
     model_versions = [int(d) for d in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, d))]
     return max(model_versions) if model_versions else None
 
 
-def create_file_from_template(template_values: dict, destination: str, template: str):
+def get_current_model_ksuid(model_dir: str) -> Optional[str]:
+    """Read the model_id.txt file in the current model version directory,
+    which contains the KSUID of the model binary.
+    """
+    v = get_current_model_version(model_dir)
+    if v is None:
+        logger.info(f"No current model version found in {model_dir}")
+        return None
+    id_file = os.path.join(model_dir, str(v), "model_id.txt")
+    if os.path.exists(id_file):
+        with open(id_file, "r") as f:
+            return f.read()
+    else:
+        logger.warning(f"No existing model_id.txt file found in {os.path.join(model_dir, str(v))}")
+        return None
+
+
+def create_file_from_template(template_values: dict, destination: str, template: str) -> None:
     """
     This is a helper function to create a file from a Jinja2 template. In your template file,
     place template values in {{ template_value }} blocks. Then pass in a dictionary mapping template
@@ -237,10 +285,9 @@ def create_file_from_template(template_values: dict, destination: str, template:
         output_file.write(filled_content)
 
 
-def delete_model_version(detector_id: str, model_version: int):
+def delete_model_version(detector_id: str, model_version: int, repository_root: str) -> None:
     """Recursively delete directory detector_id/model_version"""
-    model_dir = os.path.join(EdgeInferenceManager.MODEL_REPOSITORY, detector_id)
-    model_version_dir = os.path.join(model_dir, str(model_version))
+    model_version_dir = os.path.join(repository_root, detector_id, str(model_version))
     logger.info(f"Deleting model version {model_version} for {detector_id}")
     if os.path.exists(model_version_dir):
         shutil.rmtree(model_version_dir)
