@@ -47,7 +47,7 @@ if [[ "$INFERENCE_FLAVOR" == "CPU" ]]; then
     # Customize edge_deployment and inference_deployment_template with the CPU patch
     $K kustomize deploy/k3s/inference_deployment > inference_deployment.yaml 
     $K create configmap inference-deployment-template \
-            --from-file=inference_deployment_template.yaml
+            --from-file=inference_deployment.yaml
 
     rm inference_deployment.yaml
 else
