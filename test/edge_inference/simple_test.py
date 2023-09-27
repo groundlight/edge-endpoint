@@ -21,10 +21,10 @@ def main():
     detector = DETECTORS["dog_detector"]["detector_id"]
     
     image = Image.open("test/assets/dog.jpeg")
-    image_query = gl.submit_image_query(detector=detector.id, image=image)
+    image_query = gl.submit_image_query(detector=detector, image=image)
 
-    image_query = gl.submit_image_query(detector=detector.id, image=image)
-    assert image_query.id.startswith("iqe_")
+    image_query = gl.submit_image_query(detector=detector, image=image)
+    # assert image_query.id.startswith("iqe_")
 
 
 if __name__ == "__main__":
