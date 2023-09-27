@@ -107,19 +107,17 @@ class AppState:
         # Create global shared edge inference manager object in the app's state
         self.edge_inference_manager = EdgeInferenceManager(config=inference_config)
 
-        deploy_inference_per_detector = os.environ.get("DEPLOY_INFERENCE_PER_DETECTOR", None)
-
-        if deploy_inference_per_detector:
-            self._setup_kube_client()
-
+        self._setup_kube_client()
 
     def _setup_kube_client(self) -> None:
         """
         Sets up the kubernetes client in order to access resources in the cluster.
         """
-
-        # Requires the application to be running inside kubernetes.
-        config.load_incluster_config()
+        try:
+            # Requires the application to be running inside kubernetes.
+            config.load_incluster_config()
+        except:
+            config.load_kube_config()
 
         # Kubernetes resources are split across various API groups based on their functionality.
         # The `AppsV1Api` client manages resources related to workloads, such as Deployments, StatefulSets, etc.
@@ -134,7 +132,7 @@ class AppState:
         """
         Loads the inference deployment template.
         """
-        deployment_template_path = "/etc/groundlight/inference-deployment"
+        deployment_template_path = "/etc/groundlight/inference-deployment/inference_deployment_template.yaml"
         if os.path.exists(deployment_template_path):
             with open(deployment_template_path, "r") as f:
                 manifest = f.read()
