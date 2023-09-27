@@ -68,6 +68,7 @@ jobs:
       - name: Check the deployments 
         if : always()
         run: |
+          kubectl get pods 
           kubectl logs -l app=edge-logic-server
 
   test-motion-detection:

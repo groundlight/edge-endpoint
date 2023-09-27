@@ -80,6 +80,9 @@ class EdgeInferenceManager:
         except (ConnectionRefusedError, socket.gaierror) as ex:
             logger.warning(f"Edge inference server is not available: {ex}")
             return False
+        
+        logger.debug(f"Edge inference server is ready for {detector_id}/{model_version}")
+        
         return True
 
     def run_inference(self, detector_id: str, img_numpy: np.ndarray) -> dict:
