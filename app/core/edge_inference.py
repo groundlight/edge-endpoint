@@ -182,12 +182,16 @@ def fetch_model_urls(detector_id: str) -> dict[str, str]:
     except KeyError as ex:
         logger.error("GROUNDLIGHT_API_TOKEN environment variable is not set")
         raise ex
+    
+    logger.debug(f"Fetching model URLs for {detector_id}")
 
     url = f"https://api.groundlight.ai/edge-api/v1/fetch-model-urls/{detector_id}/"
     headers = {
         "x-api-token": groundlight_api_token,
     }
     response = requests.get(url, headers=headers, timeout=10)
+    
+    logger.debug(f"response = {response}")
 
     if response.status_code == 200:
         return response.json()

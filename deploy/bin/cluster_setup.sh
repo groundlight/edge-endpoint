@@ -32,7 +32,7 @@ $K delete configmap --ignore-not-found edge-config
 $K delete configmap --ignore-not-found inference-deployment-template 
 
 if [[ -n "{EDGE_CONFIG}" ]]; then 
-    announce "Creating config from `EDGE_CONFIG` env var"
+    announce "Creating config from EDGE_CONFIG env var"
     $K create configmap edge-config --from-literal="edge-config.yaml=${EDGE_CONFIG}"
 else 
     $K create configmap edge-config --from-file=configs/edge-config.yaml
@@ -42,11 +42,11 @@ if [[ "$INFERENCE_FLAVOR" == "CPU" ]]; then
     announce "Preparing inference deployments with CPU flavor"
 
     # Customize edge_deployment and inference_deployment_template with the CPU patch
-    $K kustomize deploy/k3s/inference_deployment > inference_deployment.yaml 
+    $K kustomize deploy/k3s/inference_deployment > inference_deployment_template.yaml 
     $K create configmap inference-deployment-template \
-            --from-file=inference_deployment.yaml
+            --from-file=inference_deployment_template.yaml
 
-    rm inference_deployment.yaml
+    rm inference_deployment_template.yaml
 else
     announce "Preparing inference deployments with GPU flavor"
     $K create configmap inference-deployment-template \
