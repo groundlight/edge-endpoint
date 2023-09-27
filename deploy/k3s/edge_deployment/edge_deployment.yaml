@@ -41,7 +41,7 @@ spec:
       containers:
       - name: edge-endpoint
         # image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-fix-patience-time-0d64ab0df-dirty-19cac12e4adca89
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:test-kubernetes-97e29feb5-dirty-7902869e4f5ab0b
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:test-kubernetes-ebb406cc3-dirty-24e6a0cdcb6e493
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717

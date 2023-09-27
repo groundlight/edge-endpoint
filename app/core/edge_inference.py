@@ -127,7 +127,7 @@ class EdgeInferenceManager:
         """
         logger.info(f"Checking if there is a new model available for {detector_id}")
         model_urls = fetch_model_urls(detector_id)
-    
+
         cloud_binary_ksuid = model_urls.get("model_binary_id", None)
         if cloud_binary_ksuid is None:
             logger.warning(f"No model binary ksuid returned for {detector_id}")
