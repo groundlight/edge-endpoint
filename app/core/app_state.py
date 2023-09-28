@@ -106,18 +106,20 @@ class AppState:
 
         # Create global shared edge inference manager object in the app's state
         self.edge_inference_manager = EdgeInferenceManager(config=inference_config)
+        
+        # This is meant to go away once we stop running docker-based GitHub actions. 
+        deploy_detector_level_inference = os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", None)
 
-        self._setup_kube_client()
+        if deploy_detector_level_inference:
+            self._setup_kube_client()
 
     def _setup_kube_client(self) -> None:
         """
         Sets up the kubernetes client in order to access resources in the cluster.
         """
-        try:
-            # Requires the application to be running inside kubernetes.
-            config.load_incluster_config()
-        except:
-            config.load_kube_config()
+
+        # Requires the application to be running inside kubernetes.
+        config.load_incluster_config()
 
         # Kubernetes resources are split across various API groups based on their functionality.
         # The `AppsV1Api` client manages resources related to workloads, such as Deployments, StatefulSets, etc.
@@ -169,10 +171,10 @@ class AppState:
 
         return inference_deployment.strip()
 
-    @cachetools.cached(
-        cache=KUBERNETES_HEALTH_CHECKS_TTL_CACHE,
-        key=lambda self, detector_id, *args, **kwargs: detector_id,
-    )
+    # @cachetools.cached(
+    #     cache=KUBERNETES_HEALTH_CHECKS_TTL_CACHE,
+    #     key=lambda self, detector_id, *args, **kwargs: detector_id,
+    # )
     def inference_deployment_is_ready(
         self, detector_id: str, namespace: str = "default", create_if_absent: bool = True
     ) -> bool:
@@ -208,11 +210,12 @@ class AppState:
         try:
             deployment = self._app_kube_client.read_namespaced_deployment(name=deployment_name, namespace=namespace)
             if deployment.status.ready_replicas == deployment.spec.replicas:
-                logger.debug(f"Deployment {deployment_name} is ready")
+                logger.debug(f"Deployment {deployment_name} created. Checking the inference server's readiness.")
 
                 # Check that the model in the deployment is also ready to server inference requests
                 return self.edge_inference_manager.inference_is_available(detector_id=detector_id)
-
+            else:
+                logger.debug(f"Deployment {deployment_name} is not ready yet.")
         except kube_client.rest.ApiException as e:
             if e.status == 404:
                 logger.debug(f"Deployment {deployment_name} does not currently exist in namespace {namespace}.")

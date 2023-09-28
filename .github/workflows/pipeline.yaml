@@ -44,9 +44,6 @@ jobs:
           kubectl rollout status deployment edge-endpoint --timeout=5m
           kubectl describe pod edge-endpoint
 
-          # Wait for edge inference server to be ready
-          sleep 30 
-
       - name: Install poetry
         uses: snok/install-poetry@v1
         with:
@@ -103,7 +100,6 @@ jobs:
           container_id=$(docker run \
             -e LOG_LEVEL=DEBUG \
             -e EDGE_CONFIG \
-            -e DEPLOY_INFERENCE_PER_DETECTOR=False \
             -d -p 6717:6717 \
             groundlight-edge)
           echo "::set-output name=container_id::$container_id"
@@ -170,7 +166,6 @@ jobs:
         id: start_container
         run: |
           container_id=$(docker run \
-            -e DEPLOY_INFERENCE_PER_DETECTOR=False \
             -d -p 6717:6717 \
             groundlight-edge)
           echo "::set-output name=container_id::$container_id"
@@ -213,7 +208,7 @@ jobs:
 
       - name: Run Unit Tests
         run: | 
-          DEPLOY_INFERENCE_PER_DETECTOR=False poetry run pytest 
+          poetry run pytest 
       
       - name: Dump Logs from Docker Container
         if: always()

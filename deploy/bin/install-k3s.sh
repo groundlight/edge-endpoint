@@ -28,7 +28,6 @@ check_k3s_is_running() {
 }
 
 if check_k3s_is_running; then
-    # Configure kubectl for the current user
     echo "kubectl has been configured for the current user."
 else
     echo "There was an issue with the K3s installation. Please check the system logs."

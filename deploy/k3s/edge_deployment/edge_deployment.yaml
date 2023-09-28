@@ -41,13 +41,15 @@ spec:
       containers:
       - name: edge-endpoint
         # image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-fix-patience-time-0d64ab0df-dirty-19cac12e4adca89
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:test-kubernetes-d541bb044-dirty-04a707ddc509c26
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:test-kubernetes-cb37a2d48-dirty-7d1f39a228fc08f
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
         env:
         - name: LOG_LEVEL
           value: "DEBUG"
+        - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
+          value: "True"
         - name: GROUNDLIGHT_API_TOKEN
           valueFrom:
             secretKeyRef:

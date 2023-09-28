@@ -80,9 +80,9 @@ class EdgeInferenceManager:
         except (ConnectionRefusedError, socket.gaierror) as ex:
             logger.warning(f"Edge inference server is not available: {ex}")
             return False
-        
+
         logger.debug(f"Edge inference server is ready for {detector_id}/{model_version}")
-        
+
         return True
 
     def run_inference(self, detector_id: str, img_numpy: np.ndarray) -> dict:
@@ -185,7 +185,7 @@ def fetch_model_urls(detector_id: str) -> dict[str, str]:
     except KeyError as ex:
         logger.error("GROUNDLIGHT_API_TOKEN environment variable is not set")
         raise ex
-    
+
     logger.debug(f"Fetching model URLs for {detector_id}")
 
     url = f"https://api.groundlight.ai/edge-api/v1/fetch-model-urls/{detector_id}/"
@@ -193,7 +193,7 @@ def fetch_model_urls(detector_id: str) -> dict[str, str]:
         "x-api-token": groundlight_api_token,
     }
     response = requests.get(url, headers=headers, timeout=10)
-    
+
     logger.debug(f"response = {response}")
 
     if response.status_code == 200:

@@ -48,8 +48,7 @@ spec:
             "--model-repository=/mnt/models",
             "--load-model=*",
             "--model-control-mode=explicit",
-            "--metrics-config=summary_latencies=true",
-            "--backend-config=python,shm-region-prefix-name={{ INFERENCE_DEPLOYMENT_NAME }}",
+            "--metrics-config=summary_latencies=true"
           ]
         resources:
           limits:

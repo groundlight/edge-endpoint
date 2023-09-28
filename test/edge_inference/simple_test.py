@@ -1,7 +1,7 @@
-
-from groundlight import Groundlight 
-from PIL import Image 
-import time 
+from groundlight import Groundlight
+from PIL import Image
+import logging 
+import time
 
 
 DETECTORS = {
@@ -19,13 +19,16 @@ DETECTORS = {
 
 
 def main():
-    gl = Groundlight()
+    gl = Groundlight(endpoint="http://10.45.0.71:30101")
     detector = DETECTORS["dog_detector"]["detector_id"]
-    
+
+    logging.info(f"detector: {detector}")
     image = Image.open("test/assets/dog.jpeg")
-    
+
     for _ in range(100):
         image_query = gl.submit_image_query(detector=detector, image=image)
+        
+        logging.debug(f"image_query: {image_query}")
 
         image_query = gl.submit_image_query(detector=detector, image=image)
         time.sleep(1)
@@ -33,4 +36,5 @@ def main():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level="DEBUG")
     main()
