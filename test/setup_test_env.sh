@@ -41,19 +41,20 @@ motion_detection_templates:
     enabled: false
 
 local_inference_templates:
+  default:
+    enabled: true 
   disabled:
     enabled: false
 
 detectors:
   - detector_id: 'det_2UOxalD1gegjk4TnyLbtGggiJ8p'
-    motion_detection_template: 'default'
-    local_inference_template: 'disabled'
+    motion_detection_template: 'disabled'
+    local_inference_template: 'default'
 
   - detector_id: 'det_2UOxao4HZyB9gv4ZVtwMOvdqgh9'
-    motion_detection_template: 'super-sensitive'
-    local_inference_template: 'disabled'
+    motion_detection_template: 'disabled'
+    local_inference_template: 'default'
 EOM
 )
 
 export EDGE_CONFIG
-export DEPLOY_INFERENCE_PER_DETECTOR=False

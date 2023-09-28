@@ -67,6 +67,8 @@ spec:
         env:
           - name: FAIL_ON_INIT_ERROR
             value: "false"
+          - name: DP_DISABLE_HEALTHCHECKS
+            value: xids
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:

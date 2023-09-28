@@ -53,7 +53,11 @@ COPY configs ${APP_ROOT}/configs
 # Create /etc/groundlight directory where edge-config.yaml and inference_deployment.yaml will be mounted 
 RUN mkdir /etc/groundlight
 
-COPY deploy/k3s/inference_deployment.yaml /etc/groundlight/inference_deployment.yaml
+RUN mkdir /etc/groundlight/edge-config && \
+    mkdir /etc/groundlight/inference-deployment
+
+COPY deploy/k3s/inference_deployment/inference_deployment_template.yaml \
+    /etc/groundlight/inference-deployment/
 
 
 ##################
