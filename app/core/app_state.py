@@ -38,7 +38,7 @@ def load_edge_config() -> RootEdgeConfig:
 
     logger.warning("EDGE_CONFIG environment variable not set. Checking default locations.")
 
-    default_config_paths = ["/etc/groundlight/edge-config.yaml", "configs/edge-config.yaml"]
+    default_config_paths = ["/etc/groundlight/edge-config/edge-config.yaml", "configs/edge-config.yaml"]
     for default_config_path in default_config_paths:
         if os.path.exists(default_config_path):
             logger.info(f"Loading edge config from {default_config_path}")
@@ -84,6 +84,10 @@ class AppState:
         self.iqe_cache = IQECache()
 
         edge_config = load_edge_config()
+
+        detectors = edge_config.detectors
+        logger.info(f"Detectors: {detectors}")
+
         motion_detection_templates: Dict[str, MotionDetectionConfig] = edge_config.motion_detection_templates
         edge_inference_templates: Dict[str, LocalInferenceConfig] = edge_config.local_inference_templates
 
@@ -102,9 +106,10 @@ class AppState:
         # Create global shared edge inference manager object in the app's state
         self.edge_inference_manager = EdgeInferenceManager(config=inference_config)
 
-        deploy_inference_per_detector = os.environ.get("DEPLOY_INFERENCE_PER_DETECTOR", None)
+        # This is meant to go away once we stop running docker-based GitHub actions.
+        deploy_detector_level_inference = os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", None)
 
-        if deploy_inference_per_detector:
+        if deploy_detector_level_inference:
             self._setup_kube_client()
 
     def _setup_kube_client(self) -> None:
@@ -128,7 +133,7 @@ class AppState:
         """
         Loads the inference deployment template.
         """
-        deployment_template_path = "/etc/groundlight/inference_deployment.yaml"
+        deployment_template_path = "/etc/groundlight/inference-deployment/inference_deployment_template.yaml"
         if os.path.exists(deployment_template_path):
             with open(deployment_template_path, "r") as f:
                 manifest = f.read()
@@ -158,10 +163,17 @@ class AppState:
 
         logger.debug(f"Applying kubernetes manifest to namespace `{namespace}`...")
 
-    @cachetools.cached(
-        cache=KUBERNETES_HEALTH_CHECKS_TTL_CACHE,
-        key=lambda self, detector_id, *args, **kwargs: detector_id,
-    )
+    def _substitute_placeholders(self, service_name: str, deployment_name: str) -> str:
+        inference_deployment = self._inference_deployment_template
+        inference_deployment = inference_deployment.replace("placeholder-inference-service-name", service_name)
+        inference_deployment = inference_deployment.replace("placeholder-inference-deployment-name", deployment_name)
+
+        return inference_deployment.strip()
+
+    # @cachetools.cached(
+    #     cache=KUBERNETES_HEALTH_CHECKS_TTL_CACHE,
+    #     key=lambda self, detector_id, *args, **kwargs: detector_id,
+    # )
     def inference_deployment_is_ready(
         self, detector_id: str, namespace: str = "default", create_if_absent: bool = True
     ) -> bool:
@@ -197,22 +209,24 @@ class AppState:
         try:
             deployment = self._app_kube_client.read_namespaced_deployment(name=deployment_name, namespace=namespace)
             if deployment.status.ready_replicas == deployment.spec.replicas:
-                logger.debug(f"Deployment {deployment_name} is ready")
+                logger.debug(f"Deployment {deployment_name} created. Checking the inference server's readiness.")
 
                 # Check that the model in the deployment is also ready to server inference requests
                 return self.edge_inference_manager.inference_is_available(detector_id=detector_id)
-
+            else:
+                logger.debug(f"Deployment {deployment_name} is not ready yet.")
         except kube_client.rest.ApiException as e:
             if e.status == 404:
                 logger.debug(f"Deployment {deployment_name} does not currently exist in namespace {namespace}.")
 
                 if create_if_absent:
                     logger.info(f"Creating deployment {deployment_name} in namespace {namespace}")
-                    deployment_manifest = self._inference_deployment_template
-                    deployment_manifest = deployment_manifest.replace("{{ INFERENCE_SERVICE_NAME }}", service_name)
-                    deployment_manifest = deployment_manifest.replace("{{ DEPLOYMENT_NAME }}", deployment_name)
 
-                    self._apply_kube_manifest(namespace=namespace, manifest=deployment_manifest)
+                    inference_deployment = self._substitute_placeholders(
+                        service_name=service_name, deployment_name=deployment_name
+                    )
+
+                    self._apply_kube_manifest(namespace=namespace, manifest=inference_deployment)
 
             else:
                 logger.error(f"Failed to read deployment {deployment_name}: {e}", exc_info=True)

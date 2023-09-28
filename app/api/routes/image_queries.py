@@ -88,7 +88,6 @@ async def post_image_query(
                 detector_id=detector_id,
                 motion_detection_manager=motion_detection_manager,
                 img=img,
-                patience_time=patience_time,
             )
 
             # If there is no motion, return a clone of the last image query response
@@ -177,7 +176,6 @@ def _improve_cached_image_query_confidence(
     detector_id: str,
     motion_detection_manager: MotionDetectionManager,
     img: np.ndarray,
-    patience_time: float,
 ) -> None:
     """
     Attempt to improve the confidence of the cached image query response for a given detector.
@@ -186,7 +184,6 @@ def _improve_cached_image_query_confidence(
     :param motion_detection_manager: Application's motion detection manager instance.
         This manages the motion detection state for all detectors.
     :param img: the image to submit.
-    :param patience_time: how long to wait for a confident response
     """
 
     detector_metadata: Detector = get_detector_metadata(detector_id=detector_id, gl=gl)
@@ -227,5 +224,5 @@ def _improve_cached_image_query_confidence(
             f"Unconfident image query re-escalation interval exceeded for {detector_id=}."
             " Re-escalating image query to the cloud API server"
         )
-        iq_response = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=patience_time)
+        iq_response = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=0)
         motion_detection_manager.update_image_query_response(detector_id=detector_id, response=iq_response)

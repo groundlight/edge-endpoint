@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: placeholder-inference-deployment-name
+  labels:
+    app: placeholder-inference-deployment-name 
+spec:
+  template:
+    spec:
+      runtimeClassName: null 
+      containers:
+      - name: inference-server
+        resources:
+          limits:
+            nvidia.com/gpu: null 
+
+
