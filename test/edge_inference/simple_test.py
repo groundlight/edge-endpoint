@@ -1,8 +1,8 @@
-from groundlight import Groundlight
-from PIL import Image
-import logging 
+import logging
 import time
 
+from groundlight import Groundlight
+from PIL import Image
 
 DETECTORS = {
     "dog_detector": {
@@ -27,7 +27,7 @@ def main():
 
     for _ in range(100):
         image_query = gl.submit_image_query(detector=detector, image=image)
-        
+
         logging.debug(f"image_query: {image_query}")
 
         image_query = gl.submit_image_query(detector=detector, image=image)
