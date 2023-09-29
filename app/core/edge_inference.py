@@ -81,8 +81,6 @@ class EdgeInferenceManager:
             logger.warning(f"Edge inference server is not available: {ex}")
             return False
 
-        logger.debug(f"Edge inference server is ready for {detector_id}/{model_version}")
-
         return True
 
     def run_inference(self, detector_id: str, img_numpy: np.ndarray) -> dict:
@@ -142,7 +140,9 @@ class EdgeInferenceManager:
             return
 
         logger.info(f"New model binary available ({cloud_binary_ksuid}), attemping to update model for {detector_id}")
-        pipeline_config: str = model_urls["pipeline_config"]
+
+        pipeline_config = model_urls["pipeline_config"]
+
         model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
         old_version, new_version = save_model_to_repository(
             detector_id,
@@ -181,7 +181,7 @@ def fetch_model_urls(detector_id: str) -> dict[str, str]:
     try:
         groundlight_api_token = os.environ["GROUNDLIGHT_API_TOKEN"]
     except KeyError as ex:
-        logger.error("GROUNDLIGHT_API_TOKEN environment variable is not set")
+        logger.error("GROUNDLIGHT_API_TOKEN environment variable is not set", exc_info=True)
         raise ex
 
     logger.debug(f"Fetching model URLs for {detector_id}")

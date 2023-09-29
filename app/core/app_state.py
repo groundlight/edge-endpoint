@@ -106,7 +106,7 @@ class AppState:
         # Create global shared edge inference manager object in the app's state
         self.edge_inference_manager = EdgeInferenceManager(config=inference_config)
 
-        # This is meant to go away once we stop running docker-based GitHub actions.
+        # This is meant to go away once we stop running docker-based CI/CD.
         deploy_detector_level_inference = os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", None)
 
         if deploy_detector_level_inference:

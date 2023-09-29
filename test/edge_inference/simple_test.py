@@ -1,4 +1,3 @@
-import logging
 import time
 
 from groundlight import Groundlight
@@ -19,22 +18,19 @@ DETECTORS = {
 
 
 def main():
-    gl = Groundlight(endpoint="http://10.45.0.71:30101")
-    detector = DETECTORS["dog_detector"]["detector_id"]
+    gl = Groundlight()
+    dog_detector = DETECTORS["dog_detector"]["detector_id"]
+    cat_detector = DETECTORS["cat_detector"]["detector_id"]
 
-    logging.info(f"detector: {detector}")
-    image = Image.open("test/assets/dog.jpeg")
+    dog_image = Image.open("test/assets/dog.jpeg")
+    cat_image = Image.open("test/assets/cat.jpeg")
 
     for _ in range(100):
-        image_query = gl.submit_image_query(detector=detector, image=image)
+        gl.submit_image_query(detector=dog_detector, image=dog_image)
 
-        logging.debug(f"image_query: {image_query}")
-
-        image_query = gl.submit_image_query(detector=detector, image=image)
+        gl.submit_image_query(detector=cat_detector, image=cat_image)
         time.sleep(1)
-        # assert image_query.id.startswith("iqe_")
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level="DEBUG")
     main()

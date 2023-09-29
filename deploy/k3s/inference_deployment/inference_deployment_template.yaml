@@ -4,7 +4,7 @@ metadata:
   name: placeholder-inference-service-name
 spec:
   selector:
-    app: placeholder-inference-service-name
+    app: inference-server
   ports:
     - protocol: TCP
       port: 8000
@@ -48,8 +48,8 @@ spec:
             "--model-repository=/mnt/models",
             "--load-model=*",
             "--model-control-mode=explicit",
-            "--metrics-config=summary_latencies=true"
-            "--backend-config=python,shm-region-prefix-name={{ DEPLOYMENT_NAME }}"
+            "--metrics-config=summary_latencies=true",
+            "--backend-config=python,shm-region-prefix-name=placeholder-inference-deployment-name"
           ]
         resources:
           limits:
