@@ -35,15 +35,16 @@ class EdgeInferenceManager:
               2) the `LocalInferenceConfig` object determines if local inference is enabled for
                 a specific detector and the model name and version to use for inference.
         """
-        self.inference_config = config
-
-        self.inference_clients = {
-            detector_id: tritonclient.InferenceServerClient(
-                url=self._inference_server_url(detector_id), verbose=verbose
-            )
-            for detector_id in self.inference_config.keys()
-            if self.detector_configured_for_local_inference(detector_id)
-        }
+        self.inference_config = config 
+        
+        if self.inference_config:
+            self.inference_clients = {
+                detector_id: tritonclient.InferenceServerClient(
+                    url=self._inference_server_url(detector_id), verbose=verbose
+                )
+                for detector_id in self.inference_config.keys()
+                if self.detector_configured_for_local_inference(detector_id)
+            }
 
     def _inference_server_url(self, detector_id: str) -> str:
         inference_service_name = f"inference-service-{detector_id.replace('_', '-').lower()}"

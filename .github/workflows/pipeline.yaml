@@ -35,7 +35,7 @@ jobs:
       - name: Deploy the edge-endpoint yaml
         run: |
           set -ex
-          source test/setup_test_env.sh
+          source test/setup_inference_test_env.sh
           export INFERENCE_FLAVOR="CPU"
           chmod +x deploy/bin/cluster_setup.sh
           ./deploy/bin/cluster_setup.sh
@@ -59,7 +59,7 @@ jobs:
 
       - name: Run a simple test against the edge-endpoint
         run: | 
-          source test/setup_test_env.sh
+          source test/setup_inference_test_env.sh
           GROUNDLIGHT_ENDPOINT=$KUBERNETES_SERVICE_ENDPOINT \
           poetry run python test/edge_inference/simple_test.py
 
