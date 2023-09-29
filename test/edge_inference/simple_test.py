@@ -36,6 +36,7 @@ def main():
             time.sleep(1)
         else: 
             time.sleep(300)
+            first_time = False 
 
 
 if __name__ == "__main__":
