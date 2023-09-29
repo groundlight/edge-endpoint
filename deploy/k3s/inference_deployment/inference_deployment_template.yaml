@@ -52,8 +52,12 @@ spec:
             "--backend-config=python,shm-region-prefix-name=placeholder-inference-deployment-name"
           ]
         resources:
+          requests:
+            nvidia.com/gpu: 1
+            ephemeral-storage: 1Gi
           limits:
             nvidia.com/gpu: 1
+            ephemeral-storage: 2Gi
         volumeMounts:
         - name: model-repo
           mountPath: /mnt/models
@@ -79,4 +83,5 @@ spec:
       - name: dshm
         emptyDir:
           medium: Memory
-          sizeLimit: 512Mi
+          # sizeLimit: 512Mi
+          sizeLimit: 1Gi
