@@ -71,6 +71,7 @@ jobs:
           kubectl logs -l app=edge-logic-server
           sleep 45
           kubectl describe pods -n default 
+          kubectl get pods 
 
   test-motion-detection:
     runs-on: ubuntu-22.04
