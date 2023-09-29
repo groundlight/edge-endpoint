@@ -36,6 +36,7 @@ jobs:
         run: |
           set -ex
           source test/setup_test_env.sh
+          export INFERENCE_FLAVOR="CPU"
           chmod +x deploy/bin/cluster_setup.sh
           ./deploy/bin/cluster_setup.sh
       - name: Wait for edge-endpoint pod to be ready
