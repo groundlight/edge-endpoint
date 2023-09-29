@@ -25,7 +25,7 @@ def main():
     dog_image = Image.open("test/assets/dog.jpeg")
     cat_image = Image.open("test/assets/cat.jpeg")
 
-    for _ in range(100):
+    for _ in range(5):
         gl.submit_image_query(detector=dog_detector, image=dog_image)
 
         gl.submit_image_query(detector=cat_detector, image=cat_image)

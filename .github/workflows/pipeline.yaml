@@ -66,9 +66,9 @@ jobs:
       - name: Check the deployments 
         if : always()
         run: |
-          kubectl get pods 
-          kubeclt describe deployment inferencemodel-det-2uoxao4hzyb9gv4zvtwmovdqgh9-7679df9f9d
-          kubeclt describe deployment inferencemodel-det-2uoxald1gegjk4tnylbtgggij8p-79689cc758
+          kubectl describe pods -n default 
+          kubectl describe deployment inferencemodel-det-2uoxao4hzyb9gv4zvtwmovdqgh9-7679df9f9d
+          kubectl describe deployment inferencemodel-det-2uoxald1gegjk4tnylbtgggij8p-79689cc758
           kubectl logs -l app=edge-logic-server
 
   test-motion-detection:
