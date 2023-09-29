@@ -25,6 +25,9 @@ async def on_startup():
     """
     On startup, update edge inference models.
     """
+    if not os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", None):
+        return
+
     for detector_id, inference_config in app.state.app_state.edge_inference_manager.inference_config.items():
         if inference_config.enabled:
             try:
