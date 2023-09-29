@@ -85,9 +85,6 @@ class AppState:
 
         edge_config = load_edge_config()
 
-        detectors = edge_config.detectors
-        logger.info(f"Detectors: {detectors}")
-
         motion_detection_templates: Dict[str, MotionDetectionConfig] = edge_config.motion_detection_templates
         edge_inference_templates: Dict[str, LocalInferenceConfig] = edge_config.local_inference_templates
 
@@ -123,7 +120,7 @@ class AppState:
         # Kubernetes resources are split across various API groups based on their functionality.
         # The `AppsV1Api` client manages resources related to workloads, such as Deployments, StatefulSets, etc.
         # The `CoreV1Api` client, on the other hand, handles core cluster resources like Pods, Services, and Namespaces.
-        # Using both clients in order to create the deployment and service for the inference container.
+        # Using both clients in order to create the deployment and service for the inference containers.
         self._app_kube_client = kube_client.AppsV1Api()
         self._core_kube_client = kube_client.CoreV1Api()
 

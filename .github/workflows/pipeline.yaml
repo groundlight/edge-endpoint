@@ -67,8 +67,10 @@ jobs:
         if : always()
         run: |
           kubectl describe pods -n default 
-          sleep 10 
+          sleep 20 
           kubectl logs -l app=edge-logic-server
+          sleep 45
+          kubectl describe pods -n default 
 
   test-motion-detection:
     runs-on: ubuntu-22.04
