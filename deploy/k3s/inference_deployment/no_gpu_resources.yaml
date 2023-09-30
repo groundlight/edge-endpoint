@@ -11,6 +11,8 @@ spec:
       containers:
       - name: inference-server
         resources:
+          requests:
+            nvidia.com/gpu: null
           limits:
             nvidia.com/gpu: null 
 
