@@ -18,25 +18,26 @@ DETECTORS = {
 
 
 def main():
-    gl = Groundlight()
+    gl = Groundlight(endpoint="http://10.45.0.71:30101")
     dog_detector = DETECTORS["dog_detector"]["detector_id"]
     cat_detector = DETECTORS["cat_detector"]["detector_id"]
 
     dog_image = Image.open("test/assets/dog.jpeg")
     cat_image = Image.open("test/assets/cat.jpeg")
-    
+
     first_time = True
 
-    for _ in range(5):
+    for _ in range(100):
         gl.submit_image_query(detector=dog_detector, image=dog_image)
 
         gl.submit_image_query(detector=cat_detector, image=cat_image)
-        
+
+        time.sleep(1)
         if not first_time:
             time.sleep(1)
-        else: 
+        else:
             time.sleep(300)
-            first_time = False 
+            first_time = False
 
 
 if __name__ == "__main__":

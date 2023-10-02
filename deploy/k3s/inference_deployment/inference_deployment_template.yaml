@@ -42,6 +42,7 @@ spec:
         # there would be a conflict in the shared memory region name, which can lead to SEGFAULTs. 
         # To avoid this, we can set the shm-region-prefix-name to a unique value for each Triton server instance.
         # TODO: We only want to shut down an old instance when this tritonsever gives the "READY" signal for all models
+        # shm-default-byte-size=16777216
         command:
           [
             "tritonserver",
@@ -51,17 +52,11 @@ spec:
             "--metrics-config=summary_latencies=true",
             "--backend-config=python,shm-region-prefix-name=placeholder-inference-deployment-name"
           ]
-        resources:
-          requests:
-            nvidia.com/gpu: 1
-            ephemeral-storage: 1Gi
-            # memory: 1Gi
-            # cpu: 1
-          limits:
-            nvidia.com/gpu: 1
-            ephemeral-storage: 2Gi
-            # memory: 2Gi
-            # cpu: 1
+        # resources:
+        #   requests:
+        #     nvidia.com/gpu: 1
+        #   limits:
+        #     nvidia.com/gpu: 1
         volumeMounts:
         - name: model-repo
           mountPath: /mnt/models

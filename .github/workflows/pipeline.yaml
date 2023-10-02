@@ -66,10 +66,7 @@ jobs:
       - name: Check the deployments 
         if : always()
         run: |
-          kubectl describe pods -n default 
-          sleep 20 
           kubectl logs -l app=edge-logic-server
-          sleep 45
           kubectl describe pods -n default 
           kubectl get pods 
 

@@ -35,8 +35,8 @@ class EdgeInferenceManager:
               2) the `LocalInferenceConfig` object determines if local inference is enabled for
                 a specific detector and the model name and version to use for inference.
         """
-        self.inference_config = config 
-        
+        self.inference_config = config
+
         if self.inference_config:
             self.inference_clients = {
                 detector_id: tritonclient.InferenceServerClient(
@@ -198,6 +198,8 @@ def fetch_model_urls(detector_id: str) -> dict[str, str]:
     if response.status_code == 200:
         return response.json()
     else:
+        logger.warning(f"Failure Response: {response.status_code}")
+
         raise HTTPException(status_code=response.status_code, detail=f"Failed to fetch model URLs for {detector_id=}.")
 
 

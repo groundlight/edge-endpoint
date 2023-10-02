@@ -33,4 +33,4 @@ async def on_startup():
             try:
                 app.state.app_state.edge_inference_manager.update_model(detector_id)
             except Exception:
-                logging.error(f"Failed to update model for {detector_id}", exc_info=True)
+                logging.error(f"Failed to update model for {detector_id}.", exc_info=True)
