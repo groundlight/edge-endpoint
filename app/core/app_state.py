@@ -167,10 +167,10 @@ class AppState:
 
         return inference_deployment.strip()
 
-    # @cachetools.cached(
-    #     cache=KUBERNETES_HEALTH_CHECKS_TTL_CACHE,
-    #     key=lambda self, detector_id, *args, **kwargs: detector_id,
-    # )
+    @cachetools.cached(
+        cache=KUBERNETES_HEALTH_CHECKS_TTL_CACHE,
+        key=lambda self, detector_id, *args, **kwargs: detector_id,
+    )
     def inference_deployment_is_ready(
         self, detector_id: str, namespace: str = "default", create_if_absent: bool = True
     ) -> bool:
