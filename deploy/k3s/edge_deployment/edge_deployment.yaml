@@ -40,8 +40,7 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       containers:
       - name: edge-endpoint
-        # image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-fix-patience-time-0d64ab0df-dirty-19cac12e4adca89
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:nvidia-runtime-fix-c026ec9e4-dirty-1326f01a0756b17
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:9cc856c56-state-management-via-k3s
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
