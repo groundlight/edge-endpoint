@@ -48,12 +48,12 @@ local_inference_templates:
 
 detectors:
   - detector_id: 'det_2UOxalD1gegjk4TnyLbtGggiJ8p'
-    motion_detection_template: 'disabled'
-    local_inference_template: 'default'
+    motion_detection_template: 'default'
+    local_inference_template: 'disabled'
 
   - detector_id: 'det_2UOxao4HZyB9gv4ZVtwMOvdqgh9'
-    motion_detection_template: 'disabled'
-    local_inference_template: 'default'
+    motion_detection_template: 'default'
+    local_inference_template: 'disabled'
 EOM
 )
 

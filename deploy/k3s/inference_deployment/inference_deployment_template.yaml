@@ -4,7 +4,7 @@ metadata:
   name: placeholder-inference-service-name
 spec:
   selector:
-    app: placeholder-inference-service-name
+    app: inference-server
   ports:
     - protocol: TCP
       port: 8000
@@ -42,18 +42,16 @@ spec:
         # there would be a conflict in the shared memory region name, which can lead to SEGFAULTs. 
         # To avoid this, we can set the shm-region-prefix-name to a unique value for each Triton server instance.
         # TODO: We only want to shut down an old instance when this tritonsever gives the "READY" signal for all models
+        # shm-default-byte-size=16777216
         command:
           [
             "tritonserver",
             "--model-repository=/mnt/models",
             "--load-model=*",
             "--model-control-mode=explicit",
-            "--metrics-config=summary_latencies=true"
-            "--backend-config=python,shm-region-prefix-name={{ DEPLOYMENT_NAME }}"
+            "--metrics-config=summary_latencies=true",
+            "--backend-config=python,shm-region-prefix-name=placeholder-inference-deployment-name"
           ]
-        resources:
-          limits:
-            nvidia.com/gpu: 1
         volumeMounts:
         - name: model-repo
           mountPath: /mnt/models

@@ -12,7 +12,7 @@ announce() {
 }
 
 K="k3s kubectl"
-INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"CPU"}
+INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"GPU"}
 
 # Secrets 
 ./deploy/bin/make-gl-api-token-secret.sh

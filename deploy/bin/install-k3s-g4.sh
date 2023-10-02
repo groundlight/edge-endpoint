@@ -16,9 +16,12 @@ SCRIPT_DIR=$(dirname "$0")
 $SCRIPT_DIR/install-k3s.sh
 
 # Configure k3s to use nvidia-container-runtime
-# See guide here: https://k3d.io/v5.3.0/usage/advanced/cuda/#configure-containerd
+# See guide here: https://k3d.io/v5.3.0/usage/advanced/cuda/#configure-containerd. 
 echo "Configuring k3s to use nvidia-container-runtime..."
 for i in {1..10}; do
+  if [[ -f "/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl" ]]; then
+    break
+  fi
   # Sometimes the following wget fails initially but works after a few seconds
   sleep 2
   sudo wget https://k3d.io/v5.3.0/usage/advanced/cuda/config.toml.tmpl -O /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl && break
@@ -67,8 +70,6 @@ spec:
         env:
           - name: FAIL_ON_INIT_ERROR
             value: "false"
-          - name: DP_DISABLE_HEALTHCHECKS
-            value: xids
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:

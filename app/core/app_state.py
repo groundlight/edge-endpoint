@@ -85,9 +85,6 @@ class AppState:
 
         edge_config = load_edge_config()
 
-        detectors = edge_config.detectors
-        logger.info(f"Detectors: {detectors}")
-
         motion_detection_templates: Dict[str, MotionDetectionConfig] = edge_config.motion_detection_templates
         edge_inference_templates: Dict[str, LocalInferenceConfig] = edge_config.local_inference_templates
 
@@ -106,7 +103,7 @@ class AppState:
         # Create global shared edge inference manager object in the app's state
         self.edge_inference_manager = EdgeInferenceManager(config=inference_config)
 
-        # This is meant to go away once we stop running docker-based GitHub actions.
+        # This is meant to go away once we stop running docker-based CI/CD.
         deploy_detector_level_inference = os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", None)
 
         if deploy_detector_level_inference:
@@ -123,7 +120,7 @@ class AppState:
         # Kubernetes resources are split across various API groups based on their functionality.
         # The `AppsV1Api` client manages resources related to workloads, such as Deployments, StatefulSets, etc.
         # The `CoreV1Api` client, on the other hand, handles core cluster resources like Pods, Services, and Namespaces.
-        # Using both clients in order to create the deployment and service for the inference container.
+        # Using both clients in order to create the deployment and service for the inference containers.
         self._app_kube_client = kube_client.AppsV1Api()
         self._core_kube_client = kube_client.CoreV1Api()
 
@@ -170,10 +167,10 @@ class AppState:
 
         return inference_deployment.strip()
 
-    # @cachetools.cached(
-    #     cache=KUBERNETES_HEALTH_CHECKS_TTL_CACHE,
-    #     key=lambda self, detector_id, *args, **kwargs: detector_id,
-    # )
+    @cachetools.cached(
+        cache=KUBERNETES_HEALTH_CHECKS_TTL_CACHE,
+        key=lambda self, detector_id, *args, **kwargs: detector_id,
+    )
     def inference_deployment_is_ready(
         self, detector_id: str, namespace: str = "default", create_if_absent: bool = True
     ) -> bool:

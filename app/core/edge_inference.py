@@ -37,13 +37,14 @@ class EdgeInferenceManager:
         """
         self.inference_config = config
 
-        self.inference_clients = {
-            detector_id: tritonclient.InferenceServerClient(
-                url=self._inference_server_url(detector_id), verbose=verbose
-            )
-            for detector_id in self.inference_config.keys()
-            if self.detector_configured_for_local_inference(detector_id)
-        }
+        if self.inference_config:
+            self.inference_clients = {
+                detector_id: tritonclient.InferenceServerClient(
+                    url=self._inference_server_url(detector_id), verbose=verbose
+                )
+                for detector_id in self.inference_config.keys()
+                if self.detector_configured_for_local_inference(detector_id)
+            }
 
     def _inference_server_url(self, detector_id: str) -> str:
         inference_service_name = f"inference-service-{detector_id.replace('_', '-').lower()}"
@@ -80,8 +81,6 @@ class EdgeInferenceManager:
         except (ConnectionRefusedError, socket.gaierror) as ex:
             logger.warning(f"Edge inference server is not available: {ex}")
             return False
-
-        logger.debug(f"Edge inference server is ready for {detector_id}/{model_version}")
 
         return True
 
@@ -142,7 +141,9 @@ class EdgeInferenceManager:
             return
 
         logger.info(f"New model binary available ({cloud_binary_ksuid}), attemping to update model for {detector_id}")
-        pipeline_config: str = model_urls["pipeline_config"]
+
+        pipeline_config = model_urls["pipeline_config"]
+
         model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
         old_version, new_version = save_model_to_repository(
             detector_id,
@@ -181,7 +182,7 @@ def fetch_model_urls(detector_id: str) -> dict[str, str]:
     try:
         groundlight_api_token = os.environ["GROUNDLIGHT_API_TOKEN"]
     except KeyError as ex:
-        logger.error("GROUNDLIGHT_API_TOKEN environment variable is not set")
+        logger.error("GROUNDLIGHT_API_TOKEN environment variable is not set", exc_info=True)
         raise ex
 
     logger.debug(f"Fetching model URLs for {detector_id}")
@@ -197,6 +198,8 @@ def fetch_model_urls(detector_id: str) -> dict[str, str]:
     if response.status_code == 200:
         return response.json()
     else:
+        logger.warning(f"Failure Response: {response.status_code}")
+
         raise HTTPException(status_code=response.status_code, detail=f"Failed to fetch model URLs for {detector_id=}.")
 
 

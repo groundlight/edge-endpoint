@@ -8,7 +8,6 @@ env:
   GROUNDLIGHT_API_TOKEN: ${{ secrets.GROUNDLIGHT_API_TOKEN }}
   # This is the NGINX proxy endpoint
   GROUNDLIGHT_ENDPOINT: http://localhost:6717
-  KUBERNETES_SERVICE_ENDPOINT: http://localhost:30101
 
 jobs:
   test-in-k3s:
@@ -23,9 +22,7 @@ jobs:
           sudo chown $USER /etc/rancher/k3s/k3s.yaml
           # symlink to kubeconfig
           mkdir -p ~/.kube
-          sudo mkdir -p /var/groundlight/serving/model_repository 
           ln -s /etc/rancher/k3s/k3s.yaml ~/.kube/config
-
       - name: Configure AWS credentials 
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -35,38 +32,18 @@ jobs:
       - name: Deploy the edge-endpoint yaml
         run: |
           set -ex
-          source test/setup_test_env.sh
+          # Once there's a fix for disk-pressure issues on GHA's runner, we can uncomment the 
+          # following command in order to set up the environment to test out edge inference
+          # source test/setup_inference_test_env.sh
+          export INFERENCE_FLAVOR="CPU"
           chmod +x deploy/bin/cluster_setup.sh
           ./deploy/bin/cluster_setup.sh
+          kubectl describe deployment 
       - name: Wait for edge-endpoint pod to be ready
         run: |
           set -ex
           kubectl rollout status deployment edge-endpoint --timeout=5m
-          kubectl describe pod edge-endpoint
-
-      - name: Install poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          installer-parallel: true
-          
-      - name: Install edge-endpoint's python dependencies
-        run: |
-          poetry install --no-interaction --no-root
-
-      - name: Run a simple test against the edge-endpoint
-        run: | 
-          source test/setup_test_env.sh
-          GROUNDLIGHT_ENDPOINT=$KUBERNETES_SERVICE_ENDPOINT \
-          poetry run python test/edge_inference/simple_test.py
-
-      - name: Check the deployments 
-        if : always()
-        run: |
-          kubectl get pods 
-          kubectl logs -l app=edge-logic-server
+          kubectl describe pod edge-endpoint 
 
   test-motion-detection:
     runs-on: ubuntu-22.04
