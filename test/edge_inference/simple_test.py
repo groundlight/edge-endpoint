@@ -25,12 +25,15 @@ def main():
     dog_image = Image.open("test/assets/dog.jpeg")
     cat_image = Image.open("test/assets/cat.jpeg")
 
+    gl.submit_image_query(detector=dog_detector, image=dog_image)
+    gl.submit_image_query(detector=cat_detector, image=cat_image)
+    
+    time.sleep(300)
+    
     for _ in range(40):
         gl.submit_image_query(detector=dog_detector, image=dog_image)
 
         gl.submit_image_query(detector=cat_detector, image=cat_image)
-
-        time.sleep(1)
 
 
 if __name__ == "__main__":
