@@ -33,10 +33,9 @@ jobs:
         run: |
           set -ex
           # Once there's a fix for disk-pressure issues on GHA's runner, we can uncomment the 
-          # following two commands in order to actually set up the environment to test out edge 
-          # inference 
+          # following command in order to set up the environment to test out edge inference
           # source test/setup_inference_test_env.sh
-          # export INFERENCE_FLAVOR="CPU"
+          export INFERENCE_FLAVOR="CPU"
           chmod +x deploy/bin/cluster_setup.sh
           ./deploy/bin/cluster_setup.sh
           kubectl describe deployment 
