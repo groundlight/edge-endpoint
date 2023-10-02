@@ -32,6 +32,10 @@ spec:
       labels:
         app: inference-server
     spec:
+      tolerations:
+      - key: "node.kubernetes.io/disk-pressure"
+        operator: "Exists"
+        effect: "NoSchedule"
       runtimeClassName: nvidia  # Required for GPU use in k3s
       containers:
       - name: inference-server

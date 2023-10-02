@@ -69,6 +69,10 @@ jobs:
           kubectl logs -l app=edge-logic-server
           kubectl describe pods -n default 
           kubectl get pods 
+      - name: Check node 
+        if : always()
+        run: | 
+          kubectl describe nodes 
 
   test-motion-detection:
     runs-on: ubuntu-22.04
