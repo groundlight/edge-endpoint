@@ -26,7 +26,7 @@ jobs:
       - name: Deploy the edge-endpoint yaml
         run: |
           set -ex
-          kubectl apply -f deploy/k3s/edge_deployment.yaml
+          kubectl apply -f deploy/k3s/edge_deployment/edge_deployment.yaml
           kubectl describe deployment
       - name: Wait for edge-endpoint pod to be ready
         run: |
