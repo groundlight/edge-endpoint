@@ -23,11 +23,23 @@ jobs:
           # symlink to kubeconfig
           mkdir -p ~/.kube
           ln -s /etc/rancher/k3s/k3s.yaml ~/.kube/config
+      - name: Configure AWS credentials 
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
       - name: Deploy the edge-endpoint yaml
         run: |
           set -ex
-          kubectl apply -f deploy/k3s/edge_deployment/edge_deployment.yaml
-          kubectl describe deployment
+          # Once there's a fix for disk-pressure issues on GHA's runner, we can uncomment the 
+          # following two commands in order to actually set up the environment to test out edge 
+          # inference 
+          # source test/setup_inference_test_env.sh
+          # export INFERENCE_FLAVOR="CPU"
+          chmod +x deploy/bin/cluster_setup.sh
+          ./deploy/bin/cluster_setup.sh
+          kubectl describe deployment 
       - name: Wait for edge-endpoint pod to be ready
         run: |
           set -ex
