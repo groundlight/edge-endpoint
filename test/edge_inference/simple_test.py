@@ -18,7 +18,7 @@ DETECTORS = {
 
 
 def main():
-    gl = Groundlight(endpoint="http://10.45.0.71:30101")
+    gl = Groundlight()
     dog_detector = DETECTORS["dog_detector"]["detector_id"]
     cat_detector = DETECTORS["cat_detector"]["detector_id"]
 
