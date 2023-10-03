@@ -46,7 +46,7 @@ spec:
         - containerPort: 6717
         env:
         - name: LOG_LEVEL
-          value: "DEBUG"
+          value: "INFO"
         - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
           value: "True"
         - name: GROUNDLIGHT_API_TOKEN
