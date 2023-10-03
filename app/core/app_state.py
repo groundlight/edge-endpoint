@@ -39,12 +39,15 @@ def load_edge_config() -> RootEdgeConfig:
 
     logger.warning("EDGE_CONFIG environment variable not set. Checking default locations.")
 
-    if os.path.exists(DEFAULT_EDGE_CONFIG_PATH):
-        logger.info(f"Loading edge config from {DEFAULT_EDGE_CONFIG_PATH}")
-        config = yaml.safe_load(open(DEFAULT_EDGE_CONFIG_PATH, "r"))
-        return RootEdgeConfig(**config)
+    default_paths = [DEFAULT_EDGE_CONFIG_PATH, "configs/edge-config.yaml"]
 
-    raise FileNotFoundError(f"Could not find edge config file in default locations: {DEFAULT_EDGE_CONFIG_PATH}")
+    for path in default_paths:
+        if os.path.exists(path):
+            logger.info(f"Loading edge config from {path}")
+            config = yaml.safe_load(open(path, "r"))
+            return RootEdgeConfig(**config)
+
+    raise FileNotFoundError(f"Could not find edge config file in default locations: {default_paths}")
 
 
 @lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
