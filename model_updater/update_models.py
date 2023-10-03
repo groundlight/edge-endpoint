@@ -4,8 +4,6 @@ import time
 from app.core.app_state import load_edge_config
 from app.core.configs import RootEdgeConfig
 from app.core.edge_inference import EdgeInferenceManager
-from fastapi import HTTPException
-
 
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=log_level)

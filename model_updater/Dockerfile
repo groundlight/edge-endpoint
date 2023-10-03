@@ -36,4 +36,5 @@ WORKDIR ${APP_ROOT}
 RUN poetry install --only model_updater --no-interaction --no-root
 
 # Entry command 
-CMD ["poetry", "run", "python", "-m", "model_updater.update_models"]
+# CMD ["poetry", "run", "python", "-m", "model_updater.update_models"]
+CMD poetry run python -m update_models
