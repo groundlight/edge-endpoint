@@ -37,11 +37,3 @@ docker buildx build \
   --platform linux/arm64,linux/amd64 \
   --tag 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${TAG} \
   ../.. --push
-
-cp ../../pyproject.toml ../../model_updater/
-
-# Build model updater image for amd64 and arm64
-docker buildx build \
-  --platform linux/arm64,linux/amd64 \
-  --tag 723181461334.dkr.ecr.us-west-2.amazonaws.com/model-updater:${TAG} \
-  ../../model_updater --push
