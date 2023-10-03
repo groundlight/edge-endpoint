@@ -40,7 +40,7 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       containers:
       - name: edge-endpoint
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:state-management-via-k3s-f462f67f0-dirty-3602301d0c7222d
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:13361241c-state-management-via-k3s
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
