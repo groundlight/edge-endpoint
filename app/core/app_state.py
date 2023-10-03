@@ -16,9 +16,9 @@ from app.core.utils import safe_call_api
 
 from .configs import LocalInferenceConfig, MotionDetectionConfig, RootEdgeConfig
 from .edge_inference import EdgeInferenceManager
+from .file_paths import DEFAULT_EDGE_CONFIG_PATH, INFERENCE_DEPLOYMENT_TEMPLATE_PATH
 from .iqe_cache import IQECache
 from .motion_detection import MotionDetectionManager
-from .file_paths import DEFAULT_EDGE_CONFIG_PATH, INFERENCE_DEPLOYMENT_TEMPLATE_PATH
 
 logger = logging.getLogger(__name__)
 
