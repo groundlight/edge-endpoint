@@ -40,13 +40,13 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       containers:
       - name: edge-endpoint
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:9cc856c56-state-management-via-k3s
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:13361241c-state-management-via-k3s
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
         env:
         - name: LOG_LEVEL
-          value: "DEBUG"
+          value: "INFO"
         - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
           value: "True"
         - name: GROUNDLIGHT_API_TOKEN

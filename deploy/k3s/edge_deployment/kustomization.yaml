@@ -1,5 +1,0 @@
-resources:
-  - edge_deployment.yaml 
-
-patchesStrategicMerge:
-  - edge_patch_cpu.yaml

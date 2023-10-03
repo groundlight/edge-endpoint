@@ -37,7 +37,7 @@ spec:
       - name: inference-server
         image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver:313680099-main
         imagePullPolicy: IfNotPresent
-        # Tritonserver will look for models in /mnt/models and initialize them on startup
+        # Tritonserver will look for models in /mnt/models and initialize them on startup.
         # When running multiple instances of Triton server on the same machine that use Python models, 
         # there would be a conflict in the shared memory region name, which can lead to SEGFAULTs. 
         # To avoid this, we can set the shm-region-prefix-name to a unique value for each Triton server instance.

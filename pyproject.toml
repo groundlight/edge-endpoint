@@ -17,7 +17,7 @@ framegrab = "^0.2.1"
 pyyaml = "^6.0"
 svix-ksuid = "^0.6.2"
 cachetools = "^5.3.1"
-tritonclient = {extras = ["all"], version = "^2.36.0"}
+tritonclient = {extras = ["all"], version = "2.36.0"}
 kubernetes = "^27.2.0"
 jinja2 = "^3.1.2"
 

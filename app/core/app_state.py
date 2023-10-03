@@ -16,6 +16,7 @@ from app.core.utils import safe_call_api
 
 from .configs import LocalInferenceConfig, MotionDetectionConfig, RootEdgeConfig
 from .edge_inference import EdgeInferenceManager
+from .file_paths import DEFAULT_EDGE_CONFIG_PATH, INFERENCE_DEPLOYMENT_TEMPLATE_PATH
 from .iqe_cache import IQECache
 from .motion_detection import MotionDetectionManager
 
@@ -38,14 +39,15 @@ def load_edge_config() -> RootEdgeConfig:
 
     logger.warning("EDGE_CONFIG environment variable not set. Checking default locations.")
 
-    default_config_paths = ["/etc/groundlight/edge-config/edge-config.yaml", "configs/edge-config.yaml"]
-    for default_config_path in default_config_paths:
-        if os.path.exists(default_config_path):
-            logger.info(f"Loading edge config from {default_config_path}")
-            config = yaml.safe_load(open(default_config_path, "r"))
+    default_paths = [DEFAULT_EDGE_CONFIG_PATH, "configs/edge-config.yaml"]
+
+    for path in default_paths:
+        if os.path.exists(path):
+            logger.info(f"Loading edge config from {path}")
+            config = yaml.safe_load(open(path, "r"))
             return RootEdgeConfig(**config)
 
-    raise FileNotFoundError(f"Could not find edge config file in default locations: {default_config_paths}")
+    raise FileNotFoundError(f"Could not find edge config file in default locations: {default_paths}")
 
 
 @lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
@@ -126,21 +128,27 @@ class AppState:
 
         self._inference_deployment_template = self._load_inference_deployment_template()
 
+        deployments = self._app_kube_client.list_deployment_for_all_namespaces(
+            label_selector="app=edge-logic-server", field_selector="metadata.name=edge-endpoint"
+        )
+        self._target_namespace = deployments.items[0].metadata.namespace if deployments.items else "default"
+
     def _load_inference_deployment_template(self) -> str:
         """
         Loads the inference deployment template.
         """
-        deployment_template_path = "/etc/groundlight/inference-deployment/inference_deployment_template.yaml"
-        if os.path.exists(deployment_template_path):
-            with open(deployment_template_path, "r") as f:
-                manifest = f.read()
-                return manifest
+        if os.path.exists(INFERENCE_DEPLOYMENT_TEMPLATE_PATH):
+            with open(INFERENCE_DEPLOYMENT_TEMPLATE_PATH, "r") as f:
+                return f.read()
 
-        raise FileNotFoundError(f"Could not find k3s inference deployment template at {deployment_template_path}")
+        raise FileNotFoundError(
+            f"Could not find k3s inference deployment template at {INFERENCE_DEPLOYMENT_TEMPLATE_PATH}"
+        )
 
     def _apply_kube_manifest(self, namespace: str, manifest: str) -> None:
         """
-        Applies manifest to the kubernetes cluster.
+        Applies manifest to the kubernetes cluster. This is not blocking since the kubernetes API
+        creates deployments and services asynchronously.
         """
         for document in yaml.safe_load_all(manifest):
             try:
@@ -149,7 +157,7 @@ class AppState:
                 elif document["kind"] == "Deployment":
                     self._app_kube_client.create_namespaced_deployment(namespace=namespace, body=document)
                 else:
-                    raise ValueError(f"Unknown kubernetes manifest kind: {document['kind']}")
+                    raise NotImplementedError(f"Unsupported kubernetes manifest kind: {document['kind']}")
 
             except kube_client.rest.ApiException as e:
                 # TODO better handling of this exception.
@@ -189,7 +197,7 @@ class AppState:
             logger.debug(f"Detector {detector_id} is not configured for local inference")
             return False
 
-        def get_service_and_deployment_names(detector_id: str) -> str:
+        def get_service_and_deployment_names(detector_id: str) -> tuple[str, str]:
             """
             Kubernetes service/deployment names have a strict naming convention.
             They have to be alphanumeric, lower cased, and can only contain dashes.
@@ -223,10 +231,10 @@ class AppState:
                         service_name=service_name, deployment_name=deployment_name
                     )
 
-                    self._apply_kube_manifest(namespace=namespace, manifest=inference_deployment)
+                    self._apply_kube_manifest(namespace=self._target_namespace, manifest=inference_deployment)
 
             else:
-                logger.error(f"Failed to read deployment {deployment_name}: {e}", exc_info=True)
+                logger.error(f"Failed to read deployment {deployment_name}.", exc_info=True)
 
         return False
 

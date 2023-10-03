@@ -41,7 +41,7 @@ fi
 if [[ "$INFERENCE_FLAVOR" == "CPU" ]]; then 
     announce "Preparing inference deployments with CPU flavor"
 
-    # Customize edge_deployment and inference_deployment_template with the CPU patch
+    # Customize inference_deployment_template with the CPU patch
     $K kustomize deploy/k3s/inference_deployment > inference_deployment_template.yaml 
     $K create configmap inference-deployment-template \
             --from-file=inference_deployment_template.yaml
@@ -57,13 +57,8 @@ fi
 # Edge Deployment
 $K apply -f deploy/k3s/service_account.yaml 
 $K delete --ignore-not-found deployment edge-endpoint
+$K delete --ignore-not-found service edge-endpoint-service
+$K apply -f deploy/k3s/edge_deployment/edge_deployment.yaml 
 
-if [[ "$INFERENCE_FLAVOR" == "CPU" ]]; then
-    $K kustomize deploy/k3s/edge_deployment > edge_deployment.yaml
-    $K apply -f edge_deployment.yaml
-    rm edge_deployment.yaml
-else
-    $K apply -f deploy/k3s/edge_deployment/edge_deployment.yaml 
-fi
 
 $K describe deployment edge-endpoint
