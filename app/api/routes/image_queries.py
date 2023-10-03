@@ -82,7 +82,7 @@ async def post_image_query(
         motion_detected = motion_detection_manager.run_motion_detection(detector_id=detector_id, new_img=img_numpy)
         if not motion_detected:
             # Try improving the cached image query response's confidence
-            # (if the cached response is low confidence)
+            # (if the cached response has low confidence)
             _improve_cached_image_query_confidence(
                 gl=gl,
                 detector_id=detector_id,
@@ -99,8 +99,12 @@ async def post_image_query(
             return new_image_query
 
     image_query = None
-    # Check if edge inference is enabled for this detector
-    if edge_inference_manager.inference_is_available(detector_id=detector_id):
+
+    # Check if the edge inference server is available
+    inference_deployment_is_ready = app_state.inference_deployment_is_ready(
+        detector_id=detector_id, create_if_absent=True
+    )
+    if inference_deployment_is_ready:
         detector_metadata: Detector = get_detector_metadata(detector_id=detector_id, gl=gl)
         results = edge_inference_manager.run_inference(detector_id=detector_id, img_numpy=img_numpy)
 

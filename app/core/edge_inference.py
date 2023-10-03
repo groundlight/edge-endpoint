@@ -35,8 +35,31 @@ class EdgeInferenceManager:
               2) the `LocalInferenceConfig` object determines if local inference is enabled for
                 a specific detector and the model name and version to use for inference.
         """
-        self.inference_client = tritonclient.InferenceServerClient(url=self.INFERENCE_SERVER_URL, verbose=verbose)
         self.inference_config = config
+
+        if self.inference_config:
+            self.inference_clients = {
+                detector_id: tritonclient.InferenceServerClient(
+                    url=self._inference_server_url(detector_id), verbose=verbose
+                )
+                for detector_id in self.inference_config.keys()
+                if self.detector_configured_for_local_inference(detector_id)
+            }
+
+    @staticmethod
+    def _inference_server_url(detector_id: str) -> str:
+        inference_service_name = f"inference-service-{detector_id.replace('_', '-').lower()}"
+        return f"{inference_service_name}:8000"
+
+    def detector_configured_for_local_inference(self, detector_id: str) -> bool:
+        """
+        Checks if the detector is configured to run local inference.
+        Args:
+            detector_id: ID of the detector on which to run local edge inference
+        Returns:
+            True if the detector is configured to run local inference, False otherwise
+        """
+        return detector_id in self.inference_config.keys() and self.inference_config[detector_id].enabled
 
     def inference_is_available(self, detector_id: str, model_version: str = "") -> bool:
         """
@@ -46,20 +69,24 @@ class EdgeInferenceManager:
         Returns:
             True if edge inference for the specified detector is available, False otherwise
         """
-        if detector_id not in self.inference_config.keys():
-            logger.debug(f"Edge inference is not enabled for {detector_id=}")
+
+        try:
+            inference_client = self.inference_clients[detector_id]
+        except KeyError:
+            logger.debug(f"Detector ID not configured to use edge inference: {detector_id}", exc_info=True)
             return False
 
         try:
-            if not self.inference_client.is_server_live():
+            if not inference_client.is_server_live():
                 logger.debug("Edge inference server is not live")
                 return False
-            if not self.inference_client.is_model_ready(detector_id, model_version=model_version):
+            if not inference_client.is_model_ready(detector_id, model_version=model_version):
                 logger.debug(f"Edge inference model is not ready: {detector_id}/{model_version}")
                 return False
         except (ConnectionRefusedError, socket.gaierror) as ex:
             logger.warning(f"Edge inference server is not available: {ex}")
             return False
+
         return True
 
     def run_inference(self, detector_id: str, img_numpy: np.ndarray) -> dict:
@@ -80,9 +107,11 @@ class EdgeInferenceManager:
         outputs = [tritonclient.InferRequestedOutput(f) for f in self.MODEL_OUTPUTS]
 
         request_id = prefixed_ksuid(prefix="einf_")
+        inference_client = self.inference_clients[detector_id]
+
         logger.debug(f"Submitting image to edge inference service. {request_id=}")
         start = time.monotonic()
-        response = self.inference_client.infer(
+        response = inference_client.infer(
             model_name=detector_id,
             inputs=[imginput],
             outputs=outputs,
@@ -117,7 +146,9 @@ class EdgeInferenceManager:
             return
 
         logger.info(f"New model binary available ({cloud_binary_ksuid}), attemping to update model for {detector_id}")
-        pipeline_config: str = model_urls["pipeline_config"]
+
+        pipeline_config = model_urls["pipeline_config"]
+
         model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
         old_version, new_version = save_model_to_repository(
             detector_id,
@@ -128,7 +159,8 @@ class EdgeInferenceManager:
         )
 
         try:
-            self.inference_client.load_model(model_name=detector_id)  # refreshes the model if already loaded
+            inference_client = self.inference_clients[detector_id]
+            inference_client.load_model(model_name=detector_id)  # refreshes the model if already loaded
         except (ConnectionRefusedError, socket.gaierror) as ex:
             logger.warning(f"Edge inference server is not available: {ex}")
             return
@@ -155,8 +187,10 @@ def fetch_model_urls(detector_id: str) -> dict[str, str]:
     try:
         groundlight_api_token = os.environ["GROUNDLIGHT_API_TOKEN"]
     except KeyError as ex:
-        logger.error("GROUNDLIGHT_API_TOKEN environment variable is not set")
+        logger.error("GROUNDLIGHT_API_TOKEN environment variable is not set", exc_info=True)
         raise ex
+
+    logger.debug(f"Fetching model URLs for {detector_id}")
 
     url = f"https://api.groundlight.ai/edge-api/v1/fetch-model-urls/{detector_id}/"
     headers = {
@@ -164,9 +198,13 @@ def fetch_model_urls(detector_id: str) -> dict[str, str]:
     }
     response = requests.get(url, headers=headers, timeout=10)
 
+    logger.debug(f"response = {response}")
+
     if response.status_code == 200:
         return response.json()
     else:
+        logger.warning(f"Failure Response: {response.status_code}")
+
         raise HTTPException(status_code=response.status_code, detail=f"Failed to fetch model URLs for {detector_id=}.")
 
 

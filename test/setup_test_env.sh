@@ -41,6 +41,8 @@ motion_detection_templates:
     enabled: false
 
 local_inference_templates:
+  default:
+    enabled: true 
   disabled:
     enabled: false
 
@@ -50,7 +52,7 @@ detectors:
     local_inference_template: 'disabled'
 
   - detector_id: 'det_2UOxao4HZyB9gv4ZVtwMOvdqgh9'
-    motion_detection_template: 'super-sensitive'
+    motion_detection_template: 'default'
     local_inference_template: 'disabled'
 EOM
 )
