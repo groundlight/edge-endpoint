@@ -9,7 +9,9 @@ cd "$(dirname "$0")"
 TAG=$(./git-tag-name.sh)
 
 # Authenticate docker to ECR
-aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin  723181461334.dkr.ecr.us-west-2.amazonaws.com
+aws ecr get-login-password --region us-west-2 | docker login \
+                  --username AWS \
+                  --password-stdin  723181461334.dkr.ecr.us-west-2.amazonaws.com
 
 # We use docker buildx to build the image for multiple platforms. buildx comes
 # installed with Docker Engine when installed via Docker Desktop. If you're
