@@ -21,27 +21,26 @@ aws ecr get-login-password --region us-west-2 | docker login --username AWS --pa
 docker run --rm --privileged linuxkit/binfmt:af88a591f9cc896a52ce596b9cf7ca26a061ef97
 
 # Check if tempbuilder already exists
-if ! docker buildx ls | grep -q tempgroundlightedgebuilder; then
+if ! docker buildx ls | grep -q tempmodelupdaterbuilder; then
   # Prep for multiplatform build - the build is done INSIDE a docker container
-  docker buildx create --name tempgroundlightedgebuilder --use
+  docker buildx create --name tempmodelupdaterbuilder --use
 else
   # If tempbuilder exists, set it as the current builder
-  docker buildx use tempgroundlightedgebuilder
+  docker buildx use tempmodelupdaterbuilder
 fi
 
 # Ensure that the tempbuilder container is running
-docker buildx inspect tempgroundlightedgebuilder --bootstrap
+docker buildx inspect tempmodelupdaterbuilder --bootstrap
 
-# Build image for amd64 and arm64
-docker buildx build \
-  --platform linux/arm64,linux/amd64 \
-  --tag 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${TAG} \
-  ../.. --push
-
+# Temporarily copy the pyproject.toml file to the model_updater directory
+# to bring it into the build context
 cp ../../pyproject.toml ../../model_updater/
 
 # Build model updater image for amd64 and arm64
 docker buildx build \
   --platform linux/arm64,linux/amd64 \
-  --tag 723181461334.dkr.ecr.us-west-2.amazonaws.com/model-updater:${TAG} \
+  --tag 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${TAG} \
   ../../model_updater --push
+
+# Remove the temporary pyproject.toml file
+rm ../../model_updater/pyproject.toml

@@ -141,7 +141,6 @@ class EdgeInferenceManager:
             return
 
         logger.info(f"New model binary available ({cloud_binary_ksuid}), attemping to update model for {detector_id}")
-
         pipeline_config = model_urls["pipeline_config"]
 
         model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
