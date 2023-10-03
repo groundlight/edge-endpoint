@@ -21,6 +21,17 @@ tritonclient = {extras = ["all"], version = "2.36.0"}
 kubernetes = "^27.2.0"
 jinja2 = "^3.1.2"
 
+[tool.poetry.group.model_updater.dependencies]
+python = "^3.9"
+fastapi = "^0.88.0"
+pydantic = "^1.10.2"
+pillow = "^9.5.0"
+pyyaml = "^6.0"
+svix-ksuid = "^0.6.2"
+tritonclient = {extras = ["all"], version = "^2.36.0"}
+jinja2 = "^3.1.2"
+
+
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.0"
 pytest-cov = "^4.0.0"
