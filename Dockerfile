@@ -46,15 +46,14 @@ WORKDIR ${APP_ROOT}
 # Install production dependencies only 
 RUN poetry install --no-interaction --no-root --without dev 
 
-
-# Copy configs
-COPY configs ${APP_ROOT}/configs 
-
 # Create /etc/groundlight directory where edge-config.yaml and inference_deployment.yaml will be mounted 
 RUN mkdir /etc/groundlight
 
 RUN mkdir /etc/groundlight/edge-config && \
     mkdir /etc/groundlight/inference-deployment
+
+# Copy configs
+COPY configs ${APP_ROOT}/configs 
 
 COPY deploy/k3s/inference_deployment/inference_deployment_template.yaml \
     /etc/groundlight/inference-deployment/

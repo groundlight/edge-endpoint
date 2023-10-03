@@ -46,7 +46,8 @@ class EdgeInferenceManager:
                 if self.detector_configured_for_local_inference(detector_id)
             }
 
-    def _inference_server_url(self, detector_id: str) -> str:
+    @staticmethod
+    def _inference_server_url(detector_id: str) -> str:
         inference_service_name = f"inference-service-{detector_id.replace('_', '-').lower()}"
         return f"{inference_service_name}:8000"
 
@@ -69,7 +70,11 @@ class EdgeInferenceManager:
             True if edge inference for the specified detector is available, False otherwise
         """
 
-        inference_client = self.inference_clients[detector_id]
+        try:
+            inference_client = self.inference_clients[detector_id]
+        except KeyError:
+            logger.debug(f"Detector ID not configured to use edge inference: {detector_id}", exc_info=True)
+            return False
 
         try:
             if not inference_client.is_server_live():

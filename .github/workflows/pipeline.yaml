@@ -36,8 +36,7 @@ jobs:
           # following command in order to set up the environment to test out edge inference
           # source test/setup_inference_test_env.sh
           export INFERENCE_FLAVOR="CPU"
-          chmod +x deploy/bin/cluster_setup.sh
-          ./deploy/bin/cluster_setup.sh
+          bash deploy/bin/cluster_setup.sh
           kubectl describe deployment 
       - name: Wait for edge-endpoint pod to be ready
         run: |
