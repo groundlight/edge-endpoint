@@ -10,15 +10,21 @@ logging.basicConfig(level=log_level)
 
 
 def update_models(edge_inference_manager: EdgeInferenceManager):
-    if not os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", None):
+    if not os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", None) or not edge_inference_manager.inference_config:
         return
 
     inference_config = edge_inference_manager.inference_config
-    refresh_rate = inference_config.refresh_rate
+
+    try:
+        # All detectors should have the same refresh rate.
+        refresh_rate = list(inference_config.value())[0].refresh_rate
+    except Exception as e:
+        logging.error(f"Failed to get refresh rate. {e}", exc_info=True)
+        return
 
     while True:
-        for detector_id, inference_config in inference_config.items():
-            if inference_config.enabled:
+        for detector_id, config in inference_config.items():
+            if config.enabled:
                 try:
                     edge_inference_manager.update_model(detector_id=detector_id)
                 except Exception as e:
