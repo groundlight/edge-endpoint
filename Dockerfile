@@ -55,9 +55,6 @@ RUN mkdir /etc/groundlight/edge-config && \
 # Copy configs
 COPY configs ${APP_ROOT}/configs 
 
-# Copy model updating code 
-COPY model_updater ${APP_ROOT}/model_updater
-
 COPY deploy/k3s/inference_deployment/inference_deployment_template.yaml \
     /etc/groundlight/inference-deployment/
 
@@ -77,6 +74,10 @@ WORKDIR ${APP_ROOT}
 
 # Copy the remaining files
 COPY /app ${APP_ROOT}/app/
+
+# Copy model updating code 
+COPY model_updater ${APP_ROOT}/model_updater
+
 COPY --from=production-dependencies-build-stage ${APP_ROOT}/configs/nginx.conf /etc/nginx/nginx.conf
 
 # Remove default nginx config

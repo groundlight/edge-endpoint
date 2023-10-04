@@ -14,18 +14,40 @@ from model import Detector
 
 from app.core.utils import safe_call_api
 
-from .configs import LocalInferenceConfig, MotionDetectionConfig
+from .configs import LocalInferenceConfig, MotionDetectionConfig, RootEdgeConfig
 from .edge_inference import EdgeInferenceManager
-from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH
+from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, DEFAULT_EDGE_CONFIG_PATH
 from .iqe_cache import IQECache
 from .motion_detection import MotionDetectionManager
-from .utils import load_edge_config
 
 logger = logging.getLogger(__name__)
 
 MAX_SDK_INSTANCES_CACHE_SIZE = 1000
 MAX_DETECTOR_IDS_TTL_CACHE_SIZE = 1000
 TTL_TIME = 3600  # 1 hour
+
+
+def load_edge_config() -> RootEdgeConfig:
+    """
+    Reads the edge config from the EDGE_CONFIG environment variable if it exists.
+    If EDGE_CONFIG is not set, reads the default edge config file.
+    """
+    yaml_config = os.environ.get("EDGE_CONFIG", "").strip()
+    if yaml_config:
+        config = yaml.safe_load(yaml_config)
+        return RootEdgeConfig(**config)
+
+    logger.warning("EDGE_CONFIG environment variable not set. Checking default locations.")
+
+    default_paths = [DEFAULT_EDGE_CONFIG_PATH, "configs/edge-config.yaml"]
+
+    for path in default_paths:
+        if os.path.exists(path):
+            logger.info(f"Loading edge config from {path}")
+            config = yaml.safe_load(open(path, "r"))
+            return RootEdgeConfig(**config)
+
+    raise FileNotFoundError(f"Could not find edge config file in default locations: {default_paths}")
 
 
 @lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)

@@ -20,6 +20,7 @@ motion_detection_templates:
 local_inference_templates:
   default:
     enabled: true 
+    refresh_rate: 120
   disabled:
     enabled: false
 

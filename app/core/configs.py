@@ -32,11 +32,11 @@ class LocalInferenceConfig(BaseModel):
     """
 
     enabled: bool = Field(False, description="Determines if local edge inference is enabled for a specific detector.")
-    refresh_every: float = Field(
-        3600.0,
+    refresh_rate: float = Field(
+        120.0,
         description=(
             "The refresh rate for the inference server (in seconds). This means how often to check for an updated model"
-            " binary (currently unused)."
+            " binary."
         ),
     )
 
@@ -80,7 +80,7 @@ class RootEdgeConfig(BaseModel):
                 'local_inference_templates': {
                     'default': LocalInferenceConfig(
                                     enabled=True,
-                                    refresh_every=3600.0
+                                    refresh_rate=120.0
                                 )
                 }
             }
