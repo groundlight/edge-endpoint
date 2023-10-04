@@ -55,6 +55,9 @@ RUN mkdir /etc/groundlight/edge-config && \
 # Copy configs
 COPY configs ${APP_ROOT}/configs 
 
+# Copy model updating code 
+COPY model_updater ${APP_ROOT}/model_updater
+
 COPY deploy/k3s/inference_deployment/inference_deployment_template.yaml \
     /etc/groundlight/inference-deployment/
 

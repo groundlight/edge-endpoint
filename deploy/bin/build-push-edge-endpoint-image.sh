@@ -38,5 +38,4 @@ docker buildx inspect tempgroundlightedgebuilder --bootstrap
 docker buildx build \
   --platform linux/arm64,linux/amd64 \
   --tag 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${TAG} \
-  -f ../../Dockerfile.app \
   ../.. --push
