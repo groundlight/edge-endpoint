@@ -1,7 +1,7 @@
 import os
 import logging
 import time
-from app.core.utils import load_edge_config
+from app.core.app_state import load_edge_config
 from app.core.configs import RootEdgeConfig
 from app.core.edge_inference import EdgeInferenceManager
 
