@@ -236,7 +236,7 @@ jobs:
             groundlight-edge)
           echo "::set-output name=container_id::$container_id"
 
-            - name: Checkout Groundlight SDK 
+      - name: Checkout Groundlight SDK 
         uses: actions/checkout@v3
         with:
           repository: groundlight/python-sdk
