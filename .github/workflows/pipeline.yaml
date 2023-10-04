@@ -227,6 +227,7 @@ jobs:
         run: |
           poetry run python -m compileall .
           poetry run python --version 
+          ls -la app/__pycache__/
           docker build -f Dockerfile.redacted --tag groundlight-edge .
 
       - name: Start Docker Container 
