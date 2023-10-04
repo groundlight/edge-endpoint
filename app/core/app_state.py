@@ -13,12 +13,13 @@ from kubernetes import config
 from model import Detector
 
 from app.core.utils import safe_call_api
-from .utils import load_edge_config
-from .configs import LocalInferenceConfig, MotionDetectionConfig, RootEdgeConfig
+
+from .configs import LocalInferenceConfig, MotionDetectionConfig
 from .edge_inference import EdgeInferenceManager
-from .file_paths import DEFAULT_EDGE_CONFIG_PATH, INFERENCE_DEPLOYMENT_TEMPLATE_PATH
+from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH
 from .iqe_cache import IQECache
 from .motion_detection import MotionDetectionManager
+from .utils import load_edge_config
 
 logger = logging.getLogger(__name__)
 
