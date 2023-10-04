@@ -1,7 +1,7 @@
 import os
 import logging
 import time
-from app.core.app_state import load_edge_config
+from app.core.utils import load_edge_config
 from app.core.configs import RootEdgeConfig
 from app.core.edge_inference import EdgeInferenceManager
 
@@ -10,8 +10,8 @@ logging.basicConfig(level=log_level)
 
 
 def update_models():
-    # if not os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", None):
-    #     return
+    if not os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", None):
+        return
 
     edge_config: RootEdgeConfig = load_edge_config()
 
@@ -21,7 +21,6 @@ def update_models():
         for detector in edge_config.detectors
     }
 
-    logging.info(f" inference_config: {inference_config}")
     edge_inference_manager = EdgeInferenceManager(config=edge_config.local_inference_templates, verbose=True)
 
     for detector_id, inference_config in inference_config.items():

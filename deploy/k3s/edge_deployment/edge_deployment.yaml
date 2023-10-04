@@ -63,7 +63,7 @@ spec:
           mountPath: /mnt/models
 
       - name: inference-model-updater
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:model-updating-cronjob-6fdf21e85-dirty-baf903f1357322c
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:model-updater-cfa04e25b-dirty-47f8cbce0dea767
         imagePullPolicy: IfNotPresent
         env:
         - name: LOG_LEVEL

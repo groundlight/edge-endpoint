@@ -15,6 +15,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        bash \
        curl \
+       libglib2.0-0 \
+       libgl1-mesa-glx \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && curl -sSL https://install.python-poetry.org | python -
@@ -26,8 +28,8 @@ ENV PYTHONUNBUFFERED=1 \
     POETRY_VERSION=${POETRY_VERSION} \
     PATH=${POETRY_HOME}/bin:$PATH
 
-COPY update_models.py ${APP_ROOT}/
-COPY app ${APP_ROOT}/app
+COPY model_updater ${APP_ROOT}/model_updater
+COPY app/core ${APP_ROOT}/app/core
 
 COPY ./pyproject.toml ${APP_ROOT}/
 
@@ -37,5 +39,4 @@ WORKDIR ${APP_ROOT}
 RUN poetry install --only model_updater --no-interaction --no-root
 
 # Entry command 
-# CMD ["poetry", "run", "python", "-m", "model_updater.update_models"]
-CMD poetry run python -m update_models
+CMD poetry run python -m model_updater.update_models

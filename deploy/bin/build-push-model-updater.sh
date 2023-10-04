@@ -32,15 +32,9 @@ fi
 # Ensure that the tempbuilder container is running
 docker buildx inspect tempmodelupdaterbuilder --bootstrap
 
-# Temporarily copy the pyproject.toml file to the model_updater directory
-# to bring it into the build context
-cp ../../pyproject.toml ../../model_updater/
-
 # Build model updater image for amd64 and arm64
 docker buildx build \
   --platform linux/arm64,linux/amd64 \
   --tag 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${TAG} \
-  ../../model_updater --push
-
-# Remove the temporary pyproject.toml file
-rm ../../model_updater/pyproject.toml
+  -f ../../Dockerfile.model_updater \
+  ../.. --push
