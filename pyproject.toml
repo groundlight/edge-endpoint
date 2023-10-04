@@ -6,7 +6,7 @@ authors = ["Groundlight AI <support@groundlight.ai>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = "3.11"
+python = "^3.9"
 uvicorn = {version = "^0.20.0", extras = ["standard"]}
 fastapi = "^0.88.0"
 pydantic = "^1.10.2"
