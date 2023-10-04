@@ -196,7 +196,7 @@ jobs:
   #       if: always()
   #       run: docker stop ${{ steps.start_container.outputs.container_id }}
 
-  - test-sdk-and-unit-tests-redacted:
+  test-sdk-and-unit-tests-redacted:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
