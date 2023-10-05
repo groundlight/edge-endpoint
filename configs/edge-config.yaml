@@ -26,11 +26,7 @@ local_inference_templates:
   default:
     enabled: true
     # How often to fetch a new model binary (in seconds)
-    refresh_every: 3600
-
-  super-fast-refresh:
-    enabled: true
-    refresh_every: 60
+    refresh_rate: 120
 
   disabled:
     enabled: false

@@ -74,6 +74,10 @@ WORKDIR ${APP_ROOT}
 
 # Copy the remaining files
 COPY /app ${APP_ROOT}/app/
+
+# Copy model updating code 
+COPY model_updater ${APP_ROOT}/model_updater
+
 COPY --from=production-dependencies-build-stage ${APP_ROOT}/configs/nginx.conf /etc/nginx/nginx.conf
 
 # Remove default nginx config

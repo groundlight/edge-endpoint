@@ -40,7 +40,7 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       containers:
       - name: edge-endpoint
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:13361241c-state-management-via-k3s
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:6ef532de5-model-updater
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
@@ -56,12 +56,33 @@ spec:
               key: api-token
         volumeMounts:
         - name: edge-config-volume
-          # This is a path inside the container not the host
           mountPath: /etc/groundlight/edge-config
         - name: inference-deployment-template-volume
           mountPath: /etc/groundlight/inference-deployment 
         - name: model-repo
           mountPath: /mnt/models
+
+      - name: inference-model-updater
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:6ef532de5-model-updater
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/bash", "-c"]
+        args: ["poetry run python -m model_updater.update_models"]
+        env:
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
+          value: "True"
+        - name: GROUNDLIGHT_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: groundlight-secrets
+              key: api-token
+        volumeMounts:
+        - name: edge-config-volume
+          mountPath: /etc/groundlight/edge-config
+        - name: model-repo
+          mountPath: /mnt/models   
+
       imagePullSecrets:
       - name: registry-credentials
       volumes:
