@@ -15,12 +15,12 @@ def update_models(edge_inference_manager: EdgeInferenceManager):
 
     inference_config = edge_inference_manager.inference_config
 
-    try:
-        # All detectors should have the same refresh rate.
-        refresh_rate = list(inference_config.values())[0].refresh_rate
-    except Exception as e:
-        logging.error(f"Failed to get refresh rate. {e}", exc_info=True)
-        return
+    # All detectors should have the same refresh rate.
+    refresh_rates = [config.refresh_rate for config in inference_config.values()]
+    if set(refresh_rates) != 1:
+        logging.error(f"Detectors have different refresh rates.")
+
+    refresh_rate = refresh_rates[0]
 
     while True:
         for detector_id, config in inference_config.items():
