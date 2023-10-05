@@ -24,7 +24,7 @@ class EdgeInferenceManager:
     INFERENCE_SERVER_URL = "inference-service:8000"
     MODEL_REPOSITORY = "/mnt/models"
 
-    def __init__(self, config: Dict[str, LocalInferenceConfig], verbose: bool = False) -> None:
+    def __init__(self, config: Dict[str, LocalInferenceConfig] | None, verbose: bool = False) -> None:
         """
         Initializes the edge inference manager.
         Args:
@@ -35,9 +35,9 @@ class EdgeInferenceManager:
               2) the `LocalInferenceConfig` object determines if local inference is enabled for
                 a specific detector and the model name and version to use for inference.
         """
-        self.inference_config = config
+        self._inference_config = config
 
-        if self.inference_config:
+        if self._inference_config:
             self.inference_clients = {
                 detector_id: tritonclient.InferenceServerClient(
                     url=self._inference_server_url(detector_id), verbose=verbose
@@ -59,6 +59,8 @@ class EdgeInferenceManager:
         Returns:
             True if the detector is configured to run local inference, False otherwise
         """
+        if not self._inference_config:
+            return False
         return detector_id in self.inference_config.keys() and self.inference_config[detector_id].enabled
 
     def inference_is_available(self, detector_id: str, model_version: str = "") -> bool:

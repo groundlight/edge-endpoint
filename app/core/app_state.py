@@ -39,15 +39,12 @@ def load_edge_config() -> RootEdgeConfig:
 
     logger.warning("EDGE_CONFIG environment variable not set. Checking default locations.")
 
-    default_paths = [DEFAULT_EDGE_CONFIG_PATH, "configs/edge-config.yaml"]
+    if os.path.exists(DEFAULT_EDGE_CONFIG_PATH):
+        logger.info(f"Loading edge config from {DEFAULT_EDGE_CONFIG_PATH}")
+        config = yaml.safe_load(open(DEFAULT_EDGE_CONFIG_PATH, "r"))
+        return RootEdgeConfig(**config)
 
-    for path in default_paths:
-        if os.path.exists(path):
-            logger.info(f"Loading edge config from {path}")
-            config = yaml.safe_load(open(path, "r"))
-            return RootEdgeConfig(**config)
-
-    raise FileNotFoundError(f"Could not find edge config file in default locations: {default_paths}")
+    raise FileNotFoundError(f"Could not find edge config file in default location: {DEFAULT_EDGE_CONFIG_PATH}")
 
 
 @lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
@@ -86,30 +83,43 @@ class AppState:
         self.iqe_cache = IQECache()
 
         edge_config = load_edge_config()
-
-        motion_detection_templates: Dict[str, MotionDetectionConfig] = edge_config.motion_detection_templates
-        edge_inference_templates: Dict[str, LocalInferenceConfig] = edge_config.local_inference_templates
-
-        motion_detection_config: Dict[str, MotionDetectionConfig] = {
-            detector.detector_id: motion_detection_templates[detector.motion_detection_template]
-            for detector in edge_config.detectors
-        }
-        inference_config: Dict[str, LocalInferenceConfig] = {
-            detector.detector_id: edge_inference_templates[detector.local_inference_template]
-            for detector in edge_config.detectors
-        }
-
-        # Create a global shared motion detection manager object in the app's state
-        self.motion_detection_manager = MotionDetectionManager(config=motion_detection_config)
-
-        # Create global shared edge inference manager object in the app's state
-        self.edge_inference_manager = EdgeInferenceManager(config=inference_config)
+        self._setup_configs(edge_config=edge_config)
 
         # This is meant to go away once we stop running docker-based CI/CD.
         deploy_detector_level_inference = os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", None)
 
         if deploy_detector_level_inference:
             self._setup_kube_client()
+
+    def _setup_configs(self, edge_config: RootEdgeConfig) -> None:
+        motion_detection_templates: Dict[str, MotionDetectionConfig] = edge_config.motion_detection_templates
+        edge_inference_templates: Dict[str, LocalInferenceConfig] = edge_config.local_inference_templates
+
+        filtered_detectors = filter(lambda detector: detector.detector_id != "", edge_config.detectors)
+
+        motion_detection_config: Dict[str, MotionDetectionConfig] | None = (
+            {
+                detector.detector_id: motion_detection_templates[detector.motion_detection_template]
+                for detector in filtered_detectors
+            }
+            if filtered_detectors
+            else None
+        )
+
+        inference_config: Dict[str, LocalInferenceConfig] | None = (
+            {
+                detector.detector_id: edge_inference_templates[detector.local_inference_template]
+                for detector in filtered_detectors
+            }
+            if filtered_detectors
+            else None
+        )
+
+        # Create a global shared motion detection manager object in the app's state
+        self.motion_detection_manager = MotionDetectionManager(config=motion_detection_config)
+
+        # Create global shared edge inference manager object in the app's state
+        self.edge_inference_manager = EdgeInferenceManager(config=inference_config)
 
     def _setup_kube_client(self) -> None:
         """

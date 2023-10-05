@@ -36,10 +36,20 @@ def update_models(edge_inference_manager: EdgeInferenceManager):
 if __name__ == "__main__":
     edge_config: RootEdgeConfig = load_edge_config()
     edge_inference_templates = edge_config.local_inference_templates
-    inference_config = {
-        detector.detector_id: edge_inference_templates[detector.local_inference_template]
-        for detector in edge_config.detectors
-    }
-    edge_inference_manager = EdgeInferenceManager(config=inference_config, verbose=True)
+    filtered_detectors = filter(lambda detector: detector.detector_id != "", edge_config.detectors)
 
-    update_models(edge_inference_manager=edge_inference_manager)
+    inference_config = (
+        {
+            detector.detector_id: edge_inference_templates[detector.local_inference_template]
+            for detector in filtered_detectors
+        }
+        if filtered_detectors
+        else None
+    )
+
+    if inference_config:
+        edge_inference_manager = EdgeInferenceManager(config=inference_config, verbose=True)
+
+        update_models(edge_inference_manager=edge_inference_manager)
+    else:
+        logging.warning("No detectors configured for edge inference.")

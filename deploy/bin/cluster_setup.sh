@@ -31,7 +31,7 @@ fi
 $K delete configmap --ignore-not-found edge-config 
 $K delete configmap --ignore-not-found inference-deployment-template 
 
-if [[ -n "{EDGE_CONFIG}" ]]; then 
+if [[ -n "$EDGE_CONFIG" ]]; then 
     announce "Creating config from EDGE_CONFIG env var"
     $K create configmap edge-config --from-literal="edge-config.yaml=${EDGE_CONFIG}"
 else 

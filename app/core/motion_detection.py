@@ -71,7 +71,7 @@ class MotionDetectorWrapper:
 
 
 class MotionDetectionManager:
-    def __init__(self, config: Dict[str, MotionDetectionConfig]) -> None:
+    def __init__(self, config: Dict[str, MotionDetectionConfig] | None) -> None:
         """
         Initializes the motion detection manager.
         Args:
@@ -79,15 +79,19 @@ class MotionDetectionManager:
             `MotionDetectionConfig` objects consist of different parameters needed
             to run motion detection.
         """
-        self.detectors = {
-            detector_id: MotionDetectorWrapper(parameters=motion_detection_config)
-            for detector_id, motion_detection_config in config.items()
-        }
+        self._config = config
+        if self._config:
+            self.detectors = {
+                detector_id: MotionDetectorWrapper(parameters=motion_detection_config)
+                for detector_id, motion_detection_config in config.items()
+            }
 
     def motion_detection_is_enabled(self, detector_id: str) -> bool:
         """
         Returns True if motion detection is enabled for the specified detector, False otherwise.
         """
+        if not self._config:
+            return False
         if detector_id not in self.detectors.keys() or not self.detectors[detector_id].is_enabled():
             logger.debug(f"Motion detection is not enabled for {detector_id=}.")
             return False

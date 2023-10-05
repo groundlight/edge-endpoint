@@ -40,7 +40,7 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       containers:
       - name: edge-endpoint
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:6ef532de5-model-updater
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:fix-starter-script-9e32f1f1d-dirty-cfc848a51ae02d9
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
@@ -63,7 +63,7 @@ spec:
           mountPath: /mnt/models
 
       - name: inference-model-updater
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:6ef532de5-model-updater
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:fix-starter-script-9e32f1f1d-dirty-cfc848a51ae02d9
         imagePullPolicy: IfNotPresent
         command: ["/bin/bash", "-c"]
         args: ["poetry run python -m model_updater.update_models"]
