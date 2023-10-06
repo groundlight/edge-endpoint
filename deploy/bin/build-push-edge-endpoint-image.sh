@@ -7,11 +7,22 @@ set -ex
 cd "$(dirname "$0")"
 
 TAG=$(./git-tag-name.sh)
+EDGE_ENDPOINT_IMAGE="edge-endpoint"
+ECR_URL="723181461334.dkr.ecr.us-west-2.amazonaws.com"
 
 # Authenticate docker to ECR
 aws ecr get-login-password --region us-west-2 | docker login \
                   --username AWS \
-                  --password-stdin  723181461334.dkr.ecr.us-west-2.amazonaws.com
+                  --password-stdin  ${ECR_URL}
+
+# Check if the first argument is "dev". If it is, only build the image for the current
+# platform 
+if [ "$1" == "dev" ]; then
+  docker build --tag ${EDGE_ENDPOINT_IMAGE} ../..
+  docker tag ${EDGE_ENDPOINT_IMAGE}:latest ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG} 
+  docker push ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG}
+  exit 0
+fi
 
 # We use docker buildx to build the image for multiple platforms. buildx comes
 # installed with Docker Engine when installed via Docker Desktop. If you're
@@ -37,5 +48,5 @@ docker buildx inspect tempgroundlightedgebuilder --bootstrap
 # Build image for amd64 and arm64
 docker buildx build \
   --platform linux/arm64,linux/amd64 \
-  --tag 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${TAG} \
+  --tag ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG} \
   ../.. --push
