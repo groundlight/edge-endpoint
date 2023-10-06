@@ -44,7 +44,8 @@ COPY ./pyproject.toml ${APP_ROOT}/
 WORKDIR ${APP_ROOT}
 
 # Install production dependencies only 
-RUN poetry install --no-interaction --no-root --without dev 
+RUN poetry install --no-interaction --no-root --without dev && \
+    poetry cache clear --all pypi 
 
 # Create /etc/groundlight directory where edge-config.yaml and inference_deployment.yaml will be mounted 
 RUN mkdir /etc/groundlight
