@@ -79,7 +79,7 @@ class InferenceDeploymentManager:
         inference_deployment = inference_deployment.replace("placeholder-model-name", detector_id)
         return inference_deployment.strip()
 
-    def create_inference_deployment(self, detector_id):
+    def create_inference_deployment(self, detector_id) -> None:
         deployment_name = get_edge_inference_deployment_name(detector_id)
         service_name = get_edge_inference_service_name(detector_id)
         inference_deployment = self._substitute_placeholders(
@@ -98,7 +98,7 @@ class InferenceDeploymentManager:
                 return None
             raise e
 
-    def get_or_create_inference_deployment(self, detector_id):
+    def get_or_create_inference_deployment(self, detector_id) -> Optional["V1Deployment"]:
         try:
             return self.get_inference_deployment(detector_id, self._target_namespace)
         except kube_client.rest.ApiException as e:
