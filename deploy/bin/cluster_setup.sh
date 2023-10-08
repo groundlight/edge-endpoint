@@ -56,10 +56,10 @@ $K delete --ignore-not-found deployment edge-endpoint
 $K delete --ignore-not-found service edge-endpoint-service
 $K get deployments -o custom-columns=":metadata.name" --no-headers=true | \
     grep "inferencemodel" | \
-    xargs -I {} $k delete deployments {}
+    xargs -I {} $K delete deployments {}
 $K get service -o custom-columns=":metadata.name" --no-headers=true | \
     grep "inference-service" | \
-    xargs -I {} $k delete service {}
+    xargs -I {} $K delete service {}
 
 # Reapply changes
 $K apply -f deploy/k3s/edge_deployment/edge_deployment.yaml

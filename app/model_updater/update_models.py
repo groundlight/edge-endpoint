@@ -36,9 +36,11 @@ def update_models(edge_inference_manager: EdgeInferenceManager, deployment_manag
 
                     deployment = deployment_manager.get_inference_deployment(detector_id=detector_id)
                     if deployment is None:
+                        logging.info(f"Creating a new inference deployment for {detector_id}")
                         deployment_manager.create_inference_deployment(detector_id=detector_id)
                     elif new_model:
                         # Update inference deployment and rollout a new pod
+                        logging.info(f"Updating inference deployment for {detector_id}")
                         deployment_manager.update_inference_deployment(detector_id=detector_id)
 
                     # TODO: poll for readiness before proceeding to avoid running too many k8s commands
