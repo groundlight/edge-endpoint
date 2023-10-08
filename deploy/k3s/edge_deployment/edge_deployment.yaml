@@ -40,7 +40,7 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       containers:
       - name: edge-endpoint
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-small-updates-865380262-dirty-e43743bce71f535
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-small-updates-de287d7f4-dirty-9c7062a32986249
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
@@ -63,7 +63,7 @@ spec:
           mountPath: /mnt/models
 
       - name: inference-model-updater
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-small-updates-865380262-dirty-e43743bce71f535
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-small-updates-de287d7f4-dirty-9c7062a32986249
         imagePullPolicy: IfNotPresent
         command: ["/bin/bash", "-c"]
         args: ["poetry run python -m app.model_updater.update_models"]

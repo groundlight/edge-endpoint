@@ -67,6 +67,13 @@ spec:
           name: http-triton
         - containerPort: 8002
           name: metrics-triton
+        readinessProbe:
+          httpGet:
+            path: /v2/health/ready # Triton's readiness endpoint
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 20  # Wait for a while
       imagePullSecrets:
       - name: registry-credentials
       volumes:
