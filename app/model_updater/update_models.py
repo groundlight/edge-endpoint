@@ -30,9 +30,10 @@ def update_models(edge_inference_manager: EdgeInferenceManager, deployment_manag
     refresh_rates = [config.refresh_rate for config in inference_config.values()]
     if len(set(refresh_rates)) != 1:
         logging.error(f"Detectors have different refresh rates.")
-    refresh_rate = refresh_rates[0]
+    refresh_rate_s = refresh_rates[0]
 
     while True:
+        start = time.time()
         for detector_id in inference_config.keys():
             try:
                 # Download and write new model to model repo on disk
@@ -49,7 +50,7 @@ def update_models(edge_inference_manager: EdgeInferenceManager, deployment_manag
 
                 poll_start = time.time()
                 while not deployment_manager.is_inference_deployment_ready():
-                    time.sleep(20)
+                    time.sleep(5)
                     if time.time() - poll_start > TEN_MINUTES:
                         raise TimeoutError("Inference deployment is not ready within time limit")
 
@@ -60,7 +61,9 @@ def update_models(edge_inference_manager: EdgeInferenceManager, deployment_manag
             except Exception:
                 logging.error(f"Failed to update model for {detector_id}", exc_info=True)
 
-        time.sleep(refresh_rate)
+        elapsed_s = time.time() - start
+        if elapsed_s < refresh_rate_s:
+            time.sleep(refresh_rate_s - elapsed_s)
 
 
 if __name__ == "__main__":
