@@ -137,18 +137,19 @@ class InferenceDeploymentManager:
         )
         return True
 
-    def is_inference_deployment_ready(self, detector_id: str) -> bool:
+    def is_inference_deployment_rollout_complete(self, detector_id: str) -> bool:
         # Fetch the Deployment object
         deployment = self.get_inference_deployment(detector_id)
         if deployment is None:
             return False
 
         desired_replicas = deployment.spec.replicas
+        updated_replicas = deployment.status.updated_replicas if deployment.status.updated_replicas else 0
         available_replicas = deployment.status.available_replicas if deployment.status.available_replicas else 0
 
-        if desired_replicas == available_replicas:
+        if desired_replicas == updated_replicas == available_replicas:
             logger.info(f"Inference deployment for {detector_id} is ready")
             return True
         else:
-            logger.debug(f"Inference deployment for {detector_id} is not ready. Desired: {desired_replicas}, Available: {available_replicas}")
+            logger.debug(f"Inference deployment rollout for {detector_id} is not complete. Desired: {desired_replicas}, Updated: {updated_replicas}, Available: {available_replicas}")
             return False

@@ -48,16 +48,17 @@ def update_models(edge_inference_manager: EdgeInferenceManager, deployment_manag
                     logging.info(f"Updating inference deployment for {detector_id}")
                     deployment_manager.update_inference_deployment(detector_id=detector_id)
 
-                poll_start = time.time()
-                while not deployment_manager.is_inference_deployment_ready():
-                    time.sleep(5)
-                    if time.time() - poll_start > TEN_MINUTES:
-                        raise TimeoutError("Inference deployment is not ready within time limit")
+                    poll_start = time.time()
+                    while not deployment_manager.is_inference_deployment_rollout_complete(detector_id):
+                        time.sleep(5)
+                        if time.time() - poll_start > TEN_MINUTES:
+                            raise TimeoutError("Inference deployment is not ready within time limit")
 
-                # Now that we have successfully rolled out a new model version, we can clean up our model repository a bit.
-                # To be a bit conservative, we keep the current model version as well as the version before that. Older
-                # versions of the model for the current detector_id will be removed from disk.
-                delete_old_model_versions(detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2)
+                    # Now that we have successfully rolled out a new model version, we can clean up our model repository a bit.
+                    # To be a bit conservative, we keep the current model version as well as the version before that. Older
+                    # versions of the model for the current detector_id will be removed from disk.
+                    logging.info(f"Cleaning up old model versions for {detector_id}")
+                    delete_old_model_versions(detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2)
             except Exception:
                 logging.error(f"Failed to update model for {detector_id}", exc_info=True)
 
