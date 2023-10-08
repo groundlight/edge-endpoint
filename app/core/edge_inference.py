@@ -40,7 +40,7 @@ class EdgeInferenceManager:
         if self.inference_config:
             self.inference_clients = {
                 detector_id: tritonclient.InferenceServerClient(
-                    url=self._inference_server_url(detector_id), verbose=verbose
+                    url=get_edge_inference_service_name(detector_id) + ":8000", verbose=verbose
                 )
                 for detector_id in self.inference_config.keys()
                 if self.detector_configured_for_local_inference(detector_id)
@@ -73,7 +73,7 @@ class EdgeInferenceManager:
         try:
             inference_client = self.inference_clients[detector_id]
         except KeyError:
-            logger.debug(f"Detector ID not configured to use edge inference: {detector_id}", exc_info=True)
+            logger.debug(f"Failed to look up inference client for {detector_id}")
             return False
 
         try:
@@ -128,9 +128,12 @@ class EdgeInferenceManager:
         )
         return output_dict
 
-    def update_model(self, detector_id: str) -> None:
+    def update_model(self, detector_id: str) -> bool:
         """
-        Request a new model from the cloud and update the local edge inference server.
+        Request a new model from Groundlight. If there is a new model available, download it and
+        write it to the model repository as a new version.
+
+        Returns True if a new model was downloaded and saved, False otherwise.
         """
         logger.info(f"Checking if there is a new model available for {detector_id}")
         model_urls = fetch_model_urls(detector_id)
@@ -143,44 +146,22 @@ class EdgeInferenceManager:
         edge_binary_ksuid = get_current_model_ksuid(model_dir)
         if edge_binary_ksuid and cloud_binary_ksuid is not None and cloud_binary_ksuid <= edge_binary_ksuid:
             logger.info(f"No new model available for {detector_id}")
-            return
+            return False
 
         logger.info(f"New model binary available ({cloud_binary_ksuid}), attemping to update model for {detector_id}")
 
         pipeline_config = model_urls["pipeline_config"]
 
         model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
-        old_version, new_version = save_model_to_repository(
+        save_model_to_repository(
             detector_id,
             model_buffer,
             pipeline_config,
             binary_ksuid=cloud_binary_ksuid,
             repository_root=self.MODEL_REPOSITORY,
         )
-
-        try:
-            inference_client = self.inference_clients[detector_id]
-            inference_client.load_model(model_name=detector_id)  # refreshes the model if already loaded
-        except (ConnectionRefusedError, socket.gaierror) as ex:
-            logger.warning(f"Edge inference server is not available: {ex}")
-            return
-
-        retries = 15
-        while not self.inference_is_available(detector_id, model_version=str(new_version)):
-            if retries == 0:
-                logger.warning(
-                    f"Edge inference server is not ready to run model version {new_version} for {detector_id}"
-                )
-                return
-            retries -= 1
-            time.sleep(2)  # Wait up to 30 seconds for model to be ready
-
-        logger.info(
-            f"Now running inference with model version {new_version} for {detector_id} using"
-            f" binary_ksuid={cloud_binary_ksuid}"
-        )
-        if old_version is not None:
-            delete_model_version(detector_id, old_version, repository_root=self.MODEL_REPOSITORY)
+        # TODO: Safely delete old versions
+        return True
 
 
 def fetch_model_urls(detector_id: str) -> dict[str, str]:
@@ -329,3 +310,17 @@ def delete_model_version(detector_id: str, model_version: int, repository_root: 
     logger.info(f"Deleting model version {model_version} for {detector_id}")
     if os.path.exists(model_version_dir):
         shutil.rmtree(model_version_dir)
+
+
+def get_edge_inference_service_name(detector_id: str) -> str:
+    """
+    Kubernetes service/deployment names have a strict naming convention.
+    They have to be alphanumeric, lower cased, and can only contain dashes.
+    We just use `inferencemodel-<detector_id>` as the deployment name and
+    `inference-service-<detector_id>` as the service name.
+    """
+    return f"inference-service-{detector_id.replace('_', '-').lower()}"
+
+
+def get_edge_inference_deployment_name(detector_id: str) -> str:
+    return f"inferencemodel-{detector_id.replace('_', '-').lower()}"

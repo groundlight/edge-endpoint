@@ -7,9 +7,6 @@ fail() {
     exit 1
 }
 
-announce() {
-    echo $1
-}
 
 K="k3s kubectl"
 INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"GPU"}
@@ -32,33 +29,39 @@ $K delete configmap --ignore-not-found edge-config
 $K delete configmap --ignore-not-found inference-deployment-template
 
 if [[ -n "${EDGE_CONFIG}" ]]; then
-    announce "Creating config from EDGE_CONFIG env var"
+    echo "Creating config from EDGE_CONFIG env var"
     $K create configmap edge-config --from-literal="edge-config.yaml=${EDGE_CONFIG}"
 else
+    echo "Creating config from configs/edeg-config.yaml"
     $K create configmap edge-config --from-file=configs/edge-config.yaml
 fi
 
 if [[ "${INFERENCE_FLAVOR}" == "CPU" ]]; then
-    announce "Preparing inference deployments with CPU flavor"
+    echo "Preparing inference deployments with CPU flavor"
 
     # Customize inference_deployment_template with the CPU patch
     $K kustomize deploy/k3s/inference_deployment > inference_deployment_template.yaml
     $K create configmap inference-deployment-template \
             --from-file=inference_deployment_template.yaml
-
     rm inference_deployment_template.yaml
 else
-    announce "Preparing inference deployments with GPU flavor"
+    echo "Preparing inference deployments with GPU flavor"
     $K create configmap inference-deployment-template \
             --from-file=deploy/k3s/inference_deployment/inference_deployment_template.yaml
 fi
 
-
-# Edge Deployment
+# Clean up existing deployments and services (if they exist)
 $K apply -f deploy/k3s/service_account.yaml
 $K delete --ignore-not-found deployment edge-endpoint
 $K delete --ignore-not-found service edge-endpoint-service
-$K apply -f deploy/k3s/edge_deployment/edge_deployment.yaml
+$K get deployments -o custom-columns=":metadata.name" --no-headers=true | \
+    grep "inferencemodel" | \
+    xargs -I {} $k delete deployments {}
+$K get service -o custom-columns=":metadata.name" --no-headers=true | \
+    grep "inference-service" | \
+    xargs -I {} $k delete service {}
 
+# Reapply changes
+$K apply -f deploy/k3s/edge_deployment/edge_deployment.yaml
 
 $K describe deployment edge-endpoint

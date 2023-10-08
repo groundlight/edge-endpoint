@@ -72,6 +72,9 @@ async def post_image_query(
         This manages the motion detection state for all detectors.
     :param inference_client: Application's triton inference client.
     """
+    if patience_time is not None:
+        logger.warning(f"Attempt to set {patience_time=} but setting patience_time via an edge endpoint is not currently supported")
+
     img_numpy = np.asarray(img)  # [H, W, C=3], dtype: uint8, RGB format
 
     iqe_cache = app_state.iqe_cache
@@ -99,12 +102,7 @@ async def post_image_query(
             return new_image_query
 
     image_query = None
-
-    # Check if the edge inference server is available
-    inference_deployment_is_ready = app_state.inference_deployment_is_ready(
-        detector_id=detector_id, create_if_absent=True
-    )
-    if inference_deployment_is_ready:
+    if edge_inference_manager.inference_is_available(detector_id=detector_id):
         detector_metadata: Detector = get_detector_metadata(detector_id=detector_id, gl=gl)
         results = edge_inference_manager.run_inference(detector_id=detector_id, img_numpy=img_numpy)
 

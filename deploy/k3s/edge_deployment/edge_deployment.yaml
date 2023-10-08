@@ -40,7 +40,7 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       containers:
       - name: edge-endpoint
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:6ef532de5-model-updater
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-small-updates-865380262-dirty-e43743bce71f535
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
@@ -58,15 +58,15 @@ spec:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
         - name: inference-deployment-template-volume
-          mountPath: /etc/groundlight/inference-deployment 
+          mountPath: /etc/groundlight/inference-deployment
         - name: model-repo
           mountPath: /mnt/models
 
       - name: inference-model-updater
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:6ef532de5-model-updater
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-small-updates-865380262-dirty-e43743bce71f535
         imagePullPolicy: IfNotPresent
         command: ["/bin/bash", "-c"]
-        args: ["poetry run python -m model_updater.update_models"]
+        args: ["poetry run python -m app.model_updater.update_models"]
         env:
         - name: LOG_LEVEL
           value: "INFO"
@@ -80,8 +80,10 @@ spec:
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
+        - name: inference-deployment-template-volume
+          mountPath: /etc/groundlight/inference-deployment
         - name: model-repo
-          mountPath: /mnt/models   
+          mountPath: /mnt/models
 
       imagePullSecrets:
       - name: registry-credentials

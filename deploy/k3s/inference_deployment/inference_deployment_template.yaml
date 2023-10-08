@@ -33,13 +33,18 @@ spec:
         app: inference-server
     spec:
       runtimeClassName: nvidia  # Required for GPU use in k3s
+      strategy:
+        type: RollingUpdate
+        rollingUpdate:
+          maxSurge: 1
+          maxUnavailable: 0  # Aim for no downtime during rollout
       containers:
       - name: inference-server
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver:313680099-main
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver:main-670fa9839-dirty-3867310dea05661
         imagePullPolicy: IfNotPresent
         # Tritonserver will look for models in /mnt/models and initialize them on startup.
-        # When running multiple instances of Triton server on the same machine that use Python models, 
-        # there would be a conflict in the shared memory region name, which can lead to SEGFAULTs. 
+        # When running multiple instances of Triton server on the same machine that use Python models,
+        # there would be a conflict in the shared memory region name, which can lead to SEGFAULTs.
         # To avoid this, we can set the shm-region-prefix-name to a unique value for each Triton server instance.
         # TODO: We only want to shut down an old instance when this tritonsever gives the "READY" signal for all models
         # shm-default-byte-size=16777216
@@ -47,10 +52,10 @@ spec:
           [
             "tritonserver",
             "--model-repository=/mnt/models",
-            "--load-model=*",
-            "--model-control-mode=explicit",
+            "--load-model=placeholder-model-name",
             "--metrics-config=summary_latencies=true",
-            "--backend-config=python,shm-region-prefix-name=placeholder-inference-deployment-name"
+            "--backend-config=python,shm-region-prefix-name=placeholder-inference-deployment-name",
+            "--log-verbose=1",
           ]
         volumeMounts:
         - name: model-repo
@@ -70,7 +75,6 @@ spec:
           # A hostPath volume mounts a file or directory from the host node's filesystem into your Pod
           # This simiplifies things a lot, but only really works for single-node clusters.
           # TODO: check out k3s local path provisioner: https://docs.k3s.io/storage#setting-up-the-local-storage-provider
-          # path: /home/ubuntu/ptdev/zuuul2/predictors/serving/model_repository
           path: /var/groundlight/serving/model_repository
           type: DirectoryOrCreate
       # https://stackoverflow.com/questions/43373463/how-to-increase-shm-size-of-a-kubernetes-container-shm-size-equivalent-of-doc
