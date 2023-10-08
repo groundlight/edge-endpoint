@@ -110,7 +110,7 @@ class InferenceDeploymentManager:
 
     def update_inference_deployment(self, detector_id: str) -> bool:
         deployment_name = get_edge_inference_deployment_name(detector_id)
-        deployment = self.get_or_create_inference_deployment(detector_id, self._target_namespace)
+        deployment = self.get_or_create_inference_deployment(detector_id)
         if deployment is None:
             logger.info(f"Creating a new inference deployment: {deployment_name}")
             return False
