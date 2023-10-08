@@ -87,10 +87,10 @@ class InferenceDeploymentManager:
         )
         self._create_from_kube_manifest(namespace=self._target_namespace, manifest=inference_deployment)
 
-    def get_inference_deployment(self, detector_id, namespace: str = "default") -> Optional["V1Deployment"]:
+    def get_inference_deployment(self, detector_id) -> Optional["V1Deployment"]:
         deployment_name = get_edge_inference_deployment_name(detector_id)
         try:
-            deployment = self._app_kube_client.read_namespaced_deployment(name=deployment_name, namespace=namespace)
+            deployment = self._app_kube_client.read_namespaced_deployment(name=deployment_name, namespace=self._target_namespace)
             return deployment
         except kube_client.rest.ApiException as e:
             if e.status == 404:
@@ -99,12 +99,12 @@ class InferenceDeploymentManager:
             raise e
 
     def get_or_create_inference_deployment(self, detector_id) -> Optional["V1Deployment"]:
-        deployment = self.get_inference_deployment(detector_id, self._target_namespace)
+        deployment = self.get_inference_deployment(detector_id)
         if deployment is not None:
             return deployment
 
         logger.debug(f"Deployment for {detector_id} does not currently exist in namespace {self._target_namespace}.")
-        self.create_inference_deployment(detector_id, self._target_namespace)
+        self.create_inference_deployment(detector_id)
         return None
 
     def update_inference_deployment(self, detector_id: str) -> bool:
@@ -136,3 +136,19 @@ class InferenceDeploymentManager:
             body=deployment
         )
         return True
+
+    def is_inference_deployment_ready(self, detector_id: str) -> bool:
+        # Fetch the Deployment object
+        deployment = self.get_inference_deployment(detector_id)
+        if deployment is None:
+            return False
+
+        desired_replicas = deployment.spec.replicas
+        available_replicas = deployment.status.available_replicas if deployment.status.available_replicas else 0
+
+        if desired_replicas == available_replicas:
+            logger.info(f"Inference deployment for {detector_id} is ready")
+            return True
+        else:
+            logger.debug(f"Inference deployment for {detector_id} is not ready. Desired: {desired_replicas}, Available: {available_replicas}")
+            return False

@@ -3,12 +3,14 @@ import logging
 import time
 from app.core.app_state import load_edge_config
 from app.core.configs import RootEdgeConfig
-from app.core.edge_inference import EdgeInferenceManager
+from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions
 
 from app.core.kubernetes_management import InferenceDeploymentManager
 
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=log_level)
+
+TEN_MINUTES = 60 * 10
 
 
 def update_models(edge_inference_manager: EdgeInferenceManager, deployment_manager: InferenceDeploymentManager):
@@ -21,32 +23,42 @@ def update_models(edge_inference_manager: EdgeInferenceManager, deployment_manag
         logging.info(f"Edge inference is not enabled for any detectors.")
         return
 
-    # All detectors should have the same refresh rate.
+    # Filter to only detectors that have inference enabled
+    inference_config = {detector_id: config for detector_id, config in inference_config.items() if config.enabled}
+
+    # All enabled detectors should have the same refresh rate.
     refresh_rates = [config.refresh_rate for config in inference_config.values()]
     if len(set(refresh_rates)) != 1:
         logging.error(f"Detectors have different refresh rates.")
     refresh_rate = refresh_rates[0]
 
     while True:
-        for detector_id, config in inference_config.items():
-            if config.enabled:
-                try:
-                    # Download and write new model to model repo on disk
-                    new_model = edge_inference_manager.update_model(detector_id=detector_id)
+        for detector_id in inference_config.keys():
+            try:
+                # Download and write new model to model repo on disk
+                new_model = edge_inference_manager.update_model(detector_id=detector_id)
 
-                    deployment = deployment_manager.get_inference_deployment(detector_id=detector_id)
-                    if deployment is None:
-                        logging.info(f"Creating a new inference deployment for {detector_id}")
-                        deployment_manager.create_inference_deployment(detector_id=detector_id)
-                    elif new_model:
-                        # Update inference deployment and rollout a new pod
-                        logging.info(f"Updating inference deployment for {detector_id}")
-                        deployment_manager.update_inference_deployment(detector_id=detector_id)
+                deployment = deployment_manager.get_inference_deployment(detector_id=detector_id)
+                if deployment is None:
+                    logging.info(f"Creating a new inference deployment for {detector_id}")
+                    deployment_manager.create_inference_deployment(detector_id=detector_id)
+                elif new_model:
+                    # Update inference deployment and rollout a new pod
+                    logging.info(f"Updating inference deployment for {detector_id}")
+                    deployment_manager.update_inference_deployment(detector_id=detector_id)
 
-                    # TODO: poll for readiness before proceeding to avoid running too many k8s commands
-                    # TODO: delete old model versions from disk to save space
-                except Exception:
-                    logging.error(f"Failed to update model for {detector_id}", exc_info=True)
+                poll_start = time.time()
+                while not deployment_manager.is_inference_deployment_ready():
+                    time.sleep(20)
+                    if time.time() - poll_start > TEN_MINUTES:
+                        raise TimeoutError("Inference deployment is not ready within time limit")
+
+                # Now that we have successfully rolled out a new model version, we can clean up our model repository a bit.
+                # To be a bit conservative, we keep the current model version as well as the version before that. Older
+                # versions of the model for the current detector_id will be removed from disk.
+                delete_old_model_versions(detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2)
+            except Exception:
+                logging.error(f"Failed to update model for {detector_id}", exc_info=True)
 
         time.sleep(refresh_rate)
 

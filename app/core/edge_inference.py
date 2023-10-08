@@ -155,7 +155,6 @@ class EdgeInferenceManager:
             binary_ksuid=cloud_binary_ksuid,
             repository_root=self.MODEL_REPOSITORY,
         )
-        # TODO: Safely delete old versions
         return True
 
 
@@ -254,10 +253,16 @@ def get_current_model_version(model_dir: str) -> Optional[int]:
     are named with integers. This function returns the highest integer in the model repository directory.
     """
     logger.debug(f"Checking for current model version in {model_dir}")
+    model_versions = get_all_model_versions(model_dir)
+    return max(model_versions) if len(model_versions) > 0 else None
+
+
+def get_all_model_versions(model_dir: str) -> list:
+    """Triton inference server model_repositories contain model versions in subdirectories. Return all such version numbers."""
     if not os.path.exists(model_dir):
-        return None
+        return []
     model_versions = [int(d) for d in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, d))]
-    return max(model_versions) if model_versions else None
+    return model_versions
 
 
 def get_current_model_ksuid(model_dir: str) -> Optional[str]:
@@ -297,6 +302,19 @@ def create_file_from_template(template_values: dict, destination: str, template:
     os.makedirs(os.path.dirname(destination), exist_ok=True)
     with open(destination, "w") as output_file:
         output_file.write(filled_content)
+
+
+def delete_old_model_versions(detector_id: str, repository_root: str, num_to_keep: int = 2) -> None:
+    """Recursively delete all but the latest model versions"""
+    model_dir = os.path.join(repository_root, detector_id)
+    model_versions = get_all_model_versions(model_dir)
+    model_versions = sorted(model_versions)
+    if len(model_versions) < num_to_keep:
+        return
+    versions_to_delete = model_versions[:-num_to_keep]  # all except the last num_to_keep
+    logger.info(f"Deleting {len(versions_to_delete)} old model version(s) for {detector_id}")
+    for v in versions_to_delete:
+        delete_model_version(detector_id, v, repository_root)
 
 
 def delete_model_version(detector_id: str, model_version: int, repository_root: str) -> None:
