@@ -1,5 +1,3 @@
-print("importing model.py")
-
 import json
 import os
 import time

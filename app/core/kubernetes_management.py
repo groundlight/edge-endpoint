@@ -99,14 +99,13 @@ class InferenceDeploymentManager:
             raise e
 
     def get_or_create_inference_deployment(self, detector_id) -> Optional["V1Deployment"]:
-        try:
-            return self.get_inference_deployment(detector_id, self._target_namespace)
-        except kube_client.rest.ApiException as e:
-            if e.status == 404:
-                logger.debug(f"Deployment for {detector_id} does not currently exist in namespace {self._target_namespace}.")
-                self.create_inference_deployment(detector_id, self._target_namespace)
-                return None
-            raise e
+        deployment = self.get_inference_deployment(detector_id, self._target_namespace)
+        if deployment is not None:
+            return deployment
+
+        logger.debug(f"Deployment for {detector_id} does not currently exist in namespace {self._target_namespace}.")
+        self.create_inference_deployment(detector_id, self._target_namespace)
+        return None
 
     def update_inference_deployment(self, detector_id: str) -> bool:
         deployment_name = get_edge_inference_deployment_name(detector_id)

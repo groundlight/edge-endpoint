@@ -57,10 +57,6 @@ spec:
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
-        - name: inference-deployment-template-volume
-          mountPath: /etc/groundlight/inference-deployment
-        - name: model-repo
-          mountPath: /mnt/models
 
       - name: inference-model-updater
         image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-small-updates-6dbbe862c-dirty-6fa549644b07efb

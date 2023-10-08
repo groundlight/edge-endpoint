@@ -73,8 +73,6 @@ def get_detector_metadata(detector_id: str, gl: Groundlight) -> Detector:
 
 
 class AppState:
-    # TTL cache for k3s health checks on inference deployments. Checks are cached for 1 minutes.
-    # KUBERNETES_HEALTH_CHECKS_TTL_CACHE = TTLCache(maxsize=MAX_DETECTOR_IDS_TTL_CACHE_SIZE, ttl=60)
 
     def __init__(self):
         # Create a global shared image query ID cache in the app's state

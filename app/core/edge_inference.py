@@ -46,11 +46,6 @@ class EdgeInferenceManager:
                 if self.detector_configured_for_local_inference(detector_id)
             }
 
-    @staticmethod
-    def _inference_server_url(detector_id: str) -> str:
-        inference_service_name = f"inference-service-{detector_id.replace('_', '-').lower()}"
-        return f"{inference_service_name}:8000"
-
     def detector_configured_for_local_inference(self, detector_id: str) -> bool:
         """
         Checks if the detector is configured to run local inference.
