@@ -73,7 +73,9 @@ async def post_image_query(
     :param inference_client: Application's triton inference client.
     """
     if patience_time is not None:
-        logger.warning(f"Attempt to set {patience_time=} but setting patience_time via an edge endpoint is not currently supported")
+        logger.warning(
+            f"Attempt to set {patience_time=} but setting patience_time via an edge endpoint is not currently supported"
+        )
 
     img_numpy = np.asarray(img)  # [H, W, C=3], dtype: uint8, RGB format
 

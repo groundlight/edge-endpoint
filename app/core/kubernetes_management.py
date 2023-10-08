@@ -1,15 +1,15 @@
-from datetime import datetime
 import logging
 import os
-import yaml
+from datetime import datetime
 from typing import Optional
 
+import yaml
 from kubernetes import client as kube_client
 from kubernetes import config
 
+from .edge_inference import get_edge_inference_deployment_name, get_edge_inference_service_name
 from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH
 from .utils import prefixed_ksuid
-from .edge_inference import get_edge_inference_deployment_name, get_edge_inference_service_name
 
 logger = logging.getLogger(__name__)
 
@@ -90,11 +90,15 @@ class InferenceDeploymentManager:
     def get_inference_deployment(self, detector_id) -> Optional["V1Deployment"]:
         deployment_name = get_edge_inference_deployment_name(detector_id)
         try:
-            deployment = self._app_kube_client.read_namespaced_deployment(name=deployment_name, namespace=self._target_namespace)
+            deployment = self._app_kube_client.read_namespaced_deployment(
+                name=deployment_name, namespace=self._target_namespace
+            )
             return deployment
         except kube_client.rest.ApiException as e:
             if e.status == 404:
-                logger.debug(f"Deployment {deployment_name} does not currently exist in namespace {self._target_namespace}.")
+                logger.debug(
+                    f"Deployment {deployment_name} does not currently exist in namespace {self._target_namespace}."
+                )
                 return None
             raise e
 
@@ -116,7 +120,7 @@ class InferenceDeploymentManager:
 
         if deployment.spec.template.metadata.annotations is None:
             deployment.spec.template.metadata.annotations = {}
-        deployment.spec.template.metadata.annotations['kubectl.kubernetes.io/restartedAt'] = datetime.now().isoformat()
+        deployment.spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"] = datetime.now().isoformat()
 
         # Set the correct detector_id so we dont load more than the one model in this deployment. Also rotate the shm-region.
         deployment.spec.template.spec.containers[0].command = [
@@ -128,12 +132,9 @@ class InferenceDeploymentManager:
             "--log-verbose=1",
         ]
 
-
         logger.info(f"Patching an existing inference deployment: {deployment_name}")
         self._app_kube_client.patch_namespaced_deployment(
-            name=deployment_name,
-            namespace=self._target_namespace,
-            body=deployment
+            name=deployment_name, namespace=self._target_namespace, body=deployment
         )
         return True
 
@@ -151,5 +152,8 @@ class InferenceDeploymentManager:
             logger.info(f"Inference deployment for {detector_id} is ready")
             return True
         else:
-            logger.debug(f"Inference deployment rollout for {detector_id} is not complete. Desired: {desired_replicas}, Updated: {updated_replicas}, Available: {available_replicas}")
+            logger.debug(
+                f"Inference deployment rollout for {detector_id} is not complete. Desired: {desired_replicas}, Updated:"
+                f" {updated_replicas}, Available: {available_replicas}"
+            )
             return False

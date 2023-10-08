@@ -10,12 +10,12 @@ from fastapi import Request
 from groundlight import Groundlight
 from model import Detector
 
-from .utils import safe_call_api
 from .configs import LocalInferenceConfig, MotionDetectionConfig, RootEdgeConfig
 from .edge_inference import EdgeInferenceManager
-from .file_paths import DEFAULT_EDGE_CONFIG_PATH, INFERENCE_DEPLOYMENT_TEMPLATE_PATH
+from .file_paths import DEFAULT_EDGE_CONFIG_PATH
 from .iqe_cache import IQECache
 from .motion_detection import MotionDetectionManager
+from .utils import safe_call_api
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,6 @@ def get_detector_metadata(detector_id: str, gl: Groundlight) -> Detector:
 
 
 class AppState:
-
     def __init__(self):
         # Create a global shared image query ID cache in the app's state
         self.iqe_cache = IQECache()

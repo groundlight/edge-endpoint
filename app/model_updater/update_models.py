@@ -1,10 +1,10 @@
-import os
 import logging
+import os
 import time
+
 from app.core.app_state import load_edge_config
 from app.core.configs import RootEdgeConfig
 from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions
-
 from app.core.kubernetes_management import InferenceDeploymentManager
 
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -20,7 +20,7 @@ def update_models(edge_inference_manager: EdgeInferenceManager, deployment_manag
     inference_config = edge_inference_manager.inference_config
 
     if not any([config.enabled for config in inference_config.values()]):
-        logging.info(f"Edge inference is not enabled for any detectors.")
+        logging.info("Edge inference is not enabled for any detectors.")
         return
 
     # Filter to only detectors that have inference enabled
@@ -29,7 +29,7 @@ def update_models(edge_inference_manager: EdgeInferenceManager, deployment_manag
     # All enabled detectors should have the same refresh rate.
     refresh_rates = [config.refresh_rate for config in inference_config.values()]
     if len(set(refresh_rates)) != 1:
-        logging.error(f"Detectors have different refresh rates.")
+        logging.error("Detectors have different refresh rates.")
     refresh_rate_s = refresh_rates[0]
 
     while True:
@@ -58,7 +58,9 @@ def update_models(edge_inference_manager: EdgeInferenceManager, deployment_manag
                     # To be a bit conservative, we keep the current model version as well as the version before that. Older
                     # versions of the model for the current detector_id will be removed from disk.
                     logging.info(f"Cleaning up old model versions for {detector_id}")
-                    delete_old_model_versions(detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2)
+                    delete_old_model_versions(
+                        detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2
+                    )
             except Exception:
                 logging.error(f"Failed to update model for {detector_id}", exc_info=True)
 
