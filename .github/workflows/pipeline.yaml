@@ -143,6 +143,7 @@ jobs:
         run: |
           container_id=$(docker run \
             -d -p 6717:6717 \
+            -e EDGE_CONFIG="configs/edge-config.yaml" \
             groundlight-edge)
           echo "::set-output name=container_id::$container_id"
 
