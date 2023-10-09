@@ -13,14 +13,21 @@ logging.basicConfig(level=log_level)
 TEN_MINUTES = 60 * 10
 
 
+def sleep_forever(message: str | None = None):
+    while True:
+        logging.info(message)
+        time.sleep(TEN_MINUTES)
+
+
 def update_models(edge_inference_manager: EdgeInferenceManager, deployment_manager: InferenceDeploymentManager):
     if not os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", None) or not edge_inference_manager.inference_config:
+        sleep_forever("Edge inference is disabled globally... sleeping forever.")
         return
 
     inference_config = edge_inference_manager.inference_config
 
     if not any([config.enabled for config in inference_config.values()]):
-        logging.info("Edge inference is not enabled for any detectors.")
+        sleep_forever("Edge inference is not enabled for any detectors... sleeping forever.")
         return
 
     # Filter to only detectors that have inference enabled
