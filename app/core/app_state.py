@@ -60,7 +60,8 @@ def get_groundlight_sdk_instance(request: Request):
 
 
 @cachetools.cached(
-    cache=cachetools.TTLCache(maxsize=MAX_DETECTOR_IDS_TTL_CACHE_SIZE, ttl=TTL_TIME), key=lambda detector_id, gl: detector_id
+    cache=cachetools.TTLCache(maxsize=MAX_DETECTOR_IDS_TTL_CACHE_SIZE, ttl=TTL_TIME),
+    key=lambda detector_id, gl: detector_id,
 )
 def get_detector_metadata(detector_id: str, gl: Groundlight) -> Detector:
     """
