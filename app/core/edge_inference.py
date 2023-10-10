@@ -172,14 +172,11 @@ def fetch_model_urls(detector_id: str) -> dict[str, str]:
         "x-api-token": groundlight_api_token,
     }
     response = requests.get(url, headers=headers, timeout=10)
-
-    logger.debug(f"response = {response}")
+    logger.debug(f"fetch-model-urls response = {response}")
 
     if response.status_code == 200:
         return response.json()
     else:
-        logger.warning(f"Failure Response: {response.status_code}")
-
         raise HTTPException(status_code=response.status_code, detail=f"Failed to fetch model URLs for {detector_id=}.")
 
 
