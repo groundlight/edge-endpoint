@@ -11,7 +11,7 @@
 
 # Use the script as follows:
 # > docker build --tag edge-endpoint .
-# > source test/setup_plain_test_env.sh
+# > source test/setup_motion_detection_test_env.sh
 # > docker run --name groundlight-edge \
 #      -e LOG_LEVEL=DEBUG \
 #      -e EDGE_CONFIG \
