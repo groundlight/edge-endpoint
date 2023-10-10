@@ -108,7 +108,7 @@ jobs:
 
       - name: Run Motion Detection Tests
         run: |
-          source test/setup_test_env.sh
+          source test/setup_motion_detection_test_env.sh
           poetry run pytest -vs test/api/test_motdet.py
 
       - name: Dump Logs from Docker Container
@@ -151,7 +151,7 @@ jobs:
       - name: Start Docker Container
         id: start_container
         run: |
-          source test/setup_vanilla_test_env.sh
+          source test/setup_plain_test_env.sh
           echo "EDGE_CONFIG=$EDGE_CONFIG"
           container_id=$(docker run \
             -e LOG_LEVEL=DEBUG \
@@ -194,6 +194,7 @@ jobs:
 
       - name: Run Unit Tests
         run: |
+          source test/setup_plain_test_env.sh
           poetry run pytest
 
       - name: Run Groundlight SDK tests against Edge Proxy Endpoint
