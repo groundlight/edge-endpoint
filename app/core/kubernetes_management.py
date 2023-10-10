@@ -151,8 +151,8 @@ class InferenceDeploymentManager:
         if desired_replicas == updated_replicas == available_replicas:
             logger.info(f"Inference deployment for {detector_id} is ready")
             return True
-      logger.debug(
+        logger.debug(
             f"Inference deployment rollout for {detector_id} is not complete. Desired: {desired_replicas}, Updated:"
             f" {updated_replicas}, Available: {available_replicas}"
-       )
-       return False
+        )
+        return False
