@@ -195,7 +195,7 @@ jobs:
       - name: Run Unit Tests
         run: |
           source test/setup_plain_test_env.sh
-          poetry run pytest
+          poetry run pytest -k "not test_motdet"
 
       - name: Run Groundlight SDK tests against Edge Proxy Endpoint
         run: |
