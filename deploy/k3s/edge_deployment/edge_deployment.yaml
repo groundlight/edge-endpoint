@@ -40,13 +40,32 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       containers:
       - name: edge-endpoint
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:6ef532de5-model-updater
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:c4e05f237-tyler-small-updates
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
         env:
         - name: LOG_LEVEL
-          value: "INFO"
+          value: "DEBUG"
+        - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
+          value: "True"
+        - name: GROUNDLIGHT_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: groundlight-secrets
+              key: api-token
+        volumeMounts:
+        - name: edge-config-volume
+          mountPath: /etc/groundlight/edge-config
+
+      - name: inference-model-updater
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:c4e05f237-tyler-small-updates
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/bash", "-c"]
+        args: ["poetry run python -m app.model_updater.update_models"]
+        env:
+        - name: LOG_LEVEL
+          value: "DEBUG"
         - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
           value: "True"
         - name: GROUNDLIGHT_API_TOKEN
@@ -58,30 +77,9 @@ spec:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
         - name: inference-deployment-template-volume
-          mountPath: /etc/groundlight/inference-deployment 
+          mountPath: /etc/groundlight/inference-deployment
         - name: model-repo
           mountPath: /mnt/models
-
-      - name: inference-model-updater
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:6ef532de5-model-updater
-        imagePullPolicy: IfNotPresent
-        command: ["/bin/bash", "-c"]
-        args: ["poetry run python -m model_updater.update_models"]
-        env:
-        - name: LOG_LEVEL
-          value: "INFO"
-        - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
-          value: "True"
-        - name: GROUNDLIGHT_API_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: groundlight-secrets
-              key: api-token
-        volumeMounts:
-        - name: edge-config-volume
-          mountPath: /etc/groundlight/edge-config
-        - name: model-repo
-          mountPath: /mnt/models   
 
       imagePullSecrets:
       - name: registry-credentials
@@ -97,6 +95,5 @@ spec:
           # A hostPath volume mounts a file or directory from the host node's filesystem into your Pod
           # This simiplifies things a lot, but only really works for single-node clusters.
           # TODO: check out k3s local path provisioner: https://docs.k3s.io/storage#setting-up-the-local-storage-provider
-          # path: /home/ubuntu/ptdev/zuuul2/predictors/serving/model_repository
           path: /var/groundlight/serving/model_repository
           type: DirectoryOrCreate

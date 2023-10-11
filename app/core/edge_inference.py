@@ -40,16 +40,11 @@ class EdgeInferenceManager:
         if self.inference_config:
             self.inference_clients = {
                 detector_id: tritonclient.InferenceServerClient(
-                    url=self._inference_server_url(detector_id), verbose=verbose
+                    url=get_edge_inference_service_name(detector_id) + ":8000", verbose=verbose
                 )
                 for detector_id in self.inference_config.keys()
                 if self.detector_configured_for_local_inference(detector_id)
             }
-
-    @staticmethod
-    def _inference_server_url(detector_id: str) -> str:
-        inference_service_name = f"inference-service-{detector_id.replace('_', '-').lower()}"
-        return f"{inference_service_name}:8000"
 
     def detector_configured_for_local_inference(self, detector_id: str) -> bool:
         """
@@ -73,7 +68,7 @@ class EdgeInferenceManager:
         try:
             inference_client = self.inference_clients[detector_id]
         except KeyError:
-            logger.debug(f"Detector ID not configured to use edge inference: {detector_id}", exc_info=True)
+            logger.debug(f"Failed to look up inference client for {detector_id}")
             return False
 
         try:
@@ -128,9 +123,12 @@ class EdgeInferenceManager:
         )
         return output_dict
 
-    def update_model(self, detector_id: str) -> None:
+    def update_model(self, detector_id: str) -> bool:
         """
-        Request a new model from the cloud and update the local edge inference server.
+        Request a new model from Groundlight. If there is a new model available, download it and
+        write it to the model repository as a new version.
+
+        Returns True if a new model was downloaded and saved, False otherwise.
         """
         logger.info(f"Checking if there is a new model available for {detector_id}")
         model_urls = fetch_model_urls(detector_id)
@@ -143,44 +141,21 @@ class EdgeInferenceManager:
         edge_binary_ksuid = get_current_model_ksuid(model_dir)
         if edge_binary_ksuid and cloud_binary_ksuid is not None and cloud_binary_ksuid <= edge_binary_ksuid:
             logger.info(f"No new model available for {detector_id}")
-            return
+            return False
 
         logger.info(f"New model binary available ({cloud_binary_ksuid}), attemping to update model for {detector_id}")
 
         pipeline_config = model_urls["pipeline_config"]
 
         model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
-        old_version, new_version = save_model_to_repository(
+        save_model_to_repository(
             detector_id,
             model_buffer,
             pipeline_config,
             binary_ksuid=cloud_binary_ksuid,
             repository_root=self.MODEL_REPOSITORY,
         )
-
-        try:
-            inference_client = self.inference_clients[detector_id]
-            inference_client.load_model(model_name=detector_id)  # refreshes the model if already loaded
-        except (ConnectionRefusedError, socket.gaierror) as ex:
-            logger.warning(f"Edge inference server is not available: {ex}")
-            return
-
-        retries = 15
-        while not self.inference_is_available(detector_id, model_version=str(new_version)):
-            if retries == 0:
-                logger.warning(
-                    f"Edge inference server is not ready to run model version {new_version} for {detector_id}"
-                )
-                return
-            retries -= 1
-            time.sleep(2)  # Wait up to 30 seconds for model to be ready
-
-        logger.info(
-            f"Now running inference with model version {new_version} for {detector_id} using"
-            f" binary_ksuid={cloud_binary_ksuid}"
-        )
-        if old_version is not None:
-            delete_model_version(detector_id, old_version, repository_root=self.MODEL_REPOSITORY)
+        return True
 
 
 def fetch_model_urls(detector_id: str) -> dict[str, str]:
@@ -197,14 +172,11 @@ def fetch_model_urls(detector_id: str) -> dict[str, str]:
         "x-api-token": groundlight_api_token,
     }
     response = requests.get(url, headers=headers, timeout=10)
-
-    logger.debug(f"response = {response}")
+    logger.debug(f"fetch-model-urls response = {response}")
 
     if response.status_code == 200:
         return response.json()
     else:
-        logger.warning(f"Failure Response: {response.status_code}")
-
         raise HTTPException(status_code=response.status_code, detail=f"Failed to fetch model URLs for {detector_id=}.")
 
 
@@ -278,10 +250,16 @@ def get_current_model_version(model_dir: str) -> Optional[int]:
     are named with integers. This function returns the highest integer in the model repository directory.
     """
     logger.debug(f"Checking for current model version in {model_dir}")
+    model_versions = get_all_model_versions(model_dir)
+    return max(model_versions) if len(model_versions) > 0 else None
+
+
+def get_all_model_versions(model_dir: str) -> list:
+    """Triton inference server model_repositories contain model versions in subdirectories. Return all such version numbers."""
     if not os.path.exists(model_dir):
-        return None
+        return []
     model_versions = [int(d) for d in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, d))]
-    return max(model_versions) if model_versions else None
+    return model_versions
 
 
 def get_current_model_ksuid(model_dir: str) -> Optional[str]:
@@ -323,9 +301,36 @@ def create_file_from_template(template_values: dict, destination: str, template:
         output_file.write(filled_content)
 
 
+def delete_old_model_versions(detector_id: str, repository_root: str, num_to_keep: int = 2) -> None:
+    """Recursively delete all but the latest model versions"""
+    model_dir = os.path.join(repository_root, detector_id)
+    model_versions = get_all_model_versions(model_dir)
+    model_versions = sorted(model_versions)
+    if len(model_versions) < num_to_keep:
+        return
+    versions_to_delete = model_versions[:-num_to_keep]  # all except the last num_to_keep
+    logger.info(f"Deleting {len(versions_to_delete)} old model version(s) for {detector_id}")
+    for v in versions_to_delete:
+        delete_model_version(detector_id, v, repository_root)
+
+
 def delete_model_version(detector_id: str, model_version: int, repository_root: str) -> None:
     """Recursively delete directory detector_id/model_version"""
     model_version_dir = os.path.join(repository_root, detector_id, str(model_version))
     logger.info(f"Deleting model version {model_version} for {detector_id}")
     if os.path.exists(model_version_dir):
         shutil.rmtree(model_version_dir)
+
+
+def get_edge_inference_service_name(detector_id: str) -> str:
+    """
+    Kubernetes service/deployment names have a strict naming convention.
+    They have to be alphanumeric, lower cased, and can only contain dashes.
+    We just use `inferencemodel-<detector_id>` as the deployment name and
+    `inference-service-<detector_id>` as the service name.
+    """
+    return f"inference-service-{detector_id.replace('_', '-').lower()}"
+
+
+def get_edge_inference_deployment_name(detector_id: str) -> str:
+    return f"inferencemodel-{detector_id.replace('_', '-').lower()}"

@@ -1,7 +1,7 @@
 name: cicd
 on: [push]
 
-env: 
+env:
   PYTHON_VERSION: "3.11"
   POETRY_VERSION: "1.5.1"
   # This is the token associated with "prod-biggies" (with shared credentials on 1password)
@@ -15,6 +15,7 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v3
+
       - name: Install k3s
         run: |
           curl -sfL https://get.k3s.io | sh -
@@ -23,55 +24,61 @@ jobs:
           # symlink to kubeconfig
           mkdir -p ~/.kube
           ln -s /etc/rancher/k3s/k3s.yaml ~/.kube/config
-      - name: Configure AWS credentials 
+
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-2
+
       - name: Deploy the edge-endpoint yaml
         run: |
           set -ex
-          # Once there's a fix for disk-pressure issues on GHA's runner, we can uncomment the 
+          # Once there's a fix for disk-pressure issues on GHA's runner, we can uncomment the
           # following command in order to set up the environment to test out edge inference
           # source test/setup_inference_test_env.sh
           export INFERENCE_FLAVOR="CPU"
           bash deploy/bin/cluster_setup.sh
-          kubectl describe deployment 
+          kubectl describe deployment
+
       - name: Wait for edge-endpoint pod to be ready
         run: |
           set -ex
           kubectl rollout status deployment edge-endpoint --timeout=5m
-          kubectl describe pod edge-endpoint 
+          kubectl describe pod edge-endpoint
 
   test-motion-detection:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
         uses: actions/checkout@v3
+
       - name: Set up python
         uses: actions/setup-python@v4
         with :
           python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install Docker 
-        # moby-runc is a CLI tool for spawning and running containers according to the Open Container Initiative (OCI) 
+
+      - name: Install Docker
+        # moby-runc is a CLI tool for spawning and running containers according to the Open Container Initiative (OCI)
         # specification, and it is used by the Docker runtime. The existing version of moby-runc on the GitHub Actions runner
         # is often incompatible with the version of Docker we want to install, so we need to remove it first.
-        run: | 
-          sudo apt-get update 
-          sudo apt-get remove moby-runc 
+        run: |
+          sudo apt-get update
+          sudo apt-get remove moby-runc
           sudo apt-get install apt-transport-https ca-certificates curl software-properties-common
           curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
           sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
           sudo apt-get update
           sudo apt-get install docker-ce
+
       - name: Build Docker Image
         run: docker build --tag groundlight-edge .
-        
+
       - name: Start Docker Container
         id: start_container
         run: |
-          source test/setup_test_env.sh
+          source test/setup_motion_detection_test_env.sh
           echo "EDGE_CONFIG=$EDGE_CONFIG"
           container_id=$(docker run \
             -e LOG_LEVEL=DEBUG \
@@ -79,7 +86,7 @@ jobs:
             -d -p 6717:6717 \
             groundlight-edge)
           echo "::set-output name=container_id::$container_id"
-            
+
       - name: Install poetry
         uses: snok/install-poetry@v1
         with:
@@ -94,40 +101,42 @@ jobs:
         with:
           path: .venv
           key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
+
       - name: Install package
         run: |
           poetry install --no-interaction --no-root
 
-      - name: Run Motion Detection Tests 
-        run: | 
-          source test/setup_test_env.sh
+      - name: Run Motion Detection Tests
+        run: |
+          source test/setup_motion_detection_test_env.sh
           poetry run pytest -vs test/api/test_motdet.py
-      
+
       - name: Dump Logs from Docker Container
         if: always()
         run: docker logs ${{ steps.start_container.outputs.container_id }}
 
       - name: Stop Docker Container
-        # This ensures that we always stop the container regardless of the outcomes of 
-        # the previous steps 
+        # This ensures that we always stop the container regardless of the outcomes of
+        # the previous steps
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
-  # Run Groundlight SDK tests against the 
-  # edge proxy endpoint set in nginx.conf file 
-  # and run unit tests. 
+  # Run Groundlight SDK tests against the
+  # edge proxy endpoint set in nginx.conf file
+  # and run unit tests.
   test-sdk-and-unit-tests:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
         uses: actions/checkout@v3
-      - name: Set up python 
+
+      - name: Set up python
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install Docker 
-        run: | 
+      - name: Install Docker
+        run: |
           sudo apt-get update
           sudo apt-get remove moby-runc
           sudo apt-get install apt-transport-https ca-certificates curl software-properties-common
@@ -135,42 +144,42 @@ jobs:
           sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
           sudo apt-get update
           sudo apt-get install docker-ce
-      - name: Build Docker Image 
+
+      - name: Build Docker Image
         run: docker build --tag groundlight-edge .
 
-      - name: Start Docker Container 
+      - name: Start Docker Container
         id: start_container
         run: |
+          source test/setup_plain_test_env.sh
+          echo "EDGE_CONFIG=$EDGE_CONFIG"
           container_id=$(docker run \
+            -e LOG_LEVEL=DEBUG \
+            -e EDGE_CONFIG \
             -d -p 6717:6717 \
             groundlight-edge)
           echo "::set-output name=container_id::$container_id"
 
-      - name: Install poetry 
+      - name: Install poetry
         uses: snok/install-poetry@v1
-        with: 
+        with:
           version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true 
-          virtualenvs-in-project: true 
-          installer-parallel: true 
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: true
 
       # Note that we're pulling the latest main from the SDK repo
       # This might be ahead of what's published to pypi, but it's useful to test things before they're released.
-      - name: Checkout Groundlight SDK 
+      - name: Checkout Groundlight SDK
         uses: actions/checkout@v3
         with:
           repository: groundlight/python-sdk
           path: groundlight-sdk
+
       - name: Install Groundlight SDK dependencies
         run: |
-          cd groundlight-sdk 
-          poetry install 
-
-      - name: Run Groundlight SDK tests against Edge Proxy Endpoint
-        run: |
-          cd groundlight-sdk 
-          poetry run pytest 
-          cd .. 
+          cd groundlight-sdk
+          poetry install
 
       - name: Load Cached venv
         id: cached-poetry-dependencies
@@ -178,20 +187,28 @@ jobs:
         with:
           path: .venv
           key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
+
       - name: Install edge-endpoint's python dependencies
         run: |
           poetry install --no-interaction --no-root
 
       - name: Run Unit Tests
-        run: | 
-          poetry run pytest 
-      
+        run: |
+          source test/setup_plain_test_env.sh
+          poetry run pytest -k "not test_motdet"
+
+      - name: Run Groundlight SDK tests against Edge Proxy Endpoint
+        run: |
+          cd groundlight-sdk
+          poetry run pytest
+          cd ..
+
       - name: Dump Logs from Docker Container
         if: always()
         run: docker logs ${{ steps.start_container.outputs.container_id }}
 
       - name: Stop Docker Container
-        # This ensures that we always stop the container regardless of the outcomes of 
-        # the previous steps 
+        # This ensures that we always stop the container regardless of the outcomes of
+        # the previous steps
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}

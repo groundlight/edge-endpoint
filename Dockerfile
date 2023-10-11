@@ -18,8 +18,8 @@ ARG POETRY_VERSION
 # Combine the installations into a single RUN command
 # Ensure that we have the bash shell since it doesn't seem to be included in the slim image.
 # This is useful for exec'ing into the container for debugging purposes.
-# We need to install libGL dependencies (`libglib2.0-0` and `libgl1-mesa-lgx`) 
-# since they are required by OpenCV 
+# We need to install libGL dependencies (`libglib2.0-0` and `libgl1-mesa-lgx`)
+# since they are required by OpenCV
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        bash \
@@ -43,18 +43,18 @@ COPY ./pyproject.toml ${APP_ROOT}/
 
 WORKDIR ${APP_ROOT}
 
-# Install production dependencies only 
+# Install production dependencies only
 RUN poetry install --no-interaction --no-root --without dev && \
-    poetry cache clear --all pypi 
+    poetry cache clear --all pypi
 
-# Create /etc/groundlight directory where edge-config.yaml and inference_deployment.yaml will be mounted 
+# Create /etc/groundlight directory where edge-config.yaml and inference_deployment.yaml will be mounted
 RUN mkdir /etc/groundlight
 
 RUN mkdir /etc/groundlight/edge-config && \
     mkdir /etc/groundlight/inference-deployment
 
 # Copy configs
-COPY configs ${APP_ROOT}/configs 
+COPY configs ${APP_ROOT}/configs
 
 COPY deploy/k3s/inference_deployment/inference_deployment_template.yaml \
     /etc/groundlight/inference-deployment/
@@ -76,9 +76,6 @@ WORKDIR ${APP_ROOT}
 # Copy the remaining files
 COPY /app ${APP_ROOT}/app/
 
-# Copy model updating code 
-COPY model_updater ${APP_ROOT}/model_updater
-
 COPY --from=production-dependencies-build-stage ${APP_ROOT}/configs/nginx.conf /etc/nginx/nginx.conf
 
 # Remove default nginx config
@@ -89,4 +86,3 @@ CMD nginx && poetry run uvicorn --workers 1 --host 0.0.0.0 --port ${APP_PORT} --
 # Document the exposed port which was configured in start_uvicorn.sh
 # https://docs.docker.com/engine/reference/builder/#expose
 EXPOSE ${APP_PORT}
-

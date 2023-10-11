@@ -72,6 +72,7 @@ async def post_image_query(
         This manages the motion detection state for all detectors.
     :param inference_client: Application's triton inference client.
     """
+
     img_numpy = np.asarray(img)  # [H, W, C=3], dtype: uint8, RGB format
 
     iqe_cache = app_state.iqe_cache
@@ -99,34 +100,31 @@ async def post_image_query(
             return new_image_query
 
     image_query = None
-
-    # Check if the edge inference server is available
-    inference_deployment_is_ready = app_state.inference_deployment_is_ready(
-        detector_id=detector_id, create_if_absent=True
-    )
-    if inference_deployment_is_ready:
+    if edge_inference_manager.inference_is_available(detector_id=detector_id):
         detector_metadata: Detector = get_detector_metadata(detector_id=detector_id, gl=gl)
         results = edge_inference_manager.run_inference(detector_id=detector_id, img_numpy=img_numpy)
+        confidence = results["confidence"]
 
-        if results["confidence"] > detector_metadata.confidence_threshold:
+        if confidence > detector_metadata.confidence_threshold:
             logger.info("Edge detector confidence is high enough to return")
 
             image_query = _create_iqe(
                 detector_id=detector_id,
                 label=results["label"],
-                confidence=results["confidence"],
+                confidence=confidence,
                 query=detector_metadata.query,
             )
             iqe_cache.update_cache(image_query=image_query)
         else:
             logger.info(
                 "Ran inference locally, but detector confidence is not high enough to return. Current confidence:"
-                f" {results['confidence']}, detector confidence threshold: {detector_metadata.confidence_threshold}."
+                f" {confidence} is less than confidence threshold: {detector_metadata.confidence_threshold}."
                 " Escalating to the cloud API server."
             )
 
     # Finally, fall back to submitting the image to the cloud
     if not image_query:
+        logger.debug("Submitting image query to cloud API server")
         # NOTE: Waiting is done on the customer's client, not here. Otherwise we would be blocking the
         # response to the customer's client from the edge-endpoint for many seconds. This has the
         # side effect of not allowing customers to update their detector's patience_time through the
