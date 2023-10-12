@@ -57,8 +57,17 @@ RUN mkdir /etc/groundlight/edge-config && \
 COPY configs ${APP_ROOT}/configs
 
 RUN mkdir /etc/nginx/ssl 
-COPY security/nginx_ed25519.key /etc/nginx/ssl/nginx_ed25519.key
-COPY security/nginx_ed25519.crt /etc/nginx/ssl/nginx_ed25519.crt
+# COPY certificates/nginx_ed25519.key /etc/nginx/ssl/nginx_ed25519.key
+# COPY certificates/nginx_ed25519.crt /etc/nginx/ssl/nginx_ed25519.crt
+
+# Copy the SSL key and certificate into their respective files only 
+# if they are provided. 
+RUN if [ ! -z "${SSL_PRIVATE_KEY}" ]; then \
+        echo "${SSL_PRIVATE_KEY}" > /etc/nginx/ssl/nginx_ed25519.key; \
+    fi && \
+    if [ ! -z "${SSL_CERTIFICATE}" ]; then \
+        echo "${SSL_CERTIFICATE}" > /etc/nginx/ssl/nginx_ed25519.crt; \
+    fi
 
 COPY deploy/k3s/inference_deployment/inference_deployment_template.yaml \
     /etc/groundlight/inference-deployment/
