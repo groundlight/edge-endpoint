@@ -49,7 +49,7 @@ class EdgeInferenceManager:
     def detector_configured_for_local_inference(self, detector_id: str) -> bool:
         """
         Checks if the detector is configured to run local inference.
-        Args:
+        Args:`
             detector_id: ID of the detector on which to run local edge inference
         Returns:
             True if the detector is configured to run local inference, False otherwise

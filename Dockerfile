@@ -56,6 +56,10 @@ RUN mkdir /etc/groundlight/edge-config && \
 # Copy configs
 COPY configs ${APP_ROOT}/configs
 
+RUN mkdir /etc/nginx/ssl 
+COPY security/nginx_ed25519.key /etc/nginx/ssl/nginx_ed25519.key
+COPY security/nginx_ed25519.crt /etc/nginx/ssl/nginx_ed25519.crt
+
 COPY deploy/k3s/inference_deployment/inference_deployment_template.yaml \
     /etc/groundlight/inference-deployment/
 
@@ -77,6 +81,7 @@ WORKDIR ${APP_ROOT}
 COPY /app ${APP_ROOT}/app/
 
 COPY --from=production-dependencies-build-stage ${APP_ROOT}/configs/nginx.conf /etc/nginx/nginx.conf
+COPY --from=production-dependencies-build-stage /etc/nginx/ssl /etc/nginx/ssl
 
 # Remove default nginx config
 RUN rm /etc/nginx/sites-enabled/default

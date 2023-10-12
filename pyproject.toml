@@ -8,9 +8,9 @@ license = "MIT"
 [tool.poetry.dependencies]
 python = "^3.9"
 uvicorn = {version = "^0.20.0", extras = ["standard"]}
-fastapi = "^0.88.0"
-pydantic = "^1.10.2"
-groundlight = "0.11.0"
+fastapi = "0.103.2"
+pydantic = ">=2.0,<3.0.0"
+groundlight = { git = "https://github.com/groundlight/python-sdk.git", rev = "disable-tls-verification" }
 opencv-python = "^4.7.0.72"
 pillow = "^9.5.0"
 framegrab = "^0.2.1"
