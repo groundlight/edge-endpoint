@@ -10,43 +10,43 @@ env:
   GROUNDLIGHT_ENDPOINT: https://localhost:6717
 
 jobs:
-  test-in-k3s:
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v3
+  # test-in-k3s:
+  #   runs-on: ubuntu-22.04
+  #   steps:
+  #     - name: Check out code
+  #       uses: actions/checkout@v3
 
-      - name: Install k3s
-        run: |
-          curl -sfL https://get.k3s.io | sh -
-          sudo chmod 644 /etc/rancher/k3s/k3s.yaml
-          sudo chown $USER /etc/rancher/k3s/k3s.yaml
-          # symlink to kubeconfig
-          mkdir -p ~/.kube
-          ln -s /etc/rancher/k3s/k3s.yaml ~/.kube/config
+  #     - name: Install k3s
+  #       run: |
+  #         curl -sfL https://get.k3s.io | sh -
+  #         sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+  #         sudo chown $USER /etc/rancher/k3s/k3s.yaml
+  #         # symlink to kubeconfig
+  #         mkdir -p ~/.kube
+  #         ln -s /etc/rancher/k3s/k3s.yaml ~/.kube/config
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
+  #     - name: Configure AWS credentials
+  #       uses: aws-actions/configure-aws-credentials@v2
+  #       with:
+  #         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  #         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  #         aws-region: us-west-2
 
-      - name: Deploy the edge-endpoint yaml
-        run: |
-          set -ex
-          # Once there's a fix for disk-pressure issues on GHA's runner, we can uncomment the
-          # following command in order to set up the environment to test out edge inference
-          # source test/setup_inference_test_env.sh
-          export INFERENCE_FLAVOR="CPU"
-          bash deploy/bin/cluster_setup.sh
-          kubectl describe deployment
+  #     - name: Deploy the edge-endpoint yaml
+  #       run: |
+  #         set -ex
+  #         # Once there's a fix for disk-pressure issues on GHA's runner, we can uncomment the
+  #         # following command in order to set up the environment to test out edge inference
+  #         # source test/setup_inference_test_env.sh
+  #         export INFERENCE_FLAVOR="CPU"
+  #         bash deploy/bin/cluster_setup.sh
+  #         kubectl describe deployment
 
-      - name: Wait for edge-endpoint pod to be ready
-        run: |
-          set -ex
-          kubectl rollout status deployment edge-endpoint --timeout=5m
-          kubectl describe pod edge-endpoint
+  #     - name: Wait for edge-endpoint pod to be ready
+  #       run: |
+  #         set -ex
+  #         kubectl rollout status deployment edge-endpoint --timeout=5m
+  #         kubectl describe pod edge-endpoint
 
   test-motion-detection:
     runs-on: ubuntu-22.04

@@ -20,7 +20,7 @@ DETECTOR_ID = "det_2SagpFUrs83cbMZsap5hZzRjZw4"
 @pytest.fixture(name="gl")
 def fixture_gl() -> Groundlight:
     """Creates a Groundlight client object"""
-    return Groundlight(endpoint="http://localhost:6717")
+    return Groundlight(endpoint="https://localhost:6717", disable_tls_verification=True)
 
 
 @pytest.fixture

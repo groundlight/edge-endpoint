@@ -41,7 +41,7 @@ def motion_detection_enabled(config: RootEdgeConfig) -> bool:
 @pytest.fixture(name="gl")
 def fixture_gl() -> Groundlight:
     """Creates a Groundlight client object"""
-    return Groundlight(endpoint="http://localhost:6717")
+    return Groundlight(endpoint="https://localhost:6717", disable_tls_verification=True)
 
 
 def test_motion_detection(gl: Groundlight, root_config: RootEdgeConfig):
