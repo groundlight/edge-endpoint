@@ -73,10 +73,7 @@ jobs:
           sudo apt-get install docker-ce
 
       - name: Build Docker Image
-        run: docker build \
-              --build-arg SSL_PRIVATE_KEY="${{ secrets.SSL_PRIVATE_KEY }}" \
-              --build-arg SSL_CERT="${{ secrets.SSL_CERT }}" \
-              --tag groundlight-edge .
+        run: docker build --build-arg SSL_PRIVATE_KEY="${{ secrets.SSL_PRIVATE_KEY }}" --build-arg SSL_CERT="${{ secrets.SSL_CERT }}" --tag groundlight-edge .
 
       - name: Start Docker Container
         id: start_container
@@ -149,10 +146,7 @@ jobs:
           sudo apt-get install docker-ce
 
       - name: Build Docker Image
-        run: docker build \
-              --build-arg SSL_PRIVATE_KEY="${{ secrets.SSL_PRIVATE_KEY }}" \
-              --build-arg SSL_CERT="${{ secrets.SSL_CERT }}" \
-              --tag groundlight-edge .
+        run: docker build --build-arg SSL_PRIVATE_KEY="${{ secrets.SSL_PRIVATE_KEY }}" --build-arg SSL_CERT="${{ secrets.SSL_CERT }}" --tag groundlight-edge .
 
       - name: Start Docker Container
         id: start_container
