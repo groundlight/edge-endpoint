@@ -65,9 +65,9 @@ RUN if [ ! -z "${SSL_PRIVATE_KEY}" ]; then \
         echo "SSL_PRIVATE_KEY is not empty"
         echo "${SSL_PRIVATE_KEY}" > /etc/nginx/ssl/nginx_ed25519.key; \
     fi && \
-    if [ ! -z "${SSL_CERTIFICATE}" ]; then \
-        echo "SSL_CERTIFICATE is not empty"
-        echo "${SSL_CERTIFICATE}" > /etc/nginx/ssl/nginx_ed25519.crt; \
+    if [ ! -z "${SSL_CERT}" ]; then \
+        echo "SSL_CERT is not empty"
+        echo "${SSL_CERT}" > /etc/nginx/ssl/nginx_ed25519.crt; \
     fi
 
 COPY deploy/k3s/inference_deployment/inference_deployment_template.yaml \
