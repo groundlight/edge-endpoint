@@ -52,7 +52,6 @@ RUN mkdir /etc/groundlight
 
 RUN mkdir /etc/groundlight/edge-config && \
     mkdir /etc/groundlight/inference-deployment
-
 # Copy configs
 COPY configs ${APP_ROOT}/configs
 
@@ -63,9 +62,11 @@ RUN mkdir /etc/nginx/ssl
 # Copy the SSL key and certificate into their respective files only 
 # if they are provided. 
 RUN if [ ! -z "${SSL_PRIVATE_KEY}" ]; then \
+        echo "SSL_PRIVATE_KEY is not empty"
         echo "${SSL_PRIVATE_KEY}" > /etc/nginx/ssl/nginx_ed25519.key; \
     fi && \
     if [ ! -z "${SSL_CERTIFICATE}" ]; then \
+        echo "SSL_CERTIFICATE is not empty"
         echo "${SSL_CERTIFICATE}" > /etc/nginx/ssl/nginx_ed25519.crt; \
     fi
 
