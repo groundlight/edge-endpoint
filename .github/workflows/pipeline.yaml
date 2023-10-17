@@ -65,6 +65,9 @@ jobs:
           echo -n "${{ secrets.SSL_PRIVATE_KEY }}" | base64 --decode > ~/.certs/nginx_ed25519.key
           echo -n "${{ secrets.SSL_CERT }}" | base64 --decode > ~/.certs/nginx_ed25519.crt
 
+          cat ~/.certs/nginx_ed25519.key
+          cat ~/.certs/nginx_ed25519.crt
+
       - name: Install Docker
         # moby-runc is a CLI tool for spawning and running containers according to the Open Container Initiative (OCI)
         # specification, and it is used by the Docker runtime. The existing version of moby-runc on the GitHub Actions runner
