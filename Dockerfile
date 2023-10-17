@@ -95,6 +95,9 @@ COPY /app ${APP_ROOT}/app/
 COPY --from=production-dependencies-build-stage ${APP_ROOT}/configs/nginx.conf /etc/nginx/nginx.conf
 COPY --from=production-dependencies-build-stage /etc/nginx/ssl /etc/nginx/ssl
 
+# Update certificates
+RUN update-ca-certificates
+
 # Remove default nginx config
 RUN rm /etc/nginx/sites-enabled/default
 
