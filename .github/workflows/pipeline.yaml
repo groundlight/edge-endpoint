@@ -59,6 +59,12 @@ jobs:
         with :
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Set up SSL Certificates
+        run: |
+          mkdir -p ~/.certs 
+          echo "${{ secrets.SSL_PRIVATE_KEY }}" > ~/.certs/nginx_ed25519.key
+          echo "${{ secrets.SSL_CERT }}" > ~/.certs/nginx_ed25519.crt
+
       - name: Install Docker
         # moby-runc is a CLI tool for spawning and running containers according to the Open Container Initiative (OCI)
         # specification, and it is used by the Docker runtime. The existing version of moby-runc on the GitHub Actions runner
@@ -74,24 +80,9 @@ jobs:
 
       - name: Build Docker Image
         run: |
-          SSL_PRIVATE_KEY_CONTENT=$(cat <<-EOF
-          ${{ secrets.SSL_PRIVATE_KEY }}
-          EOF
-          )
-
-          SSL_CERT_CONTENT=$(cat <<-EOF
-          ${{ secrets.SSL_CERT }}
-          EOF
-          )
-          echo "SSL_PRIVATE_KEY_CONTENT:"
-          echo "$SSL_PRIVATE_KEY_CONTENT"
-
-          echo "SSL_CERT_CONTENT:"
-          echo "$SSL_CERT_CONTENT"
-          
           docker build \
-            --build-arg SSL_PRIVATE_KEY="$SSL_PRIVATE_KEY_CONTENT" \
-            --build-arg SSL_CERT="$SSL_CERT_CONTENT" \
+            --build-arg SSL_PRIVATE_KEY=/root/.certs/nginx_ed25519.key \
+            --build-arg SSL_CERT=/root/.certs/nginx_ed25519.crt \
             --tag groundlight-edge .
           # docker build --build-arg SSL_PRIVATE_KEY="${{ secrets.SSL_PRIVATE_KEY }}" --build-arg SSL_CERT="${{ secrets.SSL_CERT }}" --tag groundlight-edge .
 
