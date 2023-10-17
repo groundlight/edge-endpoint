@@ -61,9 +61,12 @@ jobs:
 
       - name: Set up SSL Certificates
         run: |
-          mkdir -p ~/.certs 
-          echo "${{ secrets.SSL_PRIVATE_KEY }}" > ~/.certs/nginx_ed25519.key
-          echo "${{ secrets.SSL_CERT }}" > ~/.certs/nginx_ed25519.crt
+          mkdir -p ~/.certs
+          mkdir -p /tmp
+          echo -n "${{ secrets.SSL_PRIVATE_KEY }}" > /tmp/private_key.tmp
+          echo -n "${{ secrets.SSL_CERT }}" > /tmp/certificate.tmp
+          cp /tmp/private_key.tmp ~/.certs/nginx_ed25519.key
+          cp /tmp/certificate.tmp ~/.certs/nginx_ed25519.crt
 
       - name: Install Docker
         # moby-runc is a CLI tool for spawning and running containers according to the Open Container Initiative (OCI)
