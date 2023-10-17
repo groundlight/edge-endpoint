@@ -83,6 +83,12 @@ jobs:
           ${{ secrets.SSL_CERT }}
           EOF
           )
+          echo "SSL_PRIVATE_KEY_CONTENT:"
+          echo "$SSL_PRIVATE_KEY_CONTENT"
+
+          echo "SSL_CERT_CONTENT:"
+          echo "$SSL_CERT_CONTENT"
+          
           docker build \
             --build-arg SSL_PRIVATE_KEY="$SSL_PRIVATE_KEY_CONTENT" \
             --build-arg SSL_CERT="$SSL_CERT_CONTENT" \
