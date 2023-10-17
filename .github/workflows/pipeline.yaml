@@ -74,8 +74,15 @@ jobs:
 
       - name: Build Docker Image
         run: |
-          SSL_PRIVATE_KEY_CONTENT=$(cat ${{ secrets.SSL_PRIVATE_KEY }})
-          SSL_CERT_CONTENT=$(cat ${{ secrets.SSL_CERT }})
+          SSL_PRIVATE_KEY_CONTENT=$(cat <<EOF
+                                    ${{ secrets.SSL_PRIVATE_KEY }}
+                                  EOF
+                                  )
+
+          SSL_CERT_CONTENT=$(cat <<EOF
+                              ${{ secrets.SSL_CERT }}
+                            EOF
+                            )
           docker build \
             --build-arg SSL_PRIVATE_KEY="$SSL_PRIVATE_KEY_CONTENT" \
             --build-arg SSL_CERT="$SSL_CERT_CONTENT" \
