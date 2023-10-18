@@ -72,12 +72,15 @@ RUN mkdir /etc/nginx/ssl
 #         chmod 600 /etc/nginx/ssl/nginx_ed25519.crt; \
 #     fi
 
-COPY $SSL_PRIVATE_KEY /etc/nginx/ssl/nginx_ed25519.key
-COPY $SSL_CERT /etc/nginx/ssl/nginx_ed25519.crt
-RUN chown root:root /etc/nginx/ssl/nginx_ed25519.key && \
-    chmod 600 /etc/nginx/ssl/nginx_ed25519.key && \
-    chown root:root /etc/nginx/ssl/nginx_ed25519.crt && \ 
-    chmod 600 /etc/nginx/ssl/nginx_ed25519.crt
+# COPY $SSL_PRIVATE_KEY /etc/nginx/ssl/nginx_ed25519.key
+# COPY $SSL_CERT /etc/nginx/ssl/nginx_ed25519.crt
+# RUN chown root:root /etc/nginx/ssl/nginx_ed25519.key && \
+#     chmod 600 /etc/nginx/ssl/nginx_ed25519.key && \
+#     chown root:root /etc/nginx/ssl/nginx_ed25519.crt && \ 
+#     chmod 600 /etc/nginx/ssl/nginx_ed25519.crt
+
+COPY certificates/ssl/nginx_ed25519.key /etc/nginx/ssl/nginx_ed25519.key
+COPY certificates/ssl/nginx_ed25519.crt /etc/nginx/ssl/nginx_ed25519.crt
 
 COPY deploy/k3s/inference_deployment/inference_deployment_template.yaml \
     /etc/groundlight/inference-deployment/

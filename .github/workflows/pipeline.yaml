@@ -78,11 +78,7 @@ jobs:
 
       - name: Build Docker Image
         run: |
-          docker build \
-            --build-arg SSL_PRIVATE_KEY=/etc/nginx/ssl/nginx_ed25519.key \
-            --build-arg SSL_CERT=/etc/nginx/ssl/nginx_ed25519.crt \
-            --tag groundlight-edge .
-          # docker build --build-arg SSL_PRIVATE_KEY="${{ secrets.SSL_PRIVATE_KEY }}" --build-arg SSL_CERT="${{ secrets.SSL_CERT }}" --tag groundlight-edge .
+          docker build --tag groundlight-edge .
 
       - name: Start Docker Container
         id: start_container
