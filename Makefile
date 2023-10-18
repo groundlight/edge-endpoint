@@ -23,6 +23,6 @@ format: install-lint  ## Run standard python formatting
 
 # OpenSSL related commands
 generate-tls-certs:
-	mkdir -p /etc/nginx/ssl 
+	sudo mkdir -p /etc/nginx/ssl 
 	./certificates/generate_tls_cert.sh 
-	chmod 644 /etc/nginx/ssl/* 
+	sudo chmod 644 /etc/nginx/ssl/* 
