@@ -61,12 +61,6 @@ jobs:
 
       - name: Set up SSL Certificates
         run: |
-          # mkdir -p ~/.certs
-          # echo -n "${{ secrets.SSL_PRIVATE_KEY }}" | base64 --decode > ~/.certs/nginx_ed25519.key
-          # echo -n "${{ secrets.SSL_CERT }}" | base64 --decode > ~/.certs/nginx_ed25519.crt
-
-          # cat ~/.certs/nginx_ed25519.key
-          # cat ~/.certs/nginx_ed25519.crt
           make generate-tls-certs 
 
       - name: Install Docker
