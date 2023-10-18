@@ -19,3 +19,10 @@ lint: install-lint  ## Run linter to check formatting and style
 
 format: install-lint  ## Run standard python formatting
 	./code-quality/format ${LINT_PATHS}
+
+
+# OpenSSL related commands
+generate-tls-certs:
+	mkdir -p /etc/nginx/ssl 
+	./certificates/generate_tls_cert.sh 
+	chmod 644 /etc/nginx/ssl/* 
