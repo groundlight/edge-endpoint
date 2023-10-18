@@ -88,7 +88,7 @@ jobs:
           container_id=$(docker run \
             -e LOG_LEVEL=DEBUG \
             -e EDGE_CONFIG \
-            -d -p 6717:6717 \
+            -d -p 6717:443 \
             groundlight-edge)
           echo "::set-output name=container_id::$container_id"
 
@@ -140,6 +140,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Set up SSL Certificates
+        run: make generate-tls-certs
+
       - name: Install Docker
         run: |
           sudo apt-get update
@@ -161,7 +164,7 @@ jobs:
           container_id=$(docker run \
             -e LOG_LEVEL=DEBUG \
             -e EDGE_CONFIG \
-            -d -p 6717:6717 \
+            -d -p 6717:443 \
             groundlight-edge)
           echo "::set-output name=container_id::$container_id"
 
