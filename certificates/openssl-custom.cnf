@@ -1,0 +1,17 @@
+# https://www.phildev.net/ssl/opensslconf.html
+
+[req]
+distinguished_name = req_distinguished_name
+x509_extensions = v3_ca 
+prompt = no
+
+[req_distinguished_name]
+countryName = US 
+stateOrProvinceName = Washington 
+localityName = Seattle 
+organizationName = Groundlight 
+commonName = localhost
+
+[v3_ca]
+basicConstraints = CA:TRUE 
+keyUsage = digitalSignature, keyCertSign, cRLSign 
