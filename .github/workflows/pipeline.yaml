@@ -212,3 +212,78 @@ jobs:
         # the previous steps
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
+
+  test-sdk-with-https:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Set up python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Generate TLS Certificate 
+        run: make generate-tls-cert
+
+      - name: Install Docker
+        run: |
+          sudo apt-get update
+          sudo apt-get remove moby-runc
+          sudo apt-get install apt-transport-https ca-certificates curl software-properties-common
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+          sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+          sudo apt-get update
+          sudo apt-get install docker-ce
+
+      - name: Build Docker Image
+        run: docker build --tag groundlight-edge .
+
+      - name: Start Docker Container
+        id: start_container
+        run: |
+          source test/setup_plain_test_env.sh
+          echo "EDGE_CONFIG=$EDGE_CONFIG"
+          container_id=$(docker run \
+            -e LOG_LEVEL=DEBUG \
+            -e EDGE_CONFIG \
+            -d -p 6717:443 \
+            groundlight-edge)
+          echo "::set-output name=container_id::$container_id"
+
+      - name: Install poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: ${{ env.POETRY_VERSION }}
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: true
+
+      # Note that we're pulling the latest main from the SDK repo
+      # This might be ahead of what's published to pypi, but it's useful to test things before they're released.
+      - name: Checkout Groundlight SDK
+        uses: actions/checkout@v3
+        with:
+          repository: groundlight/python-sdk
+          path: groundlight-sdk
+
+      - name: Install Groundlight SDK dependencies
+        run: |
+          cd groundlight-sdk
+          poetry install
+
+      - name: Load Cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v3
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
+
+      - name: Run SDK tests 
+        run: |
+          export TLS_VERIFY=0 # disable TLS verification
+          GROUNDLIGHT_ENDPOINT=https://localhost:6717
+          cd groundlight-sdk
+          poetry run pytest
+          cd ..

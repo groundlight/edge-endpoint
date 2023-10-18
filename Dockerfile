@@ -59,6 +59,13 @@ COPY configs ${APP_ROOT}/configs
 COPY deploy/k3s/inference_deployment/inference_deployment_template.yaml \
     /etc/groundlight/inference-deployment/
 
+RUN mkdir /etc/nginx/ssl 
+
+# Check if the TLS certificate and private key are present in the build context 
+RUN if [ -f certs/ssl/nginx_ed25519.key ] && [ -f certs/ssl/nginx_ed25519.crt ]; then \
+        cp certs/ssl/nginx_ed25519.key /etc/nginx/ssl/nginx_ed25519.key; \
+        cp certs/ssl/nginx_ed25519.crt /etc/nginx/ssl/nginx_ed25519.crt; \
+    fi 
 
 ##################
 # Production Stage
@@ -77,6 +84,10 @@ WORKDIR ${APP_ROOT}
 COPY /app ${APP_ROOT}/app/
 
 COPY --from=production-dependencies-build-stage ${APP_ROOT}/configs/nginx.conf /etc/nginx/nginx.conf
+COPY --from=production-dependencies-build-stage /etc/nginx/ssl /etc/nginx/ssl 
+
+# Update certificates 
+RUN update-ca-certificates 
 
 # Remove default nginx config
 RUN rm /etc/nginx/sites-enabled/default
