@@ -267,6 +267,7 @@ jobs:
         with:
           repository: groundlight/python-sdk
           path: groundlight-sdk
+          ref: disable-tls-verification
 
       - name: Install Groundlight SDK dependencies
         run: |
