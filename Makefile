@@ -23,5 +23,5 @@ format: install-lint  ## Run standard python formatting
 # OpenSSL related commands
 generate-tls-cert:
 	mkdir -p certs/ssl
-	./certs/generate_tls_cert.sh 
+	./certs/generate-tls-cert.sh 
 	sudo chmod 644 certs/ssl/* 
