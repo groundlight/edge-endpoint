@@ -126,9 +126,24 @@ docker run -d --name groundlight-edge -e GROUNDLIGHT_API_TOKEN --rm -p 127.0.0.1
 
 ### Configuring HTTPS on the NGINX proxy
 
-Because the first server application code reaches is always the NGINX proxy, standard nginx configuration can be used
-to configure HTTPS.  You must either supply a signed TLS certificate or generate a self-signed certificate in this case.
-When using a self-signed certificate, be sure to configure calling applications to ignore TLS warnings.
+Because the first server application code reaches is always the NGINX proxy, standard NGINX configuration can be used 
+to configure HTTPS. The NGINX configuration file [`nginx.conf`](./configs/nginx.conf) is already set up for both 
+HTTP and HTTPS. 
 
-To set up TLS, modify the [`nginx.conf`](./configs/nginx.conf) file.  Then rebuild your container and relaunch the server.
+In order to use HTTPS for the edge endpoint, you must either supply a signed TLS certificate or generate a self-signed 
+certificate. You can generate a self-signed certificate with OpenSSL by running
+
+```shell
+make generate-tls-cert
+```
+
+This will create both a private key and a TLS certificate stored at `certs/ssl/nginx_ed25519.key` and `certs/ssl/nginx_ed25519.crt`. 
+Then, rebuild and re-lauch the server, making sure to specify the port for HTTPS, which is 443, instead of 6717 for HTTP. 
+
+```shell
+docker build --tag edge-endpoint
+export EDGE_CONFIG=$(cat configs/edge-config.yaml)
+# Send requests to the HTTPS server 
+docker run -d --name groundlight-edge -e EDGE_CONFIG --rm -p 6717:443 edge-endpoint
+```
 
