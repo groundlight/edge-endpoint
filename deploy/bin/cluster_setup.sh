@@ -14,6 +14,7 @@ INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"GPU"}
 # Secrets
 ./deploy/bin/make-gl-api-token-secret.sh
 ./deploy/bin/make-aws-secret.sh
+./deploy/bin/make-tls-cert-secret.sh 
 
 # Verify secrets have been properly created
 if ! $K get secret registry-credentials; then
