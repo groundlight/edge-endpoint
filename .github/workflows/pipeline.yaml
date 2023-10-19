@@ -238,7 +238,7 @@ jobs:
           sudo apt-get install docker-ce
 
       - name: Build Docker Image
-        run: docker build --tag groundlight-edge .
+        run: docker build --tag edge-endpoint .
 
       - name: Start Docker Container
         id: start_container
@@ -249,7 +249,7 @@ jobs:
             -e LOG_LEVEL=DEBUG \
             -e EDGE_CONFIG \
             -d -p 6717:443 \
-            groundlight-edge)
+            edge-endpoint)
           echo "::set-output name=container_id::$container_id"
 
       - name: Install poetry
@@ -281,7 +281,6 @@ jobs:
           GROUNDLIGHT_ENDPOINT=https://localhost:6717
           cd groundlight-sdk
           poetry run pytest
-          cd ..
       
       - name: Dump Logs from Docker Container
         if: always()
