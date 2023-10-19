@@ -272,7 +272,7 @@ jobs:
       - name: Install Groundlight SDK dependencies
         run: |
           cd groundlight-sdk
-          rm poetry.lock
+          cat src/groundlight/client.py
           poetry install
 
       - name: Run SDK tests 
