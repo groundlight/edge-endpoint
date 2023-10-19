@@ -276,8 +276,16 @@ jobs:
 
       - name: Run SDK tests 
         run: |
-          export TLS_VERIFY=1 # disable TLS verification
+          export DISABLE_TLS_VERIFY=1 # disable TLS verification
           GROUNDLIGHT_ENDPOINT=https://localhost:6717
           cd groundlight-sdk
           poetry run pytest
           cd ..
+      
+      - name: Dump Logs from Docker Container
+        if: always()
+        run: docker logs ${{ steps.start_container.outputs.container_id }}
+
+      - name: Stop Docker Container
+        if: always()
+        run: docker stop ${{ steps.start_container.outputs.container_id }}

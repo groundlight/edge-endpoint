@@ -8,16 +8,14 @@ $K delete --ignore-not-found secret tls-certificate
 
 
 # First check if the certs/ssl/nginx_ed25519.key and certs/ssl/nginx_ed25519.crt exist
-# If not exit early with an error message
+# If not exit early. Using exit 0 instead of exit 1 since this is an optional secret. 
 if [ ! -f "$TLS_PRIVATE_KEY" ] || [ ! -f "$TLS_CERTIFICATE" ]; then
     echo "TLS certificate and key not found at the desired location. Exiting..."
-    exit 1
+    exit 0 
 fi
 
 
-# Create a kubernetes secret for the groundlight api token
-# Make sure that you have the groundlight api token set in your environment
-
+# Create a kubernetes secret for the TLS certificate and private key
 $K create secret generic tls-certificate \
     --from-file=nginx_ed25519.key=${TLS_PRIVATE_KEY} \
     --from-file=nginx_ed25519.crt=${TLS_CERTIFICATE}
