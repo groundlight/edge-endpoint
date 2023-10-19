@@ -274,13 +274,6 @@ jobs:
           cd groundlight-sdk
           poetry install
 
-      - name: Load Cached venv
-        id: cached-poetry-dependencies
-        uses: actions/cache@v3
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
-
       - name: Run SDK tests 
         run: |
           export TLS_VERIFY=1 # disable TLS verification
