@@ -62,7 +62,7 @@ COPY deploy/k3s/inference_deployment/inference_deployment_template.yaml \
 
 RUN mkdir -p /etc/nginx/ssl 
 
-COPY certs/ssl/. /etc/nginx/ssl 
+COPY certs/ssl /etc/nginx/ssl 
 
 ##################
 # Production Stage
