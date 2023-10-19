@@ -1,0 +1,5 @@
+resources:
+  - edge_deployment.yaml 
+
+patchesStrategicMerge:
+  - conditional_volume_patch.yaml 

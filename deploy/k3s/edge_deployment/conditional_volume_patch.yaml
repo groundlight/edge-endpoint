@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge-endpoint
+  labels:
+    app: edge-endpoint
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edge-logic-server
+  template:
+    metadata:
+      labels:
+        app: edge-logic-server
+    spec:
+      serviceAccountName: edge-endpoint-service-account
+      containers:
+      - name: edge-endpoint
+        volumeMounts:
+        - name: tsl-certificate-volume 
+          mountPath: /etc/nginx/ssl 
+          readOnly: true 
+      volumes:
+      # Expecting the `tls-certificate` secret to have been 
+      # generated before applying this patch 
+      - name: tls-certificate-volume 
+        secret: 
+          secretName: tls-certificate

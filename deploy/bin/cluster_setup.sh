@@ -10,11 +10,11 @@ fail() {
 
 K="k3s kubectl"
 INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"GPU"}
+USE_HTTPS=${USE_HTTPS:-"0"}
 
 # Secrets
 ./deploy/bin/make-gl-api-token-secret.sh
 ./deploy/bin/make-aws-secret.sh
-./deploy/bin/make-tls-cert-secret.sh 
 
 # Verify secrets have been properly created
 if ! $K get secret registry-credentials; then
@@ -63,6 +63,14 @@ $K get service -o custom-columns=":metadata.name" --no-headers=true | \
     xargs -I {} $K delete service {}
 
 # Reapply changes
-$K apply -f deploy/k3s/edge_deployment/edge_deployment.yaml
+if [[ "${USE_HTTPS}" == "1" ]]; then 
+    echo "Using HTTPS. Expecting a TLS certificate and a private key to have been generated."
+    ./deploy/bin/make-tls-cert-secret.sh 
+    $K kustomize deploy/k3s/edge_deployment > edge_deployment.yaml 
+    $K apply -f edge_deployment.yaml 
+    rm edge_deployment.yaml 
+else
+    $K apply -f deploy/k3s/edge_deployment/edge_deployment.yaml
+fi 
 
 $K describe deployment edge-endpoint

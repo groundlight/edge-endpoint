@@ -57,9 +57,6 @@ spec:
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
-        - name: tls-certificate-volume
-          mountPath: /etc/nginx/ssl 
-          readOnly: true
 
       - name: inference-model-updater
         image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:c4e05f237-tyler-small-updates
@@ -100,7 +97,4 @@ spec:
           # TODO: check out k3s local path provisioner: https://docs.k3s.io/storage#setting-up-the-local-storage-provider
           path: /var/groundlight/serving/model_repository
           type: DirectoryOrCreate
-      
-      - name: tls-certificate-volume
-        secret:
-          secretName: tls-certificate
+
