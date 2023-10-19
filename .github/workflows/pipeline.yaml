@@ -283,7 +283,7 @@ jobs:
 
       - name: Run SDK tests 
         run: |
-          export TLS_VERIFY=0 # disable TLS verification
+          export TLS_VERIFY=1 # disable TLS verification
           GROUNDLIGHT_ENDPOINT=https://localhost:6717
           cd groundlight-sdk
           poetry run pytest
