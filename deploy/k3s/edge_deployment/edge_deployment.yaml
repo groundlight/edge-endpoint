@@ -40,15 +40,18 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       containers:
       - name: edge-endpoint
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:c4e05f237-tyler-small-updates
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:using-https-684512ed7-dirty-32c669a0b149163
         imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 6717
+        - containerPort: 443
         env:
         - name: LOG_LEVEL
           value: "INFO"
         - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
           value: "True"
+
+        - name: DISABLE_TLS_VERIFY
+          value: "1"
         - name: GROUNDLIGHT_API_TOKEN
           valueFrom:
             secretKeyRef:
@@ -59,7 +62,7 @@ spec:
           mountPath: /etc/groundlight/edge-config
 
       - name: inference-model-updater
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:c4e05f237-tyler-small-updates
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:using-https-684512ed7-dirty-32c669a0b149163
         imagePullPolicy: IfNotPresent
         command: ["/bin/bash", "-c"]
         args: ["poetry run python -m app.model_updater.update_models"]

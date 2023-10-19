@@ -6,7 +6,7 @@ x509_extensions = v3_ca
 prompt = no
 
 [req_distinguished_name]
-commonName = localhost
+countryName = US 
 
 [v3_ca]
 basicConstraints = CA:TRUE 
