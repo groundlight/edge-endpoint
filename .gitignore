@@ -10,7 +10,8 @@ __pycache__/
 *.so
 
 # SSL-related
-certs/ssl/
+certs/ssl/nginx_ed25519.key
+certs/ssl/nginx_ed25519.crt 
 
 # Distribution / packaging
 .Python
