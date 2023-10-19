@@ -46,7 +46,7 @@ def load_edge_config() -> RootEdgeConfig:
 
 @lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
 def _get_groundlight_sdk_instance_internal(api_token: str):
-    return Groundlight(api_token=api_token, disable_tls_verification=True)
+    return Groundlight(api_token=api_token)
 
 
 def get_groundlight_sdk_instance(request: Request):
