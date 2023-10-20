@@ -17,6 +17,7 @@ from app.core.app_state import (
 )
 from app.core.motion_detection import MotionDetectionManager
 from app.core.utils import prefixed_ksuid, safe_call_api
+from app.core.database import db
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +122,10 @@ async def post_image_query(
                 f" {confidence} is less than confidence threshold: {detector_metadata.confidence_threshold}."
                 " Escalating to the cloud API server."
             )
+    else:
+        # Run an asynchronous task to create a record in the database table for this detector to indicate that 
+        # edge inference for the given detector ID is not yet set up. 
+        pass 
 
     # Finally, fall back to submitting the image to the cloud
     if not image_query:

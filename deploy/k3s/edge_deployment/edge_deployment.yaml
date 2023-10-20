@@ -80,6 +80,12 @@ spec:
           mountPath: /etc/groundlight/inference-deployment
         - name: model-repo
           mountPath: /mnt/models
+          
+      - name: sqlite-db
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:c4e05f237-tyler-small-updates
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/bash", "-c"]
+        args: ["poetry run python -c app.core.database"]
 
       imagePullSecrets:
       - name: registry-credentials
