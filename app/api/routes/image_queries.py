@@ -62,9 +62,9 @@ async def post_image_query(
 
     :param detector_id: which detector to use
     :param patience_time: how long to wait for a confident response
-    :param want_async: If True, the client will return as soon as the image query is submitted and will not wait for 
-        an ML/Human prediction. The returned `ImageQuery` will have a `result` field of None. `wait` must be set to 
-        0 to use this parameter. 
+    :param want_async: If True, the client will return as soon as the image query is submitted and will not wait for
+        an ML/Human prediction. The returned `ImageQuery` will have a `result` field of None. `wait` must be set to
+        0 to use this parameter.
     :param img: the image to submit.
     :param gl: Application's Groundlight SDK instance
     :param iqe_cache: Application's image query ID cache.
@@ -82,7 +82,7 @@ async def post_image_query(
     iqe_cache = app_state.iqe_cache
     motion_detection_manager = app_state.motion_detection_manager
     edge_inference_manager = app_state.edge_inference_manager
-    
+
     if want_async and want_async == "True":
         return safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=0, want_async=True)
 
