@@ -62,9 +62,9 @@ async def post_image_query(
 
     :param detector_id: which detector to use
     :param patience_time: how long to wait for a confident response
-    :param want_async: If True, the client will return as soon as the image query is submitted and will not wait for 
-        an ML/Human prediction. The returned `ImageQuery` will have a `result` field of None. `wait` must be set to 
-        0 to use this parameter. 
+    :param want_async: If True, the client will return as soon as the image query is submitted and will not wait for
+        an ML/Human prediction. The returned `ImageQuery` will have a `result` field of None. `wait` must be set to
+        0 to use this parameter.
     :param img: the image to submit.
     :param gl: Application's Groundlight SDK instance
     :param iqe_cache: Application's image query ID cache.
@@ -82,9 +82,6 @@ async def post_image_query(
     iqe_cache = app_state.iqe_cache
     motion_detection_manager = app_state.motion_detection_manager
     edge_inference_manager = app_state.edge_inference_manager
-    
-    if want_async and want_async == "True":
-        return safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=0, want_async=True)
 
     if motion_detection_manager.motion_detection_is_available(detector_id=detector_id):
         motion_detected = motion_detection_manager.run_motion_detection(detector_id=detector_id, new_img=img_numpy)
@@ -137,7 +134,10 @@ async def post_image_query(
         # side effect of not allowing customers to update their detector's patience_time through the
         # edge-endpoint. But instead we could ask them to do that through the web app.
         # wait=0 sets patience_time=DEFAULT_PATIENCE_TIME and disables polling.
-        image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=0)
+        want_async_ = want_async is not None and want_async == "True"
+        image_query = safe_call_api(
+            gl.submit_image_query, detector=detector_id, image=img, wait=0, want_async=want_async_
+        )
 
     if motion_detection_manager.motion_detection_is_enabled(detector_id=detector_id):
         # Store the cloud's response so that if the next image has no motion, we will return the same response
@@ -195,7 +195,10 @@ def _improve_cached_image_query_confidence(
     desired_detector_confidence = detector_metadata.confidence_threshold
     cached_image_query = motion_detection_manager.get_image_query_response(detector_id=detector_id)
 
-    iq_confidence_is_improvable = (
+    # The first situation corresponds to when we have cached an image query from a previous
+    # `submit_image_query` call with want_async=True. In this case, the result field is None
+    # and we want to improve the confidence.
+    iq_confidence_is_improvable = cached_image_query.result is None or (
         cached_image_query.result.confidence is not None
         and cached_image_query.result.confidence < desired_detector_confidence
     )
