@@ -6,6 +6,8 @@ from app.core.app_state import load_edge_config
 from app.core.configs import RootEdgeConfig
 from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions
 from app.core.kubernetes_management import InferenceDeploymentManager
+from typing import List 
+from app.core.database import db 
 
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=log_level)
@@ -17,6 +19,10 @@ def sleep_forever(message: str | None = None):
     while True:
         logging.info(message)
         time.sleep(TEN_MINUTES)
+        
+        
+def get_detectors_without_deployments() -> List[str]:
+    return db.get_detectors_without_deployments()
 
 
 def update_models(edge_inference_manager: EdgeInferenceManager, deployment_manager: InferenceDeploymentManager):

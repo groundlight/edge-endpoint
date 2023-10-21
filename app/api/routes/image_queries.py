@@ -19,6 +19,7 @@ from app.core.motion_detection import MotionDetectionManager
 from app.core.utils import prefixed_ksuid, safe_call_api
 from app.core.database import db
 
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -123,9 +124,15 @@ async def post_image_query(
                 " Escalating to the cloud API server."
             )
     else:
-        # Run an asynchronous task to create a record in the database table for this detector to indicate that 
-        # edge inference for the given detector ID is not yet set up. 
-        pass 
+        # Run an asynchronous task to create a record in the database table for this detector to indicate that
+        # edge inference for the given detector ID is not yet set up.
+        db.create_record(
+            record={
+                "detector_id": detector_id,
+                "api_token": gl.configuration.api_key["ApiToken"],
+                "deployment_created": False,
+            }
+        )
 
     # Finally, fall back to submitting the image to the cloud
     if not image_query:
