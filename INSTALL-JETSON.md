@@ -35,3 +35,11 @@ aws sts get-caller-identity
 ```
 ./deploy/bin/cluster_setup.sh
 ```
+
+6) Figure out the URL of the edge endpoint.
+
+```
+kubectl get service edge-endpoint-service
+```
+
+This IP address and port are your URL for `GROUNDLIGHT_ENDPOINT`
