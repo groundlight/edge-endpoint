@@ -46,6 +46,7 @@ def load_edge_config() -> RootEdgeConfig:
 
 @lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
 def _get_groundlight_sdk_instance_internal(api_token: str):
+    logger.debug(f"Creating new Groundlight SDK instance with API token: {api_token}")
     return Groundlight(api_token=api_token)
 
 
