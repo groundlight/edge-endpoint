@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# move to the root directory of the repo
+cd "$(dirname "$0")"/../..
+
 set -ex
 
 fail() {
