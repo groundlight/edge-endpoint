@@ -67,15 +67,13 @@ async def post_image_query(
         0 to use this parameter.
     :param img: the image to submit.
     :param gl: Application's Groundlight SDK instance
-    :param iqe_cache: Application's image query ID cache.
-        When no motion is detected for the current image, we generate a new image query prefixed with "iqe_".
-        We cache all such "iqe_" image queries in the iqe_cache so that we can better handle calls to `get_image_query`
-        for these image queries.
-
-    :param motion_detection_manager: Application's motion detection manager instance.
-        This manages the motion detection state for all detectors.
-    :param inference_client: Application's triton inference client.
+    :param app_state: Application's state manager. It contains global state for motion detection, IQE cache, and holds
+        reference to the edge inference manager.
     """
+
+    _want_async = want_async is not None and want_async.lower() == "true"
+    if _want_async:
+        return safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=0, want_async=True)
 
     img_numpy = np.asarray(img)  # [H, W, C=3], dtype: uint8, RGB format
 
@@ -134,10 +132,7 @@ async def post_image_query(
         # side effect of not allowing customers to update their detector's patience_time through the
         # edge-endpoint. But instead we could ask them to do that through the web app.
         # wait=0 sets patience_time=DEFAULT_PATIENCE_TIME and disables polling.
-        want_async_ = want_async is not None and want_async == "True"
-        image_query = safe_call_api(
-            gl.submit_image_query, detector=detector_id, image=img, wait=0, want_async=want_async_
-        )
+        image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=0)
 
     if motion_detection_manager.motion_detection_is_enabled(detector_id=detector_id):
         # Store the cloud's response so that if the next image has no motion, we will return the same response
@@ -195,10 +190,7 @@ def _improve_cached_image_query_confidence(
     desired_detector_confidence = detector_metadata.confidence_threshold
     cached_image_query = motion_detection_manager.get_image_query_response(detector_id=detector_id)
 
-    # The first situation corresponds to when we have cached an image query from a previous
-    # `submit_image_query` call with want_async=True. In this case, the result field is None
-    # and we want to improve the confidence.
-    iq_confidence_is_improvable = cached_image_query.result is None or (
+    iq_confidence_is_improvable = (
         cached_image_query.result.confidence is not None
         and cached_image_query.result.confidence < desired_detector_confidence
     )
