@@ -64,7 +64,8 @@ async def post_image_query(
     :param patience_time: how long to wait for a confident response
     :param want_async: If True, the client will return as soon as the image query is submitted and will not wait for
         an ML/Human prediction. The returned `ImageQuery` will have a `result` field of None. `wait` must be set to
-        0 to use this parameter.
+        0 to use this parameter. If `want_async` is set, we skip motion detection and edge inference in order to honor
+        the general SDK's asychronous behavior.
     :param img: the image to submit.
     :param gl: Application's Groundlight SDK instance
     :param app_state: Application's state manager. It contains global state for motion detection, IQE cache, and holds
