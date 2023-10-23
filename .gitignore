@@ -135,3 +135,6 @@ dmypy.json
 .pytest_cache
 .idea
 test_coverage_reports/
+
+# Editor stuff
+*.swp

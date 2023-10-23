@@ -85,3 +85,7 @@ EOF
 
 # You can verify correctness by running `kubectl get node`
 # and inspecting "Capacity" section for "nvidia.com/gpu".
+
+# Set up kubeconfig for the current user
+mkdir -p ~/.kube
+cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
