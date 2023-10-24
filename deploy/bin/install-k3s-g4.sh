@@ -9,11 +9,40 @@
 
 set -ex
 
+check_nvidia_drivers_and_container_runtime() {
+  # Check that nvidia drivers are installed
+  if ! dpkg -l | grep -q nvidia-headless-525-server; then 
+    echo " NVIDIA drivers are not installed. Installing..."
+    sudo apt install -y nvidia-headless-525-server
+  else
+    echo " NVIDIA drivers are installed."
+  fi
+
+  # Check if nvidia container runtime is already installed. 
+  if ! command -v nvidia-container-runtime &> /dev/null; then 
+    echo " NVIDIA container runtime is not installed. Installing..."
+    # Get distribution information 
+    distribution=$(. /etc/os-release; echo $ID$VERSION_ID)
+
+    # Add NVIDIA Docker repository
+    echo "Adding NVIDIA Docker repository..."
+    curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
+    curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+
+    sudo apt update -y && sudo apt install nvidia-container-runtime
+  else
+    echo " NVIDIA container runtime is installed."
+  fi
+}
+
+
 K="k3s kubectl"
 SCRIPT_DIR=$(dirname "$0")
 
 # Install k3s using our standard script
 $SCRIPT_DIR/install-k3s.sh
+
+check_nvidia_drivers_and_container_runtime
 
 # Configure k3s to use nvidia-container-runtime
 # See guide here: https://k3d.io/v5.3.0/usage/advanced/cuda/#configure-containerd 
@@ -85,3 +114,7 @@ EOF
 
 # You can verify correctness by running `kubectl get node`
 # and inspecting "Capacity" section for "nvidia.com/gpu".
+
+# In addition, you can also check that the nvidia-device-plugin-ds pod 
+# is running in the `kube-system` namespace. 
+# kubectl get pods -n kube-system -l name=nvidia-device-plugin-ds
