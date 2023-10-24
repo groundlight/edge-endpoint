@@ -72,7 +72,7 @@ async def post_image_query(
         reference to the edge inference manager.
     """
 
-    # TODO: instead of just forwarding want_async calls to the cloud, facilitate partial 
+    # TODO: instead of just forwarding want_async calls to the cloud, facilitate partial
     # processing of the async request on the edge before escalating to the cloud.
     _want_async = want_async is not None and want_async.lower() == "true"
     if _want_async:
