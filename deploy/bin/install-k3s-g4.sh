@@ -10,12 +10,14 @@
 set -ex
 
 check_nvidia_drivers_and_container_runtime() {
-  # Check that nvidia drivers are installed
-  if ! dpkg -l | grep -q nvidia-headless-525-server; then 
+  # Retrieve existing version or default to 525
+  NVIDIA_VERSION=$(modinfo nvidia 2>/dev/null | awk '/^version:/ {split($2, a, "."); print a[1]}') : ${NVIDIA_VERSION:=525}
+
+  if ! dpkg -l | grep -q nvidia-headless-$NVIDIA_VERSION-server; then 
     echo " NVIDIA drivers are not installed. Installing..."
-    sudo apt install -y nvidia-headless-525-server
+    sudo apt install -y nvidia-headless-$NVIDIA_VERSION-server
   else
-    echo " NVIDIA drivers are installed."
+    echo " NVIDIA drivers for version $NVIDIA_VERSION are installed."
   fi
 
   # Check if nvidia container runtime is already installed. 
