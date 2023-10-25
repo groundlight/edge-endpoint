@@ -33,3 +33,7 @@ else
     echo "There was an issue with the K3s installation. Please check the system logs."
     exit 0
 fi
+
+# Set up kubeconfig for the current user
+mkdir -p ~/.kube
+cp /etc/rancher/k3s/k3s.yaml ~/.kube/config

@@ -48,8 +48,9 @@ async def validate_request_body(request: Request) -> Image.Image:
 
 @router.post("", response_model=ImageQuery)
 async def post_image_query(
-    detector_id: str = Query(..., description="Detector ID"),
-    patience_time: Optional[float] = Query(None, description="How long to wait for a confident response"),
+    detector_id: str = Query(...),
+    patience_time: Optional[float] = Query(None),
+    want_async: Optional[str] = Query(None),
     img: Image.Image = Depends(validate_request_body),
     gl: Groundlight = Depends(get_groundlight_sdk_instance),
     app_state: AppState = Depends(get_app_state),
@@ -63,17 +64,21 @@ async def post_image_query(
 
     :param detector_id: which detector to use
     :param patience_time: how long to wait for a confident response
+    :param want_async: If True, the client will return as soon as the image query is submitted and will not wait for
+        an ML/Human prediction. The returned `ImageQuery` will have a `result` field of None. `wait` must be set to
+        0 to use this parameter. If `want_async` is set, we skip motion detection and edge inference in order to honor
+        the general SDK's asychronous behavior.
     :param img: the image to submit.
     :param gl: Application's Groundlight SDK instance
-    :param iqe_cache: Application's image query ID cache.
-        When no motion is detected for the current image, we generate a new image query prefixed with "iqe_".
-        We cache all such "iqe_" image queries in the iqe_cache so that we can better handle calls to `get_image_query`
-        for these image queries.
-
-    :param motion_detection_manager: Application's motion detection manager instance.
-        This manages the motion detection state for all detectors.
-    :param inference_client: Application's triton inference client.
+    :param app_state: Application's state manager. It contains global state for motion detection, IQE cache, and holds
+        reference to the edge inference manager.
     """
+
+    # TODO: instead of just forwarding want_async calls to the cloud, facilitate partial
+    # processing of the async request on the edge before escalating to the cloud.
+    _want_async = want_async is not None and want_async.lower() == "true"
+    if _want_async:
+        return safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=0, want_async=True)
 
     img_numpy = np.asarray(img)  # [H, W, C=3], dtype: uint8, RGB format
 
