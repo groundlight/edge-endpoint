@@ -66,7 +66,7 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       containers:
       - name: edge-endpoint
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:setup-sqlite-database-ade72a3e8-dirty-b1142f6c339d307
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:setup-sqlite-database-98dda1d6a-dirty-92f4ab2caf8fb07
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
@@ -82,7 +82,7 @@ spec:
           mountPath: /var/groundlight/sqlite
 
       - name: inference-model-updater
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:setup-sqlite-database-ade72a3e8-dirty-b1142f6c339d307
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:setup-sqlite-database-98dda1d6a-dirty-92f4ab2caf8fb07
         imagePullPolicy: IfNotPresent
         command: ["/bin/bash", "-c"]
         args: ["poetry run python -m app.model_updater.update_models"]
