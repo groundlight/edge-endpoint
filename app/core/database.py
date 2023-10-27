@@ -1,10 +1,17 @@
-from sqlalchemy import Column, Integer, String, Boolean, create_engine
+from sqlalchemy import Column, Integer, String, Boolean, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
-from .file_paths import DATABASE_FILEPATH
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio.engine import AsyncEngine
+from app.core.file_paths import DATABASE_CONTAINER_NAME, DATABASE_FILEPATH
+from model import ImageQuery
 from typing import List, Dict
-import os
+from sqlalchemy.exc import OperationalError, IntegrityError
+import logging
+from sqlalchemy import select
 
+
+logger = logging.getLogger(__name__)
 Base = declarative_base()
 
 
@@ -17,48 +24,145 @@ class DatabaseManager:
         __tablename__ = "detector_deployments"
 
         id = Column(Integer, primary_key=True)
-        detector_id = Column(String)
+        detector_id = Column(String, unique=True)
         api_token = Column(String)
         deployment_created = Column(Boolean)
 
-    class IQECache(Base):
+    class ImageQueriesEdge(Base):
         """
-        Schema for the `iqe_cache` database table
+        Schema for the `image_queries_edge` database table.
         """
 
-        __tablename__ = "iqe_cache"
+        __tablename__ = "image_queries_edge"
+        id = Column(Integer, primary_key=True)
+        image_query_id = Column(String, unique=True)
+        image_query = Column(JSON)
 
-    def __init__(self):
-        self._engine = create_engine(f"sqlite:///{self.validate_filepath(DATABASE_FILEPATH)}")
-        self.session = sessionmaker(bind=self.engine)
+    def __init__(self, verbose=False) -> None:
+        """
+        Sets up a database connection and create database tables if they don't exist.
+        :param verbose: If True, will print out all executed database queries.
+        :type verbose: bool
+        :return: None
+        :rtype: None
+        """
+        db_url = "sqlite+aiosqlite:////var/groundlight/sqlite/sqlite.db"
+        # db_url = f"sqlite:///{DATABASE_CONTAINER_NAME}:/{DATABASE_FILEPATH}"
+        self._engine: AsyncEngine = create_async_engine(db_url, echo=verbose)
+        self.session = sessionmaker(bind=self._engine, expire_on_commit=False, class_=AsyncSession)
 
-        tables = ["detector_deployments", "iqe_cache"]
-        self._create_tables(tables=tables)
+    async def create_detector_deployment_record(self, record: Dict[str, str]) -> None:
+        """
+        Creates a new record in the `detector_deployments` table.
+        :param record: A dictionary containing the detector_id, api_token, and deployment_created fields.
+        :type record: Dict[str, str]
 
-    @staticmethod
-    def validate_filepath(filepath: str) -> str:
-        if not os.path.exists(filepath):
-            raise FileNotFoundError(f"Invalid filepath: {filepath}")
+        :throws IntegrityError: If the detector_id already exists in the database.
+        :return: None
+        :rtype: None
+        """
+        try:
+            async with AsyncSession(self._engine) as session:
+                new_record = self.DetectorDeployment(
+                    detector_id=record["detector_id"],
+                    api_token=record["api_token"],
+                    deployment_created=record["deployment_created"],
+                )
+                session.add(new_record)
+                await session.commit()
 
-        return filepath
+        except IntegrityError as e:
+            await session.rollback()
 
-    async def create_record(self, record: Dict[str, str]) -> None:
-        with Session(self._engine) as session:
-            new_record = self.DetectorDeployment(
-                detector_id=record["detector_id"],
-                api_token=record["api_token"],
-                deployment_created=record["deployment_created"],
+            # Check if the error specifically occurred due to the unique constraint on the detector_id column.
+            # If it did, then we can ignore the error.
+            if "detector_id" in str(e.orig):
+                logger.debug(f"Detector ID {record['detector_id']} already exists in the database.")
+            else:
+                logger.error(f"Integrity error occured", exc_info=True)
+
+    async def update_detector_deployment_record(self, detector_id: str) -> None:
+        """
+        Check if detector_id is a record in the database. If it is, and the deployment_created field is False,
+        update the deployment_created field to True.
+        :param detector_id: Detector ID
+        :type detector_id: str
+
+        :return: None
+        :rtype: None
+        """
+
+        try:
+            async with AsyncSession(self._engine) as session:
+                query = select(self.DetectorDeployment).filter_by(detector_id=detector_id)
+                result = await session.execute(query)
+
+                detector_record = result.scalar_one_or_none()
+                if detector_record is None:
+                    return
+
+                if not detector_record.deployment_created:
+                    detector_record.deployment_created = True
+                    await session.commit()
+        except IntegrityError:
+            logger.debug(f"Error occured while updating database record for {detector_id=}.", exc_info=True)
+            await session.rollback()
+
+    async def create_iqe_record(self, record: ImageQuery) -> None:
+        """
+        Creates a new record in the `image_queries_edge` table.
+        :param record: A image query .
+        :type record: ImageQuery
+
+        :throws IntegrityError: If the image_query_id already exists in the database.
+        :return: None
+        :rtype: None
+        """
+        try:
+            async with AsyncSession(self._engine) as session:
+                image_query_id = record.id
+                image_query_json = record.json()
+                new_record = self.ImageQueriesEdge(
+                    image_query_id=image_query_id,
+                    image_query=image_query_json,
+                )
+                session.add(new_record)
+                await session.commit()
+
+        except IntegrityError:
+            logger.debug(f"Image query {record['image_query_id']} already exists in the database.")
+            await session.rollback()
+
+    async def get_iqe_record(self, image_query_id: str) -> ImageQuery | None:
+        """
+        Gets a record from the `image_queries_edge` table.
+        :param image_query_id: The ID of the image query.
+        :type image_query_id: str
+
+        :return: The image query record.
+        :rtype: ImageQuery | None
+        """
+        async with AsyncSession(self._engine) as session:
+            query = select(self.ImageQueriesEdge.image_query).filter_by(image_query_id=image_query_id)
+            result = await session.execute(query)
+            result_row: dict | None = result.scalar_one_or_none()
+            if result_row is None:
+                return None
+            return ImageQuery(**result_row[0])
+
+    async def get_detectors_without_deployments(self) -> List[Dict[str, str]] | None:
+        async with AsyncSession(self._engine) as session:
+            query = select(self.DetectorDeployment.detector_id, self.DetectorDeployment.api_token).filter_by(
+                deployment_created=False
             )
-            session.add(new_record)
-            session.commit()
-            
-    def get_detectors_without_deployments(self) -> List[str]:
-        with Session(self._engine) as session:
-            query = session.query(self.DetectorDeployment.detector_id).filter_by(deployment_created=False)
-            undeployed_detectors = [result[0] for result in query.all()]
+            query_results = await session.execute(query)
+
+            undeployed_detectors = [{"detector_id": row[0], "api_token": row[1]} for row in query_results.fetchall()]
             return undeployed_detectors
 
-    def _create_tables(self, tables: List[str]) -> None:
+        return None
+
+    async def create_tables(self) -> None:
         """
         Checks if the database tables exist and if they don't create them
         :param tables: A list of database tables in the database
@@ -66,9 +170,14 @@ class DatabaseManager:
         :return: None
         :rtype: None
         """
-        for table_name in tables:
-            if not self.engine.dialect.has_table(self._engine, table_name):
-                Base.metadata.create_all(self._engine)
+        try:
+            async with self._engine.begin() as connection:
+                await connection.run_sync(Base.metadata.create_all)
+        except OperationalError:
+            logger.error("Could not create database tables.", exc_info=True)
 
-
-db = DatabaseManager()
+    def on_shutdown(self) -> None:
+        """
+        This ensures that we release the resources.
+        """
+        self._engine.dispose()

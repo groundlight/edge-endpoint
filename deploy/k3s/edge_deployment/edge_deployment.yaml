@@ -5,6 +5,32 @@ metadata:
   name: nvidia
 handler: nvidia
 ---
+apiVersion: v1 
+kind: PersistentVolume 
+metadata:
+  name: sqlite-pv 
+spec:
+  capacity: 
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce 
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  hostPath:
+    path: /var/groundlight/sqlite
+---
+apiVersion: v1 
+kind: PersistentVolumeClaim
+metadata:
+  name: sqlite-pvc
+spec: 
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: local-path
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -40,39 +66,41 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       containers:
       - name: edge-endpoint
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:c4e05f237-tyler-small-updates
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:setup-sqlite-database-858d1f585-dirty-735c30c4f0bd243
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
         env:
         - name: LOG_LEVEL
-          value: "DEBUG"
+          value: "INFO"
         - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
           value: "True"
-        - name: GROUNDLIGHT_API_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: groundlight-secrets
-              key: api-token
+        # - name: GROUNDLIGHT_API_TOKEN
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: groundlight-secrets
+        #       key: api-token
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
+        - name: sqlite-data
+          mountPath: /var/groundlight/sqlite
 
       - name: inference-model-updater
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:c4e05f237-tyler-small-updates
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:setup-sqlite-database-858d1f585-dirty-735c30c4f0bd243
         imagePullPolicy: IfNotPresent
         command: ["/bin/bash", "-c"]
         args: ["poetry run python -m app.model_updater.update_models"]
         env:
         - name: LOG_LEVEL
-          value: "DEBUG"
+          value: "INFO"
         - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
           value: "True"
-        - name: GROUNDLIGHT_API_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: groundlight-secrets
-              key: api-token
+        # - name: GROUNDLIGHT_API_TOKEN
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: groundlight-secrets
+        #       key: api-token
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
@@ -80,12 +108,18 @@ spec:
           mountPath: /etc/groundlight/inference-deployment
         - name: model-repo
           mountPath: /mnt/models
-          
+        - name: sqlite-data
+          mountPath: /var/groundlight/sqlite
+
+      # If the SQLite container remains in the same deployment as the "edge endpoint" and "inference model updater" 
+      # containers, they will share the same network namespace and can communicate with each other using a file path. 
+      # In this scenario, you can continue to use a file path as the db_url to connect to the SQLite database.
       - name: sqlite-db
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:c4e05f237-tyler-small-updates
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-sqlite-db:setup-sqlite-database-858d1f585-dirty-c17ebe68e26d0a6
         imagePullPolicy: IfNotPresent
-        command: ["/bin/bash", "-c"]
-        args: ["poetry run python -c app.core.database"]
+        volumeMounts:
+          - name: sqlite-data
+            mountPath: /var/groundlight/sqlite
 
       imagePullSecrets:
       - name: registry-credentials
@@ -103,3 +137,7 @@ spec:
           # TODO: check out k3s local path provisioner: https://docs.k3s.io/storage#setting-up-the-local-storage-provider
           path: /var/groundlight/serving/model_repository
           type: DirectoryOrCreate
+
+      - name: sqlite-data
+        persistentVolumeClaim:
+          claimName: sqlite-pvc

@@ -15,6 +15,7 @@ from .file_paths import DEFAULT_EDGE_CONFIG_PATH
 from .iqe_cache import IQECache
 from .motion_detection import MotionDetectionManager
 from .utils import safe_call_api
+from .database import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,9 @@ class AppState:
 
         # Create global shared edge inference manager object in the app's state
         self.edge_inference_manager = EdgeInferenceManager(config=self.inference_config)
+
+        # Initialize a database manager object
+        self.db_manager = DatabaseManager()
 
 
 def get_app_state(request: Request) -> AppState:

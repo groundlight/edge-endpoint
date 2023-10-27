@@ -2,6 +2,7 @@ import logging
 from datetime import datetime
 from io import BytesIO
 from typing import Optional
+import asyncio
 
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -17,7 +18,6 @@ from app.core.app_state import (
 )
 from app.core.motion_detection import MotionDetectionManager
 from app.core.utils import prefixed_ksuid, safe_call_api
-from app.core.database import db
 
 
 logger = logging.getLogger(__name__)
@@ -103,7 +103,8 @@ async def post_image_query(
             new_image_query = motion_detection_manager.get_image_query_response(detector_id=detector_id).copy(
                 deep=True, update={"id": prefixed_ksuid(prefix="iqe_")}
             )
-            iqe_cache.update_cache(image_query=new_image_query)
+            # iqe_cache.update_cache(image_query=new_image_query)
+            asyncio.create_task(app_state.db_manager.create_iqe_record(record=new_image_query))
             return new_image_query
 
     image_query = None
@@ -121,7 +122,8 @@ async def post_image_query(
                 confidence=confidence,
                 query=detector_metadata.query,
             )
-            iqe_cache.update_cache(image_query=image_query)
+            # iqe_cache.update_cache(image_query=image_query)
+            asyncio.create_task(app_state.db_manager.create_iqe_record(record=image_query))
         else:
             logger.info(
                 "Ran inference locally, but detector confidence is not high enough to return. Current confidence:"
@@ -131,12 +133,16 @@ async def post_image_query(
     else:
         # Run an asynchronous task to create a record in the database table for this detector to indicate that
         # edge inference for the given detector ID is not yet set up.
-        db.create_record(
-            record={
-                "detector_id": detector_id,
-                "api_token": gl.configuration.api_key["ApiToken"],
-                "deployment_created": False,
-            }
+        logger.info(f"Creating database record for {detector_id=}")
+        api_token = gl.api_client.configuration.api_key["ApiToken"]
+        asyncio.create_task(
+            app_state.db_manager.create_detector_deployment_record(
+                record={
+                    "detector_id": detector_id,
+                    "api_token": api_token,
+                    "deployment_created": False,
+                }
+            )
         )
 
     # Finally, fall back to submitting the image to the cloud
@@ -161,9 +167,10 @@ async def get_image_query(
     id: str, gl: Groundlight = Depends(get_groundlight_sdk_instance), app_state: AppState = Depends(get_app_state)
 ):
     if id.startswith("iqe_"):
-        iqe_cache = app_state.iqe_cache
+        # iqe_cache = app_state.iqe_cache
 
-        image_query = iqe_cache.get_cached_image_query(image_query_id=id)
+        # image_query = iqe_cache.get_cached_image_query(image_query_id=id)
+        image_query = app_state.db_manager.get_iqe_record(image_query_id=id)
         if not image_query:
             raise HTTPException(status_code=404, detail=f"Image query with ID {id} not found")
         return image_query

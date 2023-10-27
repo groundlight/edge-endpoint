@@ -36,15 +36,25 @@ class EdgeInferenceManager:
                 a specific detector and the model name and version to use for inference.
         """
         self.inference_config = config
+        self.verbose = verbose
 
         if self.inference_config:
             self.inference_clients = {
                 detector_id: tritonclient.InferenceServerClient(
-                    url=get_edge_inference_service_name(detector_id) + ":8000", verbose=verbose
+                    url=get_edge_inference_service_name(detector_id) + ":8000", verbose=self.verbose
                 )
                 for detector_id in self.inference_config.keys()
                 if self.detector_configured_for_local_inference(detector_id)
             }
+
+    def update_inference_config(self, detector_id: str, api_token: str) -> None:
+
+        if detector_id not in self.inference_config.keys():
+            self.inference_config[detector_id] = LocalInferenceConfig(enabbled=True, api_token=api_token)
+
+            self.inference_clients[detector_id] = tritonclient.InferenceServerClient(
+                url=get_edge_inference_service_name(detector_id) + ":8000", verbose=self.verbose
+            )
 
     def detector_configured_for_local_inference(self, detector_id: str) -> bool:
         """
@@ -131,7 +141,7 @@ class EdgeInferenceManager:
         Returns True if a new model was downloaded and saved, False otherwise.
         """
         logger.info(f"Checking if there is a new model available for {detector_id}")
-        model_urls = fetch_model_urls(detector_id)
+        model_urls = fetch_model_urls(detector_id, api_token=self.inference_config[detector_id].api_token)
 
         cloud_binary_ksuid = model_urls.get("model_binary_id", None)
         if cloud_binary_ksuid is None:
@@ -158,9 +168,9 @@ class EdgeInferenceManager:
         return True
 
 
-def fetch_model_urls(detector_id: str) -> dict[str, str]:
+def fetch_model_urls(detector_id: str, api_token: Optional[str] = None) -> dict[str, str]:
     try:
-        groundlight_api_token = os.environ["GROUNDLIGHT_API_TOKEN"]
+        groundlight_api_token = api_token or os.environ["GROUNDLIGHT_API_TOKEN"]
     except KeyError as ex:
         logger.error("GROUNDLIGHT_API_TOKEN environment variable is not set", exc_info=True)
         raise ex

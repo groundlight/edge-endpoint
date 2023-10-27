@@ -1,6 +1,6 @@
 import logging
 import os
-
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 
 from app.api.api import api_router, ping_router
@@ -18,3 +18,43 @@ app.include_router(router=api_router, prefix=API_BASE_PATH)
 app.include_router(router=ping_router)
 
 app.state.app_state = AppState()
+
+scheduler = AsyncIOScheduler()
+
+
+async def update_inference_config(app_state: AppState) -> None:
+    """
+    Update the edge inference config by checking the database for detectors for which no deployments exist.
+    :param app_state: Application's state manager.
+    :type app_state: AppState
+    :return: None
+    :rtype: None
+    """
+
+    db_manager = app_state.db_manager
+    undeployed_detector_ids = await db_manager.get_detectors_without_deployments()
+    if undeployed_detector_ids:
+        for detector_record in undeployed_detector_ids:
+            detector_id, api_token = detector_record["detector_id"], detector_record["api_token"]
+            app_state.edge_inference_manager.update_inference_config(detector_id=detector_id, api_token=api_token)
+
+
+@app.on_event("startup")
+async def startup_event():
+    # Initialize the database tables
+    db_manager = app.state.app_state.db_manager
+    await db_manager.create_tables()
+
+    # Add job to periodically update the inference config
+    scheduler.add_job(update_inference_config, "interval", seconds=30, args=[app.state.app_state])
+
+    # Start the scheduler
+    scheduler.start()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    # Dispose off the database engine
+    db_manager = app.state.app_state.db_manager
+    db_manager.on_shutdown()
+    scheduler.shutdown()
