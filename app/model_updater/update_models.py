@@ -1,14 +1,14 @@
+import asyncio
 import logging
 import os
 import time
+from typing import Dict, List
 
 from app.core.app_state import load_edge_config
 from app.core.configs import RootEdgeConfig
+from app.core.database import DatabaseManager
 from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions
 from app.core.kubernetes_management import InferenceDeploymentManager
-from typing import List, Dict
-import asyncio
-from app.core.database import DatabaseManager
 
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=log_level)

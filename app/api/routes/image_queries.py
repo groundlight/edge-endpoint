@@ -1,8 +1,8 @@
+import asyncio
 import logging
 from datetime import datetime
 from io import BytesIO
 from typing import Optional
-import asyncio
 
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -18,7 +18,6 @@ from app.core.app_state import (
 )
 from app.core.motion_detection import MotionDetectionManager
 from app.core.utils import prefixed_ksuid, safe_call_api
-
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +81,6 @@ async def post_image_query(
 
     img_numpy = np.asarray(img)  # [H, W, C=3], dtype: uint8, RGB format
 
-    iqe_cache = app_state.iqe_cache
     motion_detection_manager = app_state.motion_detection_manager
     edge_inference_manager = app_state.edge_inference_manager
 

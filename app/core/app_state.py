@@ -10,12 +10,12 @@ from groundlight import Groundlight
 from model import Detector
 
 from .configs import LocalInferenceConfig, MotionDetectionConfig, RootEdgeConfig
+from .database import DatabaseManager
 from .edge_inference import EdgeInferenceManager
 from .file_paths import DEFAULT_EDGE_CONFIG_PATH
 from .iqe_cache import IQECache
 from .motion_detection import MotionDetectionManager
 from .utils import safe_call_api
-from .database import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
