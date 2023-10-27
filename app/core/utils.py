@@ -1,11 +1,11 @@
+from datetime import datetime
 from io import BytesIO
 from typing import Callable
 
 import ksuid
 from fastapi import HTTPException
+from model import ClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
 from PIL import Image
-from datetime import datetime
-from model import ImageQuery, ImageQueryTypeEnum, ResultTypeEnum, ClassificationResult
 
 
 def create_iqe(detector_id: str, label: str, confidence: float, query: str = "") -> ImageQuery:

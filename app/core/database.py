@@ -1,12 +1,14 @@
+import json
 import logging
 from typing import Dict, List
-import json
+
 from model import ImageQuery
 from sqlalchemy import JSON, Boolean, Column, Integer, String, select
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.asyncio.engine import AsyncEngine
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import declarative_base, sessionmaker
+
 from .file_paths import DATABASE_FILEPATH
 
 logger = logging.getLogger(__name__)
