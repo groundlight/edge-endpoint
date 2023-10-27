@@ -1,9 +1,9 @@
-import cachetools
-from cachetools import TTLCache
 import json
 import logging
 from typing import Dict, List
 
+import cachetools
+from cachetools import TTLCache
 from model import ImageQuery
 from sqlalchemy import JSON, Boolean, Column, Integer, String, select
 from sqlalchemy.exc import IntegrityError, OperationalError
