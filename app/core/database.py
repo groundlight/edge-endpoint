@@ -1,13 +1,13 @@
 import logging
 from typing import Dict, List
-
+import json
 from model import ImageQuery
 from sqlalchemy import JSON, Boolean, Column, Integer, String, select
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.asyncio.engine import AsyncEngine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, declarative_base
+from .file_paths import DATABASE_FILEPATH
 
 logger = logging.getLogger(__name__)
 Base = declarative_base()
@@ -44,8 +44,10 @@ class DatabaseManager:
         :return: None
         :rtype: None
         """
-        db_url = f"sqlite:///{DATABASE_FILEPATH}"
+        db_url = f"sqlite+aiosqlite:///{DATABASE_FILEPATH}"
         self._engine: AsyncEngine = create_async_engine(db_url, echo=verbose)
+
+        # Factory for creating new AsyncSession objects.
         self.session = sessionmaker(bind=self._engine, expire_on_commit=False, class_=AsyncSession)
 
     async def create_detector_deployment_record(self, record: Dict[str, str]) -> None:
@@ -59,7 +61,7 @@ class DatabaseManager:
         :rtype: None
         """
         try:
-            async with AsyncSession(self._engine) as session:
+            async with self.session() as session:
                 new_record = self.DetectorDeployment(
                     detector_id=record["detector_id"],
                     api_token=record["api_token"],
@@ -90,7 +92,7 @@ class DatabaseManager:
         """
 
         try:
-            async with AsyncSession(self._engine) as session:
+            async with self.session() as session:
                 query = select(self.DetectorDeployment).filter_by(detector_id=detector_id)
                 result = await session.execute(query)
 
@@ -116,9 +118,10 @@ class DatabaseManager:
         :rtype: None
         """
         try:
-            async with AsyncSession(self._engine) as session:
+            async with self.session() as session:
                 image_query_id = record.id
-                image_query_json = record.json()
+                image_query_json = json.loads(record.json())
+
                 new_record = self.ImageQueriesEdge(
                     image_query_id=image_query_id,
                     image_query=image_query_json,
@@ -139,16 +142,17 @@ class DatabaseManager:
         :return: The image query record.
         :rtype: ImageQuery | None
         """
-        async with AsyncSession(self._engine) as session:
+        async with self.session() as session:
             query = select(self.ImageQueriesEdge.image_query).filter_by(image_query_id=image_query_id)
             result = await session.execute(query)
             result_row: dict | None = result.scalar_one_or_none()
             if result_row is None:
                 return None
-            return ImageQuery(**result_row[0])
+
+            return ImageQuery(**result_row)
 
     async def get_detectors_without_deployments(self) -> List[Dict[str, str]] | None:
-        async with AsyncSession(self._engine) as session:
+        async with self.session() as session:
             query = select(self.DetectorDeployment.detector_id, self.DetectorDeployment.api_token).filter_by(
                 deployment_created=False
             )
@@ -173,8 +177,8 @@ class DatabaseManager:
         except OperationalError:
             logger.error("Could not create database tables.", exc_info=True)
 
-    def on_shutdown(self) -> None:
+    async def on_shutdown(self) -> None:
         """
         This ensures that we release the resources.
         """
-        self._engine.dispose()
+        await self._engine.dispose()

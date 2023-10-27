@@ -57,5 +57,5 @@ async def startup_event():
 async def shutdown_event():
     # Dispose off the database engine
     db_manager = app.state.app_state.db_manager
-    db_manager.on_shutdown()
+    await db_manager.on_shutdown()
     scheduler.shutdown()

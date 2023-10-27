@@ -1,13 +1,12 @@
 import asyncio
 import logging
-from datetime import datetime
 from io import BytesIO
 from typing import Optional
 
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from groundlight import Groundlight
-from model import ClassificationResult, Detector, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
+from model import Detector, ImageQuery
 from PIL import Image
 
 from app.core.app_state import (
@@ -17,7 +16,7 @@ from app.core.app_state import (
     get_groundlight_sdk_instance,
 )
 from app.core.motion_detection import MotionDetectionManager
-from app.core.utils import prefixed_ksuid, safe_call_api
+from app.core.utils import prefixed_ksuid, safe_call_api, create_iqe
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +113,7 @@ async def post_image_query(
         if confidence > detector_metadata.confidence_threshold:
             logger.info("Edge detector confidence is high enough to return")
 
-            image_query = _create_iqe(
+            image_query = create_iqe(
                 detector_id=detector_id,
                 label=results["label"],
                 confidence=confidence,
@@ -173,22 +172,6 @@ async def get_image_query(
             raise HTTPException(status_code=404, detail=f"Image query with ID {id} not found")
         return image_query
     return safe_call_api(gl.get_image_query, id=id)
-
-
-def _create_iqe(detector_id: str, label: str, confidence: float, query: str = "") -> ImageQuery:
-    iq = ImageQuery(
-        id=prefixed_ksuid(prefix="iqe_"),
-        type=ImageQueryTypeEnum.image_query,
-        created_at=datetime.utcnow(),
-        query=query,
-        detector_id=detector_id,
-        result_type=ResultTypeEnum.binary_classification,
-        result=ClassificationResult(
-            confidence=confidence,
-            label=label,
-        ),
-    )
-    return iq
 
 
 def _improve_cached_image_query_confidence(
