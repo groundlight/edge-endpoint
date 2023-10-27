@@ -19,7 +19,6 @@ app.include_router(router=api_router, prefix=API_BASE_PATH)
 app.include_router(router=ping_router)
 
 app.state.app_state = AppState()
-
 scheduler = AsyncIOScheduler()
 
 
