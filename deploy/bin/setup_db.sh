@@ -28,7 +28,7 @@ if [[ -f "${DATABASE_DIRECTORY}/sqlite.db" ]]; then
     echo "SQLite database file exists and is mounted correctly."
 else
     echo "SQLite database file doesn't exist or wasn't mounted correctly. Creating it now..."
-    mkdir -p ${DATABASE_DIRECTORY}
+    sudo mkdir -p ${DATABASE_DIRECTORY}
     sudo chown -R "$(id -u)":"$(id -g)" "${DATABASE_DIRECTORY}"
 
     # SQLite is eccentric in a sense that if you just invoke `sqlite3 <db_file>`, it won't 

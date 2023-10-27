@@ -137,9 +137,13 @@ class DatabaseManager:
                 session.add(new_record)
                 await session.commit()
 
-        except IntegrityError:
-            logger.debug(f"Image query {record['image_query_id']} already exists in the database.")
+        except IntegrityError as e:
             await session.rollback()
+
+            if "image_query_id" in str(e.orig):
+                logger.debug(f"Image query {record.id} already exists in the database table.")
+            else:
+                logger.error("Integrity error occured", exc_info=True)
 
     @cachetools.cached(cache=IMAGE_QUERY_RECORD_CACHE)
     async def get_iqe_record(self, image_query_id: str) -> ImageQuery | None:

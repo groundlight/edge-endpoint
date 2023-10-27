@@ -31,7 +31,7 @@ def get_detector_ids_without_deployments(db_manager: DatabaseManager) -> List[Di
     return asyncio.run(db_manager.get_detectors_without_deployments())
 
 
-def update_models_helper(
+def _check_new_models_and_inference_deployments(
     detector_id: str,
     edge_inference_manager: EdgeInferenceManager,
     deployment_manager: InferenceDeploymentManager,
@@ -78,9 +78,6 @@ def update_models(
     if not any([config.enabled for config in edge_inference_manager.inference_config.values()]):
         sleep_forever("Edge inference is not enabled for any detectors... sleeping forever.")
 
-    # Filter to only detectors that have inference enabled
-    # inference_config = {detector_id: config for detector_id, config in inference_config.items() if config.enabled}
-
     # All enabled detectors should have the same refresh rate.
     refresh_rates = [config.refresh_rate for config in edge_inference_manager.inference_config.values()]
     if len(set(refresh_rates)) != 1:
@@ -91,7 +88,7 @@ def update_models(
         start = time.time()
         for detector_id in edge_inference_manager.inference_config.keys():
             try:
-                update_models_helper(
+                _check_new_models_and_inference_deployments(
                     detector_id=detector_id,
                     edge_inference_manager=edge_inference_manager,
                     deployment_manager=deployment_manager,
