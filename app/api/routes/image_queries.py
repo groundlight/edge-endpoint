@@ -100,7 +100,6 @@ async def post_image_query(
             new_image_query = motion_detection_manager.get_image_query_response(detector_id=detector_id).copy(
                 deep=True, update={"id": prefixed_ksuid(prefix="iqe_")}
             )
-            # iqe_cache.update_cache(image_query=new_image_query)
             asyncio.create_task(app_state.db_manager.create_iqe_record(record=new_image_query))
             return new_image_query
 
@@ -119,7 +118,6 @@ async def post_image_query(
                 confidence=confidence,
                 query=detector_metadata.query,
             )
-            # iqe_cache.update_cache(image_query=image_query)
             asyncio.create_task(app_state.db_manager.create_iqe_record(record=image_query))
         else:
             logger.info(
@@ -164,10 +162,7 @@ async def get_image_query(
     id: str, gl: Groundlight = Depends(get_groundlight_sdk_instance), app_state: AppState = Depends(get_app_state)
 ):
     if id.startswith("iqe_"):
-        # iqe_cache = app_state.iqe_cache
-
-        # image_query = iqe_cache.get_cached_image_query(image_query_id=id)
-        image_query = app_state.db_manager.get_iqe_record(image_query_id=id)
+        image_query = await app_state.db_manager.get_iqe_record(image_query_id=id)
         if not image_query:
             raise HTTPException(status_code=404, detail=f"Image query with ID {id} not found")
         return image_query

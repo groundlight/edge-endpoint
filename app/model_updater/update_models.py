@@ -104,8 +104,8 @@ def update_models(
         if elapsed_s < refresh_rate_s:
             time.sleep(refresh_rate_s - elapsed_s)
 
-        # Fetch detector IDs that need to be deployed from the database
-        undeployed_detector_ids = get_detector_ids_without_deployments(db_manager=db_manager)
+        # Fetch detector IDs that need to be deployed from the database and add them to the config
+        undeployed_detector_ids: List[Dict[str, str]] = get_detector_ids_without_deployments(db_manager=db_manager)
         if undeployed_detector_ids:
             for detector_record in undeployed_detector_ids:
                 detector_id, api_token = detector_record["detector_id"], detector_record["api_token"]
@@ -124,7 +124,7 @@ if __name__ == "__main__":
     deployment_manager = InferenceDeploymentManager()
 
     # We will delegate creation of database tables to the edge-endpoint container.
-    # So here we don't run a task to create the tables if they don't exist.
+    # So here we don't run a task to create the tables if they don't already exist.
     db_manager = DatabaseManager()
 
     update_models(

@@ -1,3 +1,5 @@
+import cachetools
+from cachetools import TTLCache
 import json
 import logging
 from typing import Dict, List
@@ -37,6 +39,10 @@ class DatabaseManager:
         id = Column(Integer, primary_key=True)
         image_query_id = Column(String, unique=True)
         image_query = Column(JSON)
+
+    GET_IMAGE_QUERY_RECORD_TTL_CACHE_SIZE = 1000
+    GET_IMAGE_QUERY_RECORD_TTL = 300  # 5 minutes
+    IMAGE_QUERY_RECORD_CACHE = TTLCache(maxsize=GET_IMAGE_QUERY_RECORD_TTL_CACHE_SIZE, ttl=GET_IMAGE_QUERY_RECORD_TTL)
 
     def __init__(self, verbose=False) -> None:
         """
@@ -135,6 +141,7 @@ class DatabaseManager:
             logger.debug(f"Image query {record['image_query_id']} already exists in the database.")
             await session.rollback()
 
+    @cachetools.cached(cache=IMAGE_QUERY_RECORD_CACHE)
     async def get_iqe_record(self, image_query_id: str) -> ImageQuery | None:
         """
         Gets a record from the `image_queries_edge` table.

@@ -13,8 +13,10 @@ fail() {
 K="k3s kubectl"
 INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"GPU"}
 
+# Ensure database file has been correctly setup 
+./deploy/bin/setup_db.sh
+
 # Secrets
-# ./deploy/bin/make-gl-api-token-secret.sh
 ./deploy/bin/make-aws-secret.sh
 
 # Verify secrets have been properly created
@@ -22,9 +24,6 @@ if ! $K get secret registry-credentials; then
     fail "registry-credentials secret not found"
 fi
 
-# if ! $K get secret groundlight-secrets; then
-#     fail "groundlight-secrets secret not found"
-# fi
 
 # Configmaps and deployments
 $K delete configmap --ignore-not-found edge-config

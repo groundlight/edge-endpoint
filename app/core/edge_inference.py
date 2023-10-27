@@ -65,8 +65,8 @@ class EdgeInferenceManager:
             True if the detector is configured to run local inference, False otherwise
         """
         if not self.inference_config:
-            return False 
-        
+            return False
+
         return detector_id in self.inference_config.keys() and self.inference_config[detector_id].enabled
 
     def inference_is_available(self, detector_id: str, model_version: str = "") -> bool:
