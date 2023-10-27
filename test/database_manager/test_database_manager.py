@@ -1,5 +1,4 @@
 import asyncio
-from typing import Dict, List
 
 import pytest
 import pytest_asyncio
@@ -129,4 +128,4 @@ async def test_update_detector_deployment_record(db_manager: DatabaseManager, da
             result = query.first()
             assert result.detector_id == record["detector_id"]
             assert result.api_token == record["api_token"]
-            assert result.deployment_created == True
+            assert result.deployment_created is True
