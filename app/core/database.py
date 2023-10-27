@@ -46,8 +46,7 @@ class DatabaseManager:
         :return: None
         :rtype: None
         """
-        db_url = "sqlite+aiosqlite:////var/groundlight/sqlite/sqlite.db"
-        # db_url = f"sqlite:///{DATABASE_CONTAINER_NAME}:/{DATABASE_FILEPATH}"
+        db_url = f"sqlite:///{DATABASE_FILEPATH}"
         self._engine: AsyncEngine = create_async_engine(db_url, echo=verbose)
         self.session = sessionmaker(bind=self._engine, expire_on_commit=False, class_=AsyncSession)
 

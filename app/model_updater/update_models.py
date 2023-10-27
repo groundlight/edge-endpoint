@@ -24,6 +24,10 @@ def sleep_forever(message: str | None = None):
 
 
 def get_detector_ids_without_deployments(db_manager: DatabaseManager) -> List[Dict[str, str]] | None:
+    """
+    NOTE: `asyncio.run` is used here because this function is called from a synchronous context.
+    :param db_manager: Database manager instance.
+    """
     return asyncio.run(db_manager.get_detectors_without_deployments())
 
 
@@ -103,8 +107,6 @@ def update_models(
         # Fetch detector IDs that need to be deployed from the database
         undeployed_detector_ids = get_detector_ids_without_deployments(db_manager=db_manager)
         if undeployed_detector_ids:
-            logging.info("Found detectors that need to be deployed from the database.")
-            logging.info(f"Record = {undeployed_detector_ids}")
             for detector_record in undeployed_detector_ids:
                 detector_id, api_token = detector_record["detector_id"], detector_record["api_token"]
                 edge_inference_manager.update_inference_config(detector_id=detector_id, api_token=api_token)

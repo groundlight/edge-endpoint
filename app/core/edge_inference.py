@@ -141,7 +141,12 @@ class EdgeInferenceManager:
         Returns True if a new model was downloaded and saved, False otherwise.
         """
         logger.info(f"Checking if there is a new model available for {detector_id}")
-        model_urls = fetch_model_urls(detector_id, api_token=self.inference_config[detector_id].api_token)
+        api_token = (
+            self.inference_config[detector_id].api_token
+            if self.detector_configured_for_local_inference(detector_id)
+            else None
+        )
+        model_urls = fetch_model_urls(detector_id, api_token=api_token)
 
         cloud_binary_ksuid = model_urls.get("model_binary_id", None)
         if cloud_binary_ksuid is None:
@@ -169,17 +174,14 @@ class EdgeInferenceManager:
 
 
 def fetch_model_urls(detector_id: str, api_token: Optional[str] = None) -> dict[str, str]:
-    try:
-        groundlight_api_token = api_token or os.environ["GROUNDLIGHT_API_TOKEN"]
-    except KeyError as ex:
-        logger.error("GROUNDLIGHT_API_TOKEN environment variable is not set", exc_info=True)
-        raise ex
+    if not api_token:
+        raise ValueError(f"No API token provided for {detector_id=}")
 
     logger.debug(f"Fetching model URLs for {detector_id}")
 
     url = f"https://api.groundlight.ai/edge-api/v1/fetch-model-urls/{detector_id}/"
     headers = {
-        "x-api-token": groundlight_api_token,
+        "x-api-token": api_token,
     }
     response = requests.get(url, headers=headers, timeout=10)
     logger.debug(f"fetch-model-urls response = {response}")
