@@ -9,7 +9,7 @@ from typing import List, Dict
 from model import ImageQuery
 import asyncio
 
-NUM_TESTING_RECORDS = 10
+NUM_TESTING_RECORDS = 100
 
 
 @pytest.fixture(scope="module")
@@ -47,21 +47,14 @@ async def test_create_detector_deployment_record(db_manager: DatabaseManager, da
     Test creating a new detector deployment record.
     """
 
-    def create_testing_records() -> List[Dict[str, str]]:
-        """
-        Create a list of testing records.
-        """
-        records = []
-        for _ in range(NUM_TESTING_RECORDS):
-            record = {
-                "detector_id": prefixed_ksuid("det_"),
-                "api_token": prefixed_ksuid("api_"),
-                "deployment_created": False,
-            }
-            records.append(record)
-        return records
-
-    records = create_testing_records()
+    records = [
+        {
+            "detector_id": prefixed_ksuid("det_"),
+            "api_token": prefixed_ksuid("api_"),
+            "deployment_created": False,
+        }
+        for _ in range(NUM_TESTING_RECORDS)
+    ]
 
     for record in records:
         await db_manager.create_detector_deployment_record(record=record)
@@ -77,9 +70,8 @@ async def test_create_detector_deployment_record(db_manager: DatabaseManager, da
 @pytest.mark.asyncio
 async def test_get_detectors_without_deployments(db_manager: DatabaseManager, database_reset):
     """
-    Test getting detectors without deployments.
+    Check that when we retrieve detector deployment records we get what we expect.
     """
-    # Create a few records
     records = [
         {
             "detector_id": prefixed_ksuid("det_"),
@@ -101,10 +93,6 @@ async def test_get_detectors_without_deployments(db_manager: DatabaseManager, da
 
 @pytest.mark.asyncio
 async def test_get_iqe_record(db_manager: DatabaseManager, database_reset):
-    """
-    Test getting an image query record.
-    """
-    # Create a record
     image_query: ImageQuery = create_iqe(
         detector_id=prefixed_ksuid("det_"), label="test_label", confidence=0.5, query="test_query"
     )
@@ -113,3 +101,30 @@ async def test_get_iqe_record(db_manager: DatabaseManager, database_reset):
     # Get the record
     retrieved_record = await db_manager.get_iqe_record(image_query_id=image_query.id)
     assert retrieved_record == image_query
+
+
+@pytest.mark.asyncio
+async def test_update_detector_deployment_record(db_manager: DatabaseManager, database_reset):
+    """
+    Create a few testing records, update the deployment_created field, and check that the update was successful.
+    """
+    records = [
+        {
+            "detector_id": prefixed_ksuid("det_"),
+            "api_token": prefixed_ksuid("api_"),
+            "deployment_created": False,
+        }
+        for _ in range(NUM_TESTING_RECORDS)
+    ]
+
+    for record in records:
+        await db_manager.create_detector_deployment_record(record=record)
+        await db_manager.update_detector_deployment_record(detector_id=record["detector_id"])
+
+        async with db_manager.session() as session:
+            query_text = f"SELECT * FROM detector_deployments WHERE detector_id = '{record['detector_id']}'"
+            query = await session.execute(text(query_text))
+            result = query.first()
+            assert result.detector_id == record["detector_id"]
+            assert result.api_token == record["api_token"]
+            assert result.deployment_created == True
