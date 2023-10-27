@@ -1,13 +1,15 @@
+import asyncio
+from typing import Dict, List
+
 import pytest
 import pytest_asyncio
+from model import ImageQuery
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import text
-from app.core.database import DatabaseManager, Base
-from app.core.utils import prefixed_ksuid, create_iqe
-from typing import List, Dict
-from model import ImageQuery
-import asyncio
+
+from app.core.database import DatabaseManager
+from app.core.utils import create_iqe, prefixed_ksuid
 
 NUM_TESTING_RECORDS = 100
 
@@ -64,7 +66,7 @@ async def test_create_detector_deployment_record(db_manager: DatabaseManager, da
             result = query.first()
             assert result.detector_id == record["detector_id"]
             assert result.api_token == record["api_token"]
-            assert result.deployment_created == record["deployment_created"] == False
+            assert result.deployment_created == record["deployment_created"] is False
 
 
 @pytest.mark.asyncio

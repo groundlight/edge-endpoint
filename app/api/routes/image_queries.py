@@ -16,7 +16,7 @@ from app.core.app_state import (
     get_groundlight_sdk_instance,
 )
 from app.core.motion_detection import MotionDetectionManager
-from app.core.utils import prefixed_ksuid, safe_call_api, create_iqe
+from app.core.utils import create_iqe, prefixed_ksuid, safe_call_api
 
 logger = logging.getLogger(__name__)
 
