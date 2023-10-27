@@ -1,15 +1,13 @@
-from sqlalchemy import Column, Integer, String, Boolean, JSON
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+import logging
+from typing import Dict, List
+
+from model import ImageQuery
+from sqlalchemy import JSON, Boolean, Column, Integer, String, select
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.asyncio.engine import AsyncEngine
-from app.core.file_paths import DATABASE_CONTAINER_NAME, DATABASE_FILEPATH
-from model import ImageQuery
-from typing import List, Dict
-from sqlalchemy.exc import OperationalError, IntegrityError
-import logging
-from sqlalchemy import select
-
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
 logger = logging.getLogger(__name__)
 Base = declarative_base()
@@ -79,7 +77,7 @@ class DatabaseManager:
             if "detector_id" in str(e.orig):
                 logger.debug(f"Detector ID {record['detector_id']} already exists in the database.")
             else:
-                logger.error(f"Integrity error occured", exc_info=True)
+                logger.error("Integrity error occured", exc_info=True)
 
     async def update_detector_deployment_record(self, detector_id: str) -> None:
         """
