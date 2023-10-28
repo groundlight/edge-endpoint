@@ -13,6 +13,7 @@ from app.core.kubernetes_management import InferenceDeploymentManager
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=log_level)
 
+REFRESH_RATE = 60
 TEN_MINUTES = 60 * 10
 DATABASE_CHECK_INTERVAL = 60
 
@@ -28,7 +29,7 @@ def get_detector_ids_without_deployments(db_manager: DatabaseManager) -> List[Di
     NOTE: `asyncio.run` is used here because this function is called from a synchronous context.
     :param db_manager: Database manager instance.
     """
-    return asyncio.run(db_manager.get_detectors_without_deployments())
+    return asyncio.run(db_manager.query_detector_deployments(deployment_created=False))
 
 
 def _check_new_models_and_inference_deployments(
@@ -73,18 +74,9 @@ def update_models(
     deployment_manager: InferenceDeploymentManager,
     db_manager: DatabaseManager,
 ) -> None:
-    if not os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", None) or not edge_inference_manager.inference_config:
+    if not os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", None):
         sleep_forever("Edge inference is disabled globally... sleeping forever.")
         return
-
-    if not any([config.enabled for config in edge_inference_manager.inference_config.values()]):
-        sleep_forever("Edge inference is not enabled for any detectors... sleeping forever.")
-
-    # All enabled detectors should have the same refresh rate.
-    refresh_rates = [config.refresh_rate for config in edge_inference_manager.inference_config.values()]
-    if len(set(refresh_rates)) != 1:
-        logging.error("Detectors have different refresh rates.")
-    refresh_rate_s = refresh_rates[0]
 
     while True:
         start = time.time()
@@ -100,8 +92,8 @@ def update_models(
                 logging.error(f"Failed to update model for {detector_id}", exc_info=True)
 
         elapsed_s = time.time() - start
-        if elapsed_s < refresh_rate_s:
-            time.sleep(refresh_rate_s - elapsed_s)
+        if elapsed_s < REFRESH_RATE:
+            time.sleep(REFRESH_RATE - elapsed_s)
 
         # Fetch detector IDs that need to be deployed from the database and add them to the config
         undeployed_detector_ids: List[Dict[str, str]] = get_detector_ids_without_deployments(db_manager=db_manager)
@@ -114,10 +106,13 @@ def update_models(
 if __name__ == "__main__":
     edge_config: RootEdgeConfig = load_edge_config()
     edge_inference_templates = edge_config.local_inference_templates
-    inference_config = {
-        detector.detector_id: edge_inference_templates[detector.local_inference_template]
-        for detector in edge_config.detectors
-    }
+    detectors = list(filter(lambda detector: detector.detector_id != "", edge_config.detectors))
+
+    inference_config = None
+    if detectors:
+        inference_config = {
+            detector.detector_id: edge_inference_templates[detector.local_inference_template] for detector in detectors
+        }
 
     edge_inference_manager = EdgeInferenceManager(config=inference_config, verbose=True)
     deployment_manager = InferenceDeploymentManager()

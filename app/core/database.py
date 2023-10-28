@@ -164,15 +164,24 @@ class DatabaseManager:
 
             return ImageQuery(**result_row)
 
-    async def get_detectors_without_deployments(self) -> List[Dict[str, str]] | None:
-        async with self.session() as session:
-            query = select(self.DetectorDeployment.detector_id, self.DetectorDeployment.api_token).filter_by(
-                deployment_created=False
-            )
-            query_results = await session.execute(query)
+    async def query_detector_deployments(self, **kwargs) -> List[Dict[str, str]] | None:
+        """
+        Query the database table for detectors based on a given query predicate.
+        :param kwargs: A dictionary containing the query predicate.
+        :throws AttributeError: If the query predicate is invalid.
+        """
+        try:
+            async with self.session() as session:
+                query = select(self.DetectorDeployment.detector_id, self.DetectorDeployment.api_token).filter_by(
+                    **kwargs
+                )
+                query_results = await session.execute(query)
 
-            undeployed_detectors = [{"detector_id": row[0], "api_token": row[1]} for row in query_results.fetchall()]
-            return undeployed_detectors
+                detectors = [{"detector_id": row[0], "api_token": row[1]} for row in query_results.fetchall()]
+                return detectors
+
+        except AttributeError:
+            logger.error("Invalid query predicate.", exc_info=True)
 
         return None
 

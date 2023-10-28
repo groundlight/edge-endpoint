@@ -85,7 +85,7 @@ async def test_get_detectors_without_deployments(db_manager: DatabaseManager, da
     for record in records:
         await db_manager.create_detector_deployment_record(record=record)
 
-    undeployed_detectors = await db_manager.get_detectors_without_deployments()
+    undeployed_detectors = await db_manager.query_detector_deployments(deployment_created=False)
     assert len(undeployed_detectors) == NUM_TESTING_RECORDS
     for record in undeployed_detectors:
         assert record["detector_id"] in [r["detector_id"] for r in records]

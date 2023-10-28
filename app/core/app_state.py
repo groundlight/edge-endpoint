@@ -79,22 +79,23 @@ class AppState:
         motion_detection_templates: Dict[str, MotionDetectionConfig] = self.edge_config.motion_detection_templates
         edge_inference_templates: Dict[str, LocalInferenceConfig] = self.edge_config.local_inference_templates
 
-        self.motion_detection_config: Dict[str, MotionDetectionConfig] = {
-            detector.detector_id: motion_detection_templates[detector.motion_detection_template]
-            for detector in self.edge_config.detectors
-        }
-        self.inference_config: Dict[str, LocalInferenceConfig] = {
-            detector.detector_id: edge_inference_templates[detector.local_inference_template]
-            for detector in self.edge_config.detectors
-        }
+        # Filter out detectors that are empty strings
+        detectors = list(filter(lambda detector: detector.detector_id != "", self.edge_config.detectors))
 
-        # Create a global shared motion detection manager object in the app's state
+        self.motion_detection_config = None
+        self.inference_config = None
+        if detectors:
+            self.motion_detection_config: Dict[str, MotionDetectionConfig] = {
+                detector.detector_id: motion_detection_templates[detector.motion_detection_template]
+                for detector in detectors
+            }
+            self.inference_config: Dict[str, LocalInferenceConfig] = {
+                detector.detector_id: edge_inference_templates[detector.local_inference_template]
+                for detector in detectors
+            }
+
         self.motion_detection_manager = MotionDetectionManager(config=self.motion_detection_config)
-
-        # Create global shared edge inference manager object in the app's state
         self.edge_inference_manager = EdgeInferenceManager(config=self.inference_config)
-
-        # Initialize a database manager object
         self.db_manager = DatabaseManager()
 
 

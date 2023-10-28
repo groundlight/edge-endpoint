@@ -1,5 +1,6 @@
 import logging
 import os
+from typing import List, Dict
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
@@ -24,7 +25,8 @@ scheduler = AsyncIOScheduler()
 
 async def update_inference_config(app_state: AppState) -> None:
     """
-    Update the edge inference config by checking the database for detectors for which no deployments exist.
+    Update the edge inference config by querying the database for new detectors.
+
     :param app_state: Application's state manager.
     :type app_state: AppState
     :return: None
@@ -32,9 +34,9 @@ async def update_inference_config(app_state: AppState) -> None:
     """
 
     db_manager = app_state.db_manager
-    undeployed_detector_ids = await db_manager.get_detectors_without_deployments()
-    if undeployed_detector_ids:
-        for detector_record in undeployed_detector_ids:
+    detectors: List[Dict[str, str]] = await db_manager.query_detector_deployments(deployment_created=True)
+    if detectors:
+        for detector_record in detectors:
             detector_id, api_token = detector_record["detector_id"], detector_record["api_token"]
             app_state.edge_inference_manager.update_inference_config(detector_id=detector_id, api_token=api_token)
 

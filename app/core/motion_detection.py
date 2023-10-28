@@ -51,10 +51,6 @@ class MotionDetectorWrapper:
 
         return False
 
-    def enable(self) -> None:
-        if not self._motion_detection_enabled:
-            self._motion_detection_enabled = True
-
     def motion_detected(self, new_img: np.ndarray) -> bool:
         if self._previous_motion_detection_time is not None:
             current_time = time.monotonic()
@@ -71,7 +67,7 @@ class MotionDetectorWrapper:
 
 
 class MotionDetectionManager:
-    def __init__(self, config: Dict[str, MotionDetectionConfig]) -> None:
+    def __init__(self, config: Dict[str, MotionDetectionConfig] | None) -> None:
         """
         Initializes the motion detection manager.
         Args:
@@ -79,10 +75,12 @@ class MotionDetectionManager:
             `MotionDetectionConfig` objects consist of different parameters needed
             to run motion detection.
         """
-        self.detectors = {
-            detector_id: MotionDetectorWrapper(parameters=motion_detection_config)
-            for detector_id, motion_detection_config in config.items()
-        }
+        self.detectors = {}
+        if config:
+            self.detectors = {
+                detector_id: MotionDetectorWrapper(parameters=motion_detection_config)
+                for detector_id, motion_detection_config in config.items()
+            }
 
     def motion_detection_is_enabled(self, detector_id: str) -> bool:
         """
@@ -103,9 +101,12 @@ class MotionDetectionManager:
         )
 
     def update_image_query_response(self, detector_id: str, response: ImageQuery) -> None:
+        assert self.motion_detection_is_enabled(detector_id=detector_id)
         self.detectors[detector_id].image_query_response = response
 
     def get_image_query_response(self, detector_id: str) -> Optional[ImageQuery]:
+        if detector_id not in self.detectors.keys():
+            return None
         return self.detectors[detector_id].image_query_response
 
     def run_motion_detection(self, detector_id: str, new_img: np.ndarray) -> bool:
