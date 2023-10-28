@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import List, Dict
+from typing import Dict, List
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
