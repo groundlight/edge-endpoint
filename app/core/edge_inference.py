@@ -50,7 +50,7 @@ class EdgeInferenceManager:
     def update_inference_config(self, detector_id: str, api_token: str) -> None:
 
         if detector_id not in self.inference_config.keys():
-            self.inference_config[detector_id] = LocalInferenceConfig(enabbled=True, api_token=api_token)
+            self.inference_config[detector_id] = LocalInferenceConfig(enabled=True, api_token=api_token)
 
             self.inference_clients[detector_id] = tritonclient.InferenceServerClient(
                 url=get_edge_inference_service_name(detector_id) + ":8000", verbose=self.verbose

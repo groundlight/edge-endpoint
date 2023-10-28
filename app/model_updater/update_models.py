@@ -36,7 +36,7 @@ def _check_new_models_and_inference_deployments(
     edge_inference_manager: EdgeInferenceManager,
     deployment_manager: InferenceDeploymentManager,
     db_manager: DatabaseManager,
-):
+) -> None:
     # Download and write new model to model repo on disk
     new_model = edge_inference_manager.update_model(detector_id=detector_id)
 
@@ -44,7 +44,9 @@ def _check_new_models_and_inference_deployments(
     if deployment is None:
         logging.info(f"Creating a new inference deployment for {detector_id}")
         deployment_manager.create_inference_deployment(detector_id=detector_id)
-    elif new_model:
+        return
+
+    if new_model:
         # Update inference deployment and rollout a new pod
         logging.info(f"Updating inference deployment for {detector_id}")
         deployment_manager.update_inference_deployment(detector_id=detector_id)
@@ -55,15 +57,15 @@ def _check_new_models_and_inference_deployments(
             if time.time() - poll_start > TEN_MINUTES:
                 raise TimeoutError("Inference deployment is not ready within time limit")
 
-        # Database transaction to update the deployment_created field for the detector_id
-        # At this time, we are sure that the deployment for the detector has been successfully created and rolled out.
-        asyncio.run(db_manager.update_detector_deployment_record(detector_id=detector_id))
-
         # Now that we have successfully rolled out a new model version, we can clean up our model repository a bit.
         # To be a bit conservative, we keep the current model version as well as the version before that. Older
         # versions of the model for the current detector_id will be removed from disk.
         logging.info(f"Cleaning up old model versions for {detector_id}")
         delete_old_model_versions(detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2)
+
+    # Database transaction to update the deployment_created field for the detector_id
+    # At this time, we are sure that the deployment for the detector has been successfully created and rolled out.
+    asyncio.run(db_manager.update_detector_deployment_record(detector_id=detector_id))
 
 
 def update_models(
