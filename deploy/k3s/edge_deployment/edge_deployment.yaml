@@ -13,7 +13,7 @@ spec:
   selector:
     app: edge-logic-server
   ports:
-  - protocol: TCP
+  - protocol: TCP 
     name: http
     port: 80
     # Service port for NGINX
@@ -24,7 +24,7 @@ spec:
     name: https
     port: 443
     # Service port for NGINX
-    targetPort: 6717
+    targetPort: 443
     # NodePort for HTTPS
     nodePort: 30102
   type: NodePort
@@ -50,7 +50,7 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       containers:
       - name: edge-endpoint
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:using-https-c30eb0aac-dirty-6743fd4608890eb
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:using-https-ac70b5082-dirty-447ad46d6dde4af
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 443
@@ -72,7 +72,7 @@ spec:
           mountPath: /etc/groundlight/edge-config
 
       - name: inference-model-updater
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:using-https-c30eb0aac-dirty-6743fd4608890eb
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:using-https-ac70b5082-dirty-447ad46d6dde4af
         imagePullPolicy: IfNotPresent
         command: ["/bin/bash", "-c"]
         args: ["poetry run python -m app.model_updater.update_models"]
