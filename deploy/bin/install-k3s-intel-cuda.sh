@@ -15,21 +15,8 @@ check_nvidia_drivers_and_container_runtime() {
   # first check if something is already installed
   NVIDIA_VERSION=$(modinfo nvidia 2>/dev/null | awk '/^version:/ {split($2, a, "."); print a[1]}')
   if [ -z "$NVIDIA_VERSION" ]; then
-    echo "Did not find nvidia drivers installed.  Probing GPU type..."
-    # If nothing is installed, check if the GPU is a Tesla or Quadro
-    GPU_TYPE=$(lspci | grep -i nvidia | awk '{print $5}')
-    if [ "$GPU_TYPE" == "Tesla" ]; then
-      # I'm not positive these are great suggestions, but copilot seems to think so
-      echo "Found Tesla GPU.  Selecting NVIDIA drivers 418 for Tesla..."
-      NVIDIA_VERSION=418
-    elif [ "$GPU_TYPE" == "Quadro" ]; then
-      echo "Found Quadro GPU.  Selecting NVIDIA drivers 460 for Quadro..."
-      NVIDIA_VERSION=460
-    else
-      # If we can't figure out the GPU type, default to 525
-      echo "Could not determine GPU type.  Selecting NVIDIA drivers 525..."
-      NVIDIA_VERSION=525
-    fi
+    echo "Did not find nvidia drivers installed.  Defaultint to 525"
+    NVIDIA_VERSION=525
   fi
 
   if ! dpkg -l | grep -q "nvidia.*-$NVIDIA_VERSION"; then
