@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# Install k3s and configure GPU support
+# Install k3s and configures GPU support
+# Designed for Intel servers with NVIDIA GPUs.
 # Tested on an AWS EC2 G4 instance using the following AMI:
 # Deep Learning AMI GPU PyTorch 2.0.1 (Ubuntu 20.04) 20230827
 
@@ -10,14 +11,31 @@
 set -ex
 
 check_nvidia_drivers_and_container_runtime() {
-  # Retrieve existing version or default to 525
-  NVIDIA_VERSION=$(modinfo nvidia 2>/dev/null | awk '/^version:/ {split($2, a, "."); print a[1]}') : ${NVIDIA_VERSION:=525}
+  # Figure out what version of nvidia drivers to use.
+  # first check if something is already installed
+  NVIDIA_VERSION=$(modinfo nvidia 2>/dev/null | awk '/^version:/ {split($2, a, "."); print a[1]}')
+  if [ -z "$NVIDIA_VERSION" ]; then
+    echo "Did not find nvidia drivers installed.  Probing GPU type..."
+    # If nothing is installed, check if the GPU is a Tesla or Quadro
+    GPU_TYPE=$(lspci | grep -i nvidia | awk '{print $5}')
+    if [ "$GPU_TYPE" == "Tesla" ]; then
+      echo "Found Tesla GPU.  Selecting NVIDIA drivers 418 for Tesla..."
+      NVIDIA_VERSION=418
+    elif [ "$GPU_TYPE" == "Quadro" ]; then
+      echo "Found Quadro GPU.  Selecting NVIDIA drivers 460 for Quadro..."
+      NVIDIA_VERSION=460
+    else
+      # If we can't figure out the GPU type, default to 525
+      echo "Could not determine GPU type.  Selecting NVIDIA drivers 525..."
+      NVIDIA_VERSION=525
+    fi
+  fi
 
-  if ! dpkg -l | grep -q nvidia-headless-$NVIDIA_VERSION-server; then 
-    echo " NVIDIA drivers are not installed. Installing..."
+  if ! dpkg -l | grep -q "nvidia.*-$NVIDIA_VERSION"; then
+    echo " Can't find NVIDIA drivers installed. Installing nvidia-headless-$NVIDIA_VERSION-server..."
     sudo apt install -y nvidia-headless-$NVIDIA_VERSION-server
   else
-    echo " NVIDIA drivers for version $NVIDIA_VERSION are installed."
+    echo " NVIDIA drivers for version $NVIDIA_VERSION appear to likely be installed."
   fi
 
   # Check if nvidia container runtime is already installed. 
