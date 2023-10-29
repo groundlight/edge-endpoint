@@ -19,6 +19,7 @@ check_nvidia_drivers_and_container_runtime() {
     # If nothing is installed, check if the GPU is a Tesla or Quadro
     GPU_TYPE=$(lspci | grep -i nvidia | awk '{print $5}')
     if [ "$GPU_TYPE" == "Tesla" ]; then
+      # I'm not positive these are great suggestions, but copilot seems to think so
       echo "Found Tesla GPU.  Selecting NVIDIA drivers 418 for Tesla..."
       NVIDIA_VERSION=418
     elif [ "$GPU_TYPE" == "Quadro" ]; then
@@ -44,12 +45,30 @@ check_nvidia_drivers_and_container_runtime() {
     # Get distribution information 
     distribution=$(. /etc/os-release; echo $ID$VERSION_ID)
 
-    # Add NVIDIA Docker repository
-    echo "Adding NVIDIA Docker repository..."
-    curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
-    curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+    # Define the NVIDIA GPG key URL
+    NVIDIA_GPG_URL="https://nvidia.github.io/nvidia-docker/gpgkey"
 
-    sudo apt update -y && sudo apt install nvidia-container-runtime
+    # Define the NVIDIA Docker repository list URL
+    NVIDIA_REPO_LIST_URL="https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list"
+
+    # Define the keyring file path
+    KEYRING="/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg"
+
+    # Define the repository list file path
+    REPO_LIST_FILE="/etc/apt/sources.list.d/nvidia-docker.list"
+
+    echo "Adding NVIDIA Docker repository..."
+
+    # Download and save the GPG key to the keyring file
+    curl -s -L $NVIDIA_GPG_URL | gpg --dearmor | sudo tee $KEYRING > /dev/null
+
+    # Download the repository source list and add it to APT sources with the signed-by option
+    curl -s -L $NVIDIA_REPO_LIST_URL | \
+    sed "s/deb /deb [signed-by=$KEYRING] /" | \
+    sudo tee $REPO_LIST_FILE > /dev/null
+
+    # Update package lists and install
+    sudo apt update -y && sudo apt install -y nvidia-container-runtime
   else
     echo " NVIDIA container runtime is installed."
   fi
