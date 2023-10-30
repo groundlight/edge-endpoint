@@ -132,3 +132,42 @@ When using a self-signed certificate, be sure to configure calling applications 
 
 To set up TLS, modify the [`nginx.conf`](./configs/nginx.conf) file.  Then rebuild your container and relaunch the server.
 
+
+
+## Troubleshooting
+
+GPU not working in docker?  Classic set of problems.
+
+```
+kubectl get pods -n kube-system
+```
+
+Make sure the `nvidia-device-plugin-daemonset` is working properly.
+
+If not, check that docker works with the GPU:
+
+```
+docker run --rm --gpus all nvidia/cuda:12.0.0-runtime-ubuntu20.04 nvidia-smi
+```
+
+If that doesn't work, check the `/etc/docker/daemon.json` file and make sure it has something like this in it:
+
+```
+{
+    "default-runtime": "nvidia",
+    "runtimes": {
+        "nvidia": {
+            "path": "nvidia-container-runtime",
+            "runtimeArgs": []
+        }
+    }
+}
+```
+
+And then restart docker:
+
+```
+sudo systemctl restart docker
+```
+
+
