@@ -18,8 +18,8 @@ def db_manager():
     """
     Create a database manager for the entire test module.
     """
-    db_manager = DatabaseManager(verbose=False)
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    db_manager = DatabaseManager(verbose=True)
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=True)
     db_manager._engine = engine
     db_manager.session = sessionmaker(bind=db_manager._engine, expire_on_commit=False, class_=AsyncSession)
     asyncio.run(db_manager.create_tables())

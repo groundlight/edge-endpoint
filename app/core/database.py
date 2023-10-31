@@ -1,20 +1,48 @@
 import json
 import logging
+import uuid
+import re
+import datetime
 from typing import Dict, List
 
 import cachetools
 from cachetools import TTLCache
 from model import ImageQuery
-from sqlalchemy import JSON, Boolean, Column, Integer, String, select
-from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy import JSON, Boolean, Column, Integer, String, select, DateTime
+from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.asyncio.engine import AsyncEngine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker, validates
 
 from .file_paths import DATABASE_FILEPATH
 
 logger = logging.getLogger(__name__)
 Base = declarative_base()
+
+
+def validate_uid(uid: str) -> None:
+    """
+    Validates that the passed in UID is either a valid UUID4 or KSUID with or
+    without a prefix.
+    """
+    try:
+        uuid.UUID(uid)
+        return
+    except:
+        pass
+
+    alphanumeric = re.compile("^[a-z0-9]+$", re.IGNORECASE)
+    if "_" in uid:
+        prefix, suffix = uid.split("_", 1)
+        if len(prefix) > 10:
+            raise SQLAlchemyError(f"Invalid ID {uid} - prefix too long")
+        if not alphanumeric.match(prefix):
+            raise SQLAlchemyError(f"Invalid ID {uid} - prefix has non-alphanumeric")
+        uid = suffix
+    if len(uid) < 27:
+        raise SQLAlchemyError(f"Invalid ID {uid} - id is too short")
+    if not alphanumeric.match(uid):
+        raise SQLAlchemyError(f"Invalid ID {uid} - idhas non-alphanumeric")
 
 
 class DatabaseManager:
@@ -26,9 +54,29 @@ class DatabaseManager:
         __tablename__ = "detector_deployments"
 
         id = Column(Integer, primary_key=True)
-        detector_id = Column(String, unique=True)
-        api_token = Column(String)
-        deployment_created = Column(Boolean)
+        detector_id = Column(String(44), unique=True, nullable=False, index=True, comment="Detector ID")
+        api_token = Column(String(44), nullable=False, comment="API token")
+        deployment_created = Column(
+            Boolean,
+            default=False,
+            nullable=False,
+            comment="Indicates if the given detector already has an inference deployment.",
+        )
+        created_at = Column(
+            DateTime, nullable=False, default=datetime.datetime.utcnow, comment="Timestamp of record creation"
+        )
+        updated_at = Column(
+            DateTime,
+            nullable=False,
+            default=datetime.datetime.utcnow,
+            onupdate=datetime.datetime.utcnow,
+            comment="Timestamp of record update",
+        )
+
+        @validates("detector_id", "api_token")
+        def validate_uid(self, key, value):
+            validate_uid(value)
+            return value
 
     class ImageQueriesEdge(Base):
         """
@@ -37,8 +85,19 @@ class DatabaseManager:
 
         __tablename__ = "image_queries_edge"
         id = Column(Integer, primary_key=True)
-        image_query_id = Column(String, unique=True)
-        image_query = Column(JSON)
+        image_query_id = Column(
+            String,
+            unique=True,
+            nullable=False,
+            index=True,
+            comment="Image query ID. This is expected to be prefixed with `iqe_`.",
+        )
+        image_query = Column(JSON, nullable=False, comment="JSON representation of the ImageQuery data model.")
+
+        @validates("image_query_id")
+        def validate_uid(self, key, value):
+            validate_uid(value)
+            return value
 
     GET_IMAGE_QUERY_RECORD_TTL_CACHE_SIZE = 1000
     GET_IMAGE_QUERY_RECORD_TTL = 300  # 5 minutes
