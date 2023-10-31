@@ -24,7 +24,6 @@ class DatabaseManager:
         """
 
         __tablename__ = "detector_deployments"
-
         id = Column(Integer, primary_key=True)
         detector_id = Column(String, unique=True)
         api_token = Column(String)
