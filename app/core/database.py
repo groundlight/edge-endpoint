@@ -52,7 +52,6 @@ class DatabaseManager:
         """
 
         __tablename__ = "detector_deployments"
-
         id = Column(Integer, primary_key=True)
         detector_id = Column(String(44), unique=True, nullable=False, index=True, comment="Detector ID")
         api_token = Column(String(44), nullable=False, comment="API token")
