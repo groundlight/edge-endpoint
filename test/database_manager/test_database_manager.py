@@ -131,7 +131,7 @@ async def test_update_detector_deployment_record(db_manager: DatabaseManager, da
             result = query.first()
             assert result.detector_id == record["detector_id"]
             assert result.api_token == record["api_token"]
-            assert bool(result.deployment_created) == True
+            assert bool(result.deployment_created) is True
 
 
 @pytest.mark.asyncio
@@ -145,7 +145,7 @@ async def test_update_api_token_for_detector(db_manager: DatabaseManager, databa
     detectors = await db_manager.query_detector_deployments(detector_id=record["detector_id"])
     assert len(detectors) == 1
     assert detectors[0]["api_token"] == record["api_token"]
-    assert bool(detectors[0]["deployment_created"]) == False
+    assert bool(detectors[0]["deployment_created"]) is False
 
     # Now change the API token
     new_api_token = prefixed_ksuid("api_")
@@ -157,7 +157,7 @@ async def test_update_api_token_for_detector(db_manager: DatabaseManager, databa
     detectors = await db_manager.query_detector_deployments(detector_id=record["detector_id"])
     assert len(detectors) == 1
     assert detectors[0]["api_token"] == new_api_token
-    assert bool(detectors[0]["deployment_created"]) == False
+    assert bool(detectors[0]["deployment_created"]) is False
 
 
 @pytest.mark.asyncio
