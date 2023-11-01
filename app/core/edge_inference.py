@@ -49,7 +49,7 @@ class EdgeInferenceManager:
 
     def update_inference_config(self, detector_id: str, api_token: str) -> None:
         """
-        Updates the inference config for a specific detector. This is useful when new
+        Adds a new detector to the inference config at runtime. This is useful when new
         detectors are added to the database and we want to create an inference deployment for them.
         Args:
             detector_id: ID of the detector on which to run local edge inference

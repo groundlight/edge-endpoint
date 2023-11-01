@@ -101,7 +101,10 @@ class MotionDetectionManager:
         )
 
     def update_image_query_response(self, detector_id: str, response: ImageQuery) -> None:
-        assert self.motion_detection_is_enabled(detector_id=detector_id)
+        if not self.motion_detection_is_enabled(detector_id=detector_id):
+            raise AssertionError(
+                f"Cannot update image query response because motion detection is not enabled for {detector_id=}"
+            )
         self.detectors[detector_id].image_query_response = response
 
     def get_image_query_response(self, detector_id: str) -> Optional[ImageQuery]:

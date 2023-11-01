@@ -4,6 +4,7 @@ import pytest
 import pytest_asyncio
 from model import ImageQuery
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -120,7 +121,9 @@ async def test_update_detector_deployment_record(db_manager: DatabaseManager, da
 
     for record in records:
         await db_manager.create_detector_deployment_record(record=record)
-        await db_manager.update_detector_deployment_record(detector_id=record["detector_id"])
+        await db_manager.update_detector_deployment_record(
+            detector_id=record["detector_id"], new_record={"deployment_created": True}
+        )
 
         async with db_manager.session() as session:
             query_text = f"SELECT * FROM detector_deployments WHERE detector_id = '{record['detector_id']}'"
@@ -128,4 +131,48 @@ async def test_update_detector_deployment_record(db_manager: DatabaseManager, da
             result = query.first()
             assert result.detector_id == record["detector_id"]
             assert result.api_token == record["api_token"]
-            assert bool(result.deployment_created) is True
+            assert bool(result.deployment_created) == True
+
+
+@pytest.mark.asyncio
+async def test_update_api_token_for_detector(db_manager: DatabaseManager, database_reset):
+    record = {
+        "detector_id": prefixed_ksuid("det_"),
+        "api_token": prefixed_ksuid("api_"),
+        "deployment_created": False,
+    }
+    await db_manager.create_detector_deployment_record(record=record)
+    detectors = await db_manager.query_detector_deployments(detector_id=record["detector_id"])
+    assert len(detectors) == 1
+    assert detectors[0]["api_token"] == record["api_token"]
+    assert bool(detectors[0]["deployment_created"]) == False
+
+    # Now change the API token
+    new_api_token = prefixed_ksuid("api_")
+    await db_manager.update_detector_deployment_record(
+        detector_id=record["detector_id"], new_record={"api_token": new_api_token}
+    )
+
+    # Check that the API token has been updated
+    detectors = await db_manager.query_detector_deployments(detector_id=record["detector_id"])
+    assert len(detectors) == 1
+    assert detectors[0]["api_token"] == new_api_token
+    assert bool(detectors[0]["deployment_created"]) == False
+
+
+@pytest.mark.asyncio
+async def test_create_detector_record_raises_integrity_error(db_manager: DatabaseManager, database_reset):
+    records = [
+        {
+            "detector_id": prefixed_ksuid("det_"),
+            "api_token": prefixed_ksuid("api_"),
+            "deployment_created": False,
+        }
+        for _ in range(NUM_TESTING_RECORDS)
+    ]
+
+    for record in records:
+        await db_manager.create_detector_deployment_record(record=record)
+
+        with pytest.raises(IntegrityError):
+            await db_manager.create_detector_deployment_record(record=record)

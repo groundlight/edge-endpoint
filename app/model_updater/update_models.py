@@ -4,7 +4,7 @@ import os
 import time
 from typing import Dict, List
 
-from app.core.app_state import load_edge_config
+from app.core.app_state import load_edge_config, get_inference_and_motion_detection_configs
 from app.core.configs import RootEdgeConfig
 from app.core.database import DatabaseManager
 from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions
@@ -66,7 +66,9 @@ def _check_new_models_and_inference_deployments(
 
     # Database transaction to update the deployment_created field for the detector_id
     # At this time, we are sure that the deployment for the detector has been successfully created and rolled out.
-    asyncio.run(db_manager.update_detector_deployment_record(detector_id=detector_id))
+    asyncio.run(
+        db_manager.update_detector_deployment_record(detector_id=detector_id, new_record={"deployment_created": True})
+    )
 
 
 def update_models(
@@ -105,14 +107,7 @@ def update_models(
 
 if __name__ == "__main__":
     edge_config: RootEdgeConfig = load_edge_config()
-    edge_inference_templates = edge_config.local_inference_templates
-    detectors = list(filter(lambda detector: detector.detector_id != "", edge_config.detectors))
-
-    inference_config = None
-    if detectors:
-        inference_config = {
-            detector.detector_id: edge_inference_templates[detector.local_inference_template] for detector in detectors
-        }
+    inference_config, _ = get_inference_and_motion_detection_configs(root_edge_config=edge_config)
 
     edge_inference_manager = EdgeInferenceManager(config=inference_config, verbose=True)
     deployment_manager = InferenceDeploymentManager()

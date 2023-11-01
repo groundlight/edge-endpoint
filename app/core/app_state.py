@@ -8,6 +8,7 @@ import yaml
 from fastapi import Request
 from groundlight import Groundlight
 from model import Detector
+from typing import Tuple
 
 from .configs import LocalInferenceConfig, MotionDetectionConfig, RootEdgeConfig
 from .database import DatabaseManager
@@ -44,6 +45,29 @@ def load_edge_config() -> RootEdgeConfig:
     raise FileNotFoundError(f"Could not find edge config file in default location: {DEFAULT_EDGE_CONFIG_PATH}")
 
 
+def get_inference_and_motion_detection_configs(
+    root_edge_config: RootEdgeConfig,
+) -> Tuple[Dict[str, LocalInferenceConfig], Dict[str, MotionDetectionConfig]]:
+    motion_detection_templates: Dict[str, MotionDetectionConfig] = root_edge_config.motion_detection_templates
+    edge_inference_templates: Dict[str, LocalInferenceConfig] = root_edge_config.local_inference_templates
+
+    # Filter out detectors whose ID's are empty strings
+    detectors = list(filter(lambda detector: detector.detector_id != "", root_edge_config.detectors))
+
+    motion_detection_config = None
+    inference_config = None
+    if detectors:
+        motion_detection_config: Dict[str, MotionDetectionConfig] = {
+            detector.detector_id: motion_detection_templates[detector.motion_detection_template]
+            for detector in detectors
+        }
+        inference_config: Dict[str, LocalInferenceConfig] = {
+            detector.detector_id: edge_inference_templates[detector.local_inference_template] for detector in detectors
+        }
+
+    return inference_config, motion_detection_config
+
+
 @lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
 def _get_groundlight_sdk_instance_internal(api_token: str):
     return Groundlight(api_token=api_token)
@@ -75,27 +99,12 @@ def get_detector_metadata(detector_id: str, gl: Groundlight) -> Detector:
 class AppState:
     def __init__(self):
         self.edge_config = load_edge_config()
+        inference_config, motion_detection_config = get_inference_and_motion_detection_configs(
+            root_edge_config=self.edge_config
+        )
 
-        motion_detection_templates: Dict[str, MotionDetectionConfig] = self.edge_config.motion_detection_templates
-        edge_inference_templates: Dict[str, LocalInferenceConfig] = self.edge_config.local_inference_templates
-
-        # Filter out detectors that are empty strings
-        detectors = list(filter(lambda detector: detector.detector_id != "", self.edge_config.detectors))
-
-        self.motion_detection_config = None
-        self.inference_config = None
-        if detectors:
-            self.motion_detection_config: Dict[str, MotionDetectionConfig] = {
-                detector.detector_id: motion_detection_templates[detector.motion_detection_template]
-                for detector in detectors
-            }
-            self.inference_config: Dict[str, LocalInferenceConfig] = {
-                detector.detector_id: edge_inference_templates[detector.local_inference_template]
-                for detector in detectors
-            }
-
-        self.motion_detection_manager = MotionDetectionManager(config=self.motion_detection_config)
-        self.edge_inference_manager = EdgeInferenceManager(config=self.inference_config)
+        self.motion_detection_manager = MotionDetectionManager(config=motion_detection_config)
+        self.edge_inference_manager = EdgeInferenceManager(config=inference_config)
         self.db_manager = DatabaseManager()
 
 

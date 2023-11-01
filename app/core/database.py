@@ -3,12 +3,12 @@ import logging
 import uuid
 import re
 import datetime
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import cachetools
 from cachetools import TTLCache
 from model import ImageQuery
-from sqlalchemy import JSON, Boolean, Column, Integer, String, select, DateTime
+from sqlalchemy import JSON, Boolean, Column, String, select, DateTime
 from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.asyncio.engine import AsyncEngine
@@ -52,8 +52,9 @@ class DatabaseManager:
         """
 
         __tablename__ = "detector_deployments"
-        id = Column(Integer, primary_key=True)
-        detector_id = Column(String(44), unique=True, nullable=False, index=True, comment="Detector ID")
+        detector_id = Column(
+            String(44), primary_key=True, unique=True, nullable=False, index=True, comment="Detector ID"
+        )
         api_token = Column(String(44), nullable=False, comment="API token")
         deployment_created = Column(
             Boolean,
@@ -66,7 +67,7 @@ class DatabaseManager:
         )
         updated_at = Column(
             DateTime,
-            nullable=False,
+            nullable=True,
             default=datetime.datetime.utcnow,
             onupdate=datetime.datetime.utcnow,
             comment="Timestamp of record update",
@@ -83,9 +84,9 @@ class DatabaseManager:
         """
 
         __tablename__ = "image_queries_edge"
-        id = Column(Integer, primary_key=True)
         image_query_id = Column(
             String,
+            primary_key=True,
             unique=True,
             nullable=False,
             index=True,
@@ -104,11 +105,8 @@ class DatabaseManager:
 
     def __init__(self, verbose=False) -> None:
         """
-        Sets up a database connection and create database tables if they don't exist.
+        Initializes the database engine which manages creating and closing connection pools efficiently.
         :param verbose: If True, will print out all executed database queries.
-        :type verbose: bool
-        :return: None
-        :rtype: None
         """
         db_url = f"sqlite+aiosqlite:///{DATABASE_FILEPATH}"
         self._engine: AsyncEngine = create_async_engine(db_url, echo=verbose)
@@ -118,7 +116,8 @@ class DatabaseManager:
 
     async def create_detector_deployment_record(self, record: Dict[str, str]) -> None:
         """
-        Creates a new record in the `detector_deployments` table.
+        Creates a new record in the `detector_deployments` table. If the record exists, but the API token has
+        changed, we will update the record with the new API token.
         :param record: A dictionary containing the detector_id, api_token, and deployment_created fields.
         :type record: Dict[str, str]
 
@@ -126,11 +125,12 @@ class DatabaseManager:
         :return: None
         :rtype: None
         """
+        api_token = record["api_token"]
         try:
             async with self.session() as session:
                 new_record = self.DetectorDeployment(
                     detector_id=record["detector_id"],
-                    api_token=record["api_token"],
+                    api_token=api_token,
                     deployment_created=record["deployment_created"],
                 )
                 session.add(new_record)
@@ -143,10 +143,19 @@ class DatabaseManager:
             # If it did, then we can ignore the error.
             if "detector_id" in str(e.orig):
                 logger.debug(f"Detector ID {record['detector_id']} already exists in the database.")
+
+                detectors = await self.query_detector_deployments(detector_id=record["detector_id"])
+                assert detectors is not None and len(detectors) == 1
+                existing_api_token = detectors[0]["api_token"]
+                if existing_api_token != api_token:
+                    logger.info(f"Updating API token for detector ID {record['detector_id']}.")
+                    await self.update_detector_deployment_record(detector_id=record["detector_id"], new_record=record)
+
             else:
                 logger.error("Integrity error occured", exc_info=True)
+                raise e
 
-    async def update_detector_deployment_record(self, detector_id: str) -> None:
+    async def update_detector_deployment_record(self, detector_id: str, new_record: Dict[str, str]) -> None:
         """
         Check if detector_id is a record in the database. If it is, and the deployment_created field is False,
         update the deployment_created field to True.
@@ -166,9 +175,12 @@ class DatabaseManager:
                 if detector_record is None:
                     return
 
-                if not detector_record.deployment_created:
-                    detector_record.deployment_created = True
-                    await session.commit()
+                detector_record.api_token = new_record.get("api_token", detector_record.api_token)
+                detector_record.deployment_created = new_record.get(
+                    "deployment_created", detector_record.deployment_created
+                )
+                await session.commit()
+
         except IntegrityError:
             logger.debug(f"Error occured while updating database record for {detector_id=}.", exc_info=True)
             await session.rollback()
@@ -202,6 +214,7 @@ class DatabaseManager:
                 logger.debug(f"Image query {record.id} already exists in the database table.")
             else:
                 logger.error("Integrity error occured", exc_info=True)
+                raise e
 
     @cachetools.cached(cache=IMAGE_QUERY_RECORD_CACHE)
     async def get_iqe_record(self, image_query_id: str) -> ImageQuery | None:
@@ -230,16 +243,31 @@ class DatabaseManager:
         """
         try:
             async with self.session() as session:
-                query = select(self.DetectorDeployment.detector_id, self.DetectorDeployment.api_token).filter_by(
-                    **kwargs
-                )
-                query_results = await session.execute(query)
+                query = select(
+                    self.DetectorDeployment.detector_id,
+                    self.DetectorDeployment.api_token,
+                    self.DetectorDeployment.deployment_created,
+                ).filter_by(**kwargs)
+                query_results: List[Tuple] = await session.execute(query)
+                query_results: List[Tuple] = query_results.fetchall()
+                if not query_results:
+                    return None
 
-                detectors = [{"detector_id": row[0], "api_token": row[1]} for row in query_results.fetchall()]
+                detectors = [
+                    {
+                        "detector_id": row[0],
+                        "api_token": row[1],
+                        "deployment_created": row[2],
+                    }
+                    for row in query_results
+                ]
                 return detectors
 
         except AttributeError:
             logger.error("Invalid query predicate.", exc_info=True)
+
+        except SQLAlchemyError:
+            logger.error("Error occured while querying database.", exc_info=True)
 
         return None
 
