@@ -7,7 +7,7 @@ from typing import Dict, List, Tuple
 import cachetools
 from cachetools import TTLCache
 from model import ImageQuery
-from sqlalchemy import JSON, Boolean, Column, String, select, DateTime
+from sqlalchemy import JSON, Boolean, Column, DateTime, String, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.asyncio.engine import AsyncEngine
