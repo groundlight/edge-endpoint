@@ -53,7 +53,7 @@ async def test_create_tables_raises_operational_error(db_manager: DatabaseManage
         # We should get an error here because the schema is not well-defined.
         # SQLAlchemy will try to look for any fields in the `detector_deployment`
         # table, and when it doesn't find any, it will raise an error.
-        detector_deployment_table = db_manager.DetectorDeployment    
+        detector_deployment_table = db_manager.DetectorDeployment
         with pytest.raises(SQLAlchemyError):
 
             class MonkeyPatchDetectorDeploymentTable(Base):
@@ -179,7 +179,7 @@ async def test_update_detector_deployment_record(db_manager: DatabaseManager, da
             result = query.first()
             assert result.detector_id == record["detector_id"]
             assert result.api_token == record["api_token"]
-            assert bool(result.deployment_created) == True
+            assert bool(result.deployment_created) is True
 
 
 @pytest.mark.asyncio
@@ -193,7 +193,7 @@ async def test_update_api_token_for_detector(db_manager: DatabaseManager, databa
     detectors = await db_manager.query_detector_deployments(detector_id=record["detector_id"])
     assert len(detectors) == 1
     assert detectors[0]["api_token"] == record["api_token"]
-    assert bool(detectors[0]["deployment_created"]) == False
+    assert bool(detectors[0]["deployment_created"]) is False
 
     # Now change the API token
     new_api_token = prefixed_ksuid("api_")
@@ -205,7 +205,7 @@ async def test_update_api_token_for_detector(db_manager: DatabaseManager, databa
     detectors = await db_manager.query_detector_deployments(detector_id=record["detector_id"])
     assert len(detectors) == 1
     assert detectors[0]["api_token"] == new_api_token
-    assert bool(detectors[0]["deployment_created"]) == False
+    assert bool(detectors[0]["deployment_created"]) is False
 
 
 @pytest.mark.asyncio

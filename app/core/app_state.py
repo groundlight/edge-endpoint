@@ -1,14 +1,13 @@
 import logging
 import os
 from functools import lru_cache
-from typing import Dict
+from typing import Dict, Tuple
 
 import cachetools
 import yaml
 from fastapi import Request
 from groundlight import Groundlight
 from model import Detector
-from typing import Tuple
 
 from .configs import LocalInferenceConfig, MotionDetectionConfig, RootEdgeConfig
 from .database import DatabaseManager
