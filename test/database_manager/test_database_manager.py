@@ -1,5 +1,4 @@
 import asyncio
-from copy import deepcopy
 
 import pytest
 import pytest_asyncio
@@ -7,7 +6,7 @@ from model import ImageQuery
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import sessionmaker
 
 from app.core.database import DatabaseManager
 from app.core.utils import create_iqe, prefixed_ksuid
