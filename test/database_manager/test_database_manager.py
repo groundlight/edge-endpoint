@@ -4,9 +4,10 @@ import pytest
 import pytest_asyncio
 from model import ImageQuery
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base
 
 from app.core.database import DatabaseManager
 from app.core.utils import create_iqe, prefixed_ksuid
@@ -34,13 +35,35 @@ def db_manager():
 @pytest_asyncio.fixture(scope="function")
 async def database_reset(db_manager: DatabaseManager):
     """
-    Reset the database before every test function
+    Reset the database before every test function and yield control to the test function.
     """
     async with db_manager.session() as session:
         await session.execute(text("DELETE FROM detector_deployments"))
         await session.execute(text("DELETE FROM image_queries_edge"))
         await session.commit()
         yield
+
+
+@pytest.mark.asyncio
+async def test_create_tables_raises_operational_error(db_manager: DatabaseManager, database_reset):
+    Base = declarative_base()
+    async with db_manager.session() as session:
+        db_manager.DetectorDeployment = None
+
+        # We should get an error here because the schema is not well-defined.
+        # SQLAlchemy will try to look for any fields in the `detector_deployment`
+        # table, and when it doesn't find any, it will raise an error.
+        detector_deployment_table = db_manager.DetectorDeployment    
+        with pytest.raises(SQLAlchemyError):
+
+            class MonkeyPatchDetectorDeploymentTable(Base):
+                __tablename__ = "detector_deployments"
+
+            db_manager.DetectorDeployment = MonkeyPatchDetectorDeploymentTable
+            await db_manager.create_tables()
+
+        db_manager.DetectorDeployment = detector_deployment_table
+        await session.rollback()
 
 
 @pytest.mark.asyncio
@@ -103,6 +126,31 @@ async def test_get_iqe_record(db_manager: DatabaseManager, database_reset):
     # Get the record
     retrieved_record = await db_manager.get_iqe_record(image_query_id=image_query.id)
     assert retrieved_record == image_query
+
+
+# @pytest.mark.asyncio
+# async def test_create_iqe_record_raises_integrity_error(db_manager: DatabaseManager, database_reset):
+#     """
+#     Tests that if we try to create an image query record that already exists, we get an IntegrityError.
+#     """
+#     image_query: ImageQuery = create_iqe(
+#         detector_id=prefixed_ksuid("det_"), label="test_label", confidence=0.5, query="test_query"
+#     )
+#     await db_manager.create_iqe_record(record=image_query)
+
+#     with pytest.raises(IntegrityError):
+#         await db_manager.create_iqe_record(record=image_query)
+
+#     # Try to delete the record and then create it again to make sure that no error
+#     # gets raised.
+#     async with db_manager.session() as session:
+#         await session.execute(text(f"DELETE FROM image_queries_edge WHERE id = '{image_query.id}'"))
+#         session.commit()
+
+#     # Now create the record again
+#     await db_manager.create_iqe_record(record=image_query)
+#     retrieved_record = await db_manager.get_iqe_record(image_query_id=image_query.id)
+#     assert retrieved_record == image_query
 
 
 @pytest.mark.asyncio
@@ -176,3 +224,21 @@ async def test_create_detector_record_raises_integrity_error(db_manager: Databas
 
         with pytest.raises(IntegrityError):
             await db_manager.create_detector_deployment_record(record=record)
+
+
+@pytest.mark.asyncio
+async def test_query_detector_deployments_raises_sqlalchemy_error(db_manager: DatabaseManager, database_reset):
+    detector_record = {
+        "detector_id": prefixed_ksuid("det_"),
+        "api_token": prefixed_ksuid("api_"),
+        "deployment_created": False,
+    }
+    await db_manager.create_detector_deployment_record(record=detector_record)
+
+    # We will query with invalid parameters and make sure that we get an error
+    # Here `image_query_id` is not a valid field in the `detector_deployments` table, so
+    # we should get an error.
+    with pytest.raises(SQLAlchemyError):
+        await db_manager.query_detector_deployments(
+            detector_id=detector_record["detector_id"], image_query_id="invalid_id"
+        )

@@ -9,7 +9,7 @@ import cachetools
 from cachetools import TTLCache
 from model import ImageQuery
 from sqlalchemy import JSON, Boolean, Column, String, select, DateTime
-from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.asyncio.engine import AsyncEngine
 from sqlalchemy.orm import declarative_base, sessionmaker, validates
@@ -112,6 +112,8 @@ class DatabaseManager:
         self._engine: AsyncEngine = create_async_engine(db_url, echo=verbose)
 
         # Factory for creating new AsyncSession objects.
+        # AsyncSession is a mutable, stateful object which represents a single database
+        # transaction in progress.
         self.session = sessionmaker(bind=self._engine, expire_on_commit=False, class_=AsyncSession)
 
     async def create_detector_deployment_record(self, record: Dict[str, str]) -> None:
@@ -147,9 +149,11 @@ class DatabaseManager:
                 detectors = await self.query_detector_deployments(detector_id=record["detector_id"])
                 assert detectors is not None and len(detectors) == 1
                 existing_api_token = detectors[0]["api_token"]
-                if existing_api_token != api_token:
-                    logger.info(f"Updating API token for detector ID {record['detector_id']}.")
-                    await self.update_detector_deployment_record(detector_id=record["detector_id"], new_record=record)
+
+                if existing_api_token == api_token:
+                    raise e
+                logger.info(f"Updating API token for detector ID {record['detector_id']}.")
+                await self.update_detector_deployment_record(detector_id=record["detector_id"], new_record=record)
 
             else:
                 logger.error("Integrity error occured", exc_info=True)
@@ -157,14 +161,20 @@ class DatabaseManager:
 
     async def update_detector_deployment_record(self, detector_id: str, new_record: Dict[str, str]) -> None:
         """
-        Check if detector_id is a record in the database. If it is, and the deployment_created field is False,
-        update the deployment_created field to True.
+        Update the record for the given detector.
         :param detector_id: Detector ID
         :type detector_id: str
+
+        :param new_record: A dictionary containing the new values for the record. This is expected to be
+        a subset of the fields in the `detector_deployments` table.
+        :type new_record: Dict[str, str]
 
         :return: None
         :rtype: None
         """
+
+        if not new_record:
+            return
 
         try:
             async with self.session() as session:
@@ -182,8 +192,8 @@ class DatabaseManager:
                 await session.commit()
 
         except IntegrityError:
-            logger.debug(f"Error occured while updating database record for {detector_id=}.", exc_info=True)
             await session.rollback()
+            logger.debug(f"Error occured while updating database record for {detector_id=}.", exc_info=True)
 
     async def create_iqe_record(self, record: ImageQuery) -> None:
         """
@@ -263,27 +273,24 @@ class DatabaseManager:
                 ]
                 return detectors
 
-        except AttributeError:
-            logger.error("Invalid query predicate.", exc_info=True)
-
-        except SQLAlchemyError:
+        except SQLAlchemyError as e:
             logger.error("Error occured while querying database.", exc_info=True)
-
-        return None
+            raise e
 
     async def create_tables(self) -> None:
         """
-        Checks if the database tables exist and if they don't create them
-        :param tables: A list of database tables in the database
-
+        Create the database tables if they don't exist.
+        `Base.metadata.create_all` will create tables from all classes that inherit from `Base`.
+        If the tables already exist, this will do nothing.
         :return: None
         :rtype: None
         """
         try:
             async with self._engine.begin() as connection:
                 await connection.run_sync(Base.metadata.create_all)
-        except OperationalError:
+        except SQLAlchemyError as e:
             logger.error("Could not create database tables.", exc_info=True)
+            raise e
 
     async def on_shutdown(self) -> None:
         """
