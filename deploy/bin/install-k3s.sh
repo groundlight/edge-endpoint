@@ -7,6 +7,14 @@ K="k3s kubectl"
 # Update system
 sudo apt update && sudo apt upgrade -y
 
+# Check if policycoreutils is installed, install it if not
+if dpkg -l policycoreutils | grep -qw ii; then
+    echo "policycoreutils is already installed."
+else
+    echo "Installing policycoreutils..."
+    sudo apt-get install -y policycoreutils
+fi
+
 # Install k3s
 echo "Installing k3s..."
 curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" sh -
@@ -35,5 +43,5 @@ else
 fi
 
 # Set up kubeconfig for the current user
-mkdir -p ~/.kube
-cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+# mkdir -p ~/.kube
+# cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
