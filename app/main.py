@@ -11,6 +11,7 @@ from app.api.naming import API_BASE_PATH
 from .core.app_state import AppState
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+DEPLOY_DETECTOR_LEVEL_INFERENCE = os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", None)
 
 logging.basicConfig(level=LOG_LEVEL)
 
@@ -47,11 +48,12 @@ async def startup_event():
     db_manager = app.state.app_state.db_manager
     await db_manager.create_tables()
 
-    # Add job to periodically update the inference config
-    scheduler.add_job(update_inference_config, "interval", seconds=30, args=[app.state.app_state])
+    if DEPLOY_DETECTOR_LEVEL_INFERENCE:
+        # Add job to periodically update the inference config
+        scheduler.add_job(update_inference_config, "interval", seconds=30, args=[app.state.app_state])
 
-    # Start the scheduler
-    scheduler.start()
+        # Start the scheduler
+        scheduler.start()
 
 
 @app.on_event("shutdown")
@@ -59,4 +61,6 @@ async def shutdown_event():
     # Dispose off the database engine
     db_manager = app.state.app_state.db_manager
     await db_manager.on_shutdown()
-    scheduler.shutdown()
+
+    if DEPLOY_DETECTOR_LEVEL_INFERENCE:
+        scheduler.shutdown()

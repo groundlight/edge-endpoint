@@ -53,6 +53,10 @@ RUN mkdir /etc/groundlight
 RUN mkdir /etc/groundlight/edge-config && \
     mkdir /etc/groundlight/inference-deployment
 
+# Adding this here for testing purposes. In production, this will be mounted as persistent 
+# volume in the kubernetes cluster. 
+RUN mkdir -p /var/groundlight/sqlite
+
 # Copy configs
 COPY configs ${APP_ROOT}/configs
 
