@@ -7,7 +7,7 @@ from typing import Dict, List, Tuple
 import cachetools
 from cachetools import TTLCache
 from model import ImageQuery
-from sqlalchemy import JSON, Boolean, Column, DateTime, String, select, Integer
+from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.asyncio.engine import AsyncEngine
@@ -158,8 +158,6 @@ class DatabaseManager:
 
             else:
                 raise e
-
-        return None
 
     async def update_detector_deployment_record(self, detector_id: str, new_record: Dict[str, str]) -> None:
         """
