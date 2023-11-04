@@ -7,7 +7,7 @@ from typing import Dict, List, Tuple
 import cachetools
 from cachetools import TTLCache
 from model import ImageQuery
-from sqlalchemy import JSON, Boolean, Column, DateTime, String, select
+from sqlalchemy import JSON, Boolean, Column, DateTime, String, select, Integer
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.asyncio.engine import AsyncEngine
@@ -34,14 +34,14 @@ def validate_uid(uid: str) -> None:
     if "_" in uid:
         prefix, suffix = uid.split("_", 1)
         if len(prefix) > 10:
-            raise SQLAlchemyError(f"Invalid ID {uid} - prefix too long")
+            raise ValueError(f"Invalid ID {uid} - prefix too long")
         if not alphanumeric.match(prefix):
-            raise SQLAlchemyError(f"Invalid ID {uid} - prefix has non-alphanumeric")
+            raise ValueError(f"Invalid ID {uid} - prefix has non-alphanumeric")
         uid = suffix
     if len(uid) < 27:
-        raise SQLAlchemyError(f"Invalid ID {uid} - id is too short")
+        raise ValueError(f"Invalid ID {uid} - id is too short")
     if not alphanumeric.match(uid):
-        raise SQLAlchemyError(f"Invalid ID {uid} - idhas non-alphanumeric")
+        raise ValueError(f"Invalid ID {uid} - id has non-alphanumeric")
 
 
 class DatabaseManager:
@@ -51,9 +51,8 @@ class DatabaseManager:
         """
 
         __tablename__ = "detector_deployments"
-        detector_id = Column(
-            String(44), primary_key=True, unique=True, nullable=False, index=True, comment="Detector ID"
-        )
+        id = Column(Integer, primary_key=True, nullable=True, autoincrement=True)
+        detector_id = Column(String(44), unique=True, nullable=False, comment="Detector ID")
         api_token = Column(String(44), nullable=False, comment="API token")
         deployment_created = Column(
             Boolean,
@@ -62,7 +61,7 @@ class DatabaseManager:
             comment="Indicates if the given detector already has an inference deployment.",
         )
         created_at = Column(
-            DateTime, nullable=False, default=datetime.datetime.utcnow, comment="Timestamp of record creation"
+            DateTime, nullable=True, default=datetime.datetime.utcnow, comment="Timestamp of record creation"
         )
         updated_at = Column(
             DateTime,
@@ -72,7 +71,7 @@ class DatabaseManager:
             comment="Timestamp of record update",
         )
 
-        @validates("detector_id", "api_token")
+        @validates("detector_id")
         def validate_uid(self, key, value):
             validate_uid(value)
             return value
@@ -142,21 +141,25 @@ class DatabaseManager:
 
             # Check if the error specifically occurred due to the unique constraint on the detector_id column.
             # If it did, then we can ignore the error.
+            # if "detector_id" in str(e.orig):
+
             if "detector_id" in str(e.orig):
                 logger.debug(f"Detector ID {record['detector_id']} already exists in the database.")
 
                 detectors = await self.query_detector_deployments(detector_id=record["detector_id"])
-                assert detectors is not None and len(detectors) == 1
+                if detectors is None or len(detectors) != 1:
+                    raise AssertionError("Expected exactly one detector to be returned.")
+
                 existing_api_token = detectors[0]["api_token"]
 
-                if existing_api_token == api_token:
-                    raise e
-                logger.info(f"Updating API token for detector ID {record['detector_id']}.")
-                await self.update_detector_deployment_record(detector_id=record["detector_id"], new_record=record)
+                if existing_api_token != api_token:
+                    logger.info(f"Updating API token for detector ID {record['detector_id']}.")
+                    await self.update_detector_deployment_record(detector_id=record["detector_id"], new_record=record)
 
             else:
-                logger.error("Integrity error occured", exc_info=True)
                 raise e
+
+        return None
 
     async def update_detector_deployment_record(self, detector_id: str, new_record: Dict[str, str]) -> None:
         """
@@ -193,6 +196,38 @@ class DatabaseManager:
         except IntegrityError:
             await session.rollback()
             logger.debug(f"Error occured while updating database record for {detector_id=}.", exc_info=True)
+
+    async def query_detector_deployments(self, **kwargs) -> List[Dict[str, str]] | None:
+        """
+        Query the database table for detectors based on a given query predicate.
+        :param kwargs: A dictionary containing the query predicate.
+        :throws AttributeError: If the query predicate is invalid.
+        """
+        try:
+            async with self.session() as session:
+                query = select(
+                    self.DetectorDeployment.detector_id,
+                    self.DetectorDeployment.api_token,
+                    self.DetectorDeployment.deployment_created,
+                ).filter_by(**kwargs)
+                query_results: List[Tuple] = await session.execute(query)
+                query_results: List[Tuple] = query_results.fetchall()
+                if not query_results:
+                    return None
+
+                detectors = [
+                    {
+                        "detector_id": row[0],
+                        "api_token": row[1],
+                        "deployment_created": row[2],
+                    }
+                    for row in query_results
+                ]
+                return detectors
+
+        except SQLAlchemyError as e:
+            logger.error("Error occured while querying database.", exc_info=True)
+            raise e
 
     async def create_iqe_record(self, record: ImageQuery) -> None:
         """
@@ -243,38 +278,6 @@ class DatabaseManager:
                 return None
 
             return ImageQuery(**result_row)
-
-    async def query_detector_deployments(self, **kwargs) -> List[Dict[str, str]] | None:
-        """
-        Query the database table for detectors based on a given query predicate.
-        :param kwargs: A dictionary containing the query predicate.
-        :throws AttributeError: If the query predicate is invalid.
-        """
-        try:
-            async with self.session() as session:
-                query = select(
-                    self.DetectorDeployment.detector_id,
-                    self.DetectorDeployment.api_token,
-                    self.DetectorDeployment.deployment_created,
-                ).filter_by(**kwargs)
-                query_results: List[Tuple] = await session.execute(query)
-                query_results: List[Tuple] = query_results.fetchall()
-                if not query_results:
-                    return None
-
-                detectors = [
-                    {
-                        "detector_id": row[0],
-                        "api_token": row[1],
-                        "deployment_created": row[2],
-                    }
-                    for row in query_results
-                ]
-                return detectors
-
-        except SQLAlchemyError as e:
-            logger.error("Error occured while querying database.", exc_info=True)
-            raise e
 
     async def create_tables(self) -> None:
         """

@@ -128,7 +128,6 @@ async def post_image_query(
     else:
         # Run an asynchronous task to create a record in the database table for this detector to indicate that
         # edge inference for the given detector ID is not yet set up.
-        logger.info(f"Creating database record for {detector_id=}")
         api_token = gl.api_client.configuration.api_key["ApiToken"]
         asyncio.create_task(
             app_state.db_manager.create_detector_deployment_record(

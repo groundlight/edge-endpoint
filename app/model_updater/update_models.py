@@ -13,9 +13,7 @@ from app.core.kubernetes_management import InferenceDeploymentManager
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=log_level)
 
-REFRESH_RATE = 60
 TEN_MINUTES = 60 * 10
-DATABASE_CHECK_INTERVAL = 60
 
 
 def sleep_forever(message: str | None = None):
@@ -30,6 +28,17 @@ def get_detector_ids_without_deployments(db_manager: DatabaseManager) -> List[Di
     :param db_manager: Database manager instance.
     """
     return asyncio.run(db_manager.query_detector_deployments(deployment_created=False))
+
+
+def get_refresh_rate(root_edge_config: RootEdgeConfig) -> float:
+    """
+    Get the time interval (in seconds) between model update calls.
+    """
+    if not root_edge_config or not root_edge_config.local_inference_templates:
+        raise ValueError("Invalid root edge config")
+
+    default_inference_config = root_edge_config.local_inference_templates["default"]
+    return default_inference_config.refresh_rate
 
 
 def _check_new_models_and_inference_deployments(
@@ -64,17 +73,21 @@ def _check_new_models_and_inference_deployments(
         logging.info(f"Cleaning up old model versions for {detector_id}")
         delete_old_model_versions(detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2)
 
-    # Database transaction to update the deployment_created field for the detector_id
-    # At this time, we are sure that the deployment for the detector has been successfully created and rolled out.
-    asyncio.run(
-        db_manager.update_detector_deployment_record(detector_id=detector_id, new_record={"deployment_created": True})
-    )
+    if deployment_manager.is_inference_deployment_rollout_complete(detector_id):
+        # Database transaction to update the deployment_created field for the detector_id
+        # At this time, we are sure that the deployment for the detector has been successfully created and rolled out.
+        asyncio.run(
+            db_manager.update_detector_deployment_record(
+                detector_id=detector_id, new_record={"deployment_created": True}
+            )
+        )
 
 
 def update_models(
     edge_inference_manager: EdgeInferenceManager,
     deployment_manager: InferenceDeploymentManager,
     db_manager: DatabaseManager,
+    refresh_rate: float,
 ) -> None:
     if not os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", None):
         sleep_forever("Edge inference is disabled globally... sleeping forever.")
@@ -94,8 +107,8 @@ def update_models(
                 logging.error(f"Failed to update model for {detector_id}", exc_info=True)
 
         elapsed_s = time.time() - start
-        if elapsed_s < REFRESH_RATE:
-            time.sleep(REFRESH_RATE - elapsed_s)
+        if elapsed_s < refresh_rate:
+            time.sleep(refresh_rate - elapsed_s)
 
         # Fetch detector IDs that need to be deployed from the database and add them to the config
         undeployed_detector_ids: List[Dict[str, str]] = get_detector_ids_without_deployments(db_manager=db_manager)
@@ -107,6 +120,7 @@ def update_models(
 
 if __name__ == "__main__":
     edge_config: RootEdgeConfig = load_edge_config()
+    refresh_rate = get_refresh_rate(root_edge_config=edge_config)
     inference_config, _ = get_inference_and_motion_detection_configs(root_edge_config=edge_config)
 
     edge_inference_manager = EdgeInferenceManager(config=inference_config, verbose=True)
@@ -117,5 +131,8 @@ if __name__ == "__main__":
     db_manager = DatabaseManager()
 
     update_models(
-        edge_inference_manager=edge_inference_manager, deployment_manager=deployment_manager, db_manager=db_manager
+        edge_inference_manager=edge_inference_manager,
+        deployment_manager=deployment_manager,
+        db_manager=db_manager,
+        refresh_rate=refresh_rate,
     )

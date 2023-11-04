@@ -7,9 +7,16 @@ K="k3s kubectl"
 # Update system
 sudo apt update && sudo apt upgrade -y
 
+if dpkg -l policycoreutils | grep -qw ii; then
+    echo "policycoreutils is already installed."
+else
+    echo "Installing policycoreutils..."
+    sudo apt-get install -y policycoreutils
+fi
+
 # Install k3s
 echo "Installing k3s..."
-curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" sh -
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.28.2+k3s1 K3S_KUBECONFIG_MODE="644" sh -
 
 check_k3s_is_running() {
     local TIMEOUT=30 # Maximum wait time of 30 seconds
@@ -35,5 +42,5 @@ else
 fi
 
 # Set up kubeconfig for the current user
-mkdir -p ~/.kube
-cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+# mkdir -p ~/.kube
+# cp /etc/rancher/k3s/k3s.yaml ~/.kube/config

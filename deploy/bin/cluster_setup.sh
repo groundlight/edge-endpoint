@@ -12,9 +12,11 @@ fail() {
 
 K="k3s kubectl"
 INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"GPU"}
+DB_RESTART=$1
 
-# Ensure database file has been correctly setup 
-./deploy/bin/setup_db.sh
+# Ensure database file has been correctly setup. If the first argument is "db_reset",
+# all the data in the database will be deleted first. 
+./deploy/bin/setup_db.sh $DB_RESTART
 
 # Secrets
 ./deploy/bin/make-aws-secret.sh

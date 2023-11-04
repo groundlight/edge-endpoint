@@ -43,33 +43,6 @@ async def database_reset(db_manager: DatabaseManager):
         yield
 
 
-# @pytest.mark.asyncio
-# async def test_create_tables_raises_operational_error(db_manager: DatabaseManager, database_reset):
-
-#     # Deep copy the database manager so that we can monkey patch the `DetectorDeployment` table
-#     # and then restore it later.
-#     new_db_manager = deepcopy(db_manager)
-
-#     Base = declarative_base()
-#     async with new_db_manager.session() as session:
-
-#         # We should get an error here because the schema is not well-defined.
-#         # SQLAlchemy will try to look for any fields in the `detector_deployment`
-#         # table, and when it doesn't find any, it will raise an error.
-#         detector_deployment_table = new_db_manager.DetectorDeployment
-#         with pytest.raises(SQLAlchemyError):
-
-#             class MonkeyPatchDetectorDeploymentTable(Base):
-#                 __tablename__ = "detector_deployments"
-
-#             new_db_manager.DetectorDeployment = MonkeyPatchDetectorDeploymentTable
-#             await new_db_manager.create_tables()
-
-#         await session.rollback()
-
-#     del new_db_manager
-
-
 @pytest.mark.asyncio
 async def test_create_detector_deployment_record(db_manager: DatabaseManager, database_reset):
     """
@@ -132,31 +105,6 @@ async def test_get_iqe_record(db_manager: DatabaseManager, database_reset):
     assert retrieved_record == image_query
 
 
-# @pytest.mark.asyncio
-# async def test_create_iqe_record_raises_integrity_error(db_manager: DatabaseManager, database_reset):
-#     """
-#     Tests that if we try to create an image query record that already exists, we get an IntegrityError.
-#     """
-#     image_query: ImageQuery = create_iqe(
-#         detector_id=prefixed_ksuid("det_"), label="test_label", confidence=0.5, query="test_query"
-#     )
-#     await db_manager.create_iqe_record(record=image_query)
-
-#     with pytest.raises(IntegrityError):
-#         await db_manager.create_iqe_record(record=image_query)
-
-#     # Try to delete the record and then create it again to make sure that no error
-#     # gets raised.
-#     async with db_manager.session() as session:
-#         await session.execute(text(f"DELETE FROM image_queries_edge WHERE id = '{image_query.id}'"))
-#         session.commit()
-
-#     # Now create the record again
-#     await db_manager.create_iqe_record(record=image_query)
-#     retrieved_record = await db_manager.get_iqe_record(image_query_id=image_query.id)
-#     assert retrieved_record == image_query
-
-
 @pytest.mark.asyncio
 async def test_update_detector_deployment_record(db_manager: DatabaseManager, database_reset):
     """
@@ -213,10 +161,13 @@ async def test_update_api_token_for_detector(db_manager: DatabaseManager, databa
 
 
 @pytest.mark.asyncio
-async def test_create_detector_record_raises_integrity_error(db_manager: DatabaseManager, database_reset):
+async def test_create_detector_record_raises_validation_error(db_manager: DatabaseManager, database_reset):
+    """
+    Creating detector record with invalid detector_id should raise a ValueError.
+    """
     records = [
         {
-            "detector_id": prefixed_ksuid("det_"),
+            "detector_id": prefixed_ksuid("det_") + prefixed_ksuid("_"),
             "api_token": prefixed_ksuid("api_"),
             "deployment_created": False,
         }
@@ -224,9 +175,7 @@ async def test_create_detector_record_raises_integrity_error(db_manager: Databas
     ]
 
     for record in records:
-        await db_manager.create_detector_deployment_record(record=record)
-
-        with pytest.raises(IntegrityError):
+        with pytest.raises(ValueError):
             await db_manager.create_detector_deployment_record(record=record)
 
 
