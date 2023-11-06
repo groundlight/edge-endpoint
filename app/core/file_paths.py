@@ -4,3 +4,5 @@ INFERENCE_DEPLOYMENT_TEMPLATE_PATH = "/etc/groundlight/inference-deployment/infe
 # Path to the database file.
 # This must also match the path used in the PersistentVolumeClaim definition for the database.
 DATABASE_FILEPATH = "/var/groundlight/sqlite/sqlite.db"
+
+DATABASE_ORM_LOG_FILE = "sqlalchemy.log"

@@ -66,13 +66,13 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       containers:
       - name: edge-endpoint
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:d33c65245-setup-sqlite-database
+        image: 7723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:setup-sqlite-database-f042d164e-dirty-10c2f8950d5e24c
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
         env:
         - name: LOG_LEVEL
-          value: "INFO"
+          value: "DEBUG"
         - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
           value: "True"
         volumeMounts:
@@ -82,13 +82,13 @@ spec:
           mountPath: /var/groundlight/sqlite
 
       - name: inference-model-updater
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:d33c65245-setup-sqlite-database
+        image: 7723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:setup-sqlite-database-f042d164e-dirty-10c2f8950d5e24c
         imagePullPolicy: IfNotPresent
         command: ["/bin/bash", "-c"]
         args: ["poetry run python -m app.model_updater.update_models"]
         env:
         - name: LOG_LEVEL
-          value: "INFO"
+          value: "DEBUG"
         - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
           value: "True"
         volumeMounts:

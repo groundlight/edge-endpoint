@@ -1,6 +1,7 @@
 import datetime
 import json
 import logging
+from logging.handlers import RotatingFileHandler
 import re
 from typing import Dict, List, Tuple
 
@@ -13,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.asyncio.engine import AsyncEngine
 from sqlalchemy.orm import declarative_base, sessionmaker, validates
 
-from .file_paths import DATABASE_FILEPATH
+from .file_paths import DATABASE_FILEPATH, DATABASE_ORM_LOG_FILE
 
 logger = logging.getLogger(__name__)
 Base = declarative_base()
@@ -106,13 +107,24 @@ class DatabaseManager:
         Initializes the database engine which manages creating and closing connection pools efficiently.
         :param verbose: If True, will print out all executed database queries.
         """
+
+        log_level = logger.getEffectiveLevel()
+        if verbose or log_level == logging.DEBUG:
+            file_handler = RotatingFileHandler(DATABASE_ORM_LOG_FILE, maxBytes=10_000_000, backupCount=10)
+            formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            file_handler.setFormatter(formatter)
+
+            sqlalchemy_logger = logging.getLogger("sqlalchemy.engine")
+            sqlalchemy_logger.setLevel(logging.INFO)
+            sqlalchemy_logger.addHandler(file_handler)
+
         db_url = f"sqlite+aiosqlite:///{DATABASE_FILEPATH}"
         self._engine: AsyncEngine = create_async_engine(db_url, echo=verbose)
 
         # Factory for creating new AsyncSession objects.
         # AsyncSession is a mutable, stateful object which represents a single database
         # transaction in progress.
-        self.session = sessionmaker(bind=self._engine, expire_on_commit=False, class_=AsyncSession)
+        self.session = sessionmaker(bind=self._engine, expire_on_commit=True, class_=AsyncSession)
 
     async def create_detector_deployment_record(self, record: Dict[str, str]) -> None:
         """
