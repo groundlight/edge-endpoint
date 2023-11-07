@@ -108,15 +108,8 @@ class DatabaseManager:
         :param verbose: If True, will print out all executed database queries.
         """
 
-        log_level = logger.getEffectiveLevel()
-        if verbose or log_level == logging.DEBUG:
-            file_handler = RotatingFileHandler(DATABASE_ORM_LOG_FILE, maxBytes=10_000_000, backupCount=10)
-            formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-            file_handler.setFormatter(formatter)
-
-            sqlalchemy_logger = logging.getLogger("sqlalchemy.engine")
-            sqlalchemy_logger.setLevel(logging.INFO)
-            sqlalchemy_logger.addHandler(file_handler)
+        log_level = logging.DEBUG if verbose else logging.INFO
+        self._configure_logging(log_level)
 
         db_url = f"sqlite+aiosqlite:///{DATABASE_FILEPATH}"
         self._engine: AsyncEngine = create_async_engine(db_url, echo=verbose)
@@ -125,6 +118,30 @@ class DatabaseManager:
         # AsyncSession is a mutable, stateful object which represents a single database
         # transaction in progress.
         self.session = sessionmaker(bind=self._engine, expire_on_commit=True, class_=AsyncSession)
+
+    def _configure_logging(self, log_level) -> None:
+        """
+        Configures logging for SQLAlchemy and aiosqlite. This is just so we can declutter the logs.
+        Logs from the database will be written to the file specified by `DATABASE_ORM_LOG_FILE`.
+        """
+        # configure SQLAlchemy logging
+        sqlalchemy_logger = logging.getLogger("sqlalchemy.engine")
+        sqlalchemy_logger.setLevel(log_level)
+
+        # configure aiosqlite logging
+        aiosqlite_logger = logging.getLogger("aiosqlite")
+        aiosqlite_logger.setLevel(log_level)
+
+        file_handler = RotatingFileHandler(DATABASE_ORM_LOG_FILE, maxBytes=10_000_000, backupCount=10)
+        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        file_handler.setFormatter(formatter)
+
+        sqlalchemy_logger.addHandler(file_handler)
+        aiosqlite_logger.addHandler(file_handler)
+
+        # Ensure that other handlers do not propagate here
+        sqlalchemy_logger.propagate = False
+        aiosqlite_logger.propagate = False
 
     async def create_detector_deployment_record(self, record: Dict[str, str]) -> None:
         """
