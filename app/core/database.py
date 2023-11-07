@@ -1,8 +1,8 @@
 import datetime
 import json
 import logging
-from logging.handlers import RotatingFileHandler
 import re
+from logging.handlers import RotatingFileHandler
 from typing import Dict, List, Tuple
 
 import cachetools
