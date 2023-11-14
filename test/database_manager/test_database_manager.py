@@ -2,7 +2,6 @@ import pytest
 from model import ImageQuery
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import DatabaseManager

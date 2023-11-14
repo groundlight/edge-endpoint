@@ -14,7 +14,6 @@ from .database import DatabaseManager
 from .edge_inference import EdgeInferenceManager
 from .file_paths import DEFAULT_EDGE_CONFIG_PATH
 from .motion_detection import MotionDetectionManager
-from .database import DatabaseManager
 from .utils import safe_call_api
 
 logger = logging.getLogger(__name__)
