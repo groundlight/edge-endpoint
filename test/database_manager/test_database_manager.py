@@ -1,9 +1,6 @@
-import asyncio
-
 import pytest
-import pytest_asyncio
 from model import ImageQuery
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -65,7 +62,7 @@ def test_create_inference_deployment_record(db_manager: DatabaseManager, databas
             result = query.first()
             assert result.detector_id == record["detector_id"]
             assert result.api_token == record["api_token"]
-            assert result.deployment_created == record["deployment_created"] == False
+            assert result.deployment_created == record["deployment_created"] is False
 
 
 def test_get_detectors_without_deployments(db_manager, database_reset):
@@ -140,7 +137,7 @@ def test_update_api_token_for_detector(db_manager, database_reset):
     detectors = db_manager.query_inference_deployments(detector_id=record["detector_id"])
     assert len(detectors) == 1
     assert detectors[0]["api_token"] == record["api_token"]
-    assert bool(detectors[0]["deployment_created"]) == False
+    assert bool(detectors[0]["deployment_created"]) is False
 
     # Now change the API token
     new_api_token = prefixed_ksuid("api_")
@@ -152,7 +149,7 @@ def test_update_api_token_for_detector(db_manager, database_reset):
     detectors = db_manager.query_inference_deployments(detector_id=record["detector_id"])
     assert len(detectors) == 1
     assert detectors[0]["api_token"] == new_api_token
-    assert bool(detectors[0]["deployment_created"]) == False
+    assert bool(detectors[0]["deployment_created"]) is False
 
 
 def test_create_detector_record_raises_validation_error(db_manager: DatabaseManager, database_reset):
