@@ -5,9 +5,9 @@ from typing import Dict, List
 
 from app.core.app_state import get_inference_and_motion_detection_configs, load_edge_config
 from app.core.configs import RootEdgeConfig
-from app.core.sync_database import DatabaseManager
 from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions
 from app.core.kubernetes_management import InferenceDeploymentManager
+from app.core.sync_database import DatabaseManager
 
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=log_level)
