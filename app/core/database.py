@@ -123,8 +123,7 @@ class DatabaseManager:
         self._engine: Engine = create_engine(db_url, echo=verbose)
 
         # Factory for creating new Session objects.
-        # A session is a mutable, stateful object that represents a single database
-        # transaction in progress.
+        # A session is a mutable, stateful object that represents a single database transaction in progress.
         self.session_maker = sessionmaker(bind=self._engine)
 
     def _setup_logging(self, level) -> None:

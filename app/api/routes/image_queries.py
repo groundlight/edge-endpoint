@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from io import BytesIO
 from typing import Optional
@@ -118,7 +117,7 @@ async def post_image_query(
                 confidence=confidence,
                 query=detector_metadata.query,
             )
-            asyncio.create_task(app_state.db_manager.create_iqe_record(record=image_query))
+            app_state.db_manager.create_iqe_record(record=image_query)
         else:
             logger.info(
                 "Ran inference locally, but detector confidence is not high enough to return. Current confidence:"
