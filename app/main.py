@@ -24,7 +24,7 @@ app.state.app_state = AppState()
 scheduler = AsyncIOScheduler()
 
 
-async def update_inference_config(app_state: AppState) -> None:
+def update_inference_config(app_state: AppState) -> None:
     """
     Update the edge inference config by querying the database for new detectors.
 
@@ -35,7 +35,7 @@ async def update_inference_config(app_state: AppState) -> None:
     """
 
     db_manager = app_state.db_manager
-    detectors: List[Dict[str, str]] = await db_manager.query_inference_deployments(deployment_created=True)
+    detectors: List[Dict[str, str]] = db_manager.query_inference_deployments(deployment_created=True)
     if detectors:
         for detector_record in detectors:
             detector_id, api_token = detector_record["detector_id"], detector_record["api_token"]
