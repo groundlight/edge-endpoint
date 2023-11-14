@@ -1,14 +1,14 @@
 import datetime
 import json
 import logging
-from logging.handlers import RotatingFileHandler
 import re
+from logging.handlers import RotatingFileHandler
 from typing import Dict, List, Tuple
 
 from model import ImageQuery
-from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, select, create_engine
+from sqlalchemy import JSON, Boolean, Column, DateTime, String, create_engine, select
 from sqlalchemy.engine.base import Engine
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import declarative_base, sessionmaker, validates
 
 from .file_paths import DATABASE_FILEPATH, DATABASE_ORM_LOG_FILE
