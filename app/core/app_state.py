@@ -10,7 +10,7 @@ from groundlight import Groundlight
 from model import Detector
 
 from .configs import LocalInferenceConfig, MotionDetectionConfig, RootEdgeConfig
-from .sync_database import DatabaseManager
+from .database import DatabaseManager
 from .edge_inference import EdgeInferenceManager
 from .file_paths import DEFAULT_EDGE_CONFIG_PATH
 from .motion_detection import MotionDetectionManager

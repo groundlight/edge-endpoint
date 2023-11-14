@@ -17,6 +17,13 @@ To start the cluster, run
 > ./deploy/bin/cluster_setup.sh
 ```
 
+Sometimes it might be desirable to reset all database tables(i.e., delete all existing data) for a fresh start. In that case, 
+you will need to start the cluster with an extra argument:
+
+```shell
+> ./deploy/bin/cluster_setup.sh db_reset
+```
+
 This will create the edge-endpoint deployment with two containers: one for the edge logic and another one for creating/updating inference
 deployments. After a while you should be able to see something like this if you run `kubectl get pods`:
 

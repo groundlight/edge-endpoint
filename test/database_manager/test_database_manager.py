@@ -6,6 +6,7 @@ from model import ImageQuery
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import DatabaseManager
@@ -20,31 +21,30 @@ def db_manager():
     Create a database manager for the entire test module.
     """
     db_manager = DatabaseManager(verbose=False)
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    engine = create_engine("sqlite:///:memory:", echo=False)
     db_manager._engine = engine
-    db_manager.session = sessionmaker(bind=db_manager._engine, expire_on_commit=False, class_=AsyncSession)
-    asyncio.run(db_manager.create_tables())
+    db_manager.session_maker = sessionmaker(bind=db_manager._engine)
+    db_manager.create_tables()
 
     yield db_manager
 
     # Tear down
-    asyncio.run(db_manager.on_shutdown())
+    db_manager.shutdown()
 
 
-@pytest_asyncio.fixture(scope="function")
-async def database_reset(db_manager: DatabaseManager):
+@pytest.fixture(scope="function")
+def database_reset(db_manager: DatabaseManager):
     """
     Reset the database before every test function and yield control to the test function.
     """
-    async with db_manager.session() as session:
-        await session.execute(text("DELETE FROM detector_deployments"))
-        await session.execute(text("DELETE FROM image_queries_edge"))
-        await session.commit()
+    with db_manager.session_maker() as session:
+        session.execute(text("DELETE FROM inference_deployments"))
+        session.execute(text("DELETE FROM image_queries_edge"))
+        session.commit()
         yield
 
 
-@pytest.mark.asyncio
-async def test_create_detector_deployment_record(db_manager: DatabaseManager, database_reset):
+def test_create_inference_deployment_record(db_manager: DatabaseManager, database_reset):
     """
     Test creating a new detector deployment record.
     """
@@ -59,18 +59,17 @@ async def test_create_detector_deployment_record(db_manager: DatabaseManager, da
     ]
 
     for record in records:
-        await db_manager.create_detector_deployment_record(record=record)
-        async with db_manager.session() as session:
-            query_text = f"SELECT * FROM detector_deployments WHERE detector_id = '{record['detector_id']}'"
-            query = await session.execute(text(query_text))
+        db_manager.create_inference_deployment_record(record=record)
+        with db_manager.session_maker() as session:
+            query_text = f"SELECT * FROM inference_deployments WHERE detector_id = '{record['detector_id']}'"
+            query = session.execute(text(query_text))
             result = query.first()
             assert result.detector_id == record["detector_id"]
             assert result.api_token == record["api_token"]
-            assert result.deployment_created == record["deployment_created"] is False
+            assert result.deployment_created == record["deployment_created"] == False
 
 
-@pytest.mark.asyncio
-async def test_get_detectors_without_deployments(db_manager: DatabaseManager, database_reset):
+def test_get_detectors_without_deployments(db_manager, database_reset):
     """
     Check that when we retrieve detector deployment records we get what we expect.
     """
@@ -84,29 +83,27 @@ async def test_get_detectors_without_deployments(db_manager: DatabaseManager, da
     ]
 
     for record in records:
-        await db_manager.create_detector_deployment_record(record=record)
+        db_manager.create_inference_deployment_record(record=record)
 
-    undeployed_detectors = await db_manager.query_detector_deployments(deployment_created=False)
+    undeployed_detectors = db_manager.query_inference_deployments(deployment_created=False)
     assert len(undeployed_detectors) == NUM_TESTING_RECORDS
     for record in undeployed_detectors:
         assert record["detector_id"] in [r["detector_id"] for r in records]
         assert record["api_token"] in [r["api_token"] for r in records]
 
 
-@pytest.mark.asyncio
-async def test_get_iqe_record(db_manager: DatabaseManager, database_reset):
+def test_get_iqe_record(db_manager, database_reset):
     image_query: ImageQuery = create_iqe(
         detector_id=prefixed_ksuid("det_"), label="test_label", confidence=0.5, query="test_query"
     )
-    await db_manager.create_iqe_record(record=image_query)
+    db_manager.create_iqe_record(record=image_query)
 
     # Get the record
-    retrieved_record = await db_manager.get_iqe_record(image_query_id=image_query.id)
+    retrieved_record = db_manager.get_iqe_record(image_query_id=image_query.id)
     assert retrieved_record == image_query
 
 
-@pytest.mark.asyncio
-async def test_update_detector_deployment_record(db_manager: DatabaseManager, database_reset):
+def test_update_inference_deployment_record(db_manager, database_reset):
     """
     Create a few testing records, update the deployment_created field, and check that the update was successful.
     """
@@ -120,48 +117,46 @@ async def test_update_detector_deployment_record(db_manager: DatabaseManager, da
     ]
 
     for record in records:
-        await db_manager.create_detector_deployment_record(record=record)
-        await db_manager.update_detector_deployment_record(
+        db_manager.create_inference_deployment_record(record=record)
+        db_manager.update_inference_deployment_record(
             detector_id=record["detector_id"], new_record={"deployment_created": True}
         )
 
-        async with db_manager.session() as session:
-            query_text = f"SELECT * FROM detector_deployments WHERE detector_id = '{record['detector_id']}'"
-            query = await session.execute(text(query_text))
+        with db_manager.session_maker() as session:
+            query_text = f"SELECT * FROM inference_deployments WHERE detector_id = '{record['detector_id']}'"
+            query = session.execute(text(query_text))
             result = query.first()
             assert result.detector_id == record["detector_id"]
             assert result.api_token == record["api_token"]
             assert bool(result.deployment_created) is True
 
 
-@pytest.mark.asyncio
-async def test_update_api_token_for_detector(db_manager: DatabaseManager, database_reset):
+def test_update_api_token_for_detector(db_manager, database_reset):
     record = {
         "detector_id": prefixed_ksuid("det_"),
         "api_token": prefixed_ksuid("api_"),
         "deployment_created": False,
     }
-    await db_manager.create_detector_deployment_record(record=record)
-    detectors = await db_manager.query_detector_deployments(detector_id=record["detector_id"])
+    db_manager.create_inference_deployment_record(record=record)
+    detectors = db_manager.query_inference_deployments(detector_id=record["detector_id"])
     assert len(detectors) == 1
     assert detectors[0]["api_token"] == record["api_token"]
-    assert bool(detectors[0]["deployment_created"]) is False
+    assert bool(detectors[0]["deployment_created"]) == False
 
     # Now change the API token
     new_api_token = prefixed_ksuid("api_")
-    await db_manager.update_detector_deployment_record(
+    db_manager.update_inference_deployment_record(
         detector_id=record["detector_id"], new_record={"api_token": new_api_token}
     )
 
     # Check that the API token has been updated
-    detectors = await db_manager.query_detector_deployments(detector_id=record["detector_id"])
+    detectors = db_manager.query_inference_deployments(detector_id=record["detector_id"])
     assert len(detectors) == 1
     assert detectors[0]["api_token"] == new_api_token
-    assert bool(detectors[0]["deployment_created"]) is False
+    assert bool(detectors[0]["deployment_created"]) == False
 
 
-@pytest.mark.asyncio
-async def test_create_detector_record_raises_validation_error(db_manager: DatabaseManager, database_reset):
+def test_create_detector_record_raises_validation_error(db_manager: DatabaseManager, database_reset):
     """
     Creating detector record with invalid detector_id should raise a ValueError.
     """
@@ -176,22 +171,19 @@ async def test_create_detector_record_raises_validation_error(db_manager: Databa
 
     for record in records:
         with pytest.raises(ValueError):
-            await db_manager.create_detector_deployment_record(record=record)
+            db_manager.create_inference_deployment_record(record=record)
 
 
-@pytest.mark.asyncio
-async def test_query_detector_deployments_raises_sqlalchemy_error(db_manager: DatabaseManager, database_reset):
+def test_query_inference_deployments_raises_sqlalchemy_error(db_manager: DatabaseManager, database_reset):
     detector_record = {
         "detector_id": prefixed_ksuid("det_"),
         "api_token": prefixed_ksuid("api_"),
         "deployment_created": False,
     }
-    await db_manager.create_detector_deployment_record(record=detector_record)
+    db_manager.create_inference_deployment_record(record=detector_record)
 
     # We will query with invalid parameters and make sure that we get an error
-    # Here `image_query_id` is not a valid field in the `detector_deployments` table, so
+    # Here `image_query_id` is not a valid field in the `inference_deployments` table, so
     # we should get an error.
     with pytest.raises(SQLAlchemyError):
-        await db_manager.query_detector_deployments(
-            detector_id=detector_record["detector_id"], image_query_id="invalid_id"
-        )
+        db_manager.query_inference_deployments(detector_id=detector_record["detector_id"], image_query_id="invalid_id")

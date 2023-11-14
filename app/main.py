@@ -59,8 +59,7 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     # Dispose off the database engine
-    db_manager = app.state.app_state.db_manager
-    db_manager.on_shutdown()
+    app.state.app_state.db_manager.shutdown()
 
     if DEPLOY_DETECTOR_LEVEL_INFERENCE:
         scheduler.shutdown()
