@@ -8,6 +8,7 @@ from app.core.configs import RootEdgeConfig
 from app.core.database import DatabaseManager
 from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions
 from app.core.kubernetes_management import InferenceDeploymentManager
+from app.core.sync_database import DatabaseManager
 
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=log_level)
