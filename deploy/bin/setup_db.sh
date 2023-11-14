@@ -12,7 +12,7 @@ DROP_QUERY="DROP TABLE IF EXISTS test_table;"
 
 
 reset_tables() {
-    TABLES=( "detector_deployments" "image_queries_edge" )
+    TABLES=( "inference_deployments" "image_queries_edge" )
 
     for TABLE_NAME in "${TABLES[@]}"; do
         if [[ $(sqlite3 "${DATABASE_PATH}" "SELECT name FROM sqlite_master WHERE type='table' AND name='${TABLE_NAME}';") == "${TABLE_NAME}" ]]; then
@@ -48,9 +48,11 @@ else
     # SQLite is eccentric in a sense that if you just invoke `sqlite3 <db_file>`, it won't 
     # actually create the file. We are using a hack here to initialize the database with 
     # a test table and then drop it. 
-    # Oddly, running echo ".exit" | sqlite3 <db_file> doesn't work either.
     echo "${ENTRY_QUERY}" | sqlite3 "${DATABASE_PATH}"
     echo "${DROP_QUERY}" | sqlite3 "${DATABASE_PATH}"
+
+    # Set journal model to Write-Ahead Logging 
+    echo "PRAGMA journal_mode=WAL;" | sqlite3 "${DATABASE_PATH}"
 fi
 
 

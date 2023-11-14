@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import os
 import time
@@ -6,7 +5,7 @@ from typing import Dict, List
 
 from app.core.app_state import get_inference_and_motion_detection_configs, load_edge_config
 from app.core.configs import RootEdgeConfig
-from app.core.database import DatabaseManager
+from app.core.sync_database import DatabaseManager
 from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions
 from app.core.kubernetes_management import InferenceDeploymentManager
 
@@ -20,14 +19,6 @@ def sleep_forever(message: str | None = None):
     while True:
         logging.info(message)
         time.sleep(TEN_MINUTES)
-
-
-def get_detector_ids_without_deployments(db_manager: DatabaseManager) -> List[Dict[str, str]] | None:
-    """
-    NOTE: `asyncio.run` is used here because this function is called from a synchronous context.
-    :param db_manager: Database manager instance.
-    """
-    return asyncio.run(db_manager.query_detector_deployments(deployment_created=False))
 
 
 def get_refresh_rate(root_edge_config: RootEdgeConfig) -> float:
@@ -76,11 +67,7 @@ def _check_new_models_and_inference_deployments(
     if deployment_manager.is_inference_deployment_rollout_complete(detector_id):
         # Database transaction to update the deployment_created field for the detector_id
         # At this time, we are sure that the deployment for the detector has been successfully created and rolled out.
-        asyncio.run(
-            db_manager.update_detector_deployment_record(
-                detector_id=detector_id, new_record={"deployment_created": True}
-            )
-        )
+        db_manager.update_inference_deployment_record(detector_id=detector_id, new_record={"deployment_created": True})
 
 
 def update_models(
@@ -111,11 +98,12 @@ def update_models(
             time.sleep(refresh_rate - elapsed_s)
 
         # Fetch detector IDs that need to be deployed from the database and add them to the config
-        undeployed_detector_ids: List[Dict[str, str]] = get_detector_ids_without_deployments(db_manager=db_manager)
+        undeployed_detector_ids: List[Dict[str, str]] = db_manager.query_inference_deployments(deployment_created=False)
         if undeployed_detector_ids:
             for detector_record in undeployed_detector_ids:
-                detector_id, api_token = detector_record["detector_id"], detector_record["api_token"]
-                edge_inference_manager.update_inference_config(detector_id=detector_id, api_token=api_token)
+                edge_inference_manager.update_inference_config(
+                    detector_id=detector_record["detector_id"], api_token=detector_record["api_token"]
+                )
 
 
 if __name__ == "__main__":

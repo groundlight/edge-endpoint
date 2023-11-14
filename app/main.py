@@ -35,7 +35,7 @@ async def update_inference_config(app_state: AppState) -> None:
     """
 
     db_manager = app_state.db_manager
-    detectors: List[Dict[str, str]] = await db_manager.query_detector_deployments(deployment_created=True)
+    detectors: List[Dict[str, str]] = await db_manager.query_inference_deployments(deployment_created=True)
     if detectors:
         for detector_record in detectors:
             detector_id, api_token = detector_record["detector_id"], detector_record["api_token"]
@@ -46,7 +46,7 @@ async def update_inference_config(app_state: AppState) -> None:
 async def startup_event():
     # Initialize the database tables
     db_manager = app.state.app_state.db_manager
-    await db_manager.create_tables()
+    db_manager.create_tables()
 
     if DEPLOY_DETECTOR_LEVEL_INFERENCE:
         # Add job to periodically update the inference config
@@ -60,7 +60,7 @@ async def startup_event():
 async def shutdown_event():
     # Dispose off the database engine
     db_manager = app.state.app_state.db_manager
-    await db_manager.on_shutdown()
+    db_manager.on_shutdown()
 
     if DEPLOY_DETECTOR_LEVEL_INFERENCE:
         scheduler.shutdown()

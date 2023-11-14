@@ -100,7 +100,7 @@ async def post_image_query(
             new_image_query = motion_detection_manager.get_image_query_response(detector_id=detector_id).copy(
                 deep=True, update={"id": prefixed_ksuid(prefix="iqe_")}
             )
-            asyncio.create_task(app_state.db_manager.create_iqe_record(record=new_image_query))
+            app_state.db_manager.create_iqe_record(record=new_image_query)
             return new_image_query
 
     image_query = None
@@ -126,17 +126,15 @@ async def post_image_query(
                 " Escalating to the cloud API server."
             )
     else:
-        # Run an asynchronous task to create a record in the database table for this detector to indicate that
-        # edge inference for the given detector ID is not yet set up.
+        # Add a record to the inference deployments table to indicate that a k8s inference deployment has not yet been
+        # created for this detector.
         api_token = gl.api_client.configuration.api_key["ApiToken"]
-        asyncio.create_task(
-            app_state.db_manager.create_detector_deployment_record(
-                record={
-                    "detector_id": detector_id,
-                    "api_token": api_token,
-                    "deployment_created": False,
-                }
-            )
+        app_state.db_manager.create_inference_deployment_record(
+            record={
+                "detector_id": detector_id,
+                "api_token": api_token,
+                "deployment_created": False,
+            }
         )
 
     # Finally, fall back to submitting the image to the cloud
@@ -161,7 +159,7 @@ async def get_image_query(
     id: str, gl: Groundlight = Depends(get_groundlight_sdk_instance), app_state: AppState = Depends(get_app_state)
 ):
     if id.startswith("iqe_"):
-        image_query = await app_state.db_manager.get_iqe_record(image_query_id=id)
+        image_query = app_state.db_manager.get_iqe_record(image_query_id=id)
         if not image_query:
             raise HTTPException(status_code=404, detail=f"Image query with ID {id} not found")
         return image_query
