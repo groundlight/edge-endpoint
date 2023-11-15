@@ -48,6 +48,7 @@ async def post_image_query(
     detector_id: str = Query(...),
     patience_time: Optional[float] = Query(None),
     want_async: Optional[str] = Query(None),
+    metadata: Optional[str] = Query(None),
     img: Image.Image = Depends(validate_request_body),
     gl: Groundlight = Depends(get_groundlight_sdk_instance),
     app_state: AppState = Depends(get_app_state),
@@ -65,6 +66,7 @@ async def post_image_query(
         an ML/Human prediction. The returned `ImageQuery` will have a `result` field of None. `wait` must be set to
         0 to use this parameter. If `want_async` is set, we skip motion detection and edge inference in order to honor
         the general SDK's asychronous behavior.
+    :param metadata: Optional metadata to attach to the image query.
     :param img: the image to submit.
     :param gl: Application's Groundlight SDK instance
     :param app_state: Application's state manager. It contains global state for motion detection, IQE cache, and holds
@@ -75,7 +77,9 @@ async def post_image_query(
     # processing of the async request on the edge before escalating to the cloud.
     _want_async = want_async is not None and want_async.lower() == "true"
     if _want_async:
-        return safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=0, want_async=True)
+        return safe_call_api(
+            gl.submit_image_query, detector=detector_id, image=img, wait=0, want_async=True, metadata=metadata
+        )
 
     img_numpy = np.asarray(img)  # [H, W, C=3], dtype: uint8, RGB format
 
@@ -144,7 +148,7 @@ async def post_image_query(
         # side effect of not allowing customers to update their detector's patience_time through the
         # edge-endpoint. But instead we could ask them to do that through the web app.
         # wait=0 sets patience_time=DEFAULT_PATIENCE_TIME and disables polling.
-        image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=0)
+        image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=0, metadata=metadata)
 
     if motion_detection_manager.motion_detection_is_enabled(detector_id=detector_id):
         # Store the cloud's response so that if the next image has no motion, we will return the same response
@@ -170,6 +174,7 @@ def _improve_cached_image_query_confidence(
     detector_id: str,
     motion_detection_manager: MotionDetectionManager,
     img: np.ndarray,
+    metadata: Optional[str] = None,
 ) -> None:
     """
     Attempt to improve the confidence of the cached image query response for a given detector.
@@ -178,6 +183,7 @@ def _improve_cached_image_query_confidence(
     :param motion_detection_manager: Application's motion detection manager instance.
         This manages the motion detection state for all detectors.
     :param img: the image to submit.
+    :param metadata: Optional metadata to attach to the image query.
     """
 
     detector_metadata: Detector = get_detector_metadata(detector_id=detector_id, gl=gl)
@@ -218,5 +224,5 @@ def _improve_cached_image_query_confidence(
             f"Unconfident image query re-escalation interval exceeded for {detector_id=}."
             " Re-escalating image query to the cloud API server"
         )
-        iq_response = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=0)
+        iq_response = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=0, metadata=metadata)
         motion_detection_manager.update_image_query_response(detector_id=detector_id, response=iq_response)
