@@ -2,7 +2,7 @@ import datetime
 import json
 import logging
 import re
-from logging.handlers import RotatingFileHandler
+import os
 from typing import Dict, List, Tuple
 
 from model import ImageQuery
@@ -40,6 +40,45 @@ def validate_uid(uid: str) -> None:
         raise ValueError(f"Invalid ID {uid} - id is too short")
     if not alphanumeric.match(uid):
         raise ValueError(f"Invalid ID {uid} - id has non-alphanumeric")
+
+
+class SizedFileHandler(logging.FileHandler):
+    """
+    A custom logging file handler that maintains a single log file with a specified maximum size.
+
+    If during a log event the file is determined to exceed the specified maximum size (`maxBytes`),
+    the current log file is truncated (i.e., all current log contents are deleted), and logging
+    continues with an empty file. This class is useful for avoiding unbounded growth of a log file,
+    which can consume all available disk space.
+
+    Parameters:
+    - filename (str): The path to the log file.
+    - mode (str): The mode in which to open the file. Default is "a" (append mode).
+    - maxBytes (int): The maximum size in bytes that the log file is allowed to reach. If the size
+      of the file exceeds this value upon a log event, the file will be truncated. If set to 0,
+      truncation will never occur.
+    - delay (bool): If True, then file opening is deferred until the first call to emit().
+    """
+
+    def __init__(self, filename, mode="a", maxBytes=0, delay=False):
+        self.maxBytes = maxBytes
+        super().__init__(filename, mode, encoding=None, delay=delay)
+
+    def emit(self, record):
+        """
+        Emit a log record. If necessary, truncate the file so that it doesn't grow without bound.
+        """
+        if self.maxBytes > 0:
+            current_size = os.path.getsize(self.baseFilename) + len(self.format(record))
+            if current_size > self.maxBytes:
+                self.stream.close()
+
+                # Open the file in write mode to truncate it
+                with open(self.baseFilename, "w") as f:
+                    pass  # The file is truncated to zero length but the file handle is still open
+
+                self.stream = self._open()
+        super().emit(record)
 
 
 class DatabaseManager:
@@ -135,7 +174,7 @@ class DatabaseManager:
         sqlalchemy_logger = logging.getLogger("sqlalchemy.engine")
         sqlalchemy_logger.setLevel(level)
 
-        file_handler = RotatingFileHandler(DATABASE_ORM_LOG_FILE, maxBytes=10_000_000, backupCount=10)
+        file_handler = SizedFileHandler(DATABASE_ORM_LOG_FILE, maxBytes=10_000_000)
         formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         file_handler.setFormatter(formatter)
         sqlalchemy_logger.addHandler(file_handler)
