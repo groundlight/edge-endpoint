@@ -65,7 +65,7 @@ class SizedFileHandler(logging.FileHandler):
         super().__init__(filename, mode, encoding=None, delay=delay)
 
     def emit(self, record):
-        """
+        """`
         Emit a log record. If necessary, truncate the file so that it doesn't grow without bound.
         """
         if self.maxBytes > 0:

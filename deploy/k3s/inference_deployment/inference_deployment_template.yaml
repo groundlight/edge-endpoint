@@ -40,7 +40,7 @@ spec:
           maxUnavailable: 0  # Aim for no downtime during rollout
       containers:
       - name: inference-server
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver:59d8771ee-tyler-poetry-and-serving-img-updates
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver:65e0f00d8-main
         imagePullPolicy: IfNotPresent
         # Tritonserver will look for models in /mnt/models and initialize them on startup.
         # When running multiple instances of Triton server on the same machine that use Python models,
@@ -54,6 +54,8 @@ spec:
             "--model-repository=/mnt/models",
             "--load-model=placeholder-model-name",
             "--metrics-config=summary_latencies=true",
+            "--allow-gpu-metric=true",
+            "--allow-cpu-metrics=true",
             "--backend-config=python,shm-region-prefix-name=placeholder-inference-deployment-name",
             "--log-verbose=1",
           ]

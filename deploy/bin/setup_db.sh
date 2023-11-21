@@ -52,7 +52,7 @@ else
     echo "${DROP_QUERY}" | sqlite3 "${DATABASE_PATH}"
 
     # Set journal model to Write-Ahead Logging 
-    echo "PRAGMA journal_mode=WAL;" | sqlite3 "${DATABASE_PATH}"
+    # echo "PRAGMA journal_mode=WAL;" | sqlite3 "${DATABASE_PATH}"
 fi
 
 
