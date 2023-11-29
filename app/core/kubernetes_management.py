@@ -9,7 +9,6 @@ from kubernetes import config
 
 from .edge_inference import get_edge_inference_deployment_name, get_edge_inference_service_name
 from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH
-from .utils import prefixed_ksuid
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +127,10 @@ class InferenceDeploymentManager:
             "--model-repository=/mnt/models",
             f"--load-model={detector_id}",  # Only load the model we care about
             "--metrics-config=summary_latencies=true",
-            f"--backend-config=python,shm-region-prefix-name={deployment_name}-{prefixed_ksuid()}",
+            "--allow-cpu-metrics=true",
+            "--allow-gpu-metrics=true",
+            "--model-control-mode=explicit",
+            f"--backend-config=python,shm-region-prefix-name={deployment_name}",
             "--log-verbose=1",
         ]
 
