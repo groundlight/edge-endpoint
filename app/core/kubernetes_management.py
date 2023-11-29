@@ -9,7 +9,6 @@ from kubernetes import config
 
 from .edge_inference import get_edge_inference_deployment_name, get_edge_inference_service_name
 from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH
-from .utils import prefixed_ksuid
 
 logger = logging.getLogger(__name__)
 
