@@ -54,8 +54,9 @@ spec:
             "--model-repository=/mnt/models",
             "--load-model=placeholder-model-name",
             "--metrics-config=summary_latencies=true",
-            "--allow-gpu-metric=true",
+            "--allow-gpu-metrics=true",
             "--allow-cpu-metrics=true",
+            "--model-control-mode=explicit",
             "--backend-config=python,shm-region-prefix-name=placeholder-inference-deployment-name",
             "--log-verbose=1",
           ]
@@ -91,3 +92,15 @@ spec:
         emptyDir:
           medium: Memory
           sizeLimit: 512Mi
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget 
+metadata: 
+  name: inference-pdb
+  namespace: default
+spec:
+  # Ensure that at least one replica is always available 
+  minAvalaible: 1 
+  selector: 
+    matchlabels: 
+      app: inference-server

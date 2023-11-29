@@ -66,7 +66,7 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       containers:
       - name: edge-endpoint
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:triton-cpu-memory-diagnosis-c314810c2-dirty-64c748c662e62db
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:triton-cpu-memory-diagnosis-b3601dd34-dirty-71f1406ccf1a9e7
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
@@ -82,7 +82,7 @@ spec:
           mountPath: /var/groundlight/sqlite
 
       - name: inference-model-updater
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:triton-cpu-memory-diagnosis-c314810c2-dirty-64c748c662e62db
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:triton-cpu-memory-diagnosis-b3601dd34-dirty-71f1406ccf1a9e7
         imagePullPolicy: IfNotPresent
         command: ["/bin/bash", "-c"]
         args: ["poetry run python -m app.model_updater.update_models"]

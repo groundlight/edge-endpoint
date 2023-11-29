@@ -128,7 +128,10 @@ class InferenceDeploymentManager:
             "--model-repository=/mnt/models",
             f"--load-model={detector_id}",  # Only load the model we care about
             "--metrics-config=summary_latencies=true",
-            f"--backend-config=python,shm-region-prefix-name={deployment_name}-{prefixed_ksuid()}",
+            "--allow-gpu-metrics=true",
+            "--allow-cpu-metrics=true",
+            "--model-control-mode=explicit",
+            f"--backend-config=python,shm-region-prefix-name={deployment_name}",
             "--log-verbose=1",
         ]
 

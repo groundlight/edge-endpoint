@@ -72,8 +72,6 @@ async def post_image_query(
     :param app_state: Application's state manager. It contains global state for motion detection, IQE cache, and holds
         reference to the edge inference manager.
     """
-    
-    logger.info(f"Received image query for {detector_id=}, {patience_time=}, {want_async=}, {metadata=}")
 
     # TODO: instead of just forwarding want_async calls to the cloud, facilitate partial
     # processing of the async request on the edge before escalating to the cloud.
