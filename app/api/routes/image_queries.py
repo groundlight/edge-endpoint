@@ -49,6 +49,7 @@ async def post_image_query(
     detector_id: str = Query(...),
     patience_time: Optional[float] = Query(None),
     want_async: Optional[str] = Query(None),
+    metadata: Optional[str] = Query(None),
     img: Image.Image = Depends(validate_request_body),
     gl: Groundlight = Depends(get_groundlight_sdk_instance),
     app_state: AppState = Depends(get_app_state),
@@ -135,7 +136,7 @@ async def post_image_query(
         # side effect of not allowing customers to update their detector's patience_time through the
         # edge-endpoint. But instead we could ask them to do that through the web app.
         # wait=0 sets patience_time=DEFAULT_PATIENCE_TIME and disables polling.
-        image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=0)
+        image_query = safe_call_api(gl.submit_image_query, detector=detector_id, metadata=metadata, image=img, wait=0)
 
     if motion_detection_manager.motion_detection_is_enabled(detector_id=detector_id):
         # Store the cloud's response so that if the next image has no motion, we will return the same response
