@@ -44,12 +44,24 @@ async def validate_request_body(request: Request) -> Image.Image:
         raise HTTPException(status_code=400, detail="Invalid input image") from ex
 
 
+async def validate_query_params_for_edge(request: Request, invalid_edge_params: set):
+    query_params = set(request.query_params.keys())
+    invalid_provided_params = query_params.intersection(invalid_edge_params)
+    if invalid_provided_params:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid query parameters for submit_image_query to edge-endpoint: {invalid_provided_params}",
+        )
+
+
 @router.post("", response_model=ImageQuery)
 async def post_image_query(
+    request: Request,
     detector_id: str = Query(...),
+    image: Image.Image = Depends(validate_request_body),
     patience_time: Optional[float] = Query(None),
-    want_async: Optional[str] = Query(None),
-    img: Image.Image = Depends(validate_request_body),
+    confidence_threshold: Optional[float] = Query(None),
+    human_review: Optional[str] = Query(None),
     gl: Groundlight = Depends(get_groundlight_sdk_instance),
     app_state: AppState = Depends(get_app_state),
 ):
@@ -60,31 +72,46 @@ async def post_image_query(
     In addition, this will also attempt to run inference locally on the edge if the edge inference server is available
     before deciding to submit the image to the cloud.
 
-    :param detector_id: which detector to use
-    :param patience_time: how long to wait for a confident response
-    :param want_async: If True, the client will return as soon as the image query is submitted and will not wait for
-        an ML/Human prediction. The returned `ImageQuery` will have a `result` field of None. `wait` must be set to
-        0 to use this parameter. If `want_async` is set, we skip motion detection and edge inference in order to honor
-        the general SDK's asychronous behavior.
-    :param img: the image to submit.
+    :param detector_id: the string id of the detector to use, like `det_12345`
+
+    :param image: the image to submit.
+
+    :param patience_time: How long to wait (in seconds) for a confident answer for this image query.
+        The longer the patience_time, the more likely Groundlight will arrive at a confident answer.
+        Within patience_time, Groundlight will update ML predictions based on stronger findings,
+        and, additionally, Groundlight will prioritize human review of the image query if necessary.
+        This is a soft server-side timeout. If not set, use the detector's patience_time.
+
+    :param confidence_threshold: The confidence threshold to wait for.
+        If not set, use the detector's confidence threshold.
+
+    :param human_review: If `None` or `DEFAULT`, send the image query for human review
+        only if the ML prediction is not confident.
+        If set to `ALWAYS`, always send the image query for human review.
+        If set to `NEVER`, never send the image query for human review.
+
     :param gl: Application's Groundlight SDK instance
+
     :param app_state: Application's state manager. It contains global state for motion detection, IQE cache, and holds
         reference to the edge inference manager.
     """
+    await validate_query_params_for_edge(
+        request,
+        invalid_edge_params={
+            "want_async",  # want_async is not supported on the edge currently
+            "inspection_id",  # inspection_id will not be supported on the edge
+            "metadata",  # metadata is not supported on the edge currently, we need to set up persistent storage first
+        },
+    )
 
-    # TODO: instead of just forwarding want_async calls to the cloud, facilitate partial
-    # processing of the async request on the edge before escalating to the cloud.
-    _want_async = want_async is not None and want_async.lower() == "true"
-    if _want_async:
-        return safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=0, want_async=True)
-
-    img_numpy = np.asarray(img)  # [H, W, C=3], dtype: uint8, RGB format
+    img_numpy = np.asarray(image)  # [H, W, C=3], dtype: uint8, RGB format
 
     iqe_cache = app_state.iqe_cache
     motion_detection_manager = app_state.motion_detection_manager
     edge_inference_manager = app_state.edge_inference_manager
+    require_human_review = human_review == "ALWAYS"
 
-    if motion_detection_manager.motion_detection_is_available(detector_id=detector_id):
+    if not require_human_review and motion_detection_manager.motion_detection_is_available(detector_id=detector_id):
         motion_detected = motion_detection_manager.run_motion_detection(detector_id=detector_id, new_img=img_numpy)
         if not motion_detected:
             # Try improving the cached image query response's confidence
@@ -93,7 +120,7 @@ async def post_image_query(
                 gl=gl,
                 detector_id=detector_id,
                 motion_detection_manager=motion_detection_manager,
-                img=img,
+                img=image,
             )
 
             # If there is no motion, return a clone of the last image query response
@@ -101,16 +128,26 @@ async def post_image_query(
             new_image_query = motion_detection_manager.get_image_query_response(detector_id=detector_id).copy(
                 deep=True, update={"id": prefixed_ksuid(prefix="iqe_")}
             )
-            iqe_cache.update_cache(image_query=new_image_query)
-            return new_image_query
+            if _is_confident_enough(
+                confidence=image_query.result.confidence,
+                detector_metadata=get_detector_metadata(detector_id=detector_id, gl=gl),
+                confidence_threshold=confidence_threshold,
+            ):
+                logger.debug("Motion detection confidence is high enough to return")
+                iqe_cache.update_cache(image_query=new_image_query)
+                return new_image_query
 
     image_query = None
-    if edge_inference_manager.inference_is_available(detector_id=detector_id):
+    if not require_human_review and edge_inference_manager.inference_is_available(detector_id=detector_id):
         detector_metadata: Detector = get_detector_metadata(detector_id=detector_id, gl=gl)
         results = edge_inference_manager.run_inference(detector_id=detector_id, img_numpy=img_numpy)
         confidence = results["confidence"]
 
-        if confidence > detector_metadata.confidence_threshold:
+        if _is_confident_enough(
+            confidence=confidence,
+            detector_metadata=get_detector_metadata(detector_id=detector_id, gl=gl),
+            confidence_threshold=confidence_threshold,
+        ):
             logger.info("Edge detector confidence is high enough to return")
 
             image_query = _create_iqe(
@@ -135,7 +172,15 @@ async def post_image_query(
         # side effect of not allowing customers to update their detector's patience_time through the
         # edge-endpoint. But instead we could ask them to do that through the web app.
         # wait=0 sets patience_time=DEFAULT_PATIENCE_TIME and disables polling.
-        image_query = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=0)
+        image_query = safe_call_api(
+            gl.submit_image_query,
+            detector=detector_id,
+            image=image,
+            wait=0,
+            patience_time=patience_time,
+            confidence_threshold=confidence_threshold,
+            human_review=human_review,
+        )
 
     if motion_detection_manager.motion_detection_is_enabled(detector_id=detector_id):
         # Store the cloud's response so that if the next image has no motion, we will return the same response
@@ -170,6 +215,7 @@ def _create_iqe(detector_id: str, label: str, confidence: float, query: str = ""
             confidence=confidence,
             label=label,
         ),
+        metadata=None,
     )
     return iq
 
@@ -178,7 +224,7 @@ def _improve_cached_image_query_confidence(
     gl: Groundlight,
     detector_id: str,
     motion_detection_manager: MotionDetectionManager,
-    img: np.ndarray,
+    img: Image.Image,
 ) -> None:
     """
     Attempt to improve the confidence of the cached image query response for a given detector.
@@ -229,3 +275,20 @@ def _improve_cached_image_query_confidence(
         )
         iq_response = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=0)
         motion_detection_manager.update_image_query_response(detector_id=detector_id, response=iq_response)
+
+
+def _is_confident_enough(
+    confidence: Optional[float], detector_metadata: Detector, confidence_threshold: Optional[float] = None
+) -> bool:
+    """
+    Determine if an image query is confident enough to return.
+    :param image_query: the image query to check
+    :param detector_metadata: the detector's metadata
+    :param confidence_threshold: the confidence threshold to use. If not set, use the detector's confidence threshold.
+    :return: True if the image query is confident enough to return, False otherwise
+    """
+    if confidence is None:
+        return True  # None confidence means answered by a human, so it's confident enough to return
+    if confidence_threshold is not None:
+        return confidence >= confidence_threshold
+    return confidence >= detector_metadata.confidence_threshold
