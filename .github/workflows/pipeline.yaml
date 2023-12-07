@@ -179,7 +179,7 @@ jobs:
       - name: Install Groundlight SDK dependencies
         run: |
           cd groundlight-sdk
-          poetry install
+          make install
 
       - name: Load Cached venv
         id: cached-poetry-dependencies
@@ -197,10 +197,10 @@ jobs:
           source test/setup_plain_test_env.sh
           poetry run pytest -k "not test_motdet"
 
-      - name: Run Groundlight SDK tests against Edge Proxy Endpoint
+      - name: Run Groundlight SDK tests against Prod API via Edge Proxy Endpoint
         run: |
           cd groundlight-sdk
-          poetry run pytest
+          make test-4edge
           cd ..
 
       - name: Dump Logs from Docker Container
