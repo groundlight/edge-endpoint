@@ -200,6 +200,7 @@ async def post_image_query(
             confidence_threshold=confidence_threshold,
             human_review=human_review,
         )
+        # TODO: patch in the edge inference results if the cloud results are not confident enough?
 
     if motion_detection_manager.motion_detection_is_enabled(detector_id=detector_id):
         # Store the cloud's response so that if the next image has no motion, we will return the same response
