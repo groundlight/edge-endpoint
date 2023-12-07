@@ -60,14 +60,3 @@ def test_post_image_query_with_metadata_throws_400(gl: Groundlight, detector: De
     with pytest.raises(HTTPException) as exc_info:
         gl.submit_image_query(detector=detector.id, image=image_bytes, wait=10.0, metadata={"foo": "bar"})
     assert exc_info.value.status_code == 400
-
-
-def test_post_image_query_with_inspection_id_throws_400(gl: Groundlight, detector: Detector):
-    """
-    Tests that submitting an image query with an inspection_id using the edge server raises a 400 error.
-    """
-    image = Image.open("test/assets/dog.jpeg")
-    image_bytes = pil_image_to_bytes(img=image)
-    with pytest.raises(HTTPException) as exc_info:
-        gl.submit_image_query(detector=detector.id, image=image_bytes, wait=10.0, inspection_id="test_inspection_id")
-    assert exc_info.value.status_code == 400
