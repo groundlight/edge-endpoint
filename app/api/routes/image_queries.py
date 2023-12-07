@@ -62,6 +62,7 @@ async def post_image_query(
     patience_time: Optional[float] = Query(None),
     confidence_threshold: Optional[float] = Query(None),
     human_review: Optional[str] = Query(None),
+    want_async: Optional[str] = Query(None),
     gl: Groundlight = Depends(get_groundlight_sdk_instance),
     app_state: AppState = Depends(get_app_state),
 ):
@@ -90,6 +91,10 @@ async def post_image_query(
         If set to `ALWAYS`, always send the image query for human review.
         If set to `NEVER`, never send the image query for human review.
 
+    :param want_async: If True, the client will return as soon as the image query is submitted and will not wait for
+        an ML/human prediction. The returned `ImageQuery` will have a `result` of None. Must set `wait` to 0 to use
+        want_async.
+
     :param gl: Application's Groundlight SDK instance
 
     :param app_state: Application's state manager. It contains global state for motion detection, IQE cache, and holds
@@ -98,11 +103,25 @@ async def post_image_query(
     await validate_query_params_for_edge(
         request,
         invalid_edge_params={
-            "want_async",  # want_async is not supported on the edge currently
             "inspection_id",  # inspection_id will not be supported on the edge
             "metadata",  # metadata is not supported on the edge currently, we need to set up persistent storage first
         },
     )
+
+    # TODO: instead of just forwarding want_async calls to the cloud, facilitate partial
+    #       processing of the async request on the edge before escalating to the cloud.
+    _want_async = want_async is not None and want_async.lower() == "true"
+    if _want_async:
+        return safe_call_api(
+            gl.submit_image_query,
+            detector=detector_id,
+            image=image,
+            wait=0,
+            patience_time=patience_time,
+            confidence_threshold=confidence_threshold,
+            human_review=human_review,
+            want_async=True,
+        )
 
     img_numpy = np.asarray(image)  # [H, W, C=3], dtype: uint8, RGB format
 
