@@ -1,7 +1,6 @@
 import pytest
-from groundlight import Groundlight
+from groundlight import ApiException, Groundlight
 from model import Detector
-from openapi_client.exceptions import ApiException
 from PIL import Image
 
 from app.core.utils import pil_image_to_bytes
