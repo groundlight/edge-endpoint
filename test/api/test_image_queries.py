@@ -1,7 +1,7 @@
 import pytest
-from fastapi import HTTPException
 from groundlight import Groundlight
 from model import Detector
+from openapi_client.exceptions import ApiException
 from PIL import Image
 
 from app.core.utils import pil_image_to_bytes
@@ -57,6 +57,6 @@ def test_post_image_query_with_metadata_throws_400(gl: Groundlight, detector: De
     """
     image = Image.open("test/assets/dog.jpeg")
     image_bytes = pil_image_to_bytes(img=image)
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(ApiException) as exc_info:
         gl.submit_image_query(detector=detector.id, image=image_bytes, wait=10.0, metadata={"foo": "bar"})
-    assert exc_info.value.status_code == 400
+    assert exc_info.value.status == 400
