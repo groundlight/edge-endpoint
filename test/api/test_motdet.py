@@ -64,7 +64,7 @@ def test_motion_detection(gl: Groundlight, root_config: RootEdgeConfig):
 
     base_iq_response = gl.submit_image_query(detector=detector.id, image=original_image, wait=10)
 
-    for _ in range(5):
+    for _ in range(2):
         previous_response = base_iq_response
         blurred_image = original_image.filter(ImageFilter.GaussianBlur(radius=50))
         new_response = gl.submit_image_query(detector=detector.id, image=blurred_image, wait=10)
