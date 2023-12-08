@@ -45,7 +45,7 @@ def test_post_image_query_want_async(gl: Groundlight, detector: Detector):
     """
     image = Image.open("test/assets/dog.jpeg")
     image_bytes = pil_image_to_bytes(img=image)
-    iq = gl.submit_image_query(detector=detector.id, image=image_bytes, wait=10.0, want_async=True)
+    iq = gl.submit_image_query(detector=detector.id, image=image_bytes, wait=0.0, want_async=True)
     assert iq is not None, "ImageQuery should not be None."
     assert iq.id.startswith("iq_"), "ImageQuery id should start with 'iq_' because it was created on the cloud."
     assert iq.result is None, "Result should be None because the query is still being processed."

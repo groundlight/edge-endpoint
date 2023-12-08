@@ -1,6 +1,14 @@
 name: cicd
-on: [push]
-
+on:
+  push:
+    # All pushes
+  workflow_dispatch:
+    # This allows it to be triggered manually in the github console
+    # You could put inputs here, but we don't need them.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # This causes it to cancel previous in-progress actions in the same PR
+  cancel-in-progress: true
 env:
   PYTHON_VERSION: "3.11"
   POETRY_VERSION: "1.5.1"
@@ -121,10 +129,7 @@ jobs:
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
-  # Run Groundlight SDK tests against the
-  # edge proxy endpoint set in nginx.conf file
-  # and run unit tests.
-  test-sdk-and-unit-tests:
+  test-general-edge-endpoint:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
@@ -168,19 +173,6 @@ jobs:
           virtualenvs-in-project: true
           installer-parallel: true
 
-      # Note that we're pulling the latest main from the SDK repo
-      # This might be ahead of what's published to pypi, but it's useful to test things before they're released.
-      - name: Checkout Groundlight SDK
-        uses: actions/checkout@v3
-        with:
-          repository: groundlight/python-sdk
-          path: groundlight-sdk
-
-      - name: Install Groundlight SDK dependencies
-        run: |
-          cd groundlight-sdk
-          make install
-
       - name: Load Cached venv
         id: cached-poetry-dependencies
         uses: actions/cache@v3
@@ -197,6 +189,81 @@ jobs:
           source test/setup_plain_test_env.sh
           poetry run pytest -k "not test_motdet"
 
+      - name: Dump Logs from Docker Container
+        if: always()
+        run: docker logs ${{ steps.start_container.outputs.container_id }}
+
+      - name: Stop Docker Container
+        # This ensures that we always stop the container regardless of the outcomes of
+        # the previous steps
+        if: always()
+        run: docker stop ${{ steps.start_container.outputs.container_id }}
+
+  # Run Groundlight SDK tests against the edge proxy endpoint
+  test-sdk:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Set up python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Docker
+        run: |
+          sudo apt-get update
+          sudo apt-get remove moby-runc
+          sudo apt-get install apt-transport-https ca-certificates curl software-properties-common
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+          sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+          sudo apt-get update
+          sudo apt-get install docker-ce
+
+      - name: Build Docker Image
+        run: docker build --tag groundlight-edge .
+
+      - name: Start Docker Container
+        id: start_container
+        run: |
+          source test/setup_plain_test_env.sh
+          echo "EDGE_CONFIG=$EDGE_CONFIG"
+          container_id=$(docker run \
+            -e LOG_LEVEL=DEBUG \
+            -e EDGE_CONFIG \
+            -d -p 6717:6717 \
+            groundlight-edge)
+          echo "::set-output name=container_id::$container_id"
+
+      - name: Install poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: ${{ env.POETRY_VERSION }}
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: true
+
+      - name: Load Cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v3
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
+
+      # Note that we're pulling the latest main from the SDK repo
+      # This might be ahead of what's published to pypi, but it's useful to test things before they're released.
+      - name: Checkout Groundlight SDK
+        uses: actions/checkout@v3
+        with:
+          repository: groundlight/python-sdk
+          path: groundlight-sdk
+
+      - name: Install Groundlight SDK dependencies
+        run: |
+          cd groundlight-sdk
+          make install
+
       - name: Run Groundlight SDK tests against Prod API via Edge Proxy Endpoint
         run: |
           cd groundlight-sdk
@@ -212,3 +279,32 @@ jobs:
         # the previous steps
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
+
+
+  build-push-edge-endpoint-multiplatform:
+    # if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+    # We only run this action if all the prior test actions succeed
+    needs:
+      - test-in-k3s
+      - test-motion-detection
+      - test-general-edge-endpoint
+      - test-sdk
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          mask-password: "true"
+      - name: Check out code
+        uses: actions/checkout@v4
+      - name: Build and Push Multiplatform edge-endpoint Image to ECR
+        timeout-minutes: 45
+        run:
+          ./deploy/bin/build-push-edge-endpoint-image.sh
