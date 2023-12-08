@@ -142,7 +142,7 @@ class TritonPythonModel:
 
             start_ns = time.time_ns()
             preds = self.pipeline.run(
-                examples=[Example(data=image, example_id=None, annotations_requested=[])],
+                examples=[Example(data=image, example_id=None, annotations_requested=[], timestamp=time.time())],
                 return_rois=False,
             )
             end_ns = time.time_ns()
