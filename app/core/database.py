@@ -1,8 +1,8 @@
 import datetime
 import json
 import logging
-import re
 import os
+import re
 from typing import Dict, List, Tuple
 
 from model import ImageQuery
@@ -74,7 +74,7 @@ class SizedFileHandler(logging.FileHandler):
                 self.stream.close()
 
                 # Open the file in write mode to truncate it
-                with open(self.baseFilename, "w") as f:
+                with open(self.baseFilename, "w"):
                     pass  # The file is truncated to zero length but the file handle is still open
 
                 self.stream = self._open()
