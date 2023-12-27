@@ -1,9 +1,9 @@
 import datetime
 import json
 import logging
+from logging.handlers import RotatingFileHandler
 from typing import Dict, List, Tuple
 
-from logging.handlers import RotatingFileHandler
 from model import ImageQuery
 from sqlalchemy import JSON, Boolean, Column, DateTime, String, create_engine, select
 from sqlalchemy.engine.base import Engine
