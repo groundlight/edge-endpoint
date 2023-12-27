@@ -2,7 +2,7 @@ import datetime
 import json
 import logging
 from logging.handlers import RotatingFileHandler
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 from model import ImageQuery
 from sqlalchemy import JSON, Boolean, Column, DateTime, String, create_engine, select

@@ -4,8 +4,8 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 
-from app.core.database import DatabaseManager
 from app.core.database import *
+from app.core.database import DatabaseManager
 from app.core.utils import create_iqe, prefixed_ksuid
 
 NUM_TESTING_RECORDS = 100
