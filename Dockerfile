@@ -55,7 +55,7 @@ RUN mkdir /etc/groundlight/edge-config && \
 
 # Adding this here for testing purposes. In production, this will be mounted as persistent 
 # volume in the kubernetes cluster. 
-RUN mkdir -p /var/groundlight/sqlite
+RUN mkdir -p /opt/groundlight/edge/sqlite
 
 # Copy configs
 COPY configs ${APP_ROOT}/configs

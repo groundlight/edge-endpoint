@@ -5,7 +5,7 @@ set -ex
 cd "$(dirname "$0")"
 
 
-DATABASE_DIRECTORY="/var/groundlight/sqlite"
+DATABASE_DIRECTORY="/opt/groundlight/edge/sqlite"
 DATABASE_PATH="${DATABASE_DIRECTORY}/sqlite.db"
 ENTRY_QUERY="CREATE TABLE IF NOT EXISTS test_table (id INTEGER);"
 DROP_QUERY="DROP TABLE IF EXISTS test_table;"
@@ -51,12 +51,14 @@ else
     echo "${ENTRY_QUERY}" | sqlite3 "${DATABASE_PATH}"
     echo "${DROP_QUERY}" | sqlite3 "${DATABASE_PATH}"
 
-    # Set journal model to Write-Ahead Logging 
+    # Set journal model to Write-Ahead Logging. This makes it much faster, at the risk of 
+    # possibly losing data if the machine crashes suddenly.
+    # https://www.sqlite.org/wal.html
     echo "PRAGMA journal_mode=WAL;" | sqlite3 "${DATABASE_PATH}"
 fi
 
 
-# Restart tables if the first argument is "restart"
+# Reset tables if the first argument is "db_reset"
 if [ "$1" == "db_reset" ]; then
     echo "Resetting database tables..."
     reset_tables

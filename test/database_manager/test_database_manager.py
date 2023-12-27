@@ -16,6 +16,9 @@ def db_manager():
     Create a database manager for the entire test module.
     """
     db_manager = DatabaseManager(verbose=False)
+
+    # Create an in-memory database
+    # sqlite:///:memory means that the database will be created in memory, so it's ephemeral.
     engine = create_engine("sqlite:///:memory:", echo=False)
     db_manager._engine = engine
     db_manager.session_maker = sessionmaker(bind=db_manager._engine)

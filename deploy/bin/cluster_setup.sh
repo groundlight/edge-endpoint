@@ -16,6 +16,11 @@ DB_RESTART=$1
 
 # Ensure database file has been correctly setup. If the first argument is "db_reset",
 # all the data in the database will be deleted first. 
+# For now, this means all 
+# - detectors in the `inference_deployments` table
+# - image queries in the `image_queries_edge` table
+# For more on these tables you can examine the database file at
+# /opt/groundlight/edge/sqlite/sqlite.db 
 ./deploy/bin/setup_db.sh $DB_RESTART
 
 # Secrets

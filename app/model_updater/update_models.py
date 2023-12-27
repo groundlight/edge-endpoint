@@ -38,6 +38,18 @@ def _check_new_models_and_inference_deployments(
     deployment_manager: InferenceDeploymentManager,
     db_manager: DatabaseManager,
 ) -> None:
+    """
+    Check that a new model is available for the detector_id. If so, update the inference deployment
+    to reflect the new state. This is also the entrypoint for creating a new inference deployment
+    and updating the database record for the detector_id (i.e., setting deployment_created to True
+    when we have successfully rolled out the inference deployment).
+
+    :param detector_id: the detector_id for which we are checking for new models and inference deployments.
+    :param edge_inference_manager: the edge inference manager object.
+    :param deployment_manager: the inference deployment manager object.
+    :param db_manager: the database manager object.
+
+    """
     # Download and write new model to model repo on disk
     new_model = edge_inference_manager.update_model(detector_id=detector_id)
 
@@ -67,7 +79,10 @@ def _check_new_models_and_inference_deployments(
     if deployment_manager.is_inference_deployment_rollout_complete(detector_id):
         # Database transaction to update the deployment_created field for the detector_id
         # At this time, we are sure that the deployment for the detector has been successfully created and rolled out.
-        db_manager.update_inference_deployment_record(detector_id=detector_id, new_record={"deployment_created": True})
+        db_manager.update_inference_deployment_record(
+            detector_id=detector_id,
+            new_record={"deployment_created": True, "deployment_name": deployment.metadata.name},
+        )
 
 
 def update_models(
@@ -76,7 +91,27 @@ def update_models(
     db_manager: DatabaseManager,
     refresh_rate: float,
 ) -> None:
-    if not os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", None):
+    """
+    Periodically update inference models for detectors.
+
+    -  For existing inference deployments, if a new model is available (i.e., it was fetched
+      successfully from the edge-api/v1/fetch-model-urls endpoint), then we will rollout a new
+      pod with the new model. If a new model is not available, then we will do nothing.
+
+    - We will also look for new detectors that need to be deployed. These are expected to be
+      found in the database. Found detectors will be added to the queue of detectors that need
+      an inference deployment.
+
+    NOTE: The periodicity of this task is controlled by the refresh_rate parameter.
+    It is settable in the edge config file (defaults to 2 minutes).
+
+    :param edge_inference_manager: the edge inference manager object.
+    :param deployment_manager: the inference deployment manager object.
+    :param db_manager: the database manager object.
+    :param refresh_rate: the time interval (in seconds) between model update calls.
+    """
+    deploy_detector_level_inference = bool(int(os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", 0)))
+    if not deploy_detector_level_inference:
         sleep_forever("Edge inference is disabled globally... sleeping forever.")
         return
 

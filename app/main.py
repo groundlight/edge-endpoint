@@ -11,7 +11,7 @@ from app.api.naming import API_BASE_PATH
 from .core.app_state import AppState
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
-DEPLOY_DETECTOR_LEVEL_INFERENCE = os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", None)
+DEPLOY_DETECTOR_LEVEL_INFERENCE = bool(int(os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", 0)))
 
 logging.basicConfig(level=LOG_LEVEL)
 

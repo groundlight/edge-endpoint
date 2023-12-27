@@ -151,11 +151,11 @@ class EdgeInferenceManager:
         Returns True if a new model was downloaded and saved, False otherwise.
         """
         logger.info(f"Checking if there is a new model available for {detector_id}")
-        api_token = (
-            self.inference_config[detector_id].api_token
-            if self.detector_configured_for_local_inference(detector_id)
-            else None
-        )
+
+        if not self.detector_configured_for_local_inference(detector_id):
+            raise ValueError(f"Detector {detector_id} is not configured for local inference")
+        api_token = self.inference_config[detector_id].api_token
+
         model_urls = fetch_model_urls(detector_id, api_token=api_token)
 
         cloud_binary_ksuid = model_urls.get("model_binary_id", None)
