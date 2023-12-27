@@ -5,6 +5,32 @@ metadata:
   name: nvidia
 handler: nvidia
 ---
+apiVersion: v1 
+kind: PersistentVolume 
+metadata:
+  name: sqlite-pv 
+spec:
+  capacity: 
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce 
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  hostPath:
+    path: /opt/groundlight/edge/sqlite
+---
+apiVersion: v1 
+kind: PersistentVolumeClaim
+metadata:
+  name: sqlite-pvc
+spec: 
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: local-path
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -40,39 +66,38 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       containers:
       - name: edge-endpoint
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:7280f93c7-triton-memory-mgmt-issue
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:9a0d8be12-setup-sqlite-database
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
         env:
         - name: LOG_LEVEL
-          value: "DEBUG"
+          value: "INFO"
+        # We need this feature flag since we run the edge logic server in two separate environments:
+        # 1. In docker (on the GitHub Actions runner) for testing
+        # 2. In kubernetes (currently a dedicated EC2 instance)
+        # This feature flag is basically good for knowing when to use the python kubernetes API
+        # (i.e., creating deployments, etc.). We don't want to use the python kubernetes API
+        # if we are only running the edge logic server in docker.
+        # TODO: Once we have kubernetes-based tests, we can remove this feature flag. 
         - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
-          value: "True"
-        - name: GROUNDLIGHT_API_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: groundlight-secrets
-              key: api-token
+          value: "1"
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
+        - name: sqlite-data
+          mountPath: /opt/groundlight/edge/sqlite
 
       - name: inference-model-updater
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:7280f93c7-triton-memory-mgmt-issue
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:9a0d8be12-setup-sqlite-database
         imagePullPolicy: IfNotPresent
         command: ["/bin/bash", "-c"]
         args: ["poetry run python -m app.model_updater.update_models"]
         env:
         - name: LOG_LEVEL
-          value: "DEBUG"
+          value: "INFO"
         - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
-          value: "True"
-        - name: GROUNDLIGHT_API_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: groundlight-secrets
-              key: api-token
+          value: "1"
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
@@ -80,6 +105,8 @@ spec:
           mountPath: /etc/groundlight/inference-deployment
         - name: model-repo
           mountPath: /mnt/models
+        - name: sqlite-data
+          mountPath: /opt/groundlight/edge/sqlite
 
       imagePullSecrets:
       - name: registry-credentials
@@ -97,3 +124,7 @@ spec:
           # TODO: check out k3s local path provisioner: https://docs.k3s.io/storage#setting-up-the-local-storage-provider
           path: /var/groundlight/serving/model_repository
           type: DirectoryOrCreate
+
+      - name: sqlite-data
+        persistentVolumeClaim:
+          claimName: sqlite-pvc

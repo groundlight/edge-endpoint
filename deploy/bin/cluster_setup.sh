@@ -10,12 +10,20 @@ fail() {
     exit 1
 }
 
-
 K="k3s kubectl"
 INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"GPU"}
+DB_RESTART=$1
+
+# Ensure database file has been correctly setup. If the first argument is "db_reset",
+# all the data in the database will be deleted first. 
+# For now, this means all 
+# - detectors in the `inference_deployments` table
+# - image queries in the `image_queries_edge` table
+# For more on these tables you can examine the database file at
+# /opt/groundlight/edge/sqlite/sqlite.db 
+./deploy/bin/setup_db.sh $DB_RESTART
 
 # Secrets
-./deploy/bin/make-gl-api-token-secret.sh
 ./deploy/bin/make-aws-secret.sh
 
 # Verify secrets have been properly created
@@ -23,9 +31,6 @@ if ! $K get secret registry-credentials; then
     fail "registry-credentials secret not found"
 fi
 
-if ! $K get secret groundlight-secrets; then
-    fail "groundlight-secrets secret not found"
-fi
 
 # Configmaps and deployments
 $K delete configmap --ignore-not-found edge-config

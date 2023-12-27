@@ -1,9 +1,11 @@
 import logging
 import os
 import time
+from typing import Dict, List
 
-from app.core.app_state import load_edge_config
+from app.core.app_state import get_inference_and_motion_detection_configs, load_edge_config
 from app.core.configs import RootEdgeConfig
+from app.core.database import DatabaseManager
 from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions
 from app.core.kubernetes_management import InferenceDeploymentManager
 
@@ -19,72 +21,141 @@ def sleep_forever(message: str | None = None):
         time.sleep(TEN_MINUTES)
 
 
-def update_models(edge_inference_manager: EdgeInferenceManager, deployment_manager: InferenceDeploymentManager):
-    if not os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", None) or not edge_inference_manager.inference_config:
+def get_refresh_rate(root_edge_config: RootEdgeConfig) -> float:
+    """
+    Get the time interval (in seconds) between model update calls.
+    """
+    if not root_edge_config or not root_edge_config.local_inference_templates:
+        raise ValueError("Invalid root edge config")
+
+    default_inference_config = root_edge_config.local_inference_templates["default"]
+    return default_inference_config.refresh_rate
+
+
+def _check_new_models_and_inference_deployments(
+    detector_id: str,
+    edge_inference_manager: EdgeInferenceManager,
+    deployment_manager: InferenceDeploymentManager,
+    db_manager: DatabaseManager,
+) -> None:
+    """
+    Check that a new model is available for the detector_id. If so, update the inference deployment
+    to reflect the new state. This is also the entrypoint for creating a new inference deployment
+    and updating the database record for the detector_id (i.e., setting deployment_created to True
+    when we have successfully rolled out the inference deployment).
+
+    :param detector_id: the detector_id for which we are checking for new models and inference deployments.
+    :param edge_inference_manager: the edge inference manager object.
+    :param deployment_manager: the inference deployment manager object.
+    :param db_manager: the database manager object.
+
+    """
+    # Download and write new model to model repo on disk
+    new_model = edge_inference_manager.update_model(detector_id=detector_id)
+
+    deployment = deployment_manager.get_inference_deployment(detector_id=detector_id)
+    if deployment is None:
+        logging.info(f"Creating a new inference deployment for {detector_id}")
+        deployment_manager.create_inference_deployment(detector_id=detector_id)
+        return
+
+    if new_model:
+        # Update inference deployment and rollout a new pod
+        logging.info(f"Updating inference deployment for {detector_id}")
+        deployment_manager.update_inference_deployment(detector_id=detector_id)
+
+        poll_start = time.time()
+        while not deployment_manager.is_inference_deployment_rollout_complete(detector_id):
+            time.sleep(5)
+            if time.time() - poll_start > TEN_MINUTES:
+                raise TimeoutError("Inference deployment is not ready within time limit")
+
+        # Now that we have successfully rolled out a new model version, we can clean up our model repository a bit.
+        # To be a bit conservative, we keep the current model version as well as the version before that. Older
+        # versions of the model for the current detector_id will be removed from disk.
+        logging.info(f"Cleaning up old model versions for {detector_id}")
+        delete_old_model_versions(detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2)
+
+    if deployment_manager.is_inference_deployment_rollout_complete(detector_id):
+        # Database transaction to update the deployment_created field for the detector_id
+        # At this time, we are sure that the deployment for the detector has been successfully created and rolled out.
+        db_manager.update_inference_deployment_record(
+            detector_id=detector_id,
+            new_record={"deployment_created": True, "deployment_name": deployment.metadata.name},
+        )
+
+
+def update_models(
+    edge_inference_manager: EdgeInferenceManager,
+    deployment_manager: InferenceDeploymentManager,
+    db_manager: DatabaseManager,
+    refresh_rate: float,
+) -> None:
+    """
+    Periodically update inference models for detectors.
+
+    -  For existing inference deployments, if a new model is available (i.e., it was fetched
+      successfully from the edge-api/v1/fetch-model-urls endpoint), then we will rollout a new
+      pod with the new model. If a new model is not available, then we will do nothing.
+
+    - We will also look for new detectors that need to be deployed. These are expected to be
+      found in the database. Found detectors will be added to the queue of detectors that need
+      an inference deployment.
+
+    NOTE: The periodicity of this task is controlled by the refresh_rate parameter.
+    It is settable in the edge config file (defaults to 2 minutes).
+
+    :param edge_inference_manager: the edge inference manager object.
+    :param deployment_manager: the inference deployment manager object.
+    :param db_manager: the database manager object.
+    :param refresh_rate: the time interval (in seconds) between model update calls.
+    """
+    deploy_detector_level_inference = bool(int(os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", 0)))
+    if not deploy_detector_level_inference:
         sleep_forever("Edge inference is disabled globally... sleeping forever.")
         return
 
-    inference_config = edge_inference_manager.inference_config
-
-    if not any([config.enabled for config in inference_config.values()]):
-        sleep_forever("Edge inference is not enabled for any detectors... sleeping forever.")
-        return
-
-    # Filter to only detectors that have inference enabled
-    inference_config = {detector_id: config for detector_id, config in inference_config.items() if config.enabled}
-
-    # All enabled detectors should have the same refresh rate.
-    refresh_rates = [config.refresh_rate for config in inference_config.values()]
-    if len(set(refresh_rates)) != 1:
-        logging.error("Detectors have different refresh rates.")
-    refresh_rate_s = refresh_rates[0]
-
     while True:
         start = time.time()
-        for detector_id in inference_config.keys():
+        for detector_id in edge_inference_manager.inference_config.keys():
             try:
-                # Download and write new model to model repo on disk
-                new_model = edge_inference_manager.update_model(detector_id=detector_id)
-
-                deployment = deployment_manager.get_inference_deployment(detector_id=detector_id)
-                if deployment is None:
-                    logging.info(f"Creating a new inference deployment for {detector_id}")
-                    deployment_manager.create_inference_deployment(detector_id=detector_id)
-                elif new_model:
-                    # Update inference deployment and rollout a new pod
-                    logging.info(f"Updating inference deployment for {detector_id}")
-                    deployment_manager.update_inference_deployment(detector_id=detector_id)
-
-                    poll_start = time.time()
-                    while not deployment_manager.is_inference_deployment_rollout_complete(detector_id):
-                        time.sleep(5)
-                        if time.time() - poll_start > TEN_MINUTES:
-                            raise TimeoutError("Inference deployment is not ready within time limit")
-
-                    # Now that we have successfully rolled out a new model version, we can clean up our model repository a bit.
-                    # To be a bit conservative, we keep the current model version as well as the version before that. Older
-                    # versions of the model for the current detector_id will be removed from disk.
-                    logging.info(f"Cleaning up old model versions for {detector_id}")
-                    delete_old_model_versions(
-                        detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2
-                    )
+                _check_new_models_and_inference_deployments(
+                    detector_id=detector_id,
+                    edge_inference_manager=edge_inference_manager,
+                    deployment_manager=deployment_manager,
+                    db_manager=db_manager,
+                )
             except Exception:
                 logging.error(f"Failed to update model for {detector_id}", exc_info=True)
 
         elapsed_s = time.time() - start
-        if elapsed_s < refresh_rate_s:
-            time.sleep(refresh_rate_s - elapsed_s)
+        if elapsed_s < refresh_rate:
+            time.sleep(refresh_rate - elapsed_s)
+
+        # Fetch detector IDs that need to be deployed from the database and add them to the config
+        undeployed_detector_ids: List[Dict[str, str]] = db_manager.query_inference_deployments(deployment_created=False)
+        if undeployed_detector_ids:
+            for detector_record in undeployed_detector_ids:
+                edge_inference_manager.update_inference_config(
+                    detector_id=detector_record.detector_id, api_token=detector_record.api_token
+                )
 
 
 if __name__ == "__main__":
     edge_config: RootEdgeConfig = load_edge_config()
-    edge_inference_templates = edge_config.local_inference_templates
-    inference_config = {
-        detector.detector_id: edge_inference_templates[detector.local_inference_template]
-        for detector in edge_config.detectors
-    }
+    refresh_rate = get_refresh_rate(root_edge_config=edge_config)
+    inference_config, _ = get_inference_and_motion_detection_configs(root_edge_config=edge_config)
 
     edge_inference_manager = EdgeInferenceManager(config=inference_config, verbose=True)
     deployment_manager = InferenceDeploymentManager()
 
-    update_models(edge_inference_manager=edge_inference_manager, deployment_manager=deployment_manager)
+    # We will delegate creation of database tables to the edge-endpoint container.
+    # So here we don't run a task to create the tables if they don't already exist.
+    db_manager = DatabaseManager()
+
+    update_models(
+        edge_inference_manager=edge_inference_manager,
+        deployment_manager=deployment_manager,
+        db_manager=db_manager,
+        refresh_rate=refresh_rate,
+    )

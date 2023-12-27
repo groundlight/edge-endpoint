@@ -1,12 +1,11 @@
 import logging
-from datetime import datetime
 from io import BytesIO
 from typing import Optional
 
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from groundlight import Groundlight
-from model import ClassificationResult, Detector, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
+from model import Detector, ImageQuery
 from PIL import Image
 
 from app.core.app_state import (
@@ -16,7 +15,7 @@ from app.core.app_state import (
     get_groundlight_sdk_instance,
 )
 from app.core.motion_detection import MotionDetectionManager
-from app.core.utils import prefixed_ksuid, safe_call_api
+from app.core.utils import create_iqe, prefixed_ksuid, safe_call_api
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +124,6 @@ async def post_image_query(
 
     img_numpy = np.asarray(image)  # [H, W, C=3], dtype: uint8, RGB format
 
-    iqe_cache = app_state.iqe_cache
     motion_detection_manager = app_state.motion_detection_manager
     edge_inference_manager = app_state.edge_inference_manager
     require_human_review = human_review == "ALWAYS"
@@ -147,13 +145,14 @@ async def post_image_query(
             new_image_query = motion_detection_manager.get_image_query_response(detector_id=detector_id).copy(
                 deep=True, update={"id": prefixed_ksuid(prefix="iqe_")}
             )
+
             if new_image_query.result and _is_confident_enough(
                 confidence=new_image_query.result.confidence,
                 detector_metadata=get_detector_metadata(detector_id=detector_id, gl=gl),
                 confidence_threshold=confidence_threshold,
             ):
                 logger.debug("Motion detection confidence is high enough to return")
-                iqe_cache.update_cache(image_query=new_image_query)
+                app_state.db_manager.create_iqe_record(record=new_image_query)
                 return new_image_query
 
     image_query = None
@@ -169,19 +168,30 @@ async def post_image_query(
         ):
             logger.info("Edge detector confidence is high enough to return")
 
-            image_query = _create_iqe(
+            image_query = create_iqe(
                 detector_id=detector_id,
                 label=results["label"],
                 confidence=confidence,
                 query=detector_metadata.query,
             )
-            iqe_cache.update_cache(image_query=image_query)
+            app_state.db_manager.create_iqe_record(record=image_query)
         else:
             logger.info(
                 "Ran inference locally, but detector confidence is not high enough to return. Current confidence:"
                 f" {confidence} is less than confidence threshold: {detector_metadata.confidence_threshold}."
                 " Escalating to the cloud API server."
             )
+    else:
+        # Add a record to the inference deployments table to indicate that a k8s inference deployment has not yet been
+        # created for this detector.
+        api_token = gl.api_client.configuration.api_key["ApiToken"]
+        app_state.db_manager.create_inference_deployment_record(
+            record={
+                "detector_id": detector_id,
+                "api_token": api_token,
+                "deployment_created": False,
+            }
+        )
 
     # Finally, fall back to submitting the image to the cloud
     if not image_query:
@@ -214,30 +224,11 @@ async def get_image_query(
     id: str, gl: Groundlight = Depends(get_groundlight_sdk_instance), app_state: AppState = Depends(get_app_state)
 ):
     if id.startswith("iqe_"):
-        iqe_cache = app_state.iqe_cache
-
-        image_query = iqe_cache.get_cached_image_query(image_query_id=id)
+        image_query = app_state.db_manager.get_iqe_record(image_query_id=id)
         if not image_query:
             raise HTTPException(status_code=404, detail=f"Image query with ID {id} not found")
         return image_query
     return safe_call_api(gl.get_image_query, id=id)
-
-
-def _create_iqe(detector_id: str, label: str, confidence: float, query: str = "") -> ImageQuery:
-    iq = ImageQuery(
-        id=prefixed_ksuid(prefix="iqe_"),
-        type=ImageQueryTypeEnum.image_query,
-        created_at=datetime.utcnow(),
-        query=query,
-        detector_id=detector_id,
-        result_type=ResultTypeEnum.binary_classification,
-        result=ClassificationResult(
-            confidence=confidence,
-            label=label,
-        ),
-        metadata=None,
-    )
-    return iq
 
 
 def _improve_cached_image_query_confidence(
@@ -253,6 +244,7 @@ def _improve_cached_image_query_confidence(
     :param motion_detection_manager: Application's motion detection manager instance.
         This manages the motion detection state for all detectors.
     :param img: the image to submit.
+    :param metadata: Optional metadata to attach to the image query.
     """
 
     detector_metadata: Detector = get_detector_metadata(detector_id=detector_id, gl=gl)

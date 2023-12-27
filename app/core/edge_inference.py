@@ -24,7 +24,7 @@ class EdgeInferenceManager:
     INFERENCE_SERVER_URL = "inference-service:8000"
     MODEL_REPOSITORY = "/mnt/models"
 
-    def __init__(self, config: Dict[str, LocalInferenceConfig], verbose: bool = False) -> None:
+    def __init__(self, config: Dict[str, LocalInferenceConfig] | None, verbose: bool = False) -> None:
         """
         Initializes the edge inference manager.
         Args:
@@ -35,16 +35,33 @@ class EdgeInferenceManager:
               2) the `LocalInferenceConfig` object determines if local inference is enabled for
                 a specific detector and the model name and version to use for inference.
         """
-        self.inference_config = config
-
-        if self.inference_config:
+        self.verbose = verbose
+        self.inference_config, self.inference_clients = {}, {}
+        if config:
+            self.inference_config = config
             self.inference_clients = {
                 detector_id: tritonclient.InferenceServerClient(
-                    url=get_edge_inference_service_name(detector_id) + ":8000", verbose=verbose
+                    url=get_edge_inference_service_name(detector_id) + ":8000", verbose=self.verbose
                 )
                 for detector_id in self.inference_config.keys()
                 if self.detector_configured_for_local_inference(detector_id)
             }
+
+    def update_inference_config(self, detector_id: str, api_token: str) -> None:
+        """
+        Adds a new detector to the inference config at runtime. This is useful when new
+        detectors are added to the database and we want to create an inference deployment for them.
+        Args:
+            detector_id: ID of the detector on which to run local edge inference
+            api_token: API token required to fetch inference models
+
+        """
+        if detector_id not in self.inference_config.keys():
+            self.inference_config[detector_id] = LocalInferenceConfig(enabled=True, api_token=api_token)
+
+            self.inference_clients[detector_id] = tritonclient.InferenceServerClient(
+                url=get_edge_inference_service_name(detector_id) + ":8000", verbose=self.verbose
+            )
 
     def detector_configured_for_local_inference(self, detector_id: str) -> bool:
         """
@@ -54,6 +71,9 @@ class EdgeInferenceManager:
         Returns:
             True if the detector is configured to run local inference, False otherwise
         """
+        if not self.inference_config:
+            return False
+
         return detector_id in self.inference_config.keys() and self.inference_config[detector_id].enabled
 
     def inference_is_available(self, detector_id: str, model_version: str = "") -> bool:
@@ -131,7 +151,14 @@ class EdgeInferenceManager:
         Returns True if a new model was downloaded and saved, False otherwise.
         """
         logger.info(f"Checking if there is a new model available for {detector_id}")
-        model_urls = fetch_model_urls(detector_id)
+
+        api_token = (
+            self.inference_config[detector_id].api_token
+            if self.detector_configured_for_local_inference(detector_id)
+            else None
+        )
+
+        model_urls = fetch_model_urls(detector_id, api_token=api_token)
 
         cloud_binary_ksuid = model_urls.get("model_binary_id", None)
         if cloud_binary_ksuid is None:
@@ -158,18 +185,15 @@ class EdgeInferenceManager:
         return True
 
 
-def fetch_model_urls(detector_id: str) -> dict[str, str]:
-    try:
-        groundlight_api_token = os.environ["GROUNDLIGHT_API_TOKEN"]
-    except KeyError as ex:
-        logger.error("GROUNDLIGHT_API_TOKEN environment variable is not set", exc_info=True)
-        raise ex
+def fetch_model_urls(detector_id: str, api_token: Optional[str] = None) -> dict[str, str]:
+    if not api_token:
+        raise ValueError(f"No API token provided for {detector_id=}")
 
     logger.debug(f"Fetching model URLs for {detector_id}")
 
     url = f"https://api.groundlight.ai/edge-api/v1/fetch-model-urls/{detector_id}/"
     headers = {
-        "x-api-token": groundlight_api_token,
+        "x-api-token": api_token,
     }
     response = requests.get(url, headers=headers, timeout=10)
     logger.debug(f"fetch-model-urls response = {response}")

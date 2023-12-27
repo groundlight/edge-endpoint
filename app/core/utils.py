@@ -1,9 +1,27 @@
+from datetime import datetime
 from io import BytesIO
 from typing import Callable
 
 import ksuid
 from fastapi import HTTPException
+from model import ClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
 from PIL import Image
+
+
+def create_iqe(detector_id: str, label: str, confidence: float, query: str = "") -> ImageQuery:
+    iq = ImageQuery(
+        id=prefixed_ksuid(prefix="iqe_"),
+        type=ImageQueryTypeEnum.image_query,
+        created_at=datetime.utcnow(),
+        query=query,
+        detector_id=detector_id,
+        result_type=ResultTypeEnum.binary_classification,
+        result=ClassificationResult(
+            confidence=confidence,
+            label=label,
+        ),
+    )
+    return iq
 
 
 def safe_call_api(api_method: Callable, **kwargs):
