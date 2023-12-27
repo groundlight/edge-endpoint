@@ -140,7 +140,7 @@ class DatabaseManager:
                 if len(detectors) != 1:
                     raise AssertionError("Expected exactly one detector to be returned.")
 
-                existing_api_token = detectors[0]["api_token"]
+                existing_api_token = detectors[0].api_token
 
                 if existing_api_token != api_token:
                     logger.info(f"Updating API token for detector ID {record['detector_id']}.")
@@ -173,7 +173,7 @@ class DatabaseManager:
                     setattr(detector_record, field, value)
             session.commit()
 
-    def query_inference_deployments(self, **kwargs) -> List[Dict[str, str]]:
+    def query_inference_deployments(self, **kwargs) -> List[InferenceDeployment]:
         """
         Query the database table for detectors based on a given query predicate.
         :param kwargs: A dictionary containing the query predicate.
@@ -181,7 +181,10 @@ class DatabaseManager:
         with self.session_maker() as session:
             query = select(self.InferenceDeployment).filter_by(**kwargs)
             query_results = session.execute(query)
-            query_results: List[Tuple] = query_results.fetchall()
+            query_results = query_results.fetchall()
+
+            # SQLAlchemy returns single element tuples for each query result.
+            query_results = [result[0] for result in query_results]
             return query_results
 
     def create_iqe_record(self, record: ImageQuery) -> None:

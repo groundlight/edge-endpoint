@@ -137,7 +137,7 @@ def update_models(
         if undeployed_detector_ids:
             for detector_record in undeployed_detector_ids:
                 edge_inference_manager.update_inference_config(
-                    detector_id=detector_record["detector_id"], api_token=detector_record["api_token"]
+                    detector_id=detector_record.detector_id, api_token=detector_record.api_token
                 )
 
 

@@ -38,7 +38,7 @@ def update_inference_config(app_state: AppState) -> None:
     detectors: List[Dict[str, str]] = db_manager.query_inference_deployments(deployment_created=True)
     if detectors:
         for detector_record in detectors:
-            detector_id, api_token = detector_record["detector_id"], detector_record["api_token"]
+            detector_id, api_token = detector_record.detector_id, detector_record.api_token
             app_state.edge_inference_manager.update_inference_config(detector_id=detector_id, api_token=api_token)
 
 

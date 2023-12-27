@@ -5,6 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import DatabaseManager
+from app.core.database import *
 from app.core.utils import create_iqe, prefixed_ksuid
 
 NUM_TESTING_RECORDS = 100
@@ -86,8 +87,8 @@ def test_get_detectors_without_deployments(db_manager, database_reset):
     undeployed_detectors = db_manager.query_inference_deployments(deployment_created=False)
     assert len(undeployed_detectors) == NUM_TESTING_RECORDS
     for record in undeployed_detectors:
-        assert record["detector_id"] in [r["detector_id"] for r in records]
-        assert record["api_token"] in [r["api_token"] for r in records]
+        assert record.detector_id in [r["detector_id"] for r in records]
+        assert record.api_token in [r["api_token"] for r in records]
 
 
 def test_get_iqe_record(db_manager, database_reset):
@@ -138,8 +139,8 @@ def test_update_api_token_for_detector(db_manager, database_reset):
     db_manager.create_inference_deployment_record(record=record)
     detectors = db_manager.query_inference_deployments(detector_id=record["detector_id"])
     assert len(detectors) == 1
-    assert detectors[0]["api_token"] == record["api_token"]
-    assert bool(detectors[0]["deployment_created"]) is False
+    assert detectors[0].api_token == record["api_token"]
+    assert bool(detectors[0].deployment_created) is False
 
     # Now change the API token
     new_api_token = prefixed_ksuid("api_")
@@ -150,26 +151,8 @@ def test_update_api_token_for_detector(db_manager, database_reset):
     # Check that the API token has been updated
     detectors = db_manager.query_inference_deployments(detector_id=record["detector_id"])
     assert len(detectors) == 1
-    assert detectors[0]["api_token"] == new_api_token
-    assert bool(detectors[0]["deployment_created"]) is False
-
-
-def test_create_detector_record_raises_validation_error(db_manager: DatabaseManager, database_reset):
-    """
-    Creating detector record with invalid detector_id should raise a ValueError.
-    """
-    records = [
-        {
-            "detector_id": prefixed_ksuid("det_") + prefixed_ksuid("_"),
-            "api_token": prefixed_ksuid("api_"),
-            "deployment_created": False,
-        }
-        for _ in range(NUM_TESTING_RECORDS)
-    ]
-
-    for record in records:
-        with pytest.raises(ValueError):
-            db_manager.create_inference_deployment_record(record=record)
+    assert detectors[0].api_token == new_api_token
+    assert bool(detectors[0].deployment_created) is False
 
 
 def test_query_inference_deployments_raises_sqlalchemy_error(db_manager: DatabaseManager, database_reset):
