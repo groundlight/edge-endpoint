@@ -1,6 +1,6 @@
 #!/bin/bash
 
-K="k3s kubectl"
+K=${KUBECTL_CMD:-kubectl}
 
 if command -v docker >/dev/null 2>&1; then
     # Enable ECR login - make sure you have the aws client configured properly, or an IAM role

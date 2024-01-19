@@ -8,7 +8,7 @@ from kubernetes import client as kube_client
 from kubernetes import config
 
 from .edge_inference import get_edge_inference_deployment_name, get_edge_inference_service_name
-from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH
+from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +33,18 @@ class InferenceDeploymentManager:
         self._app_kube_client = kube_client.AppsV1Api()
         self._core_kube_client = kube_client.CoreV1Api()
 
-        deployments = self._app_kube_client.list_deployment_for_all_namespaces(
-            label_selector="app=edge-logic-server", field_selector="metadata.name=edge-endpoint"
-        )
-        self._target_namespace = deployments.items[0].metadata.namespace if deployments.items else "default"
+        if os.path.exists(KUBERNETES_NAMESPACE_PATH):
+            with open(KUBERNETES_NAMESPACE_PATH, "r") as f:
+                self._target_namespace = f.read().strip()
+
+        else:
+            logger.error(
+                f"Could not find kubernetes namespace at {KUBERNETES_NAMESPACE_PATH}."
+                "Setting namespace to `default`. This is probably not what you want."
+            )
+            self._target_namespace = "default"
+
+        logger.info(f"Using {self._target_namespace} namespace.")
 
     def _load_inference_deployment_template(self) -> str:
         """
