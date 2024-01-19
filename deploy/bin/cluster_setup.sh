@@ -100,8 +100,9 @@ if ! $K get pvc edge-endpoint-pvc; then
         fail "EFS_VOLUME_ID environment variable not set"
     fi
     # Use envsubst to replace the EFS_VOLUME_ID in the persistentvolumeclaim.yaml template
-    envsubst < deploy/k3s/persistentvolumeclaim.yaml > deploy/k3s/persistentvolumeclaim.yaml.tmp
-    $K apply -f deploy/k3s/persistentvolumeclaim.yaml.tmp
+    envsubst < deploy/k3s/persistentvolume.yaml > deploy/k3s/persistentvolume.yaml.tmp
+    $K apply -f deploy/k3s/persistentvolume.yaml.tmp
+    rm deploy/k3s/persistentvolume.yaml.tmp
 fi
 
 $K apply -f deploy/k3s/service_account.yaml
