@@ -8,13 +8,16 @@
 # - detectors in the `inference_deployments` table
 # - image queries in the `image_queries_edge` table
 # For more on these tables you can examine the database file at
-# /opt/groundlight/edge/sqlite/sqlite.db on the attached EFS volume. 
+# /opt/groundlight/edge/sqlite/sqlite.db on the attached volume (EFS/local). 
 
 # Possible env vars:
 # - KUBECTL_CMD: path to kubectl command. Defaults to "kubectl" but can be set to "k3s kubectl" if using k3s
 # - INFERENCE_FLAVOR: "CPU" or "GPU". Defaults to "GPU"
 # - EDGE_CONFIG: contents of edge-config.yaml. If not set, will use configs/edge-config.yaml
-# - EFS_VOLUME_ID: ID of the EFS volume to use if the PV and PVC don't exist yet. 
+# - DEPLOY_LOCAL_VERSION: Indicates whether we are building the local version of the edge endpoint. 
+#           If set to 0, we will attach an EFS instead of a local volume. Defaults to 1.
+# - EFS_VOLUME_ID: ID of the EFS volume to use if we are using the EFS version. 
+
 
 
 # move to the root directory of the repo
@@ -27,19 +30,39 @@ fail() {
     exit 1
 }
 
+# Function to check for conflicting PV. 
+# This is a robustness measure to guard against errors when a user tries to create a 
+# persistent volume with hostPath when we already have an EFS volume mounted or vice versa.
+check_pv_conflict() {
+    local pv_name=$1
+    local expected_storage_class=$2
+
+    # Get existing PV details if it exists
+    pv_detail=$(kubectl get pv "$pv_name" -o json 2>/dev/null)
+    if [[ -z "$pv_detail" ]]; then
+        # PV does not exist, no conflict
+        return 0
+    fi
+
+    # Extract storage class and host path from existing PV
+    existing_storage_class=$(echo "$pv_detail" | jq -r '.spec.storageClassName')
+
+    # Compare existing PV details with expected details
+    if [[ "$existing_storage_class" != "$expected_storage_class" ]]; then
+        echo "Alert: Existing PersistentVolume '$pv_name' conflicts with the anticipated resource."
+        echo "Existing storage class: $existing_storage_class, Expected: $expected_storage_class"
+        echo "Consider deleting the existing PV/PVC and try again."
+        return 1
+    fi
+    return 0
+}
+
 
 K=${KUBECTL_CMD:-kubectl}
 INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"GPU"}
-DB_RESTART=$1
+DB_RESET=$1
+DEPLOY_LOCAL_VERSION=${DEPLOY_LOCAL_VERSION:-1}
 
-# Ensure database file has been correctly setup. If the first argument is "db_reset",
-# all the data in the database will be deleted first. 
-# For now, this means all 
-# - detectors in the `inference_deployments` table
-# - image queries in the `image_queries_edge` table
-# For more on these tables you can examine the database file at
-# /opt/groundlight/edge/sqlite/sqlite.db 
-./deploy/bin/setup_db.sh $DB_RESTART
 
 # Secrets
 ./deploy/bin/make-aws-secret.sh
@@ -54,6 +77,8 @@ fi
 $K delete configmap --ignore-not-found edge-config
 $K delete configmap --ignore-not-found inference-deployment-template
 $K delete configmap --ignore-not-found kubernetes-namespace
+$K delete configmap --ignore-not-found setup-db
+$K delete configmap --ignore-not-found db-reset
 
 if [[ -n "${EDGE_CONFIG}" ]]; then
     echo "Creating config from EDGE_CONFIG env var"
@@ -81,6 +106,15 @@ fi
 DEPLOYMENT_NAMESPACE=$($K config view -o json | jq -r '.contexts[] | select(.name == "'$(kubectl config current-context)'") | .context.namespace')
 $K create configmap kubernetes-namespace --from-literal=namespace=${DEPLOYMENT_NAMESPACE}
 
+$K create configmap setup-db --from-file=$(pwd)/deploy/bin/setup_db.sh -n ${DEPLOYMENT_NAMESPACE}
+
+# If db_reset is passed as an argument, create a environment variable DB_RESET
+if [[ "$DB_RESET" == "db_reset" ]]; then
+    $K create configmap db-reset --from-literal=DB_RESET=1
+else
+    $K create configmap db-reset --from-literal=DB_RESET=0
+fi
+
 # Clean up existing deployments and services (if they exist)
 $K delete --ignore-not-found deployment edge-endpoint
 $K delete --ignore-not-found service edge-endpoint-service
@@ -92,6 +126,30 @@ $K get service -o custom-columns=":metadata.name" --no-headers=true | \
     xargs -I {} $K delete service {}
 
 # Reapply changes
+
+# Check if DEPLOY_LOCAL_VERSION is set. If so, use a local volume instead of an EFS volume
+if [[ "${DEPLOY_LOCAL_VERSION}" == "1" ]]; then
+    if ! check_pv_conflict "edge-endpoint-pv" "local-sc"; then
+        fail "PersistentVolume edge-endpoint-pv conflicts with the existing resource."
+    fi
+
+    $K apply -f deploy/k3s/local_persistent_volume.yaml
+else
+    # If environment variable EFS_VOLUME_ID is not set, exit 
+    if [[ -z "${EFS_VOLUME_ID}" ]]; then
+        fail "EFS_VOLUME_ID environment variable not set"
+    fi
+
+    if ! check_pv_conflict "edge-endpoint-pv" "efs-sc"; then
+        fail "PersistentVolume edge-endpoint-pv conflicts with the existing resource."
+    fi
+
+    # Use envsubst to replace the EFS_VOLUME_ID in the persistentvolumeclaim.yaml template
+    envsubst < deploy/k3s/efs_persistent_volume.yaml > deploy/k3s/persistentvolume.yaml
+    $K apply -f deploy/k3s/persistentvolume.yaml
+    rm deploy/k3s/persistentvolume.yaml
+fi
+
 
 # Check if the edge-endpoint-pvc exists. If not, create it
 if ! $K get pvc edge-endpoint-pvc; then
@@ -105,7 +163,11 @@ if ! $K get pvc edge-endpoint-pvc; then
     rm deploy/k3s/persistentvolume.yaml.tmp
 fi
 
-$K apply -f deploy/k3s/service_account.yaml
+# Substitutes the namespace in the service_account.yaml template
+envsubst < deploy/k3s/service_account.yaml > deploy/k3s/service_account.yaml.tmp
+$K apply -f deploy/k3s/service_account.yaml.tmp
+rm deploy/k3s/service_account.yaml.tmp
+
 $K apply -f deploy/k3s/edge_deployment/edge_deployment.yaml
 
 $K describe deployment edge-endpoint

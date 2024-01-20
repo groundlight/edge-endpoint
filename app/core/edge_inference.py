@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from jinja2 import Template
 
 from app.core.utils import prefixed_ksuid
+from app.core.file_paths import MODEL_REPOSITORY_PATH
 
 from .configs import LocalInferenceConfig
 
@@ -22,7 +23,6 @@ class EdgeInferenceManager:
     INPUT_IMAGE_NAME = "image"
     MODEL_OUTPUTS = ["score", "confidence", "probability", "label"]
     INFERENCE_SERVER_URL = "inference-service:8000"
-    MODEL_REPOSITORY = "/mnt/models"
 
     def __init__(self, config: Dict[str, LocalInferenceConfig] | None, verbose: bool = False) -> None:
         """
@@ -164,7 +164,7 @@ class EdgeInferenceManager:
         if cloud_binary_ksuid is None:
             logger.warning(f"No model binary ksuid returned for {detector_id}")
 
-        model_dir = os.path.join(self.MODEL_REPOSITORY, detector_id)
+        model_dir = os.path.join(MODEL_REPOSITORY_PATH, detector_id)
         edge_binary_ksuid = get_current_model_ksuid(model_dir)
         if edge_binary_ksuid and cloud_binary_ksuid is not None and cloud_binary_ksuid <= edge_binary_ksuid:
             logger.info(f"No new model available for {detector_id}")
@@ -180,7 +180,7 @@ class EdgeInferenceManager:
             model_buffer,
             pipeline_config,
             binary_ksuid=cloud_binary_ksuid,
-            repository_root=self.MODEL_REPOSITORY,
+            repository_root=MODEL_REPOSITORY_PATH,
         )
         return True
 

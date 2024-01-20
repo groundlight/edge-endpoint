@@ -38,9 +38,28 @@ spec:
       # This service account is used by the edge logic to access the Kubernetes API
       # from within the pod. See deploy/k3s/service_account.yaml for more details
       serviceAccountName: edge-endpoint-service-account
+      initContainers:
+      - name: database-prep
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:miscellaneous-c290a1810-dirty-8c48a5f159e9542
+        imagePullPolicy: IfNotPresent
+        env:
+        # Flag to indicate whether or not to reset all database tables. Resetting WILL delete 
+        # all existing data in the database, so set this flag to 1 with caution.
+        - name: DB_RESET 
+          valueFrom:
+            configMapKeyRef:
+              name: db-reset
+              key: DB_RESET
+        volumeMounts:
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/sqlite
+        - name: sqlite-db-setup-script-volume
+          mountPath: /scripts 
+        command: ["/bin/bash", "/scripts/setup-db.sh"]
+
       containers:
       - name: edge-endpoint
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:3e7357529-miscellaneous
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:miscellaneous-c290a1810-dirty-8c48a5f159e9542
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
@@ -64,7 +83,7 @@ spec:
           mountPath: /opt/groundlight/edge/sqlite
 
       - name: inference-model-updater
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:3e7357529-miscellaneous
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:miscellaneous-c290a1810-dirty-8c48a5f159e9542
         imagePullPolicy: IfNotPresent
         command: ["/bin/bash", "-c"]
         args: ["poetry run python -m app.model_updater.update_models"]
@@ -91,10 +110,11 @@ spec:
           mountPath: /opt/groundlight/edge/sqlite
 
         - name: edge-endpoint-persistent-volume
-          mountPath: /var/groundlight/serving/model_repository
+          mountPath: /opt/groundlight/edge/serving/model-repo
 
       imagePullSecrets:
       - name: registry-credentials
+
       volumes:
       - name: edge-config-volume
         configMap:
@@ -105,6 +125,9 @@ spec:
       - name: inference-deployment-template-volume
         configMap:
           name: inference-deployment-template
+      - name: sqlite-db-setup-script-volume
+        configMap:
+          name: setup-db
       - name: edge-endpoint-persistent-volume
         persistentVolumeClaim:
           # This PVC is attached to an EFS volume. 
