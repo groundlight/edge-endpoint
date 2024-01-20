@@ -11,8 +11,8 @@ import tritonclient.http as tritonclient
 from fastapi import HTTPException
 from jinja2 import Template
 
-from app.core.utils import prefixed_ksuid
 from app.core.file_paths import MODEL_REPOSITORY_PATH
+from app.core.utils import prefixed_ksuid
 
 from .configs import LocalInferenceConfig
 
