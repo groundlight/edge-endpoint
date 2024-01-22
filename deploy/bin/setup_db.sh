@@ -1,4 +1,4 @@
-!/bin/bash
+#!/bin/bash
 
 # Sets up the SQLite database for the edge endpoint.
 # Expects the following environment variables:
