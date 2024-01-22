@@ -62,6 +62,7 @@ K=${KUBECTL_CMD:-"k3s kubectl"}
 INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"GPU"}
 DB_RESET=$1
 DEPLOY_LOCAL_VERSION=${DEPLOY_LOCAL_VERSION:-1}
+DEPLOYMENT_NAMESPACE=${DEPLOYMENT_NAMESPACE:-$($K config view -o json | jq -r '.contexts[] | select(.name == "'$($K config current-context)'") | .context.namespace')}
 
 
 # Secrets
@@ -72,7 +73,6 @@ if ! $K get secret registry-credentials; then
     fail "registry-credentials secret not found"
 fi
 
-DEPLOYMENT_NAMESPACE=$($K config view -o json | jq -r '.contexts[] | select(.name == "'$(kubectl config current-context)'") | .context.namespace')
 
 # Configmaps and deployments
 $K delete configmap --ignore-not-found edge-config -n ${DEPLOYMENT_NAMESPACE}
