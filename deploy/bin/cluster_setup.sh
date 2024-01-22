@@ -58,7 +58,7 @@ check_pv_conflict() {
 }
 
 
-K=${KUBECTL_CMD:-kubectl}
+K=${KUBECTL_CMD:-"k3s kubectl"}
 INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"GPU"}
 DB_RESET=$1
 DEPLOY_LOCAL_VERSION=${DEPLOY_LOCAL_VERSION:-1}
@@ -72,13 +72,14 @@ if ! $K get secret registry-credentials; then
     fail "registry-credentials secret not found"
 fi
 
+DEPLOYMENT_NAMESPACE=$($K config view -o json | jq -r '.contexts[] | select(.name == "'$(kubectl config current-context)'") | .context.namespace')
 
 # Configmaps and deployments
-$K delete configmap --ignore-not-found edge-config
-$K delete configmap --ignore-not-found inference-deployment-template
-$K delete configmap --ignore-not-found kubernetes-namespace
-$K delete configmap --ignore-not-found setup-db
-$K delete configmap --ignore-not-found db-reset
+$K delete configmap --ignore-not-found edge-config -n ${DEPLOYMENT_NAMESPACE}
+$K delete configmap --ignore-not-found inference-deployment-template -n ${DEPLOYMENT_NAMESPACE}
+$K delete configmap --ignore-not-found kubernetes-namespace -n ${DEPLOYMENT_NAMESPACE}
+$K delete configmap --ignore-not-found setup-db -n ${DEPLOYMENT_NAMESPACE}
+$K delete configmap --ignore-not-found db-reset -n ${DEPLOYMENT_NAMESPACE}
 
 if [[ -n "${EDGE_CONFIG}" ]]; then
     echo "Creating config from EDGE_CONFIG env var"
@@ -103,7 +104,6 @@ else
 fi
 
 # Create a configmap corresponding to the namespace we are deploying to
-DEPLOYMENT_NAMESPACE=$($K config view -o json | jq -r '.contexts[] | select(.name == "'$(kubectl config current-context)'") | .context.namespace')
 $K create configmap kubernetes-namespace --from-literal=namespace=${DEPLOYMENT_NAMESPACE}
 
 $K create configmap setup-db --from-file=$(pwd)/deploy/bin/setup_db.sh -n ${DEPLOYMENT_NAMESPACE}

@@ -54,8 +54,8 @@ spec:
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/sqlite
         - name: sqlite-db-setup-script-volume
-          mountPath: /scripts 
-        command: ["/bin/bash", "/scripts/setup-db.sh"]
+          mountPath: /scripts
+        command: ["/bin/bash", "/scripts/setup_db.sh"]
 
       containers:
       - name: edge-endpoint
