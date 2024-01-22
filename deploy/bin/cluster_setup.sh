@@ -17,6 +17,7 @@
 # - DEPLOY_LOCAL_VERSION: Indicates whether we are building the local version of the edge endpoint. 
 #           If set to 0, we will attach an EFS instead of a local volume. Defaults to 1.
 # - EFS_VOLUME_ID: ID of the EFS volume to use if we are using the EFS version. 
+# - DEPLOYMENT_NAMESPACE: Namespace to deploy to. Defaults to the current namespace.
 
 
 

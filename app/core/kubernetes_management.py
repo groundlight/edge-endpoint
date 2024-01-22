@@ -8,7 +8,7 @@ from kubernetes import client as kube_client
 from kubernetes import config
 
 from .edge_inference import get_edge_inference_deployment_name, get_edge_inference_service_name
-from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH
+from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH, MODEL_REPOSITORY_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +132,7 @@ class InferenceDeploymentManager:
         # Set the correct detector_id so we dont load more than the one model in this deployment. Also rotate the shm-region.
         deployment.spec.template.spec.containers[0].command = [
             "tritonserver",
-            "--model-repository=/mnt/models",
+            f"--model-repository={MODEL_REPOSITORY_PATH}",
             f"--load-model={detector_id}",  # Only load the model we care about
             "--metrics-config=summary_latencies=true",
             "--allow-cpu-metrics=true",

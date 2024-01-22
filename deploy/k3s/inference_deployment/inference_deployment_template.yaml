@@ -51,7 +51,7 @@ spec:
         command:
           [
             "tritonserver",
-            "--model-repository=/mnt/models",
+            "--model-repository=/opt/groundlight/edge/serving/model-repo",
             "--load-model=placeholder-model-name",
             "--allow-gpu-metrics=true",
             "--allow-cpu-metrics=true",
@@ -61,11 +61,8 @@ spec:
             "--log-verbose=1",
           ]
         volumeMounts:
-        - name: model-repo 
-          mountPath: /var/groundlight/serving/model_repository
-
         - name: edge-endpoint-persistent-volume
-          mountPath: /var/groundlight/serving/model_repository
+          mountPath: /opt/groundlight/edge/serving/model-repo
 
         - name: dshm
           mountPath: /dev/shm

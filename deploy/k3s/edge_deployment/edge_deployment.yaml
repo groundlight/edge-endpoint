@@ -130,6 +130,4 @@ spec:
           name: setup-db
       - name: edge-endpoint-persistent-volume
         persistentVolumeClaim:
-          # This PVC is attached to an EFS volume. 
-          # See deploy/k3s/persistentvolume.yaml for more details
           claimName: edge-endpoint-pvc
