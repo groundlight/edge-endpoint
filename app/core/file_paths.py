@@ -9,7 +9,7 @@ KUBERNETES_NAMESPACE_PATH = "/etc/groundlight/kubernetes-namespace/namespace"
 DATABASE_FILEPATH = "/opt/groundlight/edge/sqlite/sqlite.db"
 
 # Path to the model repository.
-MODEL_REPOSITORY_PATH = "/opt/groundlight/edge/serving/model-repo" 
+MODEL_REPOSITORY_PATH = "/opt/groundlight/edge/serving/model-repo"
 
 # Path to the database log file. This will contain all SQL queries executed by the ORM.
 DATABASE_ORM_LOG_FILE = "sqlalchemy.log"
