@@ -37,8 +37,8 @@ if [[ -f "${DATABASE_PATH}" ]]; then
     echo "SQLite database file exists and is mounted correctly."
 else
     echo "SQLite database file doesn't exist or wasn't mounted correctly. Creating it now..."
-    sudo mkdir -p ${DATABASE_DIRECTORY}
-    sudo chown -R "$(id -u)":"$(id -g)" "${DATABASE_DIRECTORY}"
+    mkdir -p ${DATABASE_DIRECTORY}
+    chown -R "$(id -u)":"$(id -g)" "${DATABASE_DIRECTORY}"
 
     # SQLite is eccentric in a sense that if you just invoke `sqlite3 <db_file>`, it won't 
     # actually create the file. We are using a hack here to initialize the database with 
