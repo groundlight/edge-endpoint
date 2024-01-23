@@ -32,17 +32,14 @@ class InferenceDeploymentManager:
         # Using both clients in order to create the deployment and service for the inference containers.
         self._app_kube_client = kube_client.AppsV1Api()
         self._core_kube_client = kube_client.CoreV1Api()
-
-        if os.path.exists(KUBERNETES_NAMESPACE_PATH):
-            with open(KUBERNETES_NAMESPACE_PATH, "r") as f:
-                self._target_namespace = f.read().strip()
-
-        else:
-            logger.error(
-                f"Could not find kubernetes namespace at {KUBERNETES_NAMESPACE_PATH}."
-                "Setting namespace to `default`. This is probably not what you want."
+        
+        if not os.path.exists(KUBERNETES_NAMESPACE_PATH):
+            raise FileNotFoundError(
+                f"Could not find kubernetes namespace file at {KUBERNETES_NAMESPACE_PATH}."
             )
-            self._target_namespace = "default"
+
+        with open(KUBERNETES_NAMESPACE_PATH, "r") as f:
+            self._target_namespace = f.read().strip()
 
         logger.info(f"Using {self._target_namespace} namespace.")
 
