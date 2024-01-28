@@ -37,7 +37,6 @@ class InferenceDeploymentManager:
             raise FileNotFoundError(
                 f"Could not find kubernetes namespace file at {KUBERNETES_NAMESPACE_PATH}."
             )
-
         with open(KUBERNETES_NAMESPACE_PATH, "r") as f:
             self._target_namespace = f.read().strip()
 
