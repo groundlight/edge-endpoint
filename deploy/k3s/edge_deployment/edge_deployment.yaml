@@ -5,32 +5,6 @@ metadata:
   name: nvidia
 handler: nvidia
 ---
-apiVersion: v1 
-kind: PersistentVolume 
-metadata:
-  name: sqlite-pv 
-spec:
-  capacity: 
-    storage: 1Gi
-  accessModes:
-    - ReadWriteOnce 
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: local-path
-  hostPath:
-    path: /opt/groundlight/edge/sqlite
----
-apiVersion: v1 
-kind: PersistentVolumeClaim
-metadata:
-  name: sqlite-pvc
-spec: 
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
-  storageClassName: local-path
----
 apiVersion: v1
 kind: Service
 metadata:
@@ -64,9 +38,28 @@ spec:
       # This service account is used by the edge logic to access the Kubernetes API
       # from within the pod. See deploy/k3s/service_account.yaml for more details
       serviceAccountName: edge-endpoint-service-account
+      initContainers:
+      - name: database-prep
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:miscellaneous-c290a1810-dirty-8c48a5f159e9542
+        imagePullPolicy: IfNotPresent
+        env:
+        # Flag to indicate whether or not to reset all database tables. Resetting WILL delete 
+        # all existing data in the database, so set this flag to 1 with caution.
+        - name: DB_RESET 
+          valueFrom:
+            configMapKeyRef:
+              name: db-reset
+              key: DB_RESET
+        volumeMounts:
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/sqlite
+        - name: sqlite-db-setup-script-volume
+          mountPath: /scripts
+        command: ["/bin/bash", "/scripts/setup_db.sh"]
+
       containers:
       - name: edge-endpoint
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:9a0d8be12-setup-sqlite-database
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:miscellaneous-c290a1810-dirty-8c48a5f159e9542
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
@@ -84,12 +77,13 @@ spec:
           value: "1"
         volumeMounts:
         - name: edge-config-volume
-          mountPath: /etc/groundlight/edge-config
-        - name: sqlite-data
+          mountPath: /etc/groundlight/edge-config 
+
+        - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/sqlite
 
       - name: inference-model-updater
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:9a0d8be12-setup-sqlite-database
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:miscellaneous-c290a1810-dirty-8c48a5f159e9542
         imagePullPolicy: IfNotPresent
         command: ["/bin/bash", "-c"]
         args: ["poetry run python -m app.model_updater.update_models"]
@@ -101,30 +95,39 @@ spec:
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
+
+        - name: kubernetes-namespace
+          mountPath: /etc/groundlight/kubernetes-namespace
+
         - name: inference-deployment-template-volume
           mountPath: /etc/groundlight/inference-deployment
-        - name: model-repo
-          mountPath: /mnt/models
-        - name: sqlite-data
+
+        # In this setup the edge-endpoint-persistent-volume is mounted to 
+        # two different paths in the inference-model-updater container.
+        # This allows the container to access both the sqlite database and 
+        # the path to the model repository without needing to create an extra PV and PVC.
+        - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/sqlite
+
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/serving/model-repo
 
       imagePullSecrets:
       - name: registry-credentials
+
       volumes:
       - name: edge-config-volume
         configMap:
           name: edge-config
+      - name: kubernetes-namespace 
+        configMap:
+          name: kubernetes-namespace
       - name: inference-deployment-template-volume
         configMap:
           name: inference-deployment-template
-      - name: model-repo
-        hostPath:
-          # A hostPath volume mounts a file or directory from the host node's filesystem into your Pod
-          # This simiplifies things a lot, but only really works for single-node clusters.
-          # TODO: check out k3s local path provisioner: https://docs.k3s.io/storage#setting-up-the-local-storage-provider
-          path: /var/groundlight/serving/model_repository
-          type: DirectoryOrCreate
-
-      - name: sqlite-data
+      - name: sqlite-db-setup-script-volume
+        configMap:
+          name: setup-db
+      - name: edge-endpoint-persistent-volume
         persistentVolumeClaim:
-          claimName: sqlite-pvc
+          claimName: edge-endpoint-pvc

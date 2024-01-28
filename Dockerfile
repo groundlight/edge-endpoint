@@ -27,6 +27,7 @@ RUN apt-get update \
        nginx \
        libglib2.0-0 \
        libgl1-mesa-glx \
+       sqlite3 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && curl -sSL https://install.python-poetry.org | python -

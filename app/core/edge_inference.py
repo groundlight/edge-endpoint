@@ -11,6 +11,7 @@ import tritonclient.http as tritonclient
 from fastapi import HTTPException
 from jinja2 import Template
 
+from app.core.file_paths import MODEL_REPOSITORY_PATH
 from app.core.utils import prefixed_ksuid
 
 from .configs import LocalInferenceConfig
@@ -22,7 +23,7 @@ class EdgeInferenceManager:
     INPUT_IMAGE_NAME = "image"
     MODEL_OUTPUTS = ["score", "confidence", "probability", "label"]
     INFERENCE_SERVER_URL = "inference-service:8000"
-    MODEL_REPOSITORY = "/mnt/models"
+    MODEL_REPOSITORY = MODEL_REPOSITORY_PATH
 
     def __init__(self, config: Dict[str, LocalInferenceConfig] | None, verbose: bool = False) -> None:
         """
@@ -159,7 +160,6 @@ class EdgeInferenceManager:
         )
 
         model_urls = fetch_model_urls(detector_id, api_token=api_token)
-
         cloud_binary_ksuid = model_urls.get("model_binary_id", None)
         if cloud_binary_ksuid is None:
             logger.warning(f"No model binary ksuid returned for {detector_id}")

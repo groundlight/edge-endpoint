@@ -1,9 +1,14 @@
 #!/bin/bash
 
+# Sets up the SQLite database for the edge endpoint.
+# Expects the following environment variables:
+# - DB_RESET: If set to 1, will delete all the data in the database.
+#
+# This script is invoked by an initContainer in the edge endpoint deployment.
+
 set -ex 
 
-cd "$(dirname "$0")"
-
+DB_RESET=${DB_RESET:-0}
 
 DATABASE_DIRECTORY="/opt/groundlight/edge/sqlite"
 DATABASE_PATH="${DATABASE_DIRECTORY}/sqlite.db"
@@ -24,17 +29,7 @@ reset_tables() {
     done
 }
 
-
-# Check if we have sqlite3 CLI installed. If not, install it
-if [ ! -x "/usr/bin/sqlite3" ]; then
-    echo "sqlite3 could not be found. Installing it now..."
-    sudo apt-get update
-    sudo apt install -y sqlite3
-
-else
-    echo "sqlite3 is already installed."
-    which sqlite3
-fi
+echo "Using sqlite3 from $(which sqlite3)"
 
 
 # If the database already exists, exit. Otherwise, create it
@@ -42,8 +37,8 @@ if [[ -f "${DATABASE_PATH}" ]]; then
     echo "SQLite database file exists and is mounted correctly."
 else
     echo "SQLite database file doesn't exist or wasn't mounted correctly. Creating it now..."
-    sudo mkdir -p ${DATABASE_DIRECTORY}
-    sudo chown -R "$(id -u)":"$(id -g)" "${DATABASE_DIRECTORY}"
+    mkdir -p ${DATABASE_DIRECTORY}
+    chown -R "$(id -u)":"$(id -g)" "${DATABASE_DIRECTORY}"
 
     # SQLite is eccentric in a sense that if you just invoke `sqlite3 <db_file>`, it won't 
     # actually create the file. We are using a hack here to initialize the database with 
@@ -51,15 +46,13 @@ else
     echo "${ENTRY_QUERY}" | sqlite3 "${DATABASE_PATH}"
     echo "${DROP_QUERY}" | sqlite3 "${DATABASE_PATH}"
 
-    # Set journal model to Write-Ahead Logging. This makes it much faster, at the risk of 
+    # Set journal mode to Write-Ahead Logging. This makes it much faster, at the risk of 
     # possibly losing data if the machine crashes suddenly.
     # https://www.sqlite.org/wal.html
     echo "PRAGMA journal_mode=WAL;" | sqlite3 "${DATABASE_PATH}"
 fi
 
-
-# Reset tables if the first argument is "db_reset"
-if [ "$1" == "db_reset" ]; then
-    echo "Resetting database tables..."
+if [[ "${DB_RESET}" == "1" ]]; then
+    echo "Resetting tables..."
     reset_tables
 fi

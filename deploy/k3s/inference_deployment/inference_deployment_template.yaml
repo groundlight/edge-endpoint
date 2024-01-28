@@ -51,7 +51,7 @@ spec:
         command:
           [
             "tritonserver",
-            "--model-repository=/mnt/models",
+            "--model-repository=/opt/groundlight/edge/serving/model-repo",
             "--load-model=placeholder-model-name",
             "--allow-gpu-metrics=true",
             "--allow-cpu-metrics=true",
@@ -61,8 +61,9 @@ spec:
             "--log-verbose=1",
           ]
         volumeMounts:
-        - name: model-repo
-          mountPath: /mnt/models
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/serving/model-repo
+
         - name: dshm
           mountPath: /dev/shm
         ports:
@@ -80,13 +81,9 @@ spec:
       imagePullSecrets:
       - name: registry-credentials
       volumes:
-      - name: model-repo
-        hostPath:
-          # A hostPath volume mounts a file or directory from the host node's filesystem into your Pod
-          # This simiplifies things a lot, but only really works for single-node clusters.
-          # TODO: check out k3s local path provisioner: https://docs.k3s.io/storage#setting-up-the-local-storage-provider
-          path: /var/groundlight/serving/model_repository
-          type: DirectoryOrCreate
+      - name: edge-endpoint-persistent-volume
+        persistentVolumeClaim:
+          claimName: edge-endpoint-pvc
       # https://stackoverflow.com/questions/43373463/how-to-increase-shm-size-of-a-kubernetes-container-shm-size-equivalent-of-doc
       - name: dshm
         emptyDir:
