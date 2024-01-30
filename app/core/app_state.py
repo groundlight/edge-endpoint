@@ -79,7 +79,7 @@ def get_groundlight_sdk_instance(request: Request):
     need to do that here.
     """
     api_token = request.headers.get("x-api-token")
-    
+
     logger.info(f"Using Groundlight API token: {api_token}")
     return _get_groundlight_sdk_instance_internal(api_token)
 
