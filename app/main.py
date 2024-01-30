@@ -42,24 +42,24 @@ def update_inference_config(app_state: AppState) -> None:
             app_state.edge_inference_manager.update_inference_config(detector_id=detector_id, api_token=api_token)
 
 
-# @app.on_event("startup")
-# async def startup_event():
-#     # Initialize the database tables
-#     db_manager = app.state.app_state.db_manager
-#     db_manager.create_tables()
+@app.on_event("startup")
+async def startup_event():
+    # Initialize the database tables
+    db_manager = app.state.app_state.db_manager
+    db_manager.create_tables()
 
-#     if DEPLOY_DETECTOR_LEVEL_INFERENCE:
-#         # Add job to periodically update the inference config
-#         scheduler.add_job(update_inference_config, "interval", seconds=30, args=[app.state.app_state])
+    if DEPLOY_DETECTOR_LEVEL_INFERENCE:
+        # Add job to periodically update the inference config
+        scheduler.add_job(update_inference_config, "interval", seconds=30, args=[app.state.app_state])
 
-#         # Start the scheduler
-#         scheduler.start()
+        # Start the scheduler
+        scheduler.start()
 
 
-# @app.on_event("shutdown")
-# async def shutdown_event():
-#     # Dispose off the database engine
-#     app.state.app_state.db_manager.shutdown()
+@app.on_event("shutdown")
+async def shutdown_event():
+    # Dispose off the database engine
+    app.state.app_state.db_manager.shutdown()
 
-#     if DEPLOY_DETECTOR_LEVEL_INFERENCE:
-#         scheduler.shutdown()
+    if DEPLOY_DETECTOR_LEVEL_INFERENCE:
+        scheduler.shutdown()
