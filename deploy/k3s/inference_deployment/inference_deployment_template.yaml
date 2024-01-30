@@ -40,7 +40,7 @@ spec:
           maxUnavailable: 0  # Aim for no downtime during rollout
       containers:
       - name: inference-server
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver:929c52e9d-main
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver:mmcv-installation-patch-956f7a2d9-dirty-35acb766ae0468f
         imagePullPolicy: IfNotPresent
         # Tritonserver will look for models in /mnt/models and initialize them on startup.
         # When running multiple instances of Triton server on the same machine that use Python models,
@@ -60,6 +60,12 @@ spec:
             "--backend-config=python,shm-region-prefix-name=placeholder-inference-deployment-name",
             "--log-verbose=1",
           ]
+        # Using resource limits and requests to ensure that the pod is scheduled on a GPU node
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+          requests:
+            nvidia.com/gpu: 1 
         volumeMounts:
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/serving/model-repo

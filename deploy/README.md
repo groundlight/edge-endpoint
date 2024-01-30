@@ -53,3 +53,31 @@ Follow the following steps:
 ```
 
 
+# Managing the Edge Endpoint's Deployment on EKS
+
+If we are deploying the edge endpoint on a cluster managed by EKS,
+we need to first set up an ingress so that we can expose the service outside
+the cluster. 
+
+To set up an ingress (currently, this is just for local development), run
+
+```shell
+> kubectl apply -f deploy/k3s/aws_ingress/ingress.yaml
+```
+
+Here we won't be using k3s, but regular kubernetes. Another difference is that
+we will be using an EFS-based persistent volume (for sqlite and inference model
+repository). To configure all this, we first need to set up some environment 
+variables:
+
+```shell
+export EFS_VOLUME_ID=""
+export KUBECTL_CMD="kubectl"
+export DEPLOY_LOCAL_VERSION=0
+```
+
+You should use the correct volume ID for EFS above. Then, deploy the edge endpoint by running
+
+```shell
+> ./deploy/bin/cluster_setup.sh 
+```

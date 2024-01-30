@@ -14,10 +14,9 @@ spec:
     app: edge-logic-server
   ports:
   - protocol: TCP
-    # Service port for NGINX
-    port: 6717
-    nodePort: 30101
-  type: NodePort
+    port: 6717 # The port the service is exposed on
+    targetPort: 6717 # The port the application is running on inside the container
+  type: ClusterIP
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -40,7 +39,7 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       initContainers:
       - name: database-prep
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:miscellaneous-c290a1810-dirty-8c48a5f159e9542
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:configure-app-ingress-524ecd827-dirty-04d51e960574929
         imagePullPolicy: IfNotPresent
         env:
         # Flag to indicate whether or not to reset all database tables. Resetting WILL delete 
@@ -59,13 +58,13 @@ spec:
 
       containers:
       - name: edge-endpoint
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:miscellaneous-c290a1810-dirty-8c48a5f159e9542
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:configure-app-ingress-524ecd827-dirty-04d51e960574929
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
         env:
         - name: LOG_LEVEL
-          value: "INFO"
+          value: "DEBUG"
         # We need this feature flag since we run the edge logic server in two separate environments:
         # 1. In docker (on the GitHub Actions runner) for testing
         # 2. In kubernetes (currently a dedicated EC2 instance)
@@ -82,14 +81,20 @@ spec:
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/sqlite
 
+        # We don't need to mount this volume in the edge-endpoint container, but it makes debugging
+        # easier if/when the inference-model-updater container fails to start. We can easily inspect 
+        # what's going on in the model repository. 
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/serving/model-repo
+
       - name: inference-model-updater
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:miscellaneous-c290a1810-dirty-8c48a5f159e9542
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:configure-app-ingress-524ecd827-dirty-04d51e960574929
         imagePullPolicy: IfNotPresent
         command: ["/bin/bash", "-c"]
         args: ["poetry run python -m app.model_updater.update_models"]
         env:
         - name: LOG_LEVEL
-          value: "INFO"
+          value: "DEBUG"
         - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
           value: "1"
         volumeMounts:

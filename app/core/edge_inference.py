@@ -198,10 +198,15 @@ def fetch_model_urls(detector_id: str, api_token: Optional[str] = None) -> dict[
     response = requests.get(url, headers=headers, timeout=10)
     logger.debug(f"fetch-model-urls response = {response}")
 
+    response_body = response.json()
+
     if response.status_code == 200:
-        return response.json()
+        return response_body
     else:
-        raise HTTPException(status_code=response.status_code, detail=f"Failed to fetch model URLs for {detector_id=}.")
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=f"Failed to fetch model URLs for {detector_id=}. Response: {response_body}",
+        )
 
 
 def get_object_using_presigned_url(presigned_url: str) -> bytes:

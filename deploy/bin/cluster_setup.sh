@@ -31,6 +31,9 @@ fail() {
     exit 1
 }
 
+# Fail if jq is not installed
+which jq || fail "jq not installed"
+
 # Function to check for conflicting PV. 
 # This is a robustness measure to guard against errors when a user tries to create a 
 # persistent volume with hostPath when we already have an EFS volume mounted or vice versa.
