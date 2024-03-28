@@ -159,6 +159,9 @@ class EdgeInferenceManager:
             else None
         )
 
+        # fallback to env var if we dont have a token in the config
+        api_token = api_token or os.environ.get("GROUNDLIGHT_API_TOKEN", None)
+
         model_urls = fetch_model_urls(detector_id, api_token=api_token)
         cloud_binary_ksuid = model_urls.get("model_binary_id", None)
         if cloud_binary_ksuid is None:

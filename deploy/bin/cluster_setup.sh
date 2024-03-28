@@ -8,21 +8,16 @@
 # - detectors in the `inference_deployments` table
 # - image queries in the `image_queries_edge` table
 # For more on these tables you can examine the database file at
-# /opt/groundlight/edge/sqlite/sqlite.db on the attached volume (EFS/local). 
+# /opt/groundlight/edge/sqlite/sqlite.db on the attached volume (EFS/local).
 
 # Possible env vars:
 # - KUBECTL_CMD: path to kubectl command. Defaults to "kubectl" but can be set to "k3s kubectl" if using k3s
 # - INFERENCE_FLAVOR: "CPU" or "GPU". Defaults to "GPU"
 # - EDGE_CONFIG: contents of edge-config.yaml. If not set, will use configs/edge-config.yaml
-# - DEPLOY_LOCAL_VERSION: Indicates whether we are building the local version of the edge endpoint. 
+# - DEPLOY_LOCAL_VERSION: Indicates whether we are building the local version of the edge endpoint.
 #           If set to 0, we will attach an EFS instead of a local volume. Defaults to 1.
-# - EFS_VOLUME_ID: ID of the EFS volume to use if we are using the EFS version. 
+# - EFS_VOLUME_ID: ID of the EFS volume to use if we are using the EFS version.
 # - DEPLOYMENT_NAMESPACE: Namespace to deploy to. Defaults to the current namespace.
-
-
-
-# move to the root directory of the repo
-cd "$(dirname "$0")"/../..
 
 set -ex
 
@@ -31,8 +26,8 @@ fail() {
     exit 1
 }
 
-# Function to check for conflicting PV. 
-# This is a robustness measure to guard against errors when a user tries to create a 
+# Function to check for conflicting PV.
+# This is a robustness measure to guard against errors when a user tries to create a
 # persistent volume with hostPath when we already have an EFS volume mounted or vice versa.
 check_pv_conflict() {
     local pv_name=$1
@@ -66,6 +61,9 @@ DEPLOY_LOCAL_VERSION=${DEPLOY_LOCAL_VERSION:-1}
 DEPLOYMENT_NAMESPACE=${DEPLOYMENT_NAMESPACE:-$($K config view -o json | jq -r '.contexts[] | select(.name == "'$($K config current-context)'") | .context.namespace')}
 
 
+# move to the root directory of the repo
+cd "$(dirname "$0")"/../..
+
 # Secrets
 ./deploy/bin/make-aws-secret.sh
 
@@ -75,12 +73,17 @@ if ! $K get secret registry-credentials; then
 fi
 
 
-# Configmaps and deployments
+# Configmaps, secrets, and deployments
 $K delete configmap --ignore-not-found edge-config -n ${DEPLOYMENT_NAMESPACE}
 $K delete configmap --ignore-not-found inference-deployment-template -n ${DEPLOYMENT_NAMESPACE}
 $K delete configmap --ignore-not-found kubernetes-namespace -n ${DEPLOYMENT_NAMESPACE}
 $K delete configmap --ignore-not-found setup-db -n ${DEPLOYMENT_NAMESPACE}
 $K delete configmap --ignore-not-found db-reset -n ${DEPLOYMENT_NAMESPACE}
+$K delete secret --ignore-not-found groundlight-api-token -n ${DEPLOYMENT_NAMESPACE}
+
+if [[ -n "${GROUNDLIGHT_API_TOKEN}" ]]; then
+    $K create secret generic groundlight-api-token --from-literal=GROUNDLIGHT_API_TOKEN=${GROUNDLIGHT_API_TOKEN} -n ${DEPLOYMENT_NAMESPACE}
+fi
 
 if [[ -n "${EDGE_CONFIG}" ]]; then
     echo "Creating config from EDGE_CONFIG env var"
@@ -136,7 +139,7 @@ if [[ "${DEPLOY_LOCAL_VERSION}" == "1" ]]; then
 
     $K apply -f deploy/k3s/local_persistent_volume.yaml
 else
-    # If environment variable EFS_VOLUME_ID is not set, exit 
+    # If environment variable EFS_VOLUME_ID is not set, exit
     if [[ -z "${EFS_VOLUME_ID}" ]]; then
         fail "EFS_VOLUME_ID environment variable not set"
     fi
@@ -154,7 +157,7 @@ fi
 
 # Check if the edge-endpoint-pvc exists. If not, create it
 if ! $K get pvc edge-endpoint-pvc; then
-    # If environment variable EFS_VOLUME_ID is not set, exit 
+    # If environment variable EFS_VOLUME_ID is not set, exit
     if [[ -z "${EFS_VOLUME_ID}" ]]; then
         fail "EFS_VOLUME_ID environment variable not set"
     fi
