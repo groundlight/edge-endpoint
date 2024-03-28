@@ -1,4 +1,0 @@
-# https://github.com/balena-io-experimental/balena-k3s/blob/main/balena.yml
-name: balena-k3s
-type: sw.application
-version: 0.2.7

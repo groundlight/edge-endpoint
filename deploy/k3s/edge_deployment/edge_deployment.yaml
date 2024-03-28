@@ -40,12 +40,12 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       initContainers:
       - name: database-prep
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:main-286f50eb5-dirty-3195280a7c7c28a
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:miscellaneous-c290a1810-dirty-8c48a5f159e9542
         imagePullPolicy: IfNotPresent
         env:
-        # Flag to indicate whether or not to reset all database tables. Resetting WILL delete
+        # Flag to indicate whether or not to reset all database tables. Resetting WILL delete 
         # all existing data in the database, so set this flag to 1 with caution.
-        - name: DB_RESET
+        - name: DB_RESET 
           valueFrom:
             configMapKeyRef:
               name: db-reset
@@ -59,7 +59,7 @@ spec:
 
       containers:
       - name: edge-endpoint
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:main-286f50eb5-dirty-3195280a7c7c28a
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:miscellaneous-c290a1810-dirty-8c48a5f159e9542
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
@@ -72,18 +72,18 @@ spec:
         # This feature flag is basically good for knowing when to use the python kubernetes API
         # (i.e., creating deployments, etc.). We don't want to use the python kubernetes API
         # if we are only running the edge logic server in docker.
-        # TODO: Once we have kubernetes-based tests, we can remove this feature flag.
+        # TODO: Once we have kubernetes-based tests, we can remove this feature flag. 
         - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
           value: "1"
         volumeMounts:
         - name: edge-config-volume
-          mountPath: /etc/groundlight/edge-config
+          mountPath: /etc/groundlight/edge-config 
 
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/sqlite
 
       - name: inference-model-updater
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:main-286f50eb5-dirty-3195280a7c7c28a
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:miscellaneous-c290a1810-dirty-8c48a5f159e9542
         imagePullPolicy: IfNotPresent
         command: ["/bin/bash", "-c"]
         args: ["poetry run python -m app.model_updater.update_models"]
@@ -92,12 +92,6 @@ spec:
           value: "INFO"
         - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
           value: "1"
-        - name: GROUNDLIGHT_API_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: groundlight-api-token
-              key: GROUNDLIGHT_API_TOKEN
-              optional: true
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
@@ -108,9 +102,9 @@ spec:
         - name: inference-deployment-template-volume
           mountPath: /etc/groundlight/inference-deployment
 
-        # In this setup the edge-endpoint-persistent-volume is mounted to
+        # In this setup the edge-endpoint-persistent-volume is mounted to 
         # two different paths in the inference-model-updater container.
-        # This allows the container to access both the sqlite database and
+        # This allows the container to access both the sqlite database and 
         # the path to the model repository without needing to create an extra PV and PVC.
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/sqlite
@@ -125,7 +119,7 @@ spec:
       - name: edge-config-volume
         configMap:
           name: edge-config
-      - name: kubernetes-namespace
+      - name: kubernetes-namespace 
         configMap:
           name: kubernetes-namespace
       - name: inference-deployment-template-volume
