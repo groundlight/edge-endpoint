@@ -54,7 +54,7 @@ check_pv_conflict() {
 }
 
 
-K=${KUBECTL_CMD:-"k3s kubectl"}
+K=${KUBECTL_CMD:-"kubectl"}
 INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"GPU"}
 DB_RESET=$1
 DEPLOY_LOCAL_VERSION=${DEPLOY_LOCAL_VERSION:-1}

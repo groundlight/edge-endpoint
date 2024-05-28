@@ -22,5 +22,5 @@ AWS_SECRET_ACCESS_KEY - needed along with AWS_ACCESS_KEY_ID
 Now, ssh into `bastion` and run the following:
 ```bash
 cd /app/edge-endpoint
-KUBECTL_CMD="kubectl" INFERENCE_FLAVOR="CPU" DEPLOYMENT_NAMESPACE="default" ./deploy/bin/cluster_setup.sh
+INFERENCE_FLAVOR="CPU" DEPLOYMENT_NAMESPACE="default" ./deploy/bin/cluster_setup.sh
 ```
