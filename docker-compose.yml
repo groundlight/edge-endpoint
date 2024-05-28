@@ -14,16 +14,9 @@ services:
         soft: 65535
         hard: 65535
     privileged: true
-    # ports:
-    #   - 6443:6443 # Kubernetes API Server
-    #   - 80:80 # Ingress controller port 80
-    #   - 443:443 # Ingress controller port 443
-    #   - 2379:2379 # etcd client requests
-    #   - 2380:2380 # etcd peer communication
     network_mode: host
     # https://docs.k3s.io/cli/server#cluster-options
     environment:
-      K3S_TOKEN: "mynodetoken"
       K3S_KUBECONFIG_OUTPUT: "/shared/kubeconfig.yaml"
       K3S_KUBECONFIG_MODE: "666"
       EXTRA_K3S_SERVER_ARGS: ""
