@@ -1,4 +1,7 @@
 # https://github.com/balena-io-experimental/balena-k3s/blob/main/balena.yml
-name: balena-k3s
+name: balena-k3s-edge-endpoint
 type: sw.application
-version: 0.2.7
+version: 0.2.8
+description: >-
+  Run the edge-endpoint on top of k3s on Balena. The inference-server
+  will also be deployed on the same k3s cluster.

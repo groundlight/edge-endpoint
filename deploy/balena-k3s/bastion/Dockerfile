@@ -46,12 +46,10 @@ RUN arkade version && \
     k9s@v0.27.2 \
     kubectl@v1.26.2
 
-# Install kustomize
-RUN curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
-RUN mv kustomize /usr/local/bin/kustomize
 
 # Copy edge-endpoint to /app/edge-endpoint
 RUN mkdir -p /app/edge-endpoint
 COPY . /app/edge-endpoint
 
+ENTRYPOINT []
 CMD [ "tail" , "-f", "/dev/null" ]

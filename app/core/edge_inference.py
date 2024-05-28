@@ -248,7 +248,6 @@ def save_model_to_repository(
     os.makedirs(model_version_dir, exist_ok=True)
 
     # Add model-version specific files (model.py and model.buf)
-    # NOTE: these files should be static and not change between model versions
     create_file_from_template(
         template_values={"pipeline_config": pipeline_config},
         destination=os.path.join(model_version_dir, "model.py"),
@@ -261,6 +260,8 @@ def save_model_to_repository(
             f.write(binary_ksuid)
 
     # Add/Overwrite model configuration files (config.pbtxt and binary_labels.txt)
+    # Generally these files should be static. Changing them can make earlier
+    # model versions incompatible with newer ones.
     create_file_from_template(
         template_values={"model_name": detector_id},
         destination=os.path.join(model_dir, "config.pbtxt"),
