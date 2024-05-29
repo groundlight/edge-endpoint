@@ -159,6 +159,9 @@ class EdgeInferenceManager:
             else None
         )
 
+        # fallback to env var if we dont have a token in the config
+        api_token = api_token or os.environ.get("GROUNDLIGHT_API_TOKEN", None)
+
         model_urls = fetch_model_urls(detector_id, api_token=api_token)
         cloud_binary_ksuid = model_urls.get("model_binary_id", None)
         if cloud_binary_ksuid is None:
@@ -245,7 +248,6 @@ def save_model_to_repository(
     os.makedirs(model_version_dir, exist_ok=True)
 
     # Add model-version specific files (model.py and model.buf)
-    # NOTE: these files should be static and not change between model versions
     create_file_from_template(
         template_values={"pipeline_config": pipeline_config},
         destination=os.path.join(model_version_dir, "model.py"),
@@ -258,6 +260,8 @@ def save_model_to_repository(
             f.write(binary_ksuid)
 
     # Add/Overwrite model configuration files (config.pbtxt and binary_labels.txt)
+    # Generally these files should be static. Changing them can make earlier
+    # model versions incompatible with newer ones.
     create_file_from_template(
         template_values={"model_name": detector_id},
         destination=os.path.join(model_dir, "config.pbtxt"),
