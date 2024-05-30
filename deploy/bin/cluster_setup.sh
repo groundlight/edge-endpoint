@@ -92,7 +92,7 @@ if [[ -n "${EDGE_CONFIG}" ]]; then
     echo "Creating config from EDGE_CONFIG env var"
     $K create configmap edge-config --from-literal="edge-config.yaml=${EDGE_CONFIG}"
 else
-    echo "Creating config from configs/edeg-config.yaml"
+    echo "Creating config from configs/edge-config.yaml"
     $K create configmap edge-config --from-file=configs/edge-config.yaml
 fi
 
