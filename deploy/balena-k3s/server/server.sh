@@ -6,10 +6,9 @@ set -eu
 # https://docs.k3s.io/datastore/ha-embedded
 # https://github.com/balena-io-experimental/balena-k3s/blob/main/server/server.sh
 
-if [ -n "${K3S_URL:-}" ]; then
-    # shellcheck disable=SC2086
-    exec /bin/k3s server --server "${K3S_URL}" ${EXTRA_K3S_SERVER_ARGS:-}
-else
-    # shellcheck disable=SC2086
-    exec /bin/k3s server --cluster-init ${EXTRA_K3S_SERVER_ARGS:-}
-fi
+
+# NOTE: this script is only intended to support a single-node "cluster". Multi-node
+# clusters require using ectd as a datastore, instead of the default mysql. Etcd
+# doesnt work well when the underlying storage is an sd card, like on raspberry pi.
+# If we ever do want multi-node we'd have to pass `--server` or `--cluster-init` args to k3s
+exec /bin/k3s server ${EXTRA_K3S_SERVER_ARGS:-}
