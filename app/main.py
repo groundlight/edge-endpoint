@@ -14,9 +14,7 @@ LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 DEPLOY_DETECTOR_LEVEL_INFERENCE = bool(int(os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", 0)))
 
 logging.basicConfig(
-    level=LOG_LEVEL,
-    format="%(asctime)s.%(msecs)03d %(levelname)s %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
+    level=LOG_LEVEL, format="%(asctime)s.%(msecs)03d %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
 )
 
 
