@@ -1,5 +1,7 @@
 # Groundlight Edge Endpoint
 
+(For instructions on running on Balena, see [here](./deploy/balena-k3s/README.md))
+
 Run your Groundlight models on-prem by hosting an Edge Endpoint on your own hardware.  The Edge Endpoint exposes the exact same API as the Groundlight cloud service, so any Groundlight application can point to the Edge Endpoint simply by configuring the `GROUNDLIGHT_ENDPOINT` environment variable as follows:
 
 ```
@@ -94,7 +96,8 @@ curl -sSL https://install.python-poetry.org | python3 -
 poetry install
 
 # Run tests to confirm the system is setup properly
-poetry run pytest
+# (This still isn't working properly, but is getting closer.)
+make test
 
 # Run the edge logic server (http://localhost:6718)
 # Note: the `--reload` option allows live code changes to be reloaded during development
