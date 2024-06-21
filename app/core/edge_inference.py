@@ -13,6 +13,7 @@ from jinja2 import Template
 
 from app.core.file_paths import MODEL_REPOSITORY_PATH
 from app.core.utils import prefixed_ksuid
+from app.core.speedmon import SpeedMonitor
 
 from .configs import LocalInferenceConfig
 
@@ -38,6 +39,7 @@ class EdgeInferenceManager:
         """
         self.verbose = verbose
         self.inference_config, self.inference_clients = {}, {}
+        self.speedmon = SpeedMonitor()
         if config:
             self.inference_config = config
             self.inference_clients = {
@@ -139,9 +141,10 @@ class EdgeInferenceManager:
         output_dict["label"] = "NO" if output_dict["label"] else "YES"  # map false / 0 to "YES" and true / 1 to "NO"
 
         elapsed_ms = (end_time - start_time) * 1000
-        fps = 1000 / (elapsed_ms + 1e-4)  # add eps to avoid (impossible) division by zero
+        self.speedmon.update(detector_id, elapsed_ms)
         logger.debug(f"Inference server response for request {request_id} {detector_id=}: {output_dict}.")
-        logger.info(f"Inference time {request_id} for {detector_id=}: {elapsed_ms:.1f} ms. {fps=:.2f} fps")
+        fps = self.speedmon.average_fps(detector_id)
+        logger.info(f"Recent-average FPS for {detector_id=}: {fps:.2f}")
         return output_dict
 
     def update_model(self, detector_id: str) -> bool:
