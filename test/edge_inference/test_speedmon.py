@@ -19,4 +19,3 @@ def test_speedmon_basics():
     assert speedmon.average_fps("model2") == 0
     speedmon.update("model2", 1000)
     assert speedmon.average_fps("model2") == 1
-

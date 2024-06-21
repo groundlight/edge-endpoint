@@ -1,11 +1,11 @@
-from collections import deque
 import logging
+from collections import deque
 
 logger = logging.getLogger(__name__)
 
+
 class SpeedMonitor:
-    """Keeps track of how fast inference has been on each model, in a recency window
-    """
+    """Keeps track of how fast inference has been on each model, in a recency window"""
 
     def __init__(self, window_size: int = 20):
         self.models = {}
@@ -17,8 +17,7 @@ class SpeedMonitor:
         self.models[model_id].append(elapsed_ms)
 
     def average_fps(self, model_id: str) -> float:
-        """Returns 0 if the model has not been updated yet.
-        """
+        """Returns 0 if the model has not been updated yet."""
         if model_id not in self.models:
             return 0
         N = len(self.models[model_id])
