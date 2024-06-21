@@ -125,23 +125,23 @@ class EdgeInferenceManager:
         request_id = prefixed_ksuid(prefix="einf_")
         inference_client = self.inference_clients[detector_id]
 
-        logger.debug(f"Submitting image to edge inference service. {request_id=}")
-        start = time.monotonic()
+        logger.info(f"Submitting image to edge inference service. {request_id=} for {detector_id=}")
+        start_time = time.monotonic()
         response = inference_client.infer(
             model_name=detector_id,
             inputs=[imginput],
             outputs=outputs,
             request_id=request_id,
         )
-        end = time.monotonic()
+        end_time = time.monotonic()
 
         output_dict = {k: response.as_numpy(k)[0] for k in self.MODEL_OUTPUTS}
         output_dict["label"] = "NO" if output_dict["label"] else "YES"  # map false / 0 to "YES" and true / 1 to "NO"
 
-        logger.debug(
-            f"Inference server response for model={detector_id}: {output_dict}.\n"
-            f"Inference time: {end - start:.3f} seconds"
-        )
+        elapsed_ms = (end_time - start_time) * 1000
+        fps = 1000 / (elapsed_ms + 1e-4)  # add eps to avoid (impossible) division by zero
+        logger.debug(f"Inference server response for request {request_id} {detector_id=}: {output_dict}.")
+        logger.info(f"Inference time {request_id} for {detector_id=}: {elapsed_ms:.1f} ms. {fps=:.2f} fps")
         return output_dict
 
     def update_model(self, detector_id: str) -> bool:
