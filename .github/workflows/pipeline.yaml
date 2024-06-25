@@ -252,6 +252,7 @@ jobs:
           path: .venv
           key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
 
+      # NOTE: We would like the following note to be true, but we let the SDK get ahead of the edge endpoint
       # Note that we're pulling the latest main from the SDK repo
       # This might be ahead of what's published to pypi, but it's useful to test things before they're released.
       - name: Checkout Groundlight SDK
@@ -259,6 +260,7 @@ jobs:
         with:
           repository: groundlight/python-sdk
           path: groundlight-sdk
+          ref: 'refs/tags/v0.16.0'
 
       - name: Install Groundlight SDK dependencies
         run: |
