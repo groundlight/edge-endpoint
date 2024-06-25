@@ -260,7 +260,7 @@ jobs:
         with:
           repository: groundlight/python-sdk
           path: groundlight-sdk
-          ref: 'refs/tags/v0.15.2'
+          ref: 'refs/tags/v0.14.0'
 
       - name: Install Groundlight SDK dependencies
         run: |
