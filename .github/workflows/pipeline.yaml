@@ -259,6 +259,7 @@ jobs:
         with:
           repository: groundlight/python-sdk
           path: groundlight-sdk
+          ref: limit_edge_endpoint_test
 
       - name: Install Groundlight SDK dependencies
         run: |
