@@ -19,7 +19,10 @@ AWS_ACCESS_KEY_ID - so we can pull the edge-endpoint and gl-tritonserver images 
 AWS_SECRET_ACCESS_KEY - needed along with AWS_ACCESS_KEY_ID
 ```
 
-Now, ssh into `bastion` and run the following:
+Optionally you can also configure `EDGE_INFERENCE_FLAVOR` to use GPU instead. It will default to CPU if not set.
+
+Dockerfile will automatically run the following command as `bastion` launches so no need to run this anymore.
+
 ```bash
 cd /app/edge-endpoint
 INFERENCE_FLAVOR="CPU" DEPLOYMENT_NAMESPACE="default" ./deploy/bin/cluster_setup.sh

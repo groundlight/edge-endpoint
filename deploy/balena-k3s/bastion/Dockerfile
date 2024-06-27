@@ -51,8 +51,9 @@ RUN arkade version && \
 RUN mkdir -p /app/edge-endpoint
 COPY . /app/edge-endpoint
 
-# Set environment variables for running cluster setup
-ENV INFERENCE_FLAVOR="CPU"
+# Set environment variables for running cluster setup based on env var EDGE_INFERENCE_FLAVOR, defaults to CPU if not set
+ARG INFERENCE_FLAVOR_ARG="CPU"
+ENV INFERENCE_FLAVOR=${EDGE_INFERENCE_FLAVOR:-$INFERENCE_FLAVOR_ARG}
 ENV DEPLOYMENT_NAMESPACE="default"
 
 RUN chmod +x ./edge-endpoint/deploy/bin/cluster_setup.sh
