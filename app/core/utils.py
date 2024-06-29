@@ -10,17 +10,18 @@ from PIL import Image
 
 def create_iqe(detector_id: str, label: str, confidence: float, query: str = "") -> ImageQuery:
     iq = ImageQuery(
+        metadata=None,
         id=prefixed_ksuid(prefix="iqe_"),
         type=ImageQueryTypeEnum.image_query,
         created_at=datetime.utcnow(),
         query=query,
         detector_id=detector_id,
         result_type=ResultTypeEnum.binary_classification,
-        patience_time=30.0,
         result=BinaryClassificationResult(
             confidence=confidence,
             label=label,
         ),
+        patience_time=30.0,
     )
     return iq
 
