@@ -10,7 +10,6 @@ from PIL import Image
 
 def create_iqe(detector_id: str, label: str, confidence: float, query: str = "") -> ImageQuery:
     iq = ImageQuery(
-        metadata="edge-endpoint",
         id=prefixed_ksuid(prefix="iqe_"),
         type=ImageQueryTypeEnum.image_query,
         created_at=datetime.utcnow(),
