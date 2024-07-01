@@ -263,5 +263,5 @@ def test_motion_detection_not_sufficient_if_doesnt_meet_conf_threshold(gl: Groun
     assert new_response.id != base_iq_response.id, "ImageQuery id should be different whether or not motion det is run"
     assert new_response.id.startswith("iq_"), (
         "ImageQuery id should start with 'iq_' because it was created on the cloud, because the cached mot det response"
-        " did not meet the confidence threshold"
+        f" did not meet the confidence threshold: {base_iq_response.result.confidence + 1e-3}"
     )
