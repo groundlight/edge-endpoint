@@ -67,7 +67,6 @@ spaces_indent_inline_array = 4
 trailing_comma_inline_array = true
 
 [tool.pytest.ini_options]
-log_cli = true
 testpaths = ["test"]
 
 [build-system]
