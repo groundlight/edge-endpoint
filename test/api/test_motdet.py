@@ -256,7 +256,7 @@ def test_motion_detection_not_sufficient_if_doesnt_meet_conf_threshold(gl: Groun
     new_response = gl.submit_image_query(
         detector=detector.id,
         image=original_image,
-        patience_time=30.0,
+        wait=10,
         confidence_threshold=base_iq_response.result.confidence + 1e-3,  # Require a higher confidence than before
     )
 
@@ -264,4 +264,5 @@ def test_motion_detection_not_sufficient_if_doesnt_meet_conf_threshold(gl: Groun
     assert new_response.id.startswith("iq_"), (
         "ImageQuery id should start with 'iq_' because it was created on the cloud, because the cached mot det response"
         " did not meet the confidence threshold"
+        f" Detector Confidence: {detector.confidence_threshold}. Old IQ Confidence: {base_iq_response.result.confidence}. New IQ Confidence: {new_response.result.confidence}."
     )
