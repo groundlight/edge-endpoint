@@ -253,7 +253,7 @@ def test_motion_detection_not_sufficient_if_doesnt_meet_conf_threshold(gl: Groun
     ):
         pytest.skip("This test requires that the cached image query response has a confidence < 1.0")
         
-    new_response_confidence_threshold = base_iq_response.result.confidence + 1e-3,  # Require a higher confidence than before
+    new_response_confidence_threshold = base_iq_response.result.confidence + 1e-3 # Require a higher confidence than before
 
     new_response = gl.submit_image_query(
         detector=detector.id,
