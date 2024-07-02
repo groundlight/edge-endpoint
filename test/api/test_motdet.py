@@ -257,7 +257,7 @@ def test_motion_detection_not_sufficient_if_doesnt_meet_conf_threshold(gl: Groun
         detector=detector.id,
         image=original_image,
         patience_time=30.0,
-        confidence_threshold=(base_iq_response.result.confidence + 1e-5),  # Require a higher confidence than before
+        confidence_threshold=(0.99999),  # Require a higher confidence than before
     )
 
     assert new_response.id != base_iq_response.id, "ImageQuery id should be different whether or not motion det is run"
