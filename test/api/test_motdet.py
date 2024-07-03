@@ -242,7 +242,7 @@ def test_motion_detection_not_sufficient_if_doesnt_meet_conf_threshold(gl: Groun
 
     original_image = Image.open("test/assets/dog.jpeg")
     
-    # Set wait time to be 130s
+    # Set wait time to be 30s
     wait_time = 30.0
 
     # Set up opportunity for motion detection
