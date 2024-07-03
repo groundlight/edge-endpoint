@@ -271,8 +271,7 @@ def test_motion_detection_not_sufficient_if_doesnt_meet_conf_threshold(gl: Groun
     
     # If the time difference exceeded the wait time, that means the ML has time out and will just return the previous 
     # result
-    if time_diff < wait_time:
-        assert new_response.id.startswith("iq_"), (
-            "ImageQuery id should start with 'iq_' because it was created on the cloud, because the cached mot det "
-            "response did not meet the confidence threshold"
-        )
+    assert new_response.id.startswith("iq_"), (
+        "ImageQuery id should start with 'iq_' because it was created on the cloud, because the cached mot det "
+        "response did not meet the confidence threshold"
+    )
