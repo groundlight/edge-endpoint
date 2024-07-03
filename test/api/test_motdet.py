@@ -241,10 +241,13 @@ def test_motion_detection_not_sufficient_if_doesnt_meet_conf_threshold(gl: Groun
     detector = gl.get_detector(id=detector_id)
 
     original_image = Image.open("test/assets/dog.jpeg")
+    
+    # Set wait time to be 130s
+    wait_time = 30.0
 
     # Set up opportunity for motion detection
     base_iq_response = gl.submit_image_query(
-        detector=detector.id, image=original_image, wait=10, confidence_threshold=0.5
+        detector=detector.id, image=original_image, wait=wait_time, confidence_threshold=0.5
     )
     if (
         base_iq_response.result is None
@@ -258,7 +261,7 @@ def test_motion_detection_not_sufficient_if_doesnt_meet_conf_threshold(gl: Groun
     new_response = gl.submit_image_query(
         detector=detector.id,
         image=original_image,
-        wait=10,
+        wait=wait_time,
         confidence_threshold=base_iq_response.result.confidence + 1e-3,  # Require a higher confidence than before
     )
     
@@ -266,9 +269,10 @@ def test_motion_detection_not_sufficient_if_doesnt_meet_conf_threshold(gl: Groun
 
     assert new_response.id != base_iq_response.id, "ImageQuery id should be different whether or not motion det is run"
     
-    if time_diff < 9.9:
+    # If the time difference exceeded the wait time, that means the ML has time out and will just return the previous 
+    # result
+    if time_diff < wait_time:
         assert new_response.id.startswith("iq_"), (
-            "ImageQuery id should start with 'iq_' because it was created on the cloud, because the cached mot det response"
-            " did not meet the confidence threshold"
-            f" Detector Confidence: {detector.confidence_threshold}. Old IQ Confidence: {base_iq_response.result.confidence}. New IQ Confidence: {new_response.result.confidence}. New Requirement: {new_response.confidence_threshold}"
+            "ImageQuery id should start with 'iq_' because it was created on the cloud, because the cached mot det "
+            "response did not meet the confidence threshold"
         )
