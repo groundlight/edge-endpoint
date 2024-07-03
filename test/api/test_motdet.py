@@ -263,6 +263,7 @@ def test_motion_detection_not_sufficient_if_doesnt_meet_conf_threshold(gl: Groun
         image=original_image,
         wait=wait_time,
         confidence_threshold=base_iq_response.result.confidence + 1e-3,  # Require a higher confidence than before
+        human_review="ALWAYS"
     )
     
     time_diff = time.time() - current_time
