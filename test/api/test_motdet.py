@@ -270,7 +270,7 @@ def test_motion_detection_not_sufficient_if_doesnt_meet_conf_threshold(gl: Groun
     if (
         new_response.result is None
         or new_response.result.confidence is None
-        or new_response.result.confidence < 0.95
+        or new_response.result.confidence > 0.95
     ):
         # Revert the confidence threshold to 0.90
         gl.update_detector_confidence_threshold(detector.id, 0.90)
