@@ -145,14 +145,16 @@ async def post_image_query(
             new_image_query = motion_detection_manager.get_image_query_response(detector_id=detector_id).copy(
                 deep=True, update={"id": prefixed_ksuid(prefix="iqe_")}
             )
+            
+            logger.debug(f"Motion detection - Current confidence: {new_image_query.result.confidence}. "
+                         f"Target confidence: {confidence_threshold}.")
 
             if new_image_query.result and _is_confident_enough(
                 confidence=new_image_query.result.confidence,
                 detector_metadata=get_detector_metadata(detector_id=detector_id, gl=gl),
                 confidence_threshold=confidence_threshold,
             ):
-                logger.debug(f"Motion detection confidence is high enough to return. Current confidece: "
-                             f"{new_image_query.result.confidence}. Target confidence: {confidence_threshold}.")
+                logger.debug("Motion detection confidence is high enough to return.")
                 app_state.db_manager.create_iqe_record(record=new_image_query)
                 return new_image_query
 
