@@ -242,12 +242,12 @@ def test_motion_detection_not_sufficient_if_doesnt_meet_conf_threshold(gl: Groun
 
     # Set detector confidence threshold to 0.90
     gl.update_detector_confidence_threshold(detector.id, 0.90)
-    time.sleep(20)
+    time.sleep(10) # Wait for the change to take effect
 
     original_image = Image.open("test/assets/dog.jpeg")
 
     # Set up opportunity for motion detection
-    base_iq_response = gl.submit_image_query(detector=detector.id, image=original_image, wait=10)
+    base_iq_response = gl.submit_image_query(detector=detector.id, image=original_image)
     if (
         base_iq_response.result is None
         or base_iq_response.result.confidence is None
@@ -257,7 +257,7 @@ def test_motion_detection_not_sufficient_if_doesnt_meet_conf_threshold(gl: Groun
 
     # Update detector confidence threshold to 0.99
     gl.update_detector_confidence_threshold(detector.id, 0.99)
-    time.sleep(20)
+    time.sleep(10) # Wait for the change to take effect
 
     new_response = gl.submit_image_query(
         detector=detector.id,
