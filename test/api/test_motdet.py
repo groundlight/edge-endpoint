@@ -254,26 +254,24 @@ def test_motion_detection_not_sufficient_if_doesnt_meet_conf_threshold(gl: Groun
     ):
         pytest.skip("This test requires that the cached image query response has a confidence < 1.0")
 
-    # Update detector confidence threshold to 1.0
-    gl.update_detector_confidence_threshold(detector.id, 1.0)
+    # Update detector confidence threshold to 0.99
+    gl.update_detector_confidence_threshold(detector.id, 0.99)
 
     new_response = gl.submit_image_query(
         detector=detector.id,
         image=original_image,
         confidence_threshold=base_iq_response.result.confidence + 1e-3,  # Require a higher confidence than before
     )
+    
+    # Revert the confidence threshold to 0.90
+    gl.update_detector_confidence_threshold(detector.id, 0.90)
 
     assert new_response.id != base_iq_response.id, "ImageQuery id should be different whether or not motion det is run"
 
-    if new_response.result is None or new_response.result.confidence is None or new_response.result.confidence > 0.999:
-        # Revert the confidence threshold to 0.90
-        gl.update_detector_confidence_threshold(detector.id, 0.90)
+    if new_response.result is None or new_response.result.confidence is None or new_response.result.confidence > 0.99:
         pytest.skip("This test requires that the cached image query response has a confidence < 1.0")
 
     assert new_response.id.startswith("iq_"), (
         "ImageQuery id should start with 'iq_' because it was created on the cloud, because the cached mot det "
         "response did not meet the confidence threshold"
     )
-
-    # Revert the confidence threshold to 0.90
-    gl.update_detector_confidence_threshold(detector.id, 0.90)
