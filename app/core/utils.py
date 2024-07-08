@@ -8,7 +8,7 @@ from model import BinaryClassificationResult, ImageQuery, ImageQueryTypeEnum, Re
 from PIL import Image
 
 
-def create_iqe(detector_id: str, label: str, confidence: float, query: str = "") -> ImageQuery:
+def create_iqe(detector_id: str, label: str, confidence: float, query: str = "", patience_time: float = 30) -> ImageQuery:
     iq = ImageQuery(
         metadata=None,
         id=prefixed_ksuid(prefix="iqe_"),
@@ -21,7 +21,7 @@ def create_iqe(detector_id: str, label: str, confidence: float, query: str = "")
             confidence=confidence,
             label=label,
         ),
-        patience_time=30.0,
+        patience_time=patience_time,
     )
     return iq
 

@@ -173,6 +173,7 @@ async def post_image_query(
                 label=results["label"],
                 confidence=confidence,
                 query=detector_metadata.query,
+                patience_time=patience_time,
             )
             app_state.db_manager.create_iqe_record(record=image_query)
         else:
