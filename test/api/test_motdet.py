@@ -242,11 +242,12 @@ def test_motion_detection_not_sufficient_if_doesnt_meet_conf_threshold(gl: Groun
 
     # Set detector confidence threshold to 0.90
     gl.update_detector_confidence_threshold(detector.id, 0.90)
+    time.sleep(20)
 
     original_image = Image.open("test/assets/dog.jpeg")
 
     # Set up opportunity for motion detection
-    base_iq_response = gl.submit_image_query(detector=detector.id, image=original_image, confidence_threshold=0.5)
+    base_iq_response = gl.submit_image_query(detector=detector.id, image=original_image, wait=10)
     if (
         base_iq_response.result is None
         or base_iq_response.result.confidence is None
@@ -256,15 +257,16 @@ def test_motion_detection_not_sufficient_if_doesnt_meet_conf_threshold(gl: Groun
 
     # Update detector confidence threshold to 0.99
     gl.update_detector_confidence_threshold(detector.id, 0.99)
+    time.sleep(20)
 
     new_response = gl.submit_image_query(
         detector=detector.id,
         image=original_image,
-        confidence_threshold=base_iq_response.result.confidence + 1e-3,  # Require a higher confidence than before
+        wait=10,
     )
 
     # Revert the confidence threshold to 0.90
-    # gl.update_detector_confidence_threshold(detector.id, 0.90)
+    gl.update_detector_confidence_threshold(detector.id, 0.90)
 
     assert new_response.id != base_iq_response.id, "ImageQuery id should be different whether or not motion det is run"
 
