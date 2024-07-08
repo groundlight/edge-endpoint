@@ -264,7 +264,7 @@ def test_motion_detection_not_sufficient_if_doesnt_meet_conf_threshold(gl: Groun
     )
 
     # Revert the confidence threshold to 0.90
-    gl.update_detector_confidence_threshold(detector.id, 0.90)
+    #gl.update_detector_confidence_threshold(detector.id, 0.90)
 
     assert new_response.id != base_iq_response.id, "ImageQuery id should be different whether or not motion det is run"
 
