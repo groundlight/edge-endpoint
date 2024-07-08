@@ -151,7 +151,7 @@ async def post_image_query(
                 detector_metadata=get_detector_metadata(detector_id=detector_id, gl=gl),
                 confidence_threshold=confidence_threshold,
             ):
-                logger.debug("Motion detection confidence is high enough to return")
+                logger.debug("Motion detection confidence is high enough to return.")
                 app_state.db_manager.create_iqe_record(record=new_image_query)
                 return new_image_query
 
@@ -173,6 +173,7 @@ async def post_image_query(
                 label=results["label"],
                 confidence=confidence,
                 query=detector_metadata.query,
+                patience_time=patience_time,
             )
             app_state.db_manager.create_iqe_record(record=image_query)
         else:

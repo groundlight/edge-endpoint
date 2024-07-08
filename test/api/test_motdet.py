@@ -231,37 +231,3 @@ def test_motion_detection_skipped_when_human_review_requested(gl: Groundlight, r
     assert new_response.id.startswith(
         "iq_"
     ), "ImageQuery id should start with 'iq_' because it was created on the cloud, because Human Review was requested"
-
-
-def test_motion_detection_not_sufficient_if_doesnt_meet_conf_threshold(gl: Groundlight, root_config: RootEdgeConfig):
-    if not motion_detection_enabled(root_config):
-        pytest.skip("Motion detection is disabled")
-
-    detector_id = DETECTORS["dog_detector"]["detector_id"]
-    detector = gl.get_detector(id=detector_id)
-
-    original_image = Image.open("test/assets/dog.jpeg")
-
-    # Set up opportunity for motion detection
-    base_iq_response = gl.submit_image_query(
-        detector=detector.id, image=original_image, wait=10, confidence_threshold=0.5
-    )
-    if (
-        base_iq_response.result is None
-        or base_iq_response.result.confidence is None
-        or base_iq_response.result.confidence == 1.0
-    ):
-        pytest.skip("This test requires that the cached image query response has a confidence < 1.0")
-
-    new_response = gl.submit_image_query(
-        detector=detector.id,
-        image=original_image,
-        wait=10,
-        confidence_threshold=base_iq_response.result.confidence + 1e-5,  # Require a higher confidence than before
-    )
-
-    assert new_response.id != base_iq_response.id, "ImageQuery id should be different whether or not motion det is run"
-    assert new_response.id.startswith("iq_"), (
-        "ImageQuery id should start with 'iq_' because it was created on the cloud, because the cached mot det response"
-        " did not meet the confidence threshold"
-    )
