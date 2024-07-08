@@ -146,13 +146,6 @@ async def post_image_query(
                 deep=True, update={"id": prefixed_ksuid(prefix="iqe_")}
             )
 
-            if new_image_query.result:
-                logger.debug(
-                    f"Confidence: {new_image_query.result.confidence} Detector confidence threshold:"
-                    f" {get_detector_metadata(detector_id=detector_id, gl=gl).confidence_threshold} Confidence"
-                    f" threshold: {confidence_threshold}"
-                )
-
             if new_image_query.result and _is_confident_enough(
                 confidence=new_image_query.result.confidence,
                 detector_metadata=get_detector_metadata(detector_id=detector_id, gl=gl),
