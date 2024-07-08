@@ -145,11 +145,13 @@ async def post_image_query(
             new_image_query = motion_detection_manager.get_image_query_response(detector_id=detector_id).copy(
                 deep=True, update={"id": prefixed_ksuid(prefix="iqe_")}
             )
-            
+
             if new_image_query.result:
-                logger.debug(f"Confidence: {new_image_query.result.confidence} "
-                             f"Detector confidence threshold: {get_detector_metadata(detector_id=detector_id, gl=gl).confidence_threshold} "
-                             f"Confidence threshold: {confidence_threshold}")
+                logger.debug(
+                    f"Confidence: {new_image_query.result.confidence} Detector confidence threshold:"
+                    f" {get_detector_metadata(detector_id=detector_id, gl=gl).confidence_threshold} Confidence"
+                    f" threshold: {confidence_threshold}"
+                )
 
             if new_image_query.result and _is_confident_enough(
                 confidence=new_image_query.result.confidence,
