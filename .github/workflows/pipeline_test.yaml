@@ -59,9 +59,6 @@ jobs:
           kubectl get deployment edge-endpoint
           kubectl describe deployment edge-endpoint
           kubectl get pods -l app=edge-endpoint
-          kubectl describe pod edge-endpoint-test
-          kubectl logs edge-endpoint
-          kubectl rollout history deployment edge-endpoint
 
       
       - name: Wait for edge-endpoint pod to be ready
