@@ -16,6 +16,7 @@ env:
   GROUNDLIGHT_API_TOKEN: ${{ secrets.GROUNDLIGHT_API_TOKEN }}
   # This is the NGINX proxy endpoint
   GROUNDLIGHT_ENDPOINT: http://localhost:6717
+  AWS_ACCOUNT: "GL_Public"
 
 jobs:
   # test-in-k3s:
@@ -308,6 +309,4 @@ jobs:
       - name: Build and Push Multiplatform edge-endpoint Image to ECR
         timeout-minutes: 45
         run:
-          PYTHON_VERSION: "3.11"
-          AWS_ACCOUNT: "GL_Public"
           ./deploy/bin/build-push-edge-endpoint-image.sh
