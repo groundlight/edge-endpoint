@@ -55,8 +55,8 @@ jobs:
       - name: Wait for edge-endpoint pod to be ready
         run: |
           set -ex
-          kubectl rollout status deployment edge-endpoint --timeout=5m
-          kubectl describe pod edge-endpoint
+          kubectl rollout status deployment edge-endpoint-test --timeout=5m
+          kubectl describe pod edge-endpoint-test
 
   test-motion-detection:
     runs-on: ubuntu-22.04
