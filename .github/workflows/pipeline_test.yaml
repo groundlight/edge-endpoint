@@ -283,7 +283,7 @@ jobs:
 
 
   build-push-edge-endpoint-multiplatform:
-    if: (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+    if: (github.ref == 'refs/heads/edgedevice-aws-account' || github.event_name == 'workflow_dispatch')
     # We only run this action if all the prior test actions succeed
     needs:
       - test-in-k3s
