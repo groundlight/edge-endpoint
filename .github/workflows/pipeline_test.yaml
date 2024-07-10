@@ -1,4 +1,4 @@
-name: cicd
+name: cicd_test
 on:
   push:
     # All pushes
