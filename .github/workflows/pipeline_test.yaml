@@ -52,6 +52,11 @@ jobs:
           bash deploy/bin/cluster_setup.sh
           kubectl describe deployment
 
+      - name: Display troubleshooting information about the edge-endpoint pod
+        run: |
+          set -ex
+          kubectl describe deployment edge-endpoint
+      
       - name: Wait for edge-endpoint pod to be ready
         run: |
           set -ex
