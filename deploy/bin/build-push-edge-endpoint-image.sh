@@ -7,7 +7,7 @@ set -ex
 cd "$(dirname "$0")"
 
 TAG=$(./git-tag-name.sh)
-EDGE_ENDPOINT_IMAGE="edge-endpoint"
+EDGE_ENDPOINT_IMAGE="edge-endpoint-test"
 
 # AWS_ACCOUNT is environment variable set in pipeline_test.yaml
 # check if AWS_ACCOUNT is set
