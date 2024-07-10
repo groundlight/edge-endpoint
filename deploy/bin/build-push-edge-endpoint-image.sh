@@ -8,7 +8,13 @@ cd "$(dirname "$0")"
 
 TAG=$(./git-tag-name.sh)
 EDGE_ENDPOINT_IMAGE="edge-endpoint"
-ECR_URL="723181461334.dkr.ecr.us-west-2.amazonaws.com"
+
+# AWS_ACCOUNT is environment variable set in pipeline_test.yamlß
+if AWS_ACCOUNT == "GL_Public"; then
+  ECR_URL="767397850842.dkr.ecr.us-west-2.amazonaws.com"
+else
+  ECR_URL="723181461334.dkr.ecr.us-west-2.amazonaws.com"
+fi
 
 # Authenticate docker to ECR
 aws ecr get-login-password --region us-west-2 | docker login \

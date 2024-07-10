@@ -308,4 +308,6 @@ jobs:
       - name: Build and Push Multiplatform edge-endpoint Image to ECR
         timeout-minutes: 45
         run:
+          PYTHON_VERSION: "3.11"
+          AWS_ACCOUNT: "GL_Public"
           ./deploy/bin/build-push-edge-endpoint-image.sh
