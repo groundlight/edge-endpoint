@@ -40,7 +40,7 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       initContainers:
       - name: database-prep
-        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:cicd-fix-37bd6a998-dirty-651bd9e5ddf401a
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:cicd-fix-37bd6a998-dirty-651bd9e5ddf401a
         imagePullPolicy: IfNotPresent
         env:
         # Flag to indicate whether or not to reset all database tables. Resetting WILL delete
@@ -59,7 +59,7 @@ spec:
 
       containers:
       - name: edge-endpoint
-        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:cicd-fix-37bd6a998-dirty-651bd9e5ddf401a
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:cicd-fix-37bd6a998-dirty-651bd9e5ddf401a
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6717
@@ -83,7 +83,7 @@ spec:
           mountPath: /opt/groundlight/edge/sqlite
 
       - name: inference-model-updater
-        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:cicd-fix-37bd6a998-dirty-651bd9e5ddf401a
+        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:cicd-fix-37bd6a998-dirty-651bd9e5ddf401a
         imagePullPolicy: IfNotPresent
         command: ["/bin/bash", "-c"]
         args: ["poetry run python -m app.model_updater.update_models"]
