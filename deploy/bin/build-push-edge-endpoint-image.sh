@@ -19,8 +19,10 @@ else
 fi
 
 if "$AWS_ACCOUNT" == "GL_Public"; then
+  echo "ECR_URL is being set to the GL_Public URL, 767397850842.dkr.ecr.us-west-2.amazonaws.com"
   ECR_URL="767397850842.dkr.ecr.us-west-2.amazonaws.com"
 else
+  echo "ECR_URL is being set to the Dev URL, 723181461334.dkr.ecr.us-west-2.amazonaws.com"
   ECR_URL="723181461334.dkr.ecr.us-west-2.amazonaws.com"
 fi
 
