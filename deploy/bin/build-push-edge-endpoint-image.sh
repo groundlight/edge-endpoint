@@ -9,7 +9,15 @@ cd "$(dirname "$0")"
 TAG=$(./git-tag-name.sh)
 EDGE_ENDPOINT_IMAGE="edge-endpoint"
 
-# AWS_ACCOUNT is environment variable set in pipeline_test.yamlß
+# AWS_ACCOUNT is environment variable set in pipeline_test.yaml
+# check if AWS_ACCOUNT is set
+if [ -z "${AWS_ACCOUNT}" ]; then
+  echo "Error: AWS_ACCOUNT is not set or is empty"
+  exit 1
+else
+  echo "AWS_ACCOUNT is set to ${AWS_ACCOUNT}"
+fi
+
 if AWS_ACCOUNT == "GL_Public"; then
   ECR_URL="767397850842.dkr.ecr.us-west-2.amazonaws.com"
 else
