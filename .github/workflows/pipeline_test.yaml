@@ -55,10 +55,10 @@ jobs:
       - name: Display troubleshooting information about the edge-endpoint pod
         run: |
           set -ex
-          kubectl get deployment edge-endpoint
+          kubectl get deployment edge-endpointß
           kubectl describe deployment edge-endpoint
           kubectl get pods -l app=edge-endpoint
-          kubectl describe pod edge-endpoint
+          kubectl describe pod edge-endpoint-test
           kubectl logs edge-endpoint
           kubectl rollout history deployment edge-endpoint
 
