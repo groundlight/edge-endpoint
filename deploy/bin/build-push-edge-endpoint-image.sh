@@ -7,17 +7,8 @@ set -ex
 cd "$(dirname "$0")"
 
 TAG=$(./git-tag-name.sh)
-EDGE_ENDPOINT_IMAGE="edge-endpoint-test"
-
-# AWS_ACCOUNT is environment variable set in pipeline_test.yaml
-
-if [ "$AWS_ACCOUNT" == "GL_Public" ]; then
-  echo "ECR_URL is being set to the GL_Public URL, 767397850842.dkr.ecr.us-west-2.amazonaws.com"
-  ECR_URL="767397850842.dkr.ecr.us-west-2.amazonaws.com"
-else
-  echo "ECR_URL is being set to the Dev URL, 723181461334.dkr.ecr.us-west-2.amazonaws.com"
-  ECR_URL="723181461334.dkr.ecr.us-west-2.amazonaws.com"
-fi
+EDGE_ENDPOINT_IMAGE="edge-endpoint-test"  # temporary private repo name in GL_Public ECR
+ECR_URL="767397850842.dkr.ecr.us-west-2.amazonaws.com"
 
 # Authenticate docker to ECR
 aws ecr get-login-password --region us-west-2 | docker login \
