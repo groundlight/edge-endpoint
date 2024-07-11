@@ -55,6 +55,7 @@ jobs:
       - name: Display troubleshooting information about the edge-endpoint pod
         run: |
           set -ex
+          sleep 5m
           kubectl get pods
           kubectl get deployment edge-endpoint
           kubectl describe deployment edge-endpoint
