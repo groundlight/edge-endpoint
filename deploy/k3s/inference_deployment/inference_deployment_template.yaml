@@ -40,7 +40,7 @@ spec:
           maxUnavailable: 0  # Aim for no downtime during rollout
       containers:
       - name: inference-server
-        image: 723181461334.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver:63e8110ca-tyler-bumptorch
+        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver-test:211e218f1-edgedevice-aws-account
         imagePullPolicy: IfNotPresent
         # Tritonserver will look for models in /mnt/models and initialize them on startup.
         # When running multiple instances of Triton server on the same machine that use Python models,
