@@ -55,9 +55,9 @@ check_pv_conflict() {
     return 0
 }
 
-if [ -n "$BALENA" ] && [-z "$RUN_EDGE_ENDPOINT"]; then
+if [ -n "$BALENA" ] && [ -z "$RUN_EDGE_ENDPOINT" ]; then
     echo "Using Balena and RUN_EDGE_ENDPOINT is unset. Now exiting pod creation."
-    exit 0;
+    exit 0
 fi
 
 echo "RUN_EDGE_ENDPOINT is set to '${RUN_EDGE_ENDPOINT}'. Starting edge endpoint."
