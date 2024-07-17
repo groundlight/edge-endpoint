@@ -55,134 +55,134 @@ check_pv_conflict() {
     return 0
 }
 
-if [ -n "$RUN_EDGE_ENDPOINT" ]; then
-    echo "RUN_EDGE_ENDPOINT is set to '${RUN_EDGE_ENDPOINT}'. Starting edge endpoint."
-    echo "making a change"
-
-    K=${KUBECTL_CMD:-"kubectl"}
-    INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"GPU"}
-    DB_RESET=$1
-    DEPLOY_LOCAL_VERSION=${DEPLOY_LOCAL_VERSION:-1}
-    DEPLOYMENT_NAMESPACE=${DEPLOYMENT_NAMESPACE:-$($K config view -o json | jq -r '.contexts[] | select(.name == "'$($K config current-context)'") | .context.namespace')}
-
-
-    # move to the root directory of the repo
-    cd "$(dirname "$0")"/../..
-
-    # Secrets
-    ./deploy/bin/make-aws-secret.sh
-
-    # Verify secrets have been properly created
-    if ! $K get secret registry-credentials; then
-        fail "registry-credentials secret not found"
-    fi
-
-
-    # Configmaps, secrets, and deployments
-    $K delete configmap --ignore-not-found edge-config -n ${DEPLOYMENT_NAMESPACE}
-    $K delete configmap --ignore-not-found inference-deployment-template -n ${DEPLOYMENT_NAMESPACE}
-    $K delete configmap --ignore-not-found kubernetes-namespace -n ${DEPLOYMENT_NAMESPACE}
-    $K delete configmap --ignore-not-found setup-db -n ${DEPLOYMENT_NAMESPACE}
-    $K delete configmap --ignore-not-found db-reset -n ${DEPLOYMENT_NAMESPACE}
-    $K delete secret --ignore-not-found groundlight-api-token -n ${DEPLOYMENT_NAMESPACE}
-
-    set +x  # temporarily disable command echoing to avoid printing secrets
-    if [[ -n "${GROUNDLIGHT_API_TOKEN}" ]]; then
-        echo "Creating groundlight-api-token secret"
-        $K create secret generic groundlight-api-token --from-literal=GROUNDLIGHT_API_TOKEN=${GROUNDLIGHT_API_TOKEN} -n ${DEPLOYMENT_NAMESPACE}
-    fi
-    set -x  # re-enable command echoing
-
-    if [[ -n "${EDGE_CONFIG}" ]]; then
-        echo "Creating config from EDGE_CONFIG env var"
-        $K create configmap edge-config --from-literal="edge-config.yaml=${EDGE_CONFIG}"
-    else
-        echo "Creating config from configs/edge-config.yaml"
-        $K create configmap edge-config --from-file=configs/edge-config.yaml
-    fi
-
-    if [[ "${INFERENCE_FLAVOR}" == "CPU" ]]; then
-        echo "Preparing inference deployments with CPU flavor"
-
-        # Customize inference_deployment_template with the CPU patch
-        $K kustomize deploy/k3s/inference_deployment > inference_deployment_template.yaml
-        $K create configmap inference-deployment-template \
-                --from-file=inference_deployment_template.yaml
-        rm inference_deployment_template.yaml
-    else
-        echo "Preparing inference deployments with GPU flavor"
-        $K create configmap inference-deployment-template \
-                --from-file=deploy/k3s/inference_deployment/inference_deployment_template.yaml
-    fi
-
-    # Create a configmap corresponding to the namespace we are deploying to
-    $K create configmap kubernetes-namespace --from-literal=namespace=${DEPLOYMENT_NAMESPACE}
-
-    $K create configmap setup-db --from-file=$(pwd)/deploy/bin/setup_db.sh -n ${DEPLOYMENT_NAMESPACE}
-
-    # If db_reset is passed as an argument, create a environment variable DB_RESET
-    if [[ "$DB_RESET" == "db_reset" ]]; then
-        $K create configmap db-reset --from-literal=DB_RESET=1
-    else
-        $K create configmap db-reset --from-literal=DB_RESET=0
-    fi
-
-    # Clean up existing deployments and services (if they exist)
-    $K delete --ignore-not-found deployment edge-endpoint
-    $K delete --ignore-not-found service edge-endpoint-service
-    $K get deployments -o custom-columns=":metadata.name" --no-headers=true | \
-        grep "inferencemodel" | \
-        xargs -I {} $K delete deployments {}
-    $K get service -o custom-columns=":metadata.name" --no-headers=true | \
-        grep "inference-service" | \
-        xargs -I {} $K delete service {}
-
-    # Reapply changes
-
-    # Check if DEPLOY_LOCAL_VERSION is set. If so, use a local volume instead of an EFS volume
-    if [[ "${DEPLOY_LOCAL_VERSION}" == "1" ]]; then
-        if ! check_pv_conflict "edge-endpoint-pv" "local-sc"; then
-            fail "PersistentVolume edge-endpoint-pv conflicts with the existing resource."
-        fi
-
-        $K apply -f deploy/k3s/local_persistent_volume.yaml
-    else
-        # If environment variable EFS_VOLUME_ID is not set, exit
-        if [[ -z "${EFS_VOLUME_ID}" ]]; then
-            fail "EFS_VOLUME_ID environment variable not set"
-        fi
-
-        if ! check_pv_conflict "edge-endpoint-pv" "efs-sc"; then
-            fail "PersistentVolume edge-endpoint-pv conflicts with the existing resource."
-        fi
-
-        # Use envsubst to replace the EFS_VOLUME_ID in the persistentvolumeclaim.yaml template
-        envsubst < deploy/k3s/efs_persistent_volume.yaml > deploy/k3s/persistentvolume.yaml
-        $K apply -f deploy/k3s/persistentvolume.yaml
-        rm deploy/k3s/persistentvolume.yaml
-    fi
-
-
-    # Check if the edge-endpoint-pvc exists. If not, create it
-    if ! $K get pvc edge-endpoint-pvc; then
-        # If environment variable EFS_VOLUME_ID is not set, exit
-        if [[ -z "${EFS_VOLUME_ID}" ]]; then
-            fail "EFS_VOLUME_ID environment variable not set"
-        fi
-        # Use envsubst to replace the EFS_VOLUME_ID in the persistentvolumeclaim.yaml template
-        envsubst < deploy/k3s/persistentvolume.yaml > deploy/k3s/persistentvolume.yaml.tmp
-        $K apply -f deploy/k3s/persistentvolume.yaml.tmp
-        rm deploy/k3s/persistentvolume.yaml.tmp
-    fi
-
-    # Substitutes the namespace in the service_account.yaml template
-    envsubst < deploy/k3s/service_account.yaml > deploy/k3s/service_account.yaml.tmp
-    $K apply -f deploy/k3s/service_account.yaml.tmp
-    rm deploy/k3s/service_account.yaml.tmp
-
-    $K apply -f deploy/k3s/edge_deployment/edge_deployment.yaml
-
-    $K describe deployment edge-endpoint
-else
-    echo "RUN_EDGE_ENDPOINT is not set. Exiting without starting edge endpoint pods."
+if [ -n "$BALENA" ] && [-z "$RUN_EDGE_ENDPOINT"]; then
+    echo "Using Balena and RUN_EDGE_ENDPOINT is unset. Now exiting pod creation."
+    exit 0;
 fi
+
+echo "RUN_EDGE_ENDPOINT is set to '${RUN_EDGE_ENDPOINT}'. Starting edge endpoint."
+
+K=${KUBECTL_CMD:-"kubectl"}
+INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"GPU"}
+DB_RESET=$1
+DEPLOY_LOCAL_VERSION=${DEPLOY_LOCAL_VERSION:-1}
+DEPLOYMENT_NAMESPACE=${DEPLOYMENT_NAMESPACE:-$($K config view -o json | jq -r '.contexts[] | select(.name == "'$($K config current-context)'") | .context.namespace')}
+
+
+# move to the root directory of the repo
+cd "$(dirname "$0")"/../..
+
+# Secrets
+./deploy/bin/make-aws-secret.sh
+
+# Verify secrets have been properly created
+if ! $K get secret registry-credentials; then
+    fail "registry-credentials secret not found"
+fi
+
+
+# Configmaps, secrets, and deployments
+$K delete configmap --ignore-not-found edge-config -n ${DEPLOYMENT_NAMESPACE}
+$K delete configmap --ignore-not-found inference-deployment-template -n ${DEPLOYMENT_NAMESPACE}
+$K delete configmap --ignore-not-found kubernetes-namespace -n ${DEPLOYMENT_NAMESPACE}
+$K delete configmap --ignore-not-found setup-db -n ${DEPLOYMENT_NAMESPACE}
+$K delete configmap --ignore-not-found db-reset -n ${DEPLOYMENT_NAMESPACE}
+$K delete secret --ignore-not-found groundlight-api-token -n ${DEPLOYMENT_NAMESPACE}
+
+set +x  # temporarily disable command echoing to avoid printing secrets
+if [[ -n "${GROUNDLIGHT_API_TOKEN}" ]]; then
+    echo "Creating groundlight-api-token secret"
+    $K create secret generic groundlight-api-token --from-literal=GROUNDLIGHT_API_TOKEN=${GROUNDLIGHT_API_TOKEN} -n ${DEPLOYMENT_NAMESPACE}
+fi
+set -x  # re-enable command echoing
+
+if [[ -n "${EDGE_CONFIG}" ]]; then
+    echo "Creating config from EDGE_CONFIG env var"
+    $K create configmap edge-config --from-literal="edge-config.yaml=${EDGE_CONFIG}"
+else
+    echo "Creating config from configs/edge-config.yaml"
+    $K create configmap edge-config --from-file=configs/edge-config.yaml
+fi
+
+if [[ "${INFERENCE_FLAVOR}" == "CPU" ]]; then
+    echo "Preparing inference deployments with CPU flavor"
+
+    # Customize inference_deployment_template with the CPU patch
+    $K kustomize deploy/k3s/inference_deployment > inference_deployment_template.yaml
+    $K create configmap inference-deployment-template \
+            --from-file=inference_deployment_template.yaml
+    rm inference_deployment_template.yaml
+else
+    echo "Preparing inference deployments with GPU flavor"
+    $K create configmap inference-deployment-template \
+            --from-file=deploy/k3s/inference_deployment/inference_deployment_template.yaml
+fi
+
+# Create a configmap corresponding to the namespace we are deploying to
+$K create configmap kubernetes-namespace --from-literal=namespace=${DEPLOYMENT_NAMESPACE}
+
+$K create configmap setup-db --from-file=$(pwd)/deploy/bin/setup_db.sh -n ${DEPLOYMENT_NAMESPACE}
+
+# If db_reset is passed as an argument, create a environment variable DB_RESET
+if [[ "$DB_RESET" == "db_reset" ]]; then
+    $K create configmap db-reset --from-literal=DB_RESET=1
+else
+    $K create configmap db-reset --from-literal=DB_RESET=0
+fi
+
+# Clean up existing deployments and services (if they exist)
+$K delete --ignore-not-found deployment edge-endpoint
+$K delete --ignore-not-found service edge-endpoint-service
+$K get deployments -o custom-columns=":metadata.name" --no-headers=true | \
+    grep "inferencemodel" | \
+    xargs -I {} $K delete deployments {}
+$K get service -o custom-columns=":metadata.name" --no-headers=true | \
+    grep "inference-service" | \
+    xargs -I {} $K delete service {}
+
+# Reapply changes
+
+# Check if DEPLOY_LOCAL_VERSION is set. If so, use a local volume instead of an EFS volume
+if [[ "${DEPLOY_LOCAL_VERSION}" == "1" ]]; then
+    if ! check_pv_conflict "edge-endpoint-pv" "local-sc"; then
+        fail "PersistentVolume edge-endpoint-pv conflicts with the existing resource."
+    fi
+
+    $K apply -f deploy/k3s/local_persistent_volume.yaml
+else
+    # If environment variable EFS_VOLUME_ID is not set, exit
+    if [[ -z "${EFS_VOLUME_ID}" ]]; then
+        fail "EFS_VOLUME_ID environment variable not set"
+    fi
+
+    if ! check_pv_conflict "edge-endpoint-pv" "efs-sc"; then
+        fail "PersistentVolume edge-endpoint-pv conflicts with the existing resource."
+    fi
+
+    # Use envsubst to replace the EFS_VOLUME_ID in the persistentvolumeclaim.yaml template
+    envsubst < deploy/k3s/efs_persistent_volume.yaml > deploy/k3s/persistentvolume.yaml
+    $K apply -f deploy/k3s/persistentvolume.yaml
+    rm deploy/k3s/persistentvolume.yaml
+fi
+
+
+# Check if the edge-endpoint-pvc exists. If not, create it
+if ! $K get pvc edge-endpoint-pvc; then
+    # If environment variable EFS_VOLUME_ID is not set, exit
+    if [[ -z "${EFS_VOLUME_ID}" ]]; then
+        fail "EFS_VOLUME_ID environment variable not set"
+    fi
+    # Use envsubst to replace the EFS_VOLUME_ID in the persistentvolumeclaim.yaml template
+    envsubst < deploy/k3s/persistentvolume.yaml > deploy/k3s/persistentvolume.yaml.tmp
+    $K apply -f deploy/k3s/persistentvolume.yaml.tmp
+    rm deploy/k3s/persistentvolume.yaml.tmp
+fi
+
+# Substitutes the namespace in the service_account.yaml template
+envsubst < deploy/k3s/service_account.yaml > deploy/k3s/service_account.yaml.tmp
+$K apply -f deploy/k3s/service_account.yaml.tmp
+rm deploy/k3s/service_account.yaml.tmp
+
+$K apply -f deploy/k3s/edge_deployment/edge_deployment.yaml
+
+$K describe deployment edge-endpoint
