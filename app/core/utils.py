@@ -9,7 +9,7 @@ from PIL import Image
 
 
 def create_iqe(
-    detector_id: str, label: str, confidence: float, query: str = "", patience_time: float = 30
+    detector_id: str, label: str, confidence: float, confidence_threshold: float, query: str = "", patience_time: float = 30
 ) -> ImageQuery:
     iq = ImageQuery(
         metadata=None,
@@ -23,6 +23,7 @@ def create_iqe(
             confidence=confidence,
             label=label,
         ),
+        confidence_threshold=confidence_threshold,
         patience_time=patience_time,
     )
     return iq
