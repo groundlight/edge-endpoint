@@ -93,7 +93,7 @@ def test_get_detectors_without_deployments(db_manager, database_reset):
 
 def test_get_iqe_record(db_manager, database_reset):
     image_query: ImageQuery = create_iqe(
-        detector_id=prefixed_ksuid("det_"), label="test_label", confidence=0.5, query="test_query"
+        detector_id=prefixed_ksuid("det_"), label="test_label", confidence=0.5, query="test_query", confidence_threshold=0.9
     )
     db_manager.create_iqe_record(record=image_query)
 
