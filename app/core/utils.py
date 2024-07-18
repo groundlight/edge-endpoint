@@ -7,6 +7,8 @@ from fastapi import HTTPException
 from model import BinaryClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
 from PIL import Image
 
+from . import constants
+
 
 def create_iqe(
     detector_id: str,
@@ -14,7 +16,7 @@ def create_iqe(
     confidence: float,
     confidence_threshold: float,
     query: str = "",
-    patience_time: float = 30,
+    patience_time: float = constants.DEFAULT_PATIENCE_TIME,
 ) -> ImageQuery:
     iq = ImageQuery(
         metadata=None,
