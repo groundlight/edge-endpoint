@@ -18,6 +18,8 @@
 #           If set to 0, we will attach an EFS instead of a local volume. Defaults to 1.
 # - EFS_VOLUME_ID: ID of the EFS volume to use if we are using the EFS version.
 # - DEPLOYMENT_NAMESPACE: Namespace to deploy to. Defaults to the current namespace.
+# - RUN_EDGE_ENDPOINT: Indicates whether or not to launch the edge endpoint pods.
+#           If set, launch edge endopint pods. If not set, do not launch pods. 
 
 set -ex
 
@@ -53,6 +55,12 @@ check_pv_conflict() {
     return 0
 }
 
+if [ -n "$BALENA" ] && [ -z "$RUN_EDGE_ENDPOINT" ]; then
+    echo "Using Balena and RUN_EDGE_ENDPOINT is unset. Now exiting pod creation."
+    exit 0
+fi
+
+echo "RUN_EDGE_ENDPOINT is set to '${RUN_EDGE_ENDPOINT}'. Starting edge endpoint."
 
 K=${KUBECTL_CMD:-"kubectl"}
 INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"GPU"}
