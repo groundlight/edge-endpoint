@@ -17,11 +17,12 @@ Configure the following variables via the `<fleet>/Variables` or `<device>/Devic
 GROUNDLIGHT_API_TOKEN - so that we can authorize the fetching of edge model binaries
 AWS_ACCESS_KEY_ID - so we can pull the edge-endpoint and gl-tritonserver images from ECR
 AWS_SECRET_ACCESS_KEY - needed along with AWS_ACCESS_KEY_ID
+RUN_EDGE_ENDPOINT - Set this to "RUN_EDGE_ENDPOINT" to start the pods (added for glhub integration)
 ```
 
 Optionally you can also configure `EDGE_INFERENCE_FLAVOR` to use GPU instead. It will default to CPU if not set.
 
-Dockerfile will automatically run the following command as `bastion` launches so no need to run this anymore.
+Dockerfile will automatically run the following command as `bastion` launches so no need to run this anymore but leaving this command as a reference if we need to start the clusters manually.
 
 ```bash
 cd /app/edge-endpoint
