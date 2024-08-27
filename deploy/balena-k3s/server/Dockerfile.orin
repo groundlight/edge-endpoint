@@ -1,0 +1,47 @@
+# https://hub.docker.com/r/rancher/k3s/tags
+# https://github.com/k3s-io/k3s/blob/master/package/Dockerfile
+# https://github.com/balena-io-experimental/balena-k3s/blob/main/server/Dockerfile
+
+
+# ----- k3s dockerfile (FROM rancher/k3s:v1.26.14-k3s1) -----
+# FROM alpine:3.18 as base
+FROM balenalib/jetson-orin-nano-devkit-nvme-alpine:3.18-build as base
+
+RUN apk add -U ca-certificates tar zstd tzdata
+
+# Need build the k3s binary before this step
+COPY ./build/k3s/build/out/data.tar.zst /
+
+RUN mkdir -p /image/etc/ssl/certs /image/run /image/var/run /image/tmp /image/lib/modules /image/lib/firmware && \
+    tar -xa -C /image -f /data.tar.zst && \
+    echo "root:x:0:0:root:/:/bin/sh" > /image/etc/passwd && \
+    echo "root:x:0:" > /image/etc/group && \
+    cp /etc/ssl/certs/ca-certificates.crt /image/etc/ssl/certs/ca-certificates.crt
+
+FROM scratch as collect
+ARG DRONE_TAG="dev"
+COPY --from=base /image /
+COPY --from=base /usr/share/zoneinfo /usr/share/zoneinfo
+RUN mkdir -p /etc && \
+    echo 'hosts: files dns' > /etc/nsswitch.conf && \
+    echo "PRETTY_NAME=\"K3s ${DRONE_TAG}\"" > /etc/os-release && \
+    chmod 1777 /tmp
+
+FROM scratch
+COPY --from=collect / /
+VOLUME /var/lib/kubelet
+VOLUME /var/lib/rancher/k3s
+VOLUME /var/lib/cni
+VOLUME /var/log
+ENV PATH="$PATH:/bin/aux"
+ENV CRI_CONFIG_FILE="/var/lib/rancher/k3s/agent/etc/crictl.yaml"
+
+# ENTRYPOINT ["/bin/k3s"]
+# CMD ["agent"]
+# ----- end k3s dockerfile -----
+
+COPY ./server/server.sh /server.sh
+RUN chmod +x /server.sh
+
+ENTRYPOINT []
+CMD [ "/server.sh" ]
