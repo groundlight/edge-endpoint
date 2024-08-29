@@ -1,0 +1,94 @@
+FROM balenalib/jetson-orin-nano-devkit-nvme-ubuntu:jammy-20240826
+
+WORKDIR /server
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN echo "deb https://repo.download.nvidia.com/jetson/common r36.3 main" >  /etc/apt/sources.list.d/nvidia.list && \ 
+    echo "deb https://repo.download.nvidia.com/jetson/t234 r36.3 main" >>  /etc/apt/sources.list.d/nvidia.list && \
+    apt-key adv --fetch-key http://repo.download.nvidia.com/jetson/jetson-ota-public.asc && \
+    mkdir -p /opt/nvidia/l4t-packages/ && touch /opt/nvidia/l4t-packages/.nv-l4t-disable-boot-fw-update-in-preinstall
+
+# Download and install BSP binaries for L4T 36.3 - Jetpack 6
+RUN \
+    apt-get update && apt-get install -y wget tar lbzip2 binutils xz-utils zstd qemu-user-static cpio git && \
+    cd /tmp/ && wget https://developer.nvidia.com/downloads/embedded/l4t/r36_release_v3.0/release/jetson_linux_r36.3.0_aarch64.tbz2 && \
+    tar xf jetson_linux_r36.3.0_aarch64.tbz2 && \
+    cd Linux_for_Tegra && \
+    mkdir -p /tmp/Linux_for_Tegra/rootfs/boot/ && \
+    mkdir -p /tmp/Linux_for_Tegra/rootfs/usr/bin && \
+    mkdir -p /tmp/Linux_for_Tegra/rootfs/etc && touch /tmp/Linux_for_Tegra/rootfs/etc/resolv.conf && \
+    sed -i 's/config.tbz2\"/config.tbz2\" --exclude=etc\/hosts --exclude=etc\/hostname/g' apply_binaries.sh && \
+    sed -i 's/CheckPackage qemu-user-static/#CheckPackage qemu-user-static/g' tools/l4t_update_initrd.sh && \
+    sed -i 's/trap CleanupVirEnv/#trap CleanupVirEnv/g' tools/l4t_update_initrd.sh&& \
+    sed -i 's|cp /usr/bin/qemu-aarch64-static|#cp /usr/bin/qemu-aarch64-static|g' tools/l4t_update_initrd.sh && \
+    sed -i 's|^UpdateInitrd|#UpdateInitrd|g' tools/l4t_update_initrd.sh && \
+    sed -i 's|^UpdateBackToBaseInitrd|#UpdateBackToBaseInitrd|g' tools/l4t_update_initrd.sh && \
+    sed -i 's|cp /etc/resolv.conf|#cp /etc/resolv.conf|g' tools/l4t_update_initrd.sh && \
+    sed -i 's|mv "${LDK_ROOTFS_DIR}/etc/resolv.conf"|cp "${LDK_ROOTFS_DIR}/etc/resolv.conf"|g' tools/l4t_update_initrd.sh && \
+    sed -i 's|	PrepareVirEnv|#PrepareVirEnv|g' tools/l4t_update_initrd.sh && \
+    sed -i 's/install --owner=root --group=root \"${QEMU_BIN}\" \"${L4T_ROOTFS_DIR}\/usr\/bin\/\"/#install --owner=root --group=root \"${QEMU_BIN}\" \"${L4T_ROOTFS_DIR}\/usr\/bin\/\"/g' nv_tegra/nv-apply-debs.sh && \
+    sed -i 's/chroot . \//  /g' nv_tegra/nv-apply-debs.sh && \
+    cd /tmp/Linux_for_Tegra/ && ./apply_binaries.sh -r / --target-overlay && cd .. && \
+    rm -rf Linux_for_Tegra && \
+    echo "/usr/lib/aarch64-linux-gnu/tegra" > /etc/ld.so.conf.d/nvidia-tegra.conf && ldconfig
+
+ENV LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/tegra
+ENV UDEV=1
+
+RUN apt-get update && apt-get install --no-install-recommends -y \
+    ca-certificates \
+    curl \
+    unzip \
+    dnsutils \
+    vim \
+    jq \
+    zstd \
+    tzdata \
+    gettext-base && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install CUDA
+RUN apt-get update && apt-get install --no-install-recommends -y \
+    cuda-nvcc-12-2
+
+# Install nvidia-container-toolkit
+RUN curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gp && \
+    curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+    sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+    tee /etc/apt/sources.list.d/nvidia-container-toolkit.list | \
+    apt-get update && apt-get install -y nvidia-container-toolkit && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install k3s
+# RUN curl -sfL https://github.com/k3s-io/k3s/releases/download/v1.30.4%2Bk3s1/k3s-arm64 -o /bin/k3s
+RUN curl -sfL https://github.com/k3s-io/k3s/releases/download/v1.30.4%2Bk3s1/k3s-arm64 -o /bin/k3s
+RUN chmod +x /bin/k3s
+VOLUME /var/lib/kubelet
+VOLUME /var/lib/rancher/k3s
+VOLUME /var/lib/cni
+VOLUME /var/log
+ENV PATH="$PATH:/bin/aux"
+ENV CRI_CONFIG_FILE="/var/lib/rancher/k3s/agent/etc/crictl.yaml"
+
+# Configure k3s to use nvidia-container-runtime
+RUN mkdir -p /var/lib/rancher/k3s/agent/etc/containerd && \
+    wget https://k3d.io/v5.3.0/usage/advanced/cuda/config.toml.tmpl -O /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
+
+RUN nvidia-ctk runtime configure --runtime=containerd
+
+# Add the aliases to the bash configuration
+RUN echo 'alias k="k3s kubectl"' >> ~/.bashrc && \
+    echo 'alias kubectl="k3s kubectl"' >> ~/.bashrc
+
+# Set environment variables for running cluster setup based on env var EDGE_INFERENCE_FLAVOR, defaults to CPU if not set
+ARG INFERENCE_FLAVOR_ARG="CPU"
+ENV INFERENCE_FLAVOR=${EDGE_INFERENCE_FLAVOR:-$INFERENCE_FLAVOR_ARG}
+ENV DEPLOYMENT_NAMESPACE="default"
+
+# Copy server setup scripts
+RUN mkdir -p /server
+COPY server.sh /server/server.sh
+RUN chmod +x /server/server.sh
+
+ENTRYPOINT []
+CMD ["/server/server.sh"]
