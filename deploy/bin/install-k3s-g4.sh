@@ -3,6 +3,7 @@
 # Install k3s and configure GPU support
 # Tested on an AWS EC2 G4 instance using the following AMI:
 # Deep Learning AMI GPU PyTorch 2.0.1 (Ubuntu 20.04) 20230827
+# Deep Learning OSS Nvidia Driver AMI GPU PyTorch 2.3.0 (Ubuntu 20.04) 20240825
 
 # This guide was more helpful than others fwiw:
 # https://support.tools/post/nvidia-gpus-on-k3s/
@@ -11,25 +12,26 @@ set -ex
 
 check_nvidia_drivers_and_container_runtime() {
   # Retrieve existing version or default to 525
-  NVIDIA_VERSION=$(modinfo nvidia 2>/dev/null | awk '/^version:/ {split($2, a, "."); print a[1]}') : ${NVIDIA_VERSION:=525}
+  NVIDIA_VERSION=$(modinfo nvidia 2>/dev/null | awk '/^version:/ {split($2, a, "."); print a[1]}')
+  NVIDIA_VERSION=${NVIDIA_VERSION:-525}
 
-  if ! dpkg -l | grep -q nvidia-headless-$NVIDIA_VERSION-server; then 
-    echo " NVIDIA drivers are not installed. Installing..."
-    sudo apt install -y nvidia-headless-$NVIDIA_VERSION-server
+  if ! if ! command -v nvidia-smi &> /dev/null; then
+    echo " NVIDIA drivers are not installed (nvidia-smi not found). Installing..."
+    sudo apt update && sudo apt install -y "nvidia-headless-$NVIDIA_VERSION-server"
   else
     echo " NVIDIA drivers for version $NVIDIA_VERSION are installed."
   fi
 
-  # Check if nvidia container runtime is already installed. 
-  if ! command -v nvidia-container-runtime &> /dev/null; then 
+  # Check if nvidia container runtime is already installed.
+  if ! command -v nvidia-container-runtime &> /dev/null; then
     echo " NVIDIA container runtime is not installed. Installing..."
-    # Get distribution information 
-    distribution=$(. /etc/os-release; echo $ID$VERSION_ID)
+    # Get distribution information
+    DISTRIBUTION=$(. /etc/os-release; echo "$ID$VERSION_ID")
 
     # Add NVIDIA Docker repository
     echo "Adding NVIDIA Docker repository..."
     curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
-    curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+    curl -s -L "https://nvidia.github.io/nvidia-docker/$DISTRIBUTION/nvidia-docker.list" | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
 
     sudo apt update -y && sudo apt install nvidia-container-runtime
   else
@@ -41,15 +43,15 @@ check_nvidia_drivers_and_container_runtime() {
 K="k3s kubectl"
 SCRIPT_DIR=$(dirname "$0")
 
+check_nvidia_drivers_and_container_runtime
+
 # Install k3s using our standard script
 $SCRIPT_DIR/install-k3s.sh
 
-check_nvidia_drivers_and_container_runtime
-
 # Configure k3s to use nvidia-container-runtime
-# See guide here: https://k3d.io/v5.3.0/usage/advanced/cuda/#configure-containerd 
+# See guide here: https://k3d.io/v5.3.0/usage/advanced/cuda/#configure-containerd
 echo "Configuring k3s to use nvidia-container-runtime..."
-for i in {1..10}; do
+for _ in {1..10}; do
   if [[ -f "/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl" ]]; then
     break
   fi
@@ -117,6 +119,6 @@ EOF
 # You can verify correctness by running `kubectl get node`
 # and inspecting "Capacity" section for "nvidia.com/gpu".
 
-# In addition, you can also check that the nvidia-device-plugin-ds pod 
-# is running in the `kube-system` namespace. 
+# In addition, you can also check that the nvidia-device-plugin-ds pod
+# is running in the `kube-system` namespace.
 # kubectl get pods -n kube-system -l name=nvidia-device-plugin-ds
