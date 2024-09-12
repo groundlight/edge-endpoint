@@ -2,7 +2,6 @@
 
 # Install k3s and configure GPU support
 # Tested on an AWS EC2 G4 instance using the following AMI:
-# Deep Learning AMI GPU PyTorch 2.0.1 (Ubuntu 20.04) 20230827
 # Deep Learning OSS Nvidia Driver AMI GPU PyTorch 2.3.0 (Ubuntu 20.04) 20240825
 
 # This guide was more helpful than others fwiw:
