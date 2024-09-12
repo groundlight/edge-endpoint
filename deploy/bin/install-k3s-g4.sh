@@ -15,7 +15,7 @@ check_nvidia_drivers_and_container_runtime() {
   NVIDIA_VERSION=$(modinfo nvidia 2>/dev/null | awk '/^version:/ {split($2, a, "."); print a[1]}')
   NVIDIA_VERSION=${NVIDIA_VERSION:-525}
 
-  if ! if ! command -v nvidia-smi &> /dev/null; then
+  if ! command -v nvidia-smi &> /dev/null; then
     echo " NVIDIA drivers are not installed (nvidia-smi not found). Installing..."
     sudo apt update && sudo apt install -y "nvidia-headless-$NVIDIA_VERSION-server"
   else
