@@ -48,5 +48,5 @@ model_warmup: [
 instance_group [
     {
       kind: KIND_GPU
-    },
+    }
 ]
