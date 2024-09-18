@@ -66,7 +66,7 @@ K=${KUBECTL_CMD:-"kubectl"}
 INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"GPU"}
 DB_RESET=$1
 DEPLOY_LOCAL_VERSION=${DEPLOY_LOCAL_VERSION:-1}
-DEPLOYMENT_NAMESPACE=${DEPLOYMENT_NAMESPACE:-$($K config view -o json | jq -r '.contexts[] | select(.name == "'$($K config current-context)'") | .context.namespace')}
+DEPLOYMENT_NAMESPACE=${DEPLOYMENT_NAMESPACE:-$($K config view -o json | jq -r '.contexts[] | select(.name == "'$($K config current-context)'") | .context.namespace // "default"')}
 
 
 # move to the root directory of the repo
