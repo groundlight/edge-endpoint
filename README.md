@@ -23,7 +23,7 @@ Any application written with the [Groundlight SDK](https://pypi.org/project/grou
 export GROUNDLIGHT_ENDPOINT=http://localhost:30101
 ```
 
-To find the correct port, run `k get services` and you should see an entry like this:
+To find the correct port, run `kubectl get services` and you should see an entry like this:
 ```
 NAME                                                        TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)                         AGE
 service/edge-endpoint-service                               NodePort   10.43.141.253   <none>        6717:30101/TCP                  23m
