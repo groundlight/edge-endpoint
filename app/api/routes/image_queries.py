@@ -112,6 +112,7 @@ async def post_image_query(
     #       processing of the async request on the edge before escalating to the cloud.
     _want_async = want_async is not None and want_async.lower() == "true"
     if _want_async:
+        logger.debug(f"Submitting ask_async image query to cloud API server for {detector_id=}")
         return safe_call_api(
             gl.submit_image_query,
             detector=detector_id,
