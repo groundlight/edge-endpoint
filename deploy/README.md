@@ -8,7 +8,7 @@ The edge endpoint is run as a k3s deployment. Follow the steps below to get it s
 If you don't have [k3s](https://docs.k3s.io/) installed, go ahead and install it by running 
 
 ```shell
-> ./deploy/bin/install_k3s.sh
+> ./deploy/bin/install-k3s.sh
 ```
 
 
@@ -18,14 +18,22 @@ inference pods to be initialized automatically for each detector. Even if they a
 edge inference will be set up for each detector ID for which the Groundlight service receives requests (note that it 
 takes some time for each inference pod to become available the first time).
 
-Before starting the cluster, some environment variables should be set. You'll need to have created
+Before starting the cluster, you need to create/specify the namespace for the deployment. If you're creating a new one, run:
+
+```
+kubectl create namespace "your-namespace-name"
+```
+
+Whether you created a new namespace or are using an existing one, set the DEPLOYMENT_NAMESPACE environment variable:
+```
+export DEPLOYMENT_NAMESPACE="your-namespace-name"
+```
+
+Some other environment variables should also be set. You'll need to have created
 a Groundlight API token in the [Groundlight web app](https://app.groundlight.ai/reef/my-account/api-tokens).
 ```
 # Set your API token
 export GROUNDLIGHT_API_TOKEN="api_xxxxxx"
-
-# Choose a name for the namespace to start the cluster in, e.g., groundlight-edge
-export DEPLOYMENT_NAMESPACE="your-desired-namespace-name"
 
 # Choose an inference flavor, either CPU or (default) GPU (note that appropriate setup for GPU must be done separately)
 export INFERENCE_FLAVOR="CPU" / export inference_flavor = "GPU"
