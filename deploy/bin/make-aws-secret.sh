@@ -1,6 +1,9 @@
 #!/bin/bash
 
 K=${KUBECTL_CMD:-"kubectl"}
+DEPLOYMENT_NAMESPACE=${DEPLOYMENT_NAMESPACE:-$($K config view -o json | jq -r '.contexts[] | select(.name == "'$($K config current-context)'") | .context.namespace // "default"')}
+# Update K to include the deployment namespace
+K="$K -n $DEPLOYMENT_NAMESPACE"
 
 if command -v docker >/dev/null 2>&1; then
     # Enable ECR login - make sure you have the aws client configured properly, or an IAM role
