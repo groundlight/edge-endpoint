@@ -1,4 +1,8 @@
 
+# Setting up the Edge Endpoint
+
+The edge endpoint is run as a k3s deployment. Follow the steps below to get it set up.
+
 ## Starting the k3s Cluster 
 
 If you don't have [k3s](https://docs.k3s.io/) installed, go ahead and install it by running 
@@ -8,9 +12,26 @@ If you don't have [k3s](https://docs.k3s.io/) installed, go ahead and install it
 ```
 
 
-If you intend to run motion detection, make sure to add the detector ID's to the [edge config file](/configs/edge-config.yaml). 
-If you only intend to run edge inference, you don't need to configure any detectors. By default, edge inference will be set up for 
-each detector ID for which the Groundlight service receives requests. 
+If you intend to run motion detection, make sure to add the detector ID's to the 
+[edge config file](../configs/edge-config.yaml). For edge inference, adding detector ID's to the config file will cause
+inference pods to be initialized automatically for each detector. Even if they aren't configured in the config file, 
+edge inference will be set up for each detector ID for which the Groundlight service receives requests (note that it 
+takes some time for each inference pod to become available the first time).
+
+Before starting the cluster, some environment variables should be set. You'll need to have created
+a Groundlight API token in the [Groundlight web app](https://app.groundlight.ai/reef/my-account/api-tokens).
+```
+# Set your API token
+export GROUNDLIGHT_API_TOKEN="api_xxxxxx"
+
+# Choose a name for the namespace to start the cluster in, e.g., groundlight-edge
+export DEPLOYMENT_NAMESPACE="your-desired-namespace-name"
+
+# Choose an inference flavor, either CPU or (default) GPU (note that appropriate setup for GPU must be done separately)
+export INFERENCE_FLAVOR="CPU" / export inference_flavor = "GPU"
+```
+
+You'll also need to configure your AWS credentials using `aws configure` to include credentials that have permissions to pull from the appropriate ECR location (if you don't already have the AWS CLI installed, refer to the instructions [here](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)).
 
 To start the cluster, run 
 ```shell 
@@ -28,8 +49,16 @@ This will create the edge-endpoint deployment with two containers: one for the e
 deployments. After a while you should be able to see something like this if you run `kubectl get pods`:
 
 ```shell
-NAME                             READY   STATUS    RESTARTS   AGE
-edge-endpoint-594d645588-5mf28   2/2     Running   0          4s
+NAME                                    READY   STATUS    RESTARTS   AGE
+edge-endpoint-594d645588-5mf28          2/2     Running   0          4s
+```
+
+If you added detectors to the [edge config file](../configs/edge-config.yaml), you should also see a pod for each of them, e.g.:
+
+```shell
+NAME                                                              READY   STATUS    RESTARTS   AGE
+edge-endpoint-594d645588-5mf28                                    2/2     Running   0          4s
+inferencemodel-det-3jemxiunjuekdjzbuxavuevw15k-5d8b454bcb-xqf8m   1/1     Running   0          2s
 ```
 
 
