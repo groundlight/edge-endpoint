@@ -1,6 +1,6 @@
 import logging
-from io import BytesIO
 import os
+from io import BytesIO
 from typing import Optional
 
 import numpy as np
@@ -166,7 +166,7 @@ async def post_image_query(
             motion_detection_manager.update_image_query_response(detector_id=detector_id, response=image_query)
 
         return image_query
-            
+
     if not require_human_review and motion_detection_manager.motion_detection_is_available(detector_id=detector_id):
         motion_detected = motion_detection_manager.run_motion_detection(detector_id=detector_id, new_img=img_numpy)
         if not motion_detected:
