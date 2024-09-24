@@ -1,5 +1,6 @@
 import logging
 from io import BytesIO
+import os
 from typing import Optional
 
 import numpy as np
@@ -106,29 +107,66 @@ async def post_image_query(
             "inspection_id",  # inspection_id will not be supported on the edge
             "metadata",  # metadata is not supported on the edge currently, we need to set up persistent storage first
         },
-    )
+    ))
+
+    img_numpy = np.asarray(image)  # [H, W, C=3], dtype: uint8, RGB format
+
+    edge_inference_manager = app_state.edge_inference_manager
+    motion_detection_manager = app_state.motion_detection_manager
+    require_human_review = human_review == "ALWAYS"
 
     # TODO: instead of just forwarding want_async calls to the cloud, facilitate partial
     #       processing of the async request on the edge before escalating to the cloud.
     _want_async = want_async is not None and want_async.lower() == "true"
     if _want_async:
-        return safe_call_api(
-            gl.submit_image_query,
-            detector=detector_id,
-            image=image,
-            wait=0,
-            patience_time=patience_time,
-            confidence_threshold=confidence_threshold,
-            human_review=human_review,
-            want_async=True,
+        edge_only = os.environ.get("EDGE_ONLY", "") == "ENABLED"
+        if not edge_only:
+            # Escalate to cloud api as normal
+            return safe_call_api(
+                gl.submit_image_query,
+                detector=detector_id,
+                image=image,
+                wait=0,
+                patience_time=patience_time,
+                confidence_threshold=confidence_threshold,
+                human_review=human_review,
+                want_async=True,
+            )
+
+        # Get the result of the edge model and return it
+        # TODO lots of duplicated code here
+
+        logger.debug(
+            "EDGE_ONLY is set to ENABLED. This async request will not be escalated to the cloud and the "
+            "edge model's answer will be returned regardless of confidence."
         )
 
-    img_numpy = np.asarray(image)  # [H, W, C=3], dtype: uint8, RGB format
+        if not edge_inference_manager.inference_is_available(detector_id=detector_id):
+            raise ValueError("EDGE_ONLY is set to ENABLED, but edge inference is not available.")
+        detector_metadata: Detector = get_detector_metadata(detector_id=detector_id, gl=gl)
+        results = edge_inference_manager.run_inference(detector_id=detector_id, img_numpy=img_numpy)
 
-    motion_detection_manager = app_state.motion_detection_manager
-    edge_inference_manager = app_state.edge_inference_manager
-    require_human_review = human_review == "ALWAYS"
+        if patience_time is None:
+            patience_time = constants.DEFAULT_PATIENCE_TIME  # Default patience time
 
+        if confidence_threshold is None:
+            confidence_threshold = detector_metadata.confidence_threshold  # Use detector's confidence threshold
+
+        image_query = create_iqe(
+            detector_id=detector_id,
+            label=results["label"],
+            confidence=results["confidence"],
+            query=detector_metadata.query,
+            confidence_threshold=confidence_threshold,
+            patience_time=patience_time,
+        )
+        app_state.db_manager.create_iqe_record(record=image_query)
+        if motion_detection_manager.motion_detection_is_enabled(detector_id=detector_id):
+            # Store the cloud's response so that if the next image has no motion, we will return the same response
+            motion_detection_manager.update_image_query_response(detector_id=detector_id, response=image_query)
+
+        return image_query
+            
     if not require_human_review and motion_detection_manager.motion_detection_is_available(detector_id=detector_id):
         motion_detected = motion_detection_manager.run_motion_detection(detector_id=detector_id, new_img=img_numpy)
         if not motion_detected:
