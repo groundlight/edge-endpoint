@@ -1,6 +1,9 @@
 #!/bin/bash
 
 K=${KUBECTL_CMD:-"kubectl"}
+DEPLOYMENT_NAMESPACE=${DEPLOYMENT_NAMESPACE:-$($K config view -o json | jq -r '.contexts[] | select(.name == "'$($K config current-context)'") | .context.namespace // "default"')}
+# Update K to include the deployment namespace
+K="$K -n $DEPLOYMENT_NAMESPACE"
 
 if command -v docker >/dev/null 2>&1; then
     # Enable ECR login - make sure you have the aws client configured properly, or an IAM role
@@ -8,7 +11,7 @@ if command -v docker >/dev/null 2>&1; then
     aws ecr get-login-password --region us-west-2 | docker login \
         --username AWS \
         --password-stdin  \
-        723181461334.dkr.ecr.us-west-2.amazonaws.com
+        767397850842.dkr.ecr.us-west-2.amazonaws.com
 else
     echo "Docker is not installed. Skipping docker ECR login."
 fi
@@ -20,6 +23,6 @@ $K delete --ignore-not-found secret registry-credentials
 
 PASSWORD=$(aws ecr get-login-password --region us-west-2)
 $K create secret docker-registry registry-credentials \
-    --docker-server=723181461334.dkr.ecr.us-west-2.amazonaws.com \
+    --docker-server=767397850842.dkr.ecr.us-west-2.amazonaws.com \
     --docker-username=AWS \
     --docker-password=$PASSWORD

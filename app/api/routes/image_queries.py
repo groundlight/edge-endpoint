@@ -8,6 +8,7 @@ from groundlight import Groundlight
 from model import Detector, ImageQuery
 from PIL import Image
 
+from app.core import constants
 from app.core.app_state import (
     AppState,
     get_app_state,
@@ -151,7 +152,7 @@ async def post_image_query(
                 detector_metadata=get_detector_metadata(detector_id=detector_id, gl=gl),
                 confidence_threshold=confidence_threshold,
             ):
-                logger.debug("Motion detection confidence is high enough to return")
+                logger.debug("Motion detection confidence is high enough to return.")
                 app_state.db_manager.create_iqe_record(record=new_image_query)
                 return new_image_query
 
@@ -168,11 +169,19 @@ async def post_image_query(
         ):
             logger.info("Edge detector confidence is high enough to return")
 
+            if patience_time is None:
+                patience_time = constants.DEFAULT_PATIENCE_TIME  # Default patience time
+
+            if confidence_threshold is None:
+                confidence_threshold = detector_metadata.confidence_threshold  # Use detector's confidence threshold
+
             image_query = create_iqe(
                 detector_id=detector_id,
                 label=results["label"],
                 confidence=confidence,
                 query=detector_metadata.query,
+                confidence_threshold=confidence_threshold,
+                patience_time=patience_time,
             )
             app_state.db_manager.create_iqe_record(record=image_query)
         else:

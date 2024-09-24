@@ -15,6 +15,7 @@ async def create_detector(props: DetectorCreate, gl: Groundlight = Depends(get_g
         gl.create_detector,
         name=props.name,
         query=props.query,
+        group_name=props.group_name,
         confidence_threshold=props.confidence_threshold,
         pipeline_config=props.pipeline_config,
     )

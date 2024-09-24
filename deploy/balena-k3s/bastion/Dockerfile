@@ -55,6 +55,7 @@ RUN mkdir -p /app/edge-endpoint
 COPY . /app/edge-endpoint
 
 RUN echo "source /app/edge-endpoint/deploy/balena-k3s/bastion/src/kube-bash.sh" >> /root/.bashrc
+RUN chmod +x ./edge-endpoint/deploy/bin/cluster_setup.sh
 
 ENTRYPOINT []
-CMD [ "tail" , "-f", "/dev/null" ]
+CMD ["/bin/sh", "-c", "./edge-endpoint/deploy/bin/cluster_setup.sh && tail -f /dev/null"]

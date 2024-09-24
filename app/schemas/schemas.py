@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, confloat
 class DetectorCreate(BaseModel):
     name: str = Field(description="Name of the detector")
     query: Optional[str] = Field(description="Query associated with the detector")
+    group_name: Optional[str] = Field(description="Which group should this detector be part of?")
     confidence_threshold: Optional[confloat(ge=0.0, le=1.0)] = Field(
         0.9,
         description=(
