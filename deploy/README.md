@@ -35,9 +35,10 @@ a Groundlight API token in the [Groundlight web app](https://app.groundlight.ai/
 # Set your API token
 export GROUNDLIGHT_API_TOKEN="api_xxxxxx"
 
-# Choose an inference flavor, either CPU or (default) GPU (note that appropriate setup for GPU must be done separately,
-and is currently not fully functional):
-export INFERENCE_FLAVOR="CPU" / export inference_flavor = "GPU"
+# Choose an inference flavor, either CPU or (default) GPU.
+# Note that appropriate setup for GPU must be done separately.
+export INFERENCE_FLAVOR="CPU"
+# export INFERENCE_FLAVOR = "GPU"
 ```
 
 You'll also need to configure your AWS credentials using `aws configure` to include credentials that have permissions to pull from the appropriate ECR location (if you don't already have the AWS CLI installed, refer to the instructions [here](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)).
