@@ -25,7 +25,10 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     dnsutils \
     vim \
     jq \
-    gettext-base && \
+    bash-completion \
+    gettext-base \
+    procps \
+    htop && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Note that currently this is only for ARM
@@ -51,7 +54,7 @@ RUN arkade version && \
 RUN mkdir -p /app/edge-endpoint
 COPY . /app/edge-endpoint
 
-
+RUN echo "source /app/edge-endpoint/deploy/balena-k3s/bastion/src/kube-bash.sh" >> /root/.bashrc
 RUN chmod +x ./edge-endpoint/deploy/bin/cluster_setup.sh
 
 ENTRYPOINT []
