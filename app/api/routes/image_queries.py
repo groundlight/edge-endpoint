@@ -107,7 +107,7 @@ async def post_image_query(
             "inspection_id",  # inspection_id will not be supported on the edge
             "metadata",  # metadata is not supported on the edge currently, we need to set up persistent storage first
         },
-    ))
+    )
 
     img_numpy = np.asarray(image)  # [H, W, C=3], dtype: uint8, RGB format
 
