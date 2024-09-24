@@ -78,7 +78,9 @@ class InferenceDeploymentManager:
         inference_deployment = self._inference_deployment_template
         inference_deployment = inference_deployment.replace("placeholder-inference-service-name", service_name)
         inference_deployment = inference_deployment.replace("placeholder-inference-deployment-name", deployment_name)
-        inference_deployment = inference_deployment.replace("placeholder-inference-instance-name", f"instance-{detector_id}")
+        inference_deployment = inference_deployment.replace(
+            "placeholder-inference-instance-name", f"instance-{detector_id}"
+        )
         inference_deployment = inference_deployment.replace("placeholder-model-name", detector_id)
         return inference_deployment.strip()
 
