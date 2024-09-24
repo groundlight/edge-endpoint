@@ -9,7 +9,9 @@ install-pre-commit: install  ## Install pre-commit hooks. Requires .pre-commit-c
 	poetry run pre-commit install
 
 test: install  ## Run unit tests in verbose mode 
-	poetry run pytest -vs 
+	. test/setup_plain_test_env.sh && poetry run pytest -vs -k "not test_motdet"
+	# TODO: Refactor so the config is loaded by the test
+	. test/setup_motion_detection_test_env.sh && poetry run pytest -vs test/api/test_motdet.py
 
 # Adjust which paths we lint
 LINT_PATHS="app test"

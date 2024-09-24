@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from jinja2 import Template
 
 from app.core.file_paths import MODEL_REPOSITORY_PATH
+from app.core.speedmon import SpeedMonitor
 from app.core.utils import prefixed_ksuid
 
 from .configs import LocalInferenceConfig
@@ -38,6 +39,7 @@ class EdgeInferenceManager:
         """
         self.verbose = verbose
         self.inference_config, self.inference_clients = {}, {}
+        self.speedmon = SpeedMonitor()
         if config:
             self.inference_config = config
             self.inference_clients = {
@@ -125,23 +127,24 @@ class EdgeInferenceManager:
         request_id = prefixed_ksuid(prefix="einf_")
         inference_client = self.inference_clients[detector_id]
 
-        logger.debug(f"Submitting image to edge inference service. {request_id=}")
-        start = time.monotonic()
+        logger.info(f"Submitting image to edge inference service. {request_id=} for {detector_id=}")
+        start_time = time.monotonic()
         response = inference_client.infer(
             model_name=detector_id,
             inputs=[imginput],
             outputs=outputs,
             request_id=request_id,
         )
-        end = time.monotonic()
+        end_time = time.monotonic()
 
         output_dict = {k: response.as_numpy(k)[0] for k in self.MODEL_OUTPUTS}
         output_dict["label"] = "NO" if output_dict["label"] else "YES"  # map false / 0 to "YES" and true / 1 to "NO"
 
-        logger.debug(
-            f"Inference server response for model={detector_id}: {output_dict}.\n"
-            f"Inference time: {end - start:.3f} seconds"
-        )
+        elapsed_ms = (end_time - start_time) * 1000
+        self.speedmon.update(detector_id, elapsed_ms)
+        logger.debug(f"Inference server response for request {request_id} {detector_id=}: {output_dict}.")
+        fps = self.speedmon.average_fps(detector_id)
+        logger.info(f"Recent-average FPS for {detector_id=}: {fps:.2f}")
         return output_dict
 
     def update_model(self, detector_id: str) -> bool:
