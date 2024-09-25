@@ -64,7 +64,7 @@ def handle_iqe_creation(
     app_state: AppState,
 ) -> ImageQuery:
     """
-    Handles the creation of an edge image query.
+    Handles the creation of an edge image query from the model results.
 
     :param detector_id: The string id of the detector to use
     :param results: A dict containing the results from the model.

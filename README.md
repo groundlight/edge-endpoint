@@ -49,6 +49,15 @@ print(f"The answer is {image_query.result}")
 
 See the [SDK's getting started guide](https://code.groundlight.ai/python-sdk/docs/getting-started) for more info.
 
+### Experimental: getting only edge model answers
+If you only want to receive answers from the edge model, you can set the `EDGE_ONLY` environment variable like so:
+```
+export EDGE_ONLY=ENABLED
+```
+Then, if you make requests to the edge endpoint using the `ask_async` method, you will only receive answers from the edge model (regardless of the confidence). Additionally, note that no image queries submitted this way will show up in the web app or be used to train the model. This option should therefore only be used if you don't need the model to improve, and only want fast answers from the edge model.
+
+This is an experimental feature and may be modified or removed in the future.
+
 ## Development and Internal Architecture
 
 This section describes the various components that comprise the Groundlight Edge Endpoint, and how they interoperate.
