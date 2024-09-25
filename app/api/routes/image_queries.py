@@ -114,7 +114,7 @@ async def post_image_query(
     # TODO: instead of just forwarding want_async calls to the cloud, facilitate partial
     #       processing of the async request on the edge before escalating to the cloud.
     _want_async = want_async is not None and want_async.lower() == "true"
-    if _want_async and not edge_only: # If edge-only mode is enabled, we don't want to make cloud API calls
+    if _want_async and not edge_only:  # If edge-only mode is enabled, we don't want to make cloud API calls
         return safe_call_api(
             gl.submit_image_query,
             detector=detector_id,
@@ -166,11 +166,14 @@ async def post_image_query(
         results = edge_inference_manager.run_inference(detector_id=detector_id, img_numpy=img_numpy)
         confidence = results["confidence"]
 
-        if _is_confident_enough(
-            confidence=confidence,
-            detector_metadata=get_detector_metadata(detector_id=detector_id, gl=gl),
-            confidence_threshold=confidence_threshold,
-        ) or edge_only:
+        if (
+            _is_confident_enough(
+                confidence=confidence,
+                detector_metadata=get_detector_metadata(detector_id=detector_id, gl=gl),
+                confidence_threshold=confidence_threshold,
+            )
+            or edge_only
+        ):
             if edge_only:
                 logger.info("EDGE_ONLY is enabled. The edge model's answer will be returned regardless of confidence.")
             else:
