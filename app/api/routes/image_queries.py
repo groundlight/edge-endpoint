@@ -55,45 +55,6 @@ async def validate_query_params_for_edge(request: Request, invalid_edge_params: 
         )
 
 
-def handle_iqe_creation(
-    detector_id: str,
-    results: dict,
-    detector_metadata: Detector,
-    patience_time: float | None,
-    confidence_threshold: float | None,
-    app_state: AppState,
-) -> ImageQuery:
-    """
-    Handles the creation of an edge image query from the model results.
-
-    :param detector_id: The string id of the detector to use
-    :param results: A dict containing the results from the model.
-    :param detector_metadata: Info about the associated detector object.
-    :param patience_time: The patience time specified for the request.
-    :param confidence_threshold: The confidence threshold specified for the request.
-    :param app_state: The AppState at the time of the request.
-
-    :returns: An ImageQuery object containing the results of the model.
-    """
-    if patience_time is None:
-        patience_time = constants.DEFAULT_PATIENCE_TIME  # Default patience time
-
-    if confidence_threshold is None:
-        confidence_threshold = detector_metadata.confidence_threshold  # Use detector's confidence threshold
-
-    image_query = create_iqe(
-        detector_id=detector_id,
-        label=results["label"],
-        confidence=results["confidence"],
-        query=detector_metadata.query,
-        confidence_threshold=confidence_threshold,
-        patience_time=patience_time,
-    )
-    app_state.db_manager.create_iqe_record(record=image_query)
-
-    return image_query
-
-
 @router.post("", response_model=ImageQuery)
 async def post_image_query(
     request: Request,
@@ -186,7 +147,7 @@ async def post_image_query(
         detector_metadata: Detector = get_detector_metadata(detector_id=detector_id, gl=gl)
         results = edge_inference_manager.run_inference(detector_id=detector_id, img_numpy=img_numpy)
 
-        image_query = handle_iqe_creation(
+        image_query = _handle_iqe_creation(
             detector_id=detector_id,
             results=results,
             detector_metadata=detector_metadata,
@@ -236,7 +197,7 @@ async def post_image_query(
         ):
             logger.info("Edge detector confidence is high enough to return")
 
-            image_query = handle_iqe_creation(
+            image_query = _handle_iqe_creation(
                 detector_id=detector_id,
                 results=results,
                 detector_metadata=detector_metadata,
@@ -298,6 +259,45 @@ async def get_image_query(
             raise HTTPException(status_code=404, detail=f"Image query with ID {id} not found")
         return image_query
     return safe_call_api(gl.get_image_query, id=id)
+
+
+def _handle_iqe_creation(
+    detector_id: str,
+    results: dict,
+    detector_metadata: Detector,
+    patience_time: float | None,
+    confidence_threshold: float | None,
+    app_state: AppState,
+) -> ImageQuery:
+    """
+    Handles the creation of an edge image query from the model results.
+
+    :param detector_id: The string id of the detector to use
+    :param results: A dict containing the results from the model.
+    :param detector_metadata: Info about the associated detector object.
+    :param patience_time: The patience time specified for the request.
+    :param confidence_threshold: The confidence threshold specified for the request.
+    :param app_state: The AppState at the time of the request.
+
+    :returns: An ImageQuery object containing the results of the model.
+    """
+    if patience_time is None:
+        patience_time = constants.DEFAULT_PATIENCE_TIME  # Default patience time
+
+    if confidence_threshold is None:
+        confidence_threshold = detector_metadata.confidence_threshold  # Use detector's confidence threshold
+
+    image_query = create_iqe(
+        detector_id=detector_id,
+        label=results["label"],
+        confidence=results["confidence"],
+        query=detector_metadata.query,
+        confidence_threshold=confidence_threshold,
+        patience_time=patience_time,
+    )
+    app_state.db_manager.create_iqe_record(record=image_query)
+
+    return image_query
 
 
 def _improve_cached_image_query_confidence(
