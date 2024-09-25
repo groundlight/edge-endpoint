@@ -143,7 +143,7 @@ class TritonPythonModel:
             start_ns = time.time_ns()
             preds = self.pipeline.run(
                 examples=[Example(data=image, example_id=None, annotations_requested=[], timestamp=time.time())],
-                return_rois=False,
+                return_secondary_prediction=False,
             )
             end_ns = time.time_ns()
             self.pipeline_counter.increment((end_ns - start_ns) / 1000)
