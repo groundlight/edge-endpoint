@@ -54,12 +54,13 @@ async def validate_query_params_for_edge(request: Request, invalid_edge_params: 
             detail=f"Invalid query parameters for submit_image_query to edge-endpoint: {invalid_provided_params}",
         )
 
+
 def handle_iqe_creation(
     detector_id: str,
     results: dict,
     detector_metadata: Detector,
-    patience_time: float | None, 
-    confidence_threshold: float | None, 
+    patience_time: float | None,
+    confidence_threshold: float | None,
     app_state: AppState,
 ) -> ImageQuery:
     """
@@ -91,6 +92,7 @@ def handle_iqe_creation(
     app_state.db_manager.create_iqe_record(record=image_query)
 
     return image_query
+
 
 @router.post("", response_model=ImageQuery)
 async def post_image_query(
@@ -175,12 +177,12 @@ async def post_image_query(
 
         if not edge_inference_manager.inference_is_available(detector_id=detector_id):
             raise ValueError("EDGE_ONLY is set to ENABLED, but edge inference is not available.")
-        
+
         logger.debug(
             "EDGE_ONLY is set to ENABLED. This async request will not be escalated to the cloud and the "
             "edge model's answer will be returned regardless of confidence. Motion detection will be ignored."
         )
-        
+
         detector_metadata: Detector = get_detector_metadata(detector_id=detector_id, gl=gl)
         results = edge_inference_manager.run_inference(detector_id=detector_id, img_numpy=img_numpy)
 
@@ -190,7 +192,7 @@ async def post_image_query(
             detector_metadata=detector_metadata,
             patience_time=patience_time,
             confidence_threshold=confidence_threshold,
-            app_state=app_state
+            app_state=app_state,
         )
 
         return image_query
@@ -240,7 +242,7 @@ async def post_image_query(
                 detector_metadata=detector_metadata,
                 patience_time=patience_time,
                 confidence_threshold=confidence_threshold,
-                app_state=app_state
+                app_state=app_state,
             )
         else:
             logger.info(
