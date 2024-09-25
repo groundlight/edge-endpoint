@@ -54,6 +54,43 @@ async def validate_query_params_for_edge(request: Request, invalid_edge_params: 
             detail=f"Invalid query parameters for submit_image_query to edge-endpoint: {invalid_provided_params}",
         )
 
+def handle_iqe_creation(
+    detector_id: str,
+    results: dict,
+    detector_metadata: Detector,
+    patience_time: float | None, 
+    confidence_threshold: float | None, 
+    app_state: AppState,
+) -> ImageQuery:
+    """
+    Handles the creation of an edge image query.
+
+    :param detector_id: The string id of the detector to use
+    :param results: A dict containing the results from the model.
+    :param detector_metadata: Info about the associated detector object.
+    :param patience_time: The patience time specified for the request.
+    :param confidence_threshold: The confidence threshold specified for the request.
+    :param app_state: The AppState at the time of the request.
+
+    :returns: An ImageQuery object containing the results of the model.
+    """
+    if patience_time is None:
+        patience_time = constants.DEFAULT_PATIENCE_TIME  # Default patience time
+
+    if confidence_threshold is None:
+        confidence_threshold = detector_metadata.confidence_threshold  # Use detector's confidence threshold
+
+    image_query = create_iqe(
+        detector_id=detector_id,
+        label=results["label"],
+        confidence=results["confidence"],
+        query=detector_metadata.query,
+        confidence_threshold=confidence_threshold,
+        patience_time=patience_time,
+    )
+    app_state.db_manager.create_iqe_record(record=image_query)
+
+    return image_query
 
 @router.post("", response_model=ImageQuery)
 async def post_image_query(
@@ -134,36 +171,27 @@ async def post_image_query(
             )
 
         # Get the result of the edge model and return it
-        # TODO lots of duplicated code here
-
-        logger.debug(
-            "EDGE_ONLY is set to ENABLED. This async request will not be escalated to the cloud and the "
-            "edge model's answer will be returned regardless of confidence."
-        )
+        # NOTE: because this is temporary code, this skips handling motion detection
 
         if not edge_inference_manager.inference_is_available(detector_id=detector_id):
             raise ValueError("EDGE_ONLY is set to ENABLED, but edge inference is not available.")
+        
+        logger.debug(
+            "EDGE_ONLY is set to ENABLED. This async request will not be escalated to the cloud and the "
+            "edge model's answer will be returned regardless of confidence. Motion detection will be ignored."
+        )
+        
         detector_metadata: Detector = get_detector_metadata(detector_id=detector_id, gl=gl)
         results = edge_inference_manager.run_inference(detector_id=detector_id, img_numpy=img_numpy)
 
-        if patience_time is None:
-            patience_time = constants.DEFAULT_PATIENCE_TIME  # Default patience time
-
-        if confidence_threshold is None:
-            confidence_threshold = detector_metadata.confidence_threshold  # Use detector's confidence threshold
-
-        image_query = create_iqe(
+        image_query = handle_iqe_creation(
             detector_id=detector_id,
-            label=results["label"],
-            confidence=results["confidence"],
-            query=detector_metadata.query,
-            confidence_threshold=confidence_threshold,
+            results=results,
+            detector_metadata=detector_metadata,
             patience_time=patience_time,
+            confidence_threshold=confidence_threshold,
+            app_state=app_state
         )
-        app_state.db_manager.create_iqe_record(record=image_query)
-        if motion_detection_manager.motion_detection_is_enabled(detector_id=detector_id):
-            # Store the cloud's response so that if the next image has no motion, we will return the same response
-            motion_detection_manager.update_image_query_response(detector_id=detector_id, response=image_query)
 
         return image_query
 
@@ -198,34 +226,26 @@ async def post_image_query(
     if not require_human_review and edge_inference_manager.inference_is_available(detector_id=detector_id):
         detector_metadata: Detector = get_detector_metadata(detector_id=detector_id, gl=gl)
         results = edge_inference_manager.run_inference(detector_id=detector_id, img_numpy=img_numpy)
-        confidence = results["confidence"]
 
         if _is_confident_enough(
-            confidence=confidence,
+            confidence=results["confidence"],
             detector_metadata=get_detector_metadata(detector_id=detector_id, gl=gl),
             confidence_threshold=confidence_threshold,
         ):
             logger.info("Edge detector confidence is high enough to return")
 
-            if patience_time is None:
-                patience_time = constants.DEFAULT_PATIENCE_TIME  # Default patience time
-
-            if confidence_threshold is None:
-                confidence_threshold = detector_metadata.confidence_threshold  # Use detector's confidence threshold
-
-            image_query = create_iqe(
+            image_query = handle_iqe_creation(
                 detector_id=detector_id,
-                label=results["label"],
-                confidence=confidence,
-                query=detector_metadata.query,
-                confidence_threshold=confidence_threshold,
+                results=results,
+                detector_metadata=detector_metadata,
                 patience_time=patience_time,
+                confidence_threshold=confidence_threshold,
+                app_state=app_state
             )
-            app_state.db_manager.create_iqe_record(record=image_query)
         else:
             logger.info(
                 "Ran inference locally, but detector confidence is not high enough to return. Current confidence:"
-                f" {confidence} is less than confidence threshold: {detector_metadata.confidence_threshold}."
+                f" {results['confidence']} is less than confidence threshold: {detector_metadata.confidence_threshold}."
                 " Escalating to the cloud API server."
             )
     else:
