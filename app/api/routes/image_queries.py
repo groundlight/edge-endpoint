@@ -137,7 +137,7 @@ async def post_image_query(
         # NOTE: because this is temporary code, this skips handling motion detection
 
         if not edge_inference_manager.inference_is_available(detector_id=detector_id):
-            raise ValueError("EDGE_ONLY is set to ENABLED, but edge inference is not available.")
+            raise RuntimeError("EDGE_ONLY is set to ENABLED, but edge inference is not available.")
 
         logger.debug(
             "EDGE_ONLY is set to ENABLED. This async request will not be escalated to the cloud and the "
