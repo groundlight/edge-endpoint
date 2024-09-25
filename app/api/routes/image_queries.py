@@ -167,12 +167,12 @@ async def post_image_query(
         confidence = results["confidence"]
 
         if (
+            edge_only or
             _is_confident_enough(
                 confidence=confidence,
                 detector_metadata=get_detector_metadata(detector_id=detector_id, gl=gl),
                 confidence_threshold=confidence_threshold,
             )
-            or edge_only
         ):
             if edge_only:
                 logger.info("EDGE_ONLY is enabled. The edge model's answer will be returned regardless of confidence.")
