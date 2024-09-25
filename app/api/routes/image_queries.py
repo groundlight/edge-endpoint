@@ -128,8 +128,8 @@ async def post_image_query(
 
     img_numpy = np.asarray(image)  # [H, W, C=3], dtype: uint8, RGB format
 
-    edge_inference_manager = app_state.edge_inference_manager
     motion_detection_manager = app_state.motion_detection_manager
+    edge_inference_manager = app_state.edge_inference_manager
     require_human_review = human_review == "ALWAYS"
 
     if not require_human_review and motion_detection_manager.motion_detection_is_available(detector_id=detector_id):
