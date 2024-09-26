@@ -1,4 +1,5 @@
 import logging
+import os
 from io import BytesIO
 from typing import Optional
 
@@ -108,10 +109,12 @@ async def post_image_query(
         },
     )
 
+    edge_only = bool(int(os.environ.get("EDGE_ONLY", 0)))
+
     # TODO: instead of just forwarding want_async calls to the cloud, facilitate partial
     #       processing of the async request on the edge before escalating to the cloud.
     _want_async = want_async is not None and want_async.lower() == "true"
-    if _want_async:
+    if _want_async and not edge_only:  # If edge-only mode is enabled, we don't want to make cloud API calls
         return safe_call_api(
             gl.submit_image_query,
             detector=detector_id,
@@ -131,6 +134,7 @@ async def post_image_query(
 
     if not require_human_review and motion_detection_manager.motion_detection_is_available(detector_id=detector_id):
         motion_detected = motion_detection_manager.run_motion_detection(detector_id=detector_id, new_img=img_numpy)
+        # TODO motion detection logic will likely need to be altered to work with the EDGE_ONLY flag
         if not motion_detected:
             # Try improving the cached image query response's confidence
             # (if the cached response has low confidence)
@@ -162,12 +166,15 @@ async def post_image_query(
         results = edge_inference_manager.run_inference(detector_id=detector_id, img_numpy=img_numpy)
         confidence = results["confidence"]
 
-        if _is_confident_enough(
+        if edge_only or _is_confident_enough(
             confidence=confidence,
             detector_metadata=get_detector_metadata(detector_id=detector_id, gl=gl),
             confidence_threshold=confidence_threshold,
         ):
-            logger.info("Edge detector confidence is high enough to return")
+            if edge_only:
+                logger.info("EDGE_ONLY is enabled. The edge model's answer will be returned regardless of confidence.")
+            else:
+                logger.info("Edge detector confidence is high enough to return")
 
             if patience_time is None:
                 patience_time = constants.DEFAULT_PATIENCE_TIME  # Default patience time
@@ -201,6 +208,10 @@ async def post_image_query(
                 "deployment_created": False,
             }
         )
+
+        # Fail if edge inference is not available and edge-only mode is enabled
+        if edge_only:
+            raise RuntimeError("EDGE_ONLY is set to ENABLED, but edge inference is not available.")
 
     # Finally, fall back to submitting the image to the cloud
     if not image_query:
