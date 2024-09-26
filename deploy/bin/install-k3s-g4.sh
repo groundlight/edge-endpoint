@@ -15,10 +15,10 @@ check_nvidia_drivers_and_container_runtime() {
   NVIDIA_VERSION=${NVIDIA_VERSION:-525}
 
   if ! command -v nvidia-smi &> /dev/null; then
-    echo " NVIDIA drivers are not installed (nvidia-smi not found). Installing..."
+    echo "NVIDIA drivers are not installed (nvidia-smi not found). Installing..."
     sudo apt update && sudo apt install -y "nvidia-headless-$NVIDIA_VERSION-server"
   else
-    echo " NVIDIA drivers for version $NVIDIA_VERSION are installed."
+    echo "NVIDIA drivers for version $NVIDIA_VERSION are installed."
   fi
 
   # Check if nvidia container runtime is already installed.
@@ -38,6 +38,12 @@ check_nvidia_drivers_and_container_runtime() {
   fi
 }
 
+# Install Helm if it's not available since the Nvidia operator comes packaged as a Helm chart.
+if ! command -v helm &> /dev/null
+then
+  echo "Helm not found, installing Helm..."
+  curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+fi
 
 K="k3s kubectl"
 SCRIPT_DIR=$(dirname "$0")
@@ -47,76 +53,32 @@ check_nvidia_drivers_and_container_runtime
 # Install k3s using our standard script
 $SCRIPT_DIR/install-k3s.sh
 
-# Configure k3s to use nvidia-container-runtime
-# See guide here: https://k3d.io/v5.3.0/usage/advanced/cuda/#configure-containerd
-echo "Configuring k3s to use nvidia-container-runtime..."
-for _ in {1..10}; do
-  if [[ -f "/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl" ]]; then
-    break
-  fi
-  # Sometimes the following wget fails initially but works after a few seconds
-  sleep 2
-  sudo wget https://k3d.io/v5.3.0/usage/advanced/cuda/config.toml.tmpl -O /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl && break
-done
+# Add the NVIDIA GPU Operator Helm repository
+helm repo add nvidia https://nvidia.github.io/gpu-operator
+helm repo update
 
-# Enable nvidia-device-plugin via a DaemonSet and add a RuntimeClass definition for it
-# https://github.com/NVIDIA/k8s-device-plugin/?tab=readme-ov-file#enabling-gpu-support-in-kubernetes
-echo "Creating nvidia RuntimeClass and nvidia-device-plugin DaemonSet..."
-$K apply -f - <<EOF
-apiVersion: node.k8s.io/v1
-kind: RuntimeClass
-metadata:
-  name: nvidia
-handler: nvidia
----
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: nvidia-device-plugin-daemonset
-  namespace: kube-system
-spec:
-  selector:
-    matchLabels:
-      name: nvidia-device-plugin-ds
-  updateStrategy:
-    type: RollingUpdate
-  template:
-    metadata:
-      labels:
-        name: nvidia-device-plugin-ds
-    spec:
-      tolerations:
-      - key: nvidia.com/gpu
-        operator: Exists
-        effect: NoSchedule
-      # Mark this pod as a critical add-on; when enabled, the critical add-on
-      # scheduler reserves resources for critical add-on pods so that they can
-      # be rescheduled after a failure.
-      # See https://kubernetes.io/docs/tasks/administer-cluster/guaranteed-scheduling-critical-addon-pods/
-      priorityClassName: "system-node-critical"
-      # (GROUNDLIGHT) REQUIRED MODIFICATION FOR K3S:
-      runtimeClassName: nvidia
-      containers:
-      - image: nvcr.io/nvidia/k8s-device-plugin:v0.14.1
-        name: nvidia-device-plugin-ctr
-        env:
-          - name: FAIL_ON_INIT_ERROR
-            value: "false"
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop: ["ALL"]
-        volumeMounts:
-        - name: device-plugin
-          mountPath: /var/lib/kubelet/device-plugins
-      volumes:
-      - name: device-plugin
-        hostPath:
-          path: /var/lib/kubelet/device-plugins
-EOF
+# Get the latest version of the GPU Operator (the second field on the second line of the search result)
+LATEST_VERSION=$(helm search repo nvidia/gpu-operator --devel --versions | awk 'NR == 2 {print $2}')
 
-# You can verify correctness by running `kubectl get node`
-# and inspecting "Capacity" section for "nvidia.com/gpu".
+# Install the GPU Operator using Helm
+echo "Installing NVIDIA GPU Operator version $LATEST_VERSION..."
+helm install \
+    --wait \
+    --generate-name \
+    -n gpu-operator \
+    --create-namespace \
+    --version "$LATEST_VERSION" \
+    nvidia/gpu-operator
+
+echo "NVIDIA GPU Operator installation completed."
+
+# Verify that we actually added GPU capacity to the node
+capacity=$($K get $($K get nodes -o name) -o=jsonpath='{.status.capacity.nvidia\.com/gpu}')
+if [ "$capacity" = "1" ]; then
+  echo "GPU capacity successfully added"
+else
+  echo "WARNING: No GPU capacity on node after install!!"
+fi
 
 # In addition, you can also check that the nvidia-device-plugin-ds pod
 # is running in the `kube-system` namespace.
