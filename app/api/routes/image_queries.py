@@ -109,7 +109,7 @@ async def post_image_query(
         },
     )
 
-    edge_only = os.environ.get("EDGE_ONLY", "") == "ENABLED"
+    edge_only = bool(int(os.environ.get("EDGE_ONLY", 0)))
 
     # TODO: instead of just forwarding want_async calls to the cloud, facilitate partial
     #       processing of the async request on the edge before escalating to the cloud.
