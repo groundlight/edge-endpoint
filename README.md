@@ -57,6 +57,8 @@ If you only want to receive answers from the edge model, you can set the `EDGE_O
 ```
 Then, if you make requests to the edge endpoint, you will only receive answers from the edge model (regardless of the confidence). Additionally, note that no image queries submitted this way will show up in the web app or be used to train the model. This option should therefore only be used if you don't need the model to improve and only want fast answers from the edge model.
 
+If this flag is enabled and the edge inference model for a detector is not available, attempting to send image queries to that detector will return a 500 error response.
+
 This feature is currently not fully compatible with motion detection. If motion detection is enabled, some image queries may still be sent to the cloud API.
 
 This is an experimental feature and may be modified or removed in the future. `EDGE_ONLY` is disabled by default.
