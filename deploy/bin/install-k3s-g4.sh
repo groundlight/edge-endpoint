@@ -32,7 +32,7 @@ check_nvidia_drivers_and_container_runtime() {
     curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
     curl -s -L "https://nvidia.github.io/nvidia-docker/$DISTRIBUTION/nvidia-docker.list" | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
 
-    sudo apt update -y && sudo apt install nvidia-container-runtime
+    sudo apt update -y && sudo apt install -y nvidia-container-runtime
   else
     echo " NVIDIA container runtime is installed."
   fi
