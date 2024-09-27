@@ -33,6 +33,7 @@ def create_iqe(
         confidence_threshold=confidence_threshold,
         patience_time=patience_time,
         rois=None,
+        text=None,
     )
     return iq
 

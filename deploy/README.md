@@ -36,7 +36,7 @@ a Groundlight API token in the [Groundlight web app](https://app.groundlight.ai/
 export GROUNDLIGHT_API_TOKEN="api_xxxxxx"
 
 # Choose an inference flavor, either CPU or (default) GPU.
-# Note that appropriate setup for GPU must be done separately.
+# Note that appropriate setup for GPU may need to be done separately.
 export INFERENCE_FLAVOR="CPU"
 # export INFERENCE_FLAVOR = "GPU"
 ```
