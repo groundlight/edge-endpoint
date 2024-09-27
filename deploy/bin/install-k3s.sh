@@ -10,7 +10,7 @@ sudo apt update && sudo apt upgrade -y
 
 # Install k3s
 echo "Installing k3s..."
-curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.28.2+k3s1 K3S_KUBECONFIG_MODE="644" sh -
+curl -sfL https://get.k3s.io |  K3S_KUBECONFIG_MODE="644" sh -s - --disable=traefik
 
 check_k3s_is_running() {
     local TIMEOUT=30 # Maximum wait time of 30 seconds
@@ -38,3 +38,4 @@ fi
 # Set up kubeconfig for the current user
 mkdir -p ~/.kube
 cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+chmod 600 ~/.kube/config
