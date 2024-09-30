@@ -50,6 +50,7 @@ class DetectorConfig(BaseModel):
     detector_id: str = Field(..., description="Detector ID")
     local_inference_template: str = Field(..., description="Template for local edge inference.")
     motion_detection_template: str = Field(..., description="Template for motion detection.")
+    edge_only: bool = Field(False, description="Whether the detector should be in edge-only mode or not.")
 
 
 class RootEdgeConfig(BaseModel):
