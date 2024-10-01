@@ -1,5 +1,4 @@
 import logging
-import os
 from io import BytesIO
 from typing import Optional
 
@@ -16,7 +15,7 @@ from app.core.app_state import (
     get_detector_metadata,
     get_groundlight_sdk_instance,
 )
-from app.core.configs import DetectorConfig, RootEdgeConfig
+from app.core.configs import DetectorConfig
 from app.core.motion_detection import MotionDetectionManager
 from app.core.utils import create_iqe, prefixed_ksuid, safe_call_api
 
@@ -54,6 +53,7 @@ async def validate_query_params_for_edge(request: Request, invalid_edge_params: 
             status_code=400,
             detail=f"Invalid query parameters for submit_image_query to edge-endpoint: {invalid_provided_params}",
         )
+
 
 @router.post("", response_model=ImageQuery)
 async def post_image_query(
@@ -254,19 +254,21 @@ async def get_image_query(
         return image_query
     return safe_call_api(gl.get_image_query, id=id)
 
+
 def _get_detector_config_by_id(detector_configs: list[DetectorConfig], detector_id: str) -> DetectorConfig | None:
     """
     Finds the corresponding `DetectorConfig` for the given detector id from the list.
 
-    :param detector_configs: A list of `DetectorConfig`. 
+    :param detector_configs: A list of `DetectorConfig`.
     :param detector_id: The detector_id string to look for.
     :returns: The corresponding `DetectorConfig` if it exists, and None if there is no matching config.
     """
     for detector_config in detector_configs:
         if detector_id == detector_config.detector_id:
             return detector_config
-    
+
     return None
+
 
 def _improve_cached_image_query_confidence(
     gl: Groundlight,
