@@ -126,13 +126,12 @@ async def post_image_query(
             want_async=True,
         )
 
-    img_numpy = np.asarray(image)  # [H, W, C=3], dtype: uint8, RGB format
-
     motion_detection_manager = app_state.motion_detection_manager
     edge_inference_manager = app_state.edge_inference_manager
     require_human_review = human_review == "ALWAYS"
 
     if not require_human_review and motion_detection_manager.motion_detection_is_available(detector_id=detector_id):
+        img_numpy = np.asarray(image)  # [H, W, C=3], dtype: uint8, RGB format
         motion_detected = motion_detection_manager.run_motion_detection(detector_id=detector_id, new_img=img_numpy)
         # TODO motion detection logic will likely need to be altered to work with the EDGE_ONLY flag
         if not motion_detected:
@@ -163,7 +162,7 @@ async def post_image_query(
     image_query = None
     if not require_human_review and edge_inference_manager.inference_is_available(detector_id=detector_id):
         detector_metadata: Detector = get_detector_metadata(detector_id=detector_id, gl=gl)
-        results = edge_inference_manager.run_inference(detector_id=detector_id, img_numpy=img_numpy)
+        results = edge_inference_manager.run_inference(detector_id=detector_id, image=image)
         confidence = results["confidence"]
 
         if edge_only or _is_confident_enough(

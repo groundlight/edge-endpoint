@@ -1,3 +1,4 @@
+import io
 import logging
 import os
 import shutil
@@ -5,16 +6,14 @@ import socket
 import time
 from typing import Dict, Optional
 
-import numpy as np
 import requests
-import tritonclient.http as tritonclient
 import yaml
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from jinja2 import Template
+from PIL import Image
 
 from app.core.file_paths import MODEL_REPOSITORY_PATH
 from app.core.speedmon import SpeedMonitor
-from app.core.utils import prefixed_ksuid
 
 from .configs import LocalInferenceConfig
 
@@ -43,10 +42,8 @@ class EdgeInferenceManager:
         self.speedmon = SpeedMonitor()
         if config:
             self.inference_config = config
-            self.inference_clients = {
-                detector_id: tritonclient.InferenceServerClient(
-                    url=get_edge_inference_service_name(detector_id) + ":8000", verbose=self.verbose
-                )
+            self.inference_client_urls = {
+                detector_id: get_edge_inference_service_name(detector_id) + ":8000"
                 for detector_id in self.inference_config.keys()
                 if self.detector_configured_for_local_inference(detector_id)
             }
@@ -62,10 +59,7 @@ class EdgeInferenceManager:
         """
         if detector_id not in self.inference_config.keys():
             self.inference_config[detector_id] = LocalInferenceConfig(enabled=True, api_token=api_token)
-
-            self.inference_clients[detector_id] = tritonclient.InferenceServerClient(
-                url=get_edge_inference_service_name(detector_id) + ":8000", verbose=self.verbose
-            )
+            self.inference_client_urls[detector_id] = get_edge_inference_service_name(detector_id) + ":8000"
 
     def detector_configured_for_local_inference(self, detector_id: str) -> bool:
         """
@@ -80,7 +74,7 @@ class EdgeInferenceManager:
 
         return detector_id in self.inference_config.keys() and self.inference_config[detector_id].enabled
 
-    def inference_is_available(self, detector_id: str, model_version: str = "") -> bool:
+    def inference_is_available(self, detector_id: str) -> bool:
         """
         Queries the inference server to see if everything is ready to perform inference.
         Args:
@@ -90,17 +84,22 @@ class EdgeInferenceManager:
         """
 
         try:
-            inference_client = self.inference_clients[detector_id]
+            inference_client_url = self.inference_client_urls[detector_id]
         except KeyError:
             logger.debug(f"Failed to look up inference client for {detector_id}")
             return False
 
         try:
-            if not inference_client.is_server_live():
+            server_live_url = f"http://{inference_client_url}/health/live"
+            response = requests.get(server_live_url)
+            if response.status_code != status.HTTP_200_OK:
                 logger.debug("Edge inference server is not live")
                 return False
-            if not inference_client.is_model_ready(detector_id, model_version=model_version):
-                logger.debug(f"Edge inference model is not ready: {detector_id}/{model_version}")
+
+            model_ready_url = f"http://{inference_client_url}/health/ready"
+            response = requests.get(model_ready_url)
+            if response.status_code != status.HTTP_200_OK:
+                logger.debug(f"Edge inference model is not ready: {detector_id}")
                 return False
         except (ConnectionRefusedError, socket.gaierror) as ex:
             logger.warning(f"Edge inference server is not available: {ex}")
@@ -108,7 +107,7 @@ class EdgeInferenceManager:
 
         return True
 
-    def run_inference(self, detector_id: str, img_numpy: np.ndarray) -> dict:
+    def run_inference(self, detector_id: str, image: Image.Image) -> dict:
         """
         Submit an image to the inference server, route to a specific model, and return the results.
         Args:
@@ -121,29 +120,51 @@ class EdgeInferenceManager:
                 - "probability": float
                 - "label": str
         """
-        imginput = tritonclient.InferInput(self.INPUT_IMAGE_NAME, img_numpy.shape, datatype="UINT8")
-        imginput.set_data_from_numpy(img_numpy)
-        outputs = [tritonclient.InferRequestedOutput(f) for f in self.MODEL_OUTPUTS]
-
-        request_id = prefixed_ksuid(prefix="einf_")
-        inference_client = self.inference_clients[detector_id]
-
-        logger.info(f"Submitting image to edge inference service. {request_id=} for {detector_id=}")
+        logger.info(f"Submitting image to edge inference service. {detector_id=}")
         start_time = time.monotonic()
-        response = inference_client.infer(
-            model_name=detector_id,
-            inputs=[imginput],
-            outputs=outputs,
-            request_id=request_id,
-        )
+
+        # Convert the PIL image to a WebP byte stream
+        byte_arr = io.BytesIO()
+        image.save(byte_arr, format="WEBP")
+        byte_arr.seek(0)
+
+        inference_client_url = self.inference_client_urls[detector_id]
+        inference_url = f"http://{inference_client_url}/infer"
+        files = {"file": ("image.webp", byte_arr, "image/webp")}
+        response = requests.post(inference_url, files=files)
+
         end_time = time.monotonic()
 
-        output_dict = {k: response.as_numpy(k)[0] for k in self.MODEL_OUTPUTS}
+        if response.status_code != status.HTTP_200_OK:
+            logger.error(f"Inference server returned an error: {response.status_code} - {response.text}")
+            raise RuntimeError(f"Inference server error: {response.status_code}")
+
+        if "predictions" not in response.json():
+            logger.error(f"Invalid inference response: {response.json()}")
+            raise RuntimeError("Invalid inference response")
+
+        # TODO: Clean up and make response parsing more robust.
+        # Ideally we would leverage an autogenerated openapi client to handle this.
+        #
+        # Example response:
+        # {
+        #     "multi_predictions": None,  # Multiclass / Counting results
+        #     "predictions": {"confidences": [0.54], "labels": [0], "probabilities": [0.45], "scores": [-2.94]},  # Binary results
+        #     "secondary_predictions": None,  # Text recognition and Obj detection results
+        # }
+        output_dict = response.json()["predictions"]
+        output_dict = {
+            "score": output_dict["scores"][0],
+            "confidence": output_dict["confidences"][0],
+            "probability": output_dict["probabilities"][0],
+            "label": output_dict["labels"][0],
+        }
         output_dict["label"] = "NO" if output_dict["label"] else "YES"  # map false / 0 to "YES" and true / 1 to "NO"
 
         elapsed_ms = (end_time - start_time) * 1000
         self.speedmon.update(detector_id, elapsed_ms)
-        logger.debug(f"Inference server response for request {request_id} {detector_id=}: {output_dict}.")
+        logger.debug(f"Inference server response for request {detector_id=}: {output_dict}.")
+
         fps = self.speedmon.average_fps(detector_id)
         logger.info(f"Recent-average FPS for {detector_id=}: {fps:.2f}")
         return output_dict
@@ -199,13 +220,11 @@ def fetch_model_urls(detector_id: str, api_token: Optional[str] = None) -> dict[
     logger.debug(f"Fetching model URLs for {detector_id}")
 
     url = f"https://api.groundlight.ai/edge-api/v1/fetch-model-urls/{detector_id}/"
-    headers = {
-        "x-api-token": api_token,
-    }
+    headers = {"x-api-token": api_token}
     response = requests.get(url, headers=headers, timeout=10)
     logger.debug(f"fetch-model-urls response = {response}")
 
-    if response.status_code == 200:
+    if response.status_code == status.HTTP_200_OK:
         return response.json()
     else:
         raise HTTPException(status_code=response.status_code, detail=f"Failed to fetch model URLs for {detector_id=}.")
@@ -213,7 +232,7 @@ def fetch_model_urls(detector_id: str, api_token: Optional[str] = None) -> dict[
 
 def get_object_using_presigned_url(presigned_url: str) -> bytes:
     response = requests.get(presigned_url, timeout=10)
-    if response.status_code == 200:
+    if response.status_code == status.HTTP_200_OK:
         return response.content
     else:
         raise HTTPException(status_code=response.status_code, detail=f"Failed to retrieve data from {presigned_url}.")
@@ -232,15 +251,9 @@ def save_model_to_repository(
     ```
     <model-repository-path>/
         <model-name>/
-            [config.pbtxt]
-            [<output-labels-file> ...]
             <version>/
-                <model-definition-file (e.g. model.py, model.buf, model_id.txt, etc)>
+                <model-definition-files (e.g. model.buf, pipeline_config.yaml, etc)>
     ```
-    See the following resources for more information:
-    - https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/model_repository.html
-    - https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/model_repository.html#python-models
-    - https://github.com/triton-inference-server/python_backend?tab=readme-ov-file#usage
     """
     model_dir = os.path.join(repository_root, detector_id)
     os.makedirs(model_dir, exist_ok=True)
@@ -251,13 +264,6 @@ def save_model_to_repository(
     model_version_dir = os.path.join(model_dir, str(new_model_version))
     os.makedirs(model_version_dir, exist_ok=True)
 
-    # Add model-version specific files (model.py and model.buf)
-    # TODO: remove the model_template.py creation step - its triton specific
-    create_file_from_template(
-        template_values={"pipeline_config": pipeline_config},
-        destination=os.path.join(model_version_dir, "model.py"),
-        template="app/resources/model_template.py",
-    )
     with open(os.path.join(model_version_dir, "model.buf"), "wb") as f:
         f.write(model_buffer)
     with open(os.path.join(model_version_dir, "pipeline_config.yaml"), "w") as f:
@@ -266,23 +272,12 @@ def save_model_to_repository(
         with open(os.path.join(model_version_dir, "model_id.txt"), "w") as f:
             f.write(binary_ksuid)
 
-    # Add/Overwrite model configuration files (config.pbtxt and binary_labels.txt)
-    # Generally these files should be static. Changing them can make earlier
-    # model versions incompatible with newer ones.
-    # TODO: remove the config_tempate.pbtxt creation step - its triton specific
-    create_file_from_template(
-        template_values={"model_name": detector_id},
-        destination=os.path.join(model_dir, "config.pbtxt"),
-        template="app/resources/config_template.pbtxt",
-    )
-    shutil.copy2(src="app/resources/binary_labels.txt", dst=os.path.join(model_dir, "binary_labels.txt"))
-
     logger.info(f"Wrote new model version {new_model_version} for {detector_id} with {binary_ksuid=}")
     return old_model_version, new_model_version
 
 
 def get_current_model_version(model_dir: str) -> Optional[int]:
-    """Triton inference server model_repositories contain model versions in subdirectories. These subdirectories
+    """Edge inference server model_repositories contain model versions in subdirectories. These subdirectories
     are named with integers. This function returns the highest integer in the model repository directory.
     """
     logger.debug(f"Checking for current model version in {model_dir}")
@@ -291,7 +286,9 @@ def get_current_model_version(model_dir: str) -> Optional[int]:
 
 
 def get_all_model_versions(model_dir: str) -> list:
-    """Triton inference server model_repositories contain model versions in subdirectories. Return all such version numbers."""
+    """Edge inference server model_repositories contain model versions in subdirectories.
+    Return all such version numbers.
+    """
     if not os.path.exists(model_dir):
         return []
     model_versions = [int(d) for d in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, d))]

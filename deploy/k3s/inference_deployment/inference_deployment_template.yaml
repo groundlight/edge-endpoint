@@ -39,7 +39,7 @@ spec:
           maxUnavailable: 0  # Aim for no downtime during rollout
       containers:
       - name: inference-server
-        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver-test:tyler-flask-serving-4184162a0-dirty-02c48d8c12dd548
+        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:latest
         imagePullPolicy: IfNotPresent
         env:
         - name: MODEL_REPOSITORY
