@@ -20,6 +20,7 @@ python = "^3.9"
 pyyaml = "^6.0.2"
 SQLAlchemy = "2.0.35"
 svix-ksuid = "^0.6.2"
+tritonclient = {extras = ["all"], version = "2.36.0"}
 uvicorn = {version = "^0.31.0", extras = ["standard"]}
 
 [tool.poetry.group.dev.dependencies]
@@ -67,7 +68,6 @@ trailing_comma_inline_array = true
 
 [tool.pytest.ini_options]
 testpaths = ["test"]
-addopts = "--strict-markers"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
