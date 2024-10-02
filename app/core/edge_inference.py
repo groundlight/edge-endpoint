@@ -8,6 +8,7 @@ from typing import Dict, Optional
 import numpy as np
 import requests
 import tritonclient.http as tritonclient
+import yaml
 from fastapi import HTTPException
 from jinja2 import Template
 
@@ -251,6 +252,7 @@ def save_model_to_repository(
     os.makedirs(model_version_dir, exist_ok=True)
 
     # Add model-version specific files (model.py and model.buf)
+    # TODO: remove the model_template.py creation step - its triton specific
     create_file_from_template(
         template_values={"pipeline_config": pipeline_config},
         destination=os.path.join(model_version_dir, "model.py"),
@@ -258,6 +260,8 @@ def save_model_to_repository(
     )
     with open(os.path.join(model_version_dir, "model.buf"), "wb") as f:
         f.write(model_buffer)
+    with open(os.path.join(model_version_dir, "pipeline_config.yaml"), "w") as f:
+        yaml.dump(yaml.safe_load(pipeline_config), f)
     if binary_ksuid:
         with open(os.path.join(model_version_dir, "model_id.txt"), "w") as f:
             f.write(binary_ksuid)
@@ -265,6 +269,7 @@ def save_model_to_repository(
     # Add/Overwrite model configuration files (config.pbtxt and binary_labels.txt)
     # Generally these files should be static. Changing them can make earlier
     # model versions incompatible with newer ones.
+    # TODO: remove the config_tempate.pbtxt creation step - its triton specific
     create_file_from_template(
         template_values={"model_name": detector_id},
         destination=os.path.join(model_dir, "config.pbtxt"),

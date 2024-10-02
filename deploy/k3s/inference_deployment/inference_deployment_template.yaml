@@ -11,10 +11,6 @@ spec:
       port: 8000
       name: http
       targetPort: 8000
-    - protocol: TCP
-      port: 8002
-      name: metrics  # From the edge machine, run curl localhost:<nodeport>/metrics to see metrics summary
-      targetPort: 8002
   type: NodePort
 ---
 apiVersion: apps/v1
@@ -43,40 +39,35 @@ spec:
           maxUnavailable: 0  # Aim for no downtime during rollout
       containers:
       - name: inference-server
-        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver-test:latest
+        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-tritonserver-test:tyler-flask-serving-4184162a0-dirty-02c48d8c12dd548
         imagePullPolicy: IfNotPresent
-        # Tritonserver will look for models in /mnt/models and initialize them on startup.
-        # When running multiple instances of Triton server on the same machine that use Python models,
-        # there would be a conflict in the shared memory region name, which can lead to SEGFAULTs.
-        # To avoid this, we can set the shm-region-prefix-name to a unique value for each Triton server instance.
-        # TODO: We only want to shut down an old instance when this tritonsever gives the "READY" signal for all models
-        # shm-default-byte-size=16777216
+        env:
+        - name: MODEL_REPOSITORY
+          value: "/opt/groundlight/edge/serving/model-repo"
+        - name: MODEL_NAME
+          value: placeholder-model-name
         command:
           [
-            "tritonserver",
-            "--model-repository=/opt/groundlight/edge/serving/model-repo",
-            "--load-model=placeholder-model-name",
-            "--allow-gpu-metrics=true",
-            "--allow-cpu-metrics=true",
-            "--model-control-mode=explicit",
-            "--metrics-config=summary_latencies=true",
-            "--backend-config=python,shm-region-prefix-name=placeholder-inference-deployment-name",
-            "--log-verbose=1",
+            "poetry", "run", "python3", "-m", "uvicorn", "serving.edge_inference_server.fastapi_server:app",
+            "--host", "0.0.0.0",
+            "--port", "8000"
           ]
         volumeMounts:
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/serving/model-repo
-
-        - name: dshm
-          mountPath: /dev/shm
         ports:
         - containerPort: 8000
-          name: http-triton
-        - containerPort: 8002
-          name: metrics-triton
+          name: http-fastapi
+        startupProbe:
+          httpGet:
+            path: /health/live  # Checks if the server is up
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 30  # Wait for up to 5 min
         readinessProbe:
           httpGet:
-            path: /v2/health/ready  # Triton's readiness endpoint
+            path: /health/ready  # Checks if the server is ready to serve requests
             port: 8000
           initialDelaySeconds: 10
           periodSeconds: 10
@@ -87,8 +78,3 @@ spec:
       - name: edge-endpoint-persistent-volume
         persistentVolumeClaim:
           claimName: edge-endpoint-pvc
-      # https://stackoverflow.com/questions/43373463/how-to-increase-shm-size-of-a-kubernetes-container-shm-size-equivalent-of-doc
-      - name: dshm
-        emptyDir:
-          medium: Memory
-          sizeLimit: 128Mi

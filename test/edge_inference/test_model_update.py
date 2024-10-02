@@ -25,9 +25,16 @@ def test_save_model_to_repository():
         assert os.path.exists(os.path.join(temp_dir, detector_id, "1"))
         assert os.path.exists(os.path.join(temp_dir, detector_id, "1", "model.buf"))
         assert os.path.exists(os.path.join(temp_dir, detector_id, "1", "model.py"))
+        assert os.path.exists(os.path.join(temp_dir, detector_id, "1", "pipeline_config.yaml"))
         id_file = os.path.join(temp_dir, detector_id, "1", "model_id.txt")
         assert os.path.exists(id_file)
 
+        # Check contents of pipeline_config.yaml
+        pipeline_config_file = os.path.join(temp_dir, detector_id, "1", "pipeline_config.yaml")
+        with open(pipeline_config_file, "r") as f:
+            assert f.read() == "test_pipeline_config"
+
+        # Check that the id file contains the correct ksuid
         with open(id_file, "r") as f:
             assert ksuid_1 == f.read()
 
@@ -35,7 +42,7 @@ def test_save_model_to_repository():
         save_model_to_repository(
             detector_id=detector_id,
             model_buffer=b"test_model2",
-            pipeline_config="test_pipeline_config",
+            pipeline_config="test_pipeline_config_2",
             binary_ksuid=ksuid_2,
             repository_root=temp_dir,
         )
@@ -43,8 +50,14 @@ def test_save_model_to_repository():
         assert os.path.exists(os.path.join(temp_dir, detector_id, "2"))
         assert os.path.exists(os.path.join(temp_dir, detector_id, "2", "model.buf"))
         assert os.path.exists(os.path.join(temp_dir, detector_id, "2", "model.py"))
+        assert os.path.exists(os.path.join(temp_dir, detector_id, "2", "pipeline_config.yaml"))
         id_file = os.path.join(temp_dir, detector_id, "2", "model_id.txt")
         assert os.path.exists(id_file)
+
+        # Check contents of pipeline_config.yaml
+        pipeline_config_file = os.path.join(temp_dir, detector_id, "1", "pipeline_config.yaml")
+        with open(pipeline_config_file, "r") as f:
+            assert f.read() == "test_pipeline_config_2"
 
         with open(id_file, "r") as f:
             assert ksuid_2 == f.read()
@@ -53,6 +66,7 @@ def test_save_model_to_repository():
         delete_model_version(detector_id, model_version=1, repository_root=temp_dir)
         assert not os.path.exists(os.path.join(temp_dir, detector_id, "1", "model.buf"))
         assert not os.path.exists(os.path.join(temp_dir, detector_id, "1", "model.py"))
+        assert not os.path.exists(os.path.join(temp_dir, detector_id, "1", "pipeline_config.yaml"))
         assert not os.path.exists(os.path.join(temp_dir, detector_id, "1", "model_id.txt"))
         assert not os.path.exists(os.path.join(temp_dir, detector_id, "1"))
 
