@@ -72,7 +72,7 @@ class RootEdgeConfig(BaseModel):
     ):
         """
         Validate the templates referenced by the detectors.
-        :param detector: The detector to validate.
+        :param detectors: The detectors to validate.
         :param values: The values passed to the validator. This is a dictionary of the form:
             {
                 'motion_detection_templates': {
@@ -91,6 +91,8 @@ class RootEdgeConfig(BaseModel):
                 }
             }
         """
+        logger.info(f"detectors has type {type(detectors)}")
+        logger.info(f"first value in detectors has type {type(list(detectors.values())[0])}")
         for detector in detectors.values():
             if (
                 "motion_detection_templates" in values
