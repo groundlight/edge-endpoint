@@ -30,20 +30,34 @@ def load_edge_config() -> RootEdgeConfig:
     """
     yaml_config = os.environ.get("EDGE_CONFIG", "").strip()
     if yaml_config:
-        config = yaml.safe_load(yaml_config)
-        config["detectors"] = {det["detector_id"]: det for det in config.get("detectors", [])}
-        return RootEdgeConfig(**config)
+        return _load_config_from_yaml(yaml_config)
 
     logger.warning("EDGE_CONFIG environment variable not set. Checking default locations.")
 
     if os.path.exists(DEFAULT_EDGE_CONFIG_PATH):
         logger.info(f"Loading edge config from {DEFAULT_EDGE_CONFIG_PATH}")
         with open(DEFAULT_EDGE_CONFIG_PATH, "r") as f:
-            config = yaml.safe_load(f)
-            config["detectors"] = {det["detector_id"]: det for det in config.get("detectors", [])}
-        return RootEdgeConfig(**config)
+            return _load_config_from_yaml(f)
 
     raise FileNotFoundError(f"Could not find edge config file in default location: {DEFAULT_EDGE_CONFIG_PATH}")
+
+
+def _load_config_from_yaml(yaml_config) -> RootEdgeConfig:
+    """
+    Creates a `RootEdgeConfig` from the config yaml. Raises an error if there are duplicate detector ids.
+    """
+    config = yaml.safe_load(yaml_config)
+
+    detectors = config.get("detectors", [])
+    detector_ids = [det["detector_id"] for det in detectors]
+    
+    # Check for duplicate detector IDs
+    if len(detector_ids) != len(set(detector_ids)):
+        raise ValueError("Duplicate detector IDs found in the configuration. Each detector should only have one entry.")
+    
+    config["detectors"] = {det["detector_id"]: det for det in detectors}
+    
+    return RootEdgeConfig(**config)
 
 
 def get_inference_and_motion_detection_configs(
