@@ -93,6 +93,7 @@ class RootEdgeConfig(BaseModel):
         """
         logger.info(f"detectors has type {type(detectors)}")
         logger.info(f"first value in detectors has type {type(list(detectors.values())[0])}")
+        logger.info(f"first value in detectors is: {list(detectors.values())[0]}")
         for detector in detectors.values():
             if (
                 "motion_detection_templates" in values
