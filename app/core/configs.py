@@ -62,11 +62,11 @@ class RootEdgeConfig(BaseModel):
 
     motion_detection_templates: Dict[str, MotionDetectionConfig]
     local_inference_templates: Dict[str, LocalInferenceConfig]
-    detectors: List[DetectorConfig]
+    detectors: Dict[str, DetectorConfig]
 
-    @validator("detectors", each_item=True)
+    @validator("detectors", pre=True, each_item=False)
     def validate_templates(
-        cls, detector: DetectorConfig, values: Dict[str, Dict[str, Union[MotionDetectionConfig, LocalInferenceConfig]]]
+        cls, detectors: Dict[str, DetectorConfig], values: Dict[str, Dict[str, Union[MotionDetectionConfig, LocalInferenceConfig]]]
     ):
         """
         Validate the templates referenced by the detectors.
@@ -89,15 +89,15 @@ class RootEdgeConfig(BaseModel):
                 }
             }
         """
-
-        if (
-            "motion_detection_templates" in values
-            and detector.motion_detection_template not in values["motion_detection_templates"]
-        ):
-            raise ValueError(f"Motion Detection Template {detector.motion_detection_template} not defined.")
-        if (
-            "local_inference_templates" in values
-            and detector.local_inference_template not in values["local_inference_templates"]
-        ):
-            raise ValueError(f"Local Inference Template {detector.local_inference_template} not defined.")
-        return detector
+        for detector in detectors.values():
+            if (
+                "motion_detection_templates" in values
+                and detector.motion_detection_template not in values["motion_detection_templates"]
+            ):
+                raise ValueError(f"Motion Detection Template {detector.motion_detection_template} not defined.")
+            if (
+                "local_inference_templates" in values
+                and detector.local_inference_template not in values["local_inference_templates"]
+            ):
+                raise ValueError(f"Local Inference Template {detector.local_inference_template} not defined.")
+        return detectors

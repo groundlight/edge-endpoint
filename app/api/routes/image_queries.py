@@ -109,7 +109,7 @@ async def post_image_query(
         },
     )
 
-    detector_config = _get_detector_config_by_id(app_state.edge_config.detectors, detector_id)
+    detector_config = app_state.edge_config.detectors.get(detector_id, None)
     edge_only = detector_config.edge_only if detector_config is not None else False
 
     # TODO: instead of just forwarding want_async calls to the cloud, facilitate partial
@@ -253,21 +253,6 @@ async def get_image_query(
             raise HTTPException(status_code=404, detail=f"Image query with ID {id} not found")
         return image_query
     return safe_call_api(gl.get_image_query, id=id)
-
-
-def _get_detector_config_by_id(detector_configs: list[DetectorConfig], detector_id: str) -> DetectorConfig | None:
-    """
-    Finds the corresponding `DetectorConfig` for the given detector id from the list.
-
-    :param detector_configs: A list of `DetectorConfig`.
-    :param detector_id: The detector_id string to look for.
-    :returns: The corresponding `DetectorConfig` if it exists, and None if there is no matching config.
-    """
-    for detector_config in detector_configs:
-        if detector_id == detector_config.detector_id:
-            return detector_config
-
-    return None
 
 
 def _improve_cached_image_query_confidence(
