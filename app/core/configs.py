@@ -64,7 +64,7 @@ class RootEdgeConfig(BaseModel):
     local_inference_templates: Dict[str, LocalInferenceConfig]
     detectors: Dict[str, DetectorConfig]
 
-    @validator("detectors", pre=True, each_item=False)
+    @validator("detectors", each_item=False)
     def validate_templates(
         cls,
         detectors: Dict[str, DetectorConfig],
