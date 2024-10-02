@@ -50,13 +50,13 @@ def _load_config_from_yaml(yaml_config) -> RootEdgeConfig:
 
     detectors = config.get("detectors", [])
     detector_ids = [det["detector_id"] for det in detectors]
-    
+
     # Check for duplicate detector IDs
     if len(detector_ids) != len(set(detector_ids)):
         raise ValueError("Duplicate detector IDs found in the configuration. Each detector should only have one entry.")
-    
+
     config["detectors"] = {det["detector_id"]: det for det in detectors}
-    
+
     return RootEdgeConfig(**config)
 
 
