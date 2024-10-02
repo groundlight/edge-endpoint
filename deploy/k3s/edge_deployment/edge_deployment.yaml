@@ -75,10 +75,6 @@ spec:
         # TODO: Once we have kubernetes-based tests, we can remove this feature flag.
         - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
           value: "1"
-        # When EDGE_ONLY is set to 1, requests to the edge endpoint will only return the edge model's answer, regardless
-        # of the confidence.
-        - name: EDGE_ONLY
-          value: "0" # disabled by default
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
