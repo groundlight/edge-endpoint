@@ -15,7 +15,6 @@ from app.core.app_state import (
     get_detector_metadata,
     get_groundlight_sdk_instance,
 )
-from app.core.configs import DetectorConfig
 from app.core.motion_detection import MotionDetectionManager
 from app.core.utils import create_iqe, prefixed_ksuid, safe_call_api
 

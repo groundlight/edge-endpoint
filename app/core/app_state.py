@@ -63,7 +63,8 @@ def get_inference_and_motion_detection_configs(
             for detector_id, detector_config in detectors.items()
         }
         inference_config: Dict[str, LocalInferenceConfig] = {
-            detector_id: edge_inference_templates[detector_config.local_inference_template] for detector_id, detector_config in detectors.items()
+            detector_id: edge_inference_templates[detector_config.local_inference_template]
+            for detector_id, detector_config in detectors.items()
         }
 
     return inference_config, motion_detection_config

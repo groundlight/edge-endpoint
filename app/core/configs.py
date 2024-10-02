@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, List, Optional, Union
+from typing import Dict, Optional, Union
 
 from pydantic import BaseModel, Field, validator
 
@@ -66,7 +66,9 @@ class RootEdgeConfig(BaseModel):
 
     @validator("detectors", pre=True, each_item=False)
     def validate_templates(
-        cls, detectors: Dict[str, DetectorConfig], values: Dict[str, Dict[str, Union[MotionDetectionConfig, LocalInferenceConfig]]]
+        cls,
+        detectors: Dict[str, DetectorConfig],
+        values: Dict[str, Dict[str, Union[MotionDetectionConfig, LocalInferenceConfig]]],
     ):
         """
         Validate the templates referenced by the detectors.
