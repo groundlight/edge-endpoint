@@ -28,7 +28,8 @@ set -ex
 cd "$(dirname "$0")"
 
 TAG=$(./git-tag-name.sh)
-EDGE_ENDPOINT_IMAGE="edge-endpoint-test"  # temporary private repo name in GL_Public ECR
+# EDGE_ENDPOINT_IMAGE="edge-endpoint-test"  # v0.1.0 (triton inference server) compatible images
+EDGE_ENDPOINT_IMAGE="edge-endpoint"  # v0.2.0 (fastapi inference server) compatible images
 ECR_URL="767397850842.dkr.ecr.us-west-2.amazonaws.com"
 
 # Authenticate docker to ECR
