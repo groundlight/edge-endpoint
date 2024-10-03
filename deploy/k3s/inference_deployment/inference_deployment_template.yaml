@@ -40,7 +40,7 @@ spec:
       containers:
       - name: inference-server
         image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         env:
         - name: MODEL_REPOSITORY
           value: "/opt/groundlight/edge/serving/model-repo"

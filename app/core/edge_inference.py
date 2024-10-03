@@ -19,16 +19,14 @@ from .configs import LocalInferenceConfig
 logger = logging.getLogger(__name__)
 
 
-def is_edge_inference_live(inference_client_url: str) -> bool:
-    server_live_url = f"http://{inference_client_url}/health/live"
-    response = requests.get(server_live_url)
-    return response.status_code == status.HTTP_200_OK
-
-
 def is_edge_inference_ready(inference_client_url: str) -> bool:
     model_ready_url = f"http://{inference_client_url}/health/ready"
-    response = requests.get(model_ready_url)
-    return response.status_code == status.HTTP_200_OK
+    try:
+        response = requests.get(model_ready_url)
+        return response.status_code == status.HTTP_200_OK
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Failed to connect to {model_ready_url}: {e}")
+        return False
 
 
 def submit_image_for_inference(inference_client_url: str, image: Image.Image) -> dict:
@@ -39,12 +37,15 @@ def submit_image_for_inference(inference_client_url: str, image: Image.Image) ->
     image.save(byte_arr, format="WEBP")
     byte_arr.seek(0)
     files = {"file": ("image.webp", byte_arr, "image/webp")}
-    response = requests.post(inference_url, files=files)
-
-    if response.status_code != status.HTTP_200_OK:
-        logger.error(f"Inference server returned an error: {response.status_code} - {response.text}")
-        raise RuntimeError(f"Inference server error: {response.status_code}")
-    return response.json()
+    try:
+        response = requests.post(inference_url, files=files)
+        if response.status_code != status.HTTP_200_OK:
+            logger.error(f"Inference server returned an error: {response.status_code} - {response.text}")
+            raise RuntimeError(f"Inference server error: {response.status_code} - {response.text}")
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to connect to {inference_url}: {e}")
+        raise RuntimeError("Failed to submit image for inference") from e
 
 
 def parse_inference_response(response: dict) -> dict:
@@ -112,6 +113,7 @@ class EdgeInferenceManager:
         if detector_id not in self.inference_config.keys():
             self.inference_config[detector_id] = LocalInferenceConfig(enabled=True, api_token=api_token)
             self.inference_client_urls[detector_id] = get_edge_inference_service_name(detector_id) + ":8000"
+            logger.info(f"Set up edge inference for {detector_id}")
 
     def detector_configured_for_local_inference(self, detector_id: str) -> bool:
         """
@@ -140,9 +142,6 @@ class EdgeInferenceManager:
             logger.debug(f"Failed to look up inference client for {detector_id}")
             return False
 
-        if not is_edge_inference_live(inference_client_url):
-            logger.debug("Edge inference server is not live")
-            return False
         if not is_edge_inference_ready(inference_client_url):
             logger.debug("Edge inference server is not ready")
             return False
@@ -172,7 +171,7 @@ class EdgeInferenceManager:
         self.speedmon.update(detector_id, elapsed_ms)
         fps = self.speedmon.average_fps(detector_id)
 
-        logger.warning(f"Inference server response for request {detector_id=}: {output_dict}.")
+        logger.debug(f"Inference server response for request {detector_id=}: {output_dict}.")
         logger.info(f"Recent-average FPS for {detector_id=}: {fps:.2f}")
         return output_dict
 

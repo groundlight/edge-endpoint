@@ -117,28 +117,39 @@ def update_models(
 
     while True:
         start = time.time()
+        logging.info("Starting model update check for existing inference deployments.")
         for detector_id in edge_inference_manager.inference_config.keys():
             try:
+                logging.debug(f"Checking new models and inference deployments for detector_id: {detector_id}")
                 _check_new_models_and_inference_deployments(
                     detector_id=detector_id,
                     edge_inference_manager=edge_inference_manager,
                     deployment_manager=deployment_manager,
                     db_manager=db_manager,
                 )
-            except Exception:
-                logging.error(f"Failed to update model for {detector_id}", exc_info=True)
+                logging.info(f"Successfully updated model for detector_id: {detector_id}")
+            except Exception as e:
+                logging.error(f"Failed to update model for detector_id: {detector_id}. Error: {e}", exc_info=True)
 
         elapsed_s = time.time() - start
+        logging.info(f"Model update check completed in {elapsed_s:.2f} seconds.")
         if elapsed_s < refresh_rate:
-            time.sleep(refresh_rate - elapsed_s)
+            sleep_duration = refresh_rate - elapsed_s
+            logging.info(f"Sleeping for {sleep_duration:.2f} seconds before next update cycle.")
+            time.sleep(sleep_duration)
 
         # Fetch detector IDs that need to be deployed from the database and add them to the config
+        logging.info("Fetching undeployed detector IDs from the database.")
         undeployed_detector_ids: List[Dict[str, str]] = db_manager.query_inference_deployments(deployment_created=False)
         if undeployed_detector_ids:
+            logging.info(f"Found {len(undeployed_detector_ids)} undeployed detectors. Updating inference config.")
             for detector_record in undeployed_detector_ids:
+                logging.debug(f"Updating inference config for detector_id: {detector_record.detector_id}")
                 edge_inference_manager.update_inference_config(
                     detector_id=detector_record.detector_id, api_token=detector_record.api_token
                 )
+        else:
+            logging.info("No undeployed detectors found.")
 
 
 if __name__ == "__main__":

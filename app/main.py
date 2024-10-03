@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Dict, List
+from typing import List
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
@@ -9,6 +9,7 @@ from app.api.api import api_router, ping_router
 from app.api.naming import API_BASE_PATH
 
 from .core.app_state import AppState
+from .core.database import DatabaseManager
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 DEPLOY_DETECTOR_LEVEL_INFERENCE = bool(int(os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", 0)))
@@ -37,7 +38,9 @@ def update_inference_config(app_state: AppState) -> None:
     """
 
     db_manager = app_state.db_manager
-    detectors: List[Dict[str, str]] = db_manager.query_inference_deployments(deployment_created=True)
+    detectors: List[DatabaseManager.InferenceDeployment] = db_manager.query_inference_deployments(
+        deployment_created=True
+    )
     if detectors:
         for detector_record in detectors:
             detector_id, api_token = detector_record.detector_id, detector_record.api_token
