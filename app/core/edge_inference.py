@@ -38,7 +38,7 @@ class EdgeInferenceManager:
                 a specific detector and the model name and version to use for inference.
         """
         self.verbose = verbose
-        self.inference_config, self.inference_clients = {}, {}
+        self.inference_config, self.inference_client_urls = {}, {}
         self.speedmon = SpeedMonitor()
         if config:
             self.inference_config = config
