@@ -174,7 +174,7 @@ async def post_image_query(
         ):
             if edge_only:
                 logger.info(
-                    f"Edge-only mode is enabled on this detector. The edge model's answer will be returned "
+                    "Edge-only mode is enabled on this detector. The edge model's answer will be returned "
                     "regardless of confidence. {detector_id=}"
                 )
             else:
