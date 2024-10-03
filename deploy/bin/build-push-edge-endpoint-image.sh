@@ -37,8 +37,7 @@ aws ecr get-login-password --region us-west-2 | docker login \
                   --username AWS \
                   --password-stdin  ${ECR_URL}
 
-# Check if the first argument is "dev". If it is, only build the image for the current
-# platform
+# Check if the first argument is "dev". If it is, only build the image for the current platform
 if [ "$1" == "dev" ]; then
   docker build --tag ${EDGE_ENDPOINT_IMAGE} ../..
   docker tag ${EDGE_ENDPOINT_IMAGE}:latest ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG}

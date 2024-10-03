@@ -19,7 +19,7 @@
 # - EFS_VOLUME_ID: ID of the EFS volume to use if we are using the EFS version.
 # - DEPLOYMENT_NAMESPACE: Namespace to deploy to. Defaults to the current namespace.
 # - RUN_EDGE_ENDPOINT: Indicates whether or not to launch the edge endpoint pods.
-#           If set, launch edge endopint pods. If not set, do not launch pods.
+#           If set, launch edge-endpoint pods. If not set, do not launch pods.
 
 set -ex
 
