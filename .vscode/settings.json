@@ -1,0 +1,26 @@
+{
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit",
+    "source.fixAll.ruff": "explicit"
+  },
+  "editor.rulers": [
+    100,
+    120
+  ],
+  "[python]": {
+    "editor.tabSize": 4,
+    "editor.defaultFormatter": "charliermarsh.ruff"
+  },
+  "ruff.importStrategy": "useBundled",
+  "ruff.fixAll": true,  // enable auto-fixing: https://docs.astral.sh/ruff/linter/#fixes
+  "ruff.organizeImports": true,
+  "ruff.lint.args": [
+    "--config",
+    "pyproject.toml"
+  ],
+  "ruff.format.args": [
+    "--config",
+    "pyproject.toml"
+  ]
+}

@@ -30,18 +30,34 @@ def load_edge_config() -> RootEdgeConfig:
     """
     yaml_config = os.environ.get("EDGE_CONFIG", "").strip()
     if yaml_config:
-        config = yaml.safe_load(yaml_config)
-        return RootEdgeConfig(**config)
+        return _load_config_from_yaml(yaml_config)
 
     logger.warning("EDGE_CONFIG environment variable not set. Checking default locations.")
 
     if os.path.exists(DEFAULT_EDGE_CONFIG_PATH):
         logger.info(f"Loading edge config from {DEFAULT_EDGE_CONFIG_PATH}")
         with open(DEFAULT_EDGE_CONFIG_PATH, "r") as f:
-            config = yaml.safe_load(f)
-        return RootEdgeConfig(**config)
+            return _load_config_from_yaml(f)
 
     raise FileNotFoundError(f"Could not find edge config file in default location: {DEFAULT_EDGE_CONFIG_PATH}")
+
+
+def _load_config_from_yaml(yaml_config) -> RootEdgeConfig:
+    """
+    Creates a `RootEdgeConfig` from the config yaml. Raises an error if there are duplicate detector ids.
+    """
+    config = yaml.safe_load(yaml_config)
+
+    detectors = config.get("detectors", [])
+    detector_ids = [det["detector_id"] for det in detectors]
+
+    # Check for duplicate detector IDs
+    if len(detector_ids) != len(set(detector_ids)):
+        raise ValueError("Duplicate detector IDs found in the configuration. Each detector should only have one entry.")
+
+    config["detectors"] = {det["detector_id"]: det for det in detectors}
+
+    return RootEdgeConfig(**config)
 
 
 def get_inference_and_motion_detection_configs(
@@ -51,17 +67,18 @@ def get_inference_and_motion_detection_configs(
     edge_inference_templates: Dict[str, LocalInferenceConfig] = root_edge_config.local_inference_templates
 
     # Filter out detectors whose ID's are empty strings
-    detectors = list(filter(lambda detector: detector.detector_id != "", root_edge_config.detectors))
+    detectors = {det_id: detector for det_id, detector in root_edge_config.detectors.items() if det_id != ""}
 
     motion_detection_config = None
     inference_config = None
     if detectors:
         motion_detection_config: Dict[str, MotionDetectionConfig] = {
-            detector.detector_id: motion_detection_templates[detector.motion_detection_template]
-            for detector in detectors
+            detector_id: motion_detection_templates[detector_config.motion_detection_template]
+            for detector_id, detector_config in detectors.items()
         }
         inference_config: Dict[str, LocalInferenceConfig] = {
-            detector.detector_id: edge_inference_templates[detector.local_inference_template] for detector in detectors
+            detector_id: edge_inference_templates[detector_config.local_inference_template]
+            for detector_id, detector_config in detectors.items()
         }
 
     return inference_config, motion_detection_config

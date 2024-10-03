@@ -1,13 +1,35 @@
 #!/bin/bash
 
-set -ex
+#!/bin/bash
 
+# This script builds and pushes the edge-endpoint Docker image to ECR.
+#
+# Usage:
+#   ./build-push-edge-endpoint-image.sh [dev]
+#
+# Arguments:
+#   dev: Optional. If provided, builds only for the current platform, and pushes
+#        the image to ECR *without* the :latest tag. Useful for local development.
+#        Otherwise, builds for both amd64 and arm64 architectures and pushes the
+#        image to ECR with both the :latest and :<git-tag> tags.
+#
+# The script does the following:
+# 1. Sets the image tag based on the current git commit.
+# 2. Authenticates Docker with ECR.
+# 3. Builds the Docker image (either for current platform or multi-platform).
+# 4. Pushes the image to ECR.
+#
+# Note: Ensure you have the necessary AWS credentials and Docker installed.
+
+
+set -ex
 
 # Ensure that you're in the same directory as this script before running it
 cd "$(dirname "$0")"
 
 TAG=$(./git-tag-name.sh)
-EDGE_ENDPOINT_IMAGE="edge-endpoint-test"  # temporary private repo name in GL_Public ECR
+# EDGE_ENDPOINT_IMAGE="edge-endpoint-test"  # v0.1.0 (triton inference server) compatible images
+EDGE_ENDPOINT_IMAGE="edge-endpoint"  # v0.2.0 (fastapi inference server) compatible images
 ECR_URL="767397850842.dkr.ecr.us-west-2.amazonaws.com"
 
 # Authenticate docker to ECR
@@ -15,11 +37,10 @@ aws ecr get-login-password --region us-west-2 | docker login \
                   --username AWS \
                   --password-stdin  ${ECR_URL}
 
-# Check if the first argument is "dev". If it is, only build the image for the current
-# platform 
+# Check if the first argument is "dev". If it is, only build the image for the current platform
 if [ "$1" == "dev" ]; then
   docker build --tag ${EDGE_ENDPOINT_IMAGE} ../..
-  docker tag ${EDGE_ENDPOINT_IMAGE}:latest ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG} 
+  docker tag ${EDGE_ENDPOINT_IMAGE}:latest ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG}
   docker push ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG}
   exit 0
 fi

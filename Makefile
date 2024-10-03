@@ -1,6 +1,6 @@
 
-install: 
-	poetry install 
+install:
+	poetry install --no-root
 
 install-lint:  ## Only install the linter dependencies
 	poetry install --only lint
@@ -8,7 +8,7 @@ install-lint:  ## Only install the linter dependencies
 install-pre-commit: install  ## Install pre-commit hooks. Requires .pre-commit-config.yaml at the root
 	poetry run pre-commit install
 
-test: install  ## Run unit tests in verbose mode 
+test: install  ## Run unit tests in verbose mode
 	. test/setup_plain_test_env.sh && poetry run pytest -vs -k "not test_motdet"
 	# TODO: Refactor so the config is loaded by the test
 	. test/setup_motion_detection_test_env.sh && poetry run pytest -vs test/api/test_motdet.py

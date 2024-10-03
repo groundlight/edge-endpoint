@@ -1,7 +1,7 @@
 # Running the edge-endpoint via k3s on a balena device
 
 ## Setup
-Tested using an EC2 m6 instance with 64GB disk. Everything except for the triton inference server works on a RaspberryPi 5 (which has a 64bit OS and 8Gb RAM), but the inference server is too demanding for the RPi5.
+Tested using an EC2 m6 instance with 64GB disk. Also known to work on a Raspberry Pi 5 with 8GB of RAM.
 
 From the root of `edge-endpoint`, run:
 ```bash
@@ -15,7 +15,7 @@ Now, we have our k3s cluster built and running, but we have not started our edge
 Configure the following variables via the `<fleet>/Variables` or `<device>/Device Variables` interfaces on the BalenaCloud dashboard:
 ```
 GROUNDLIGHT_API_TOKEN - so that we can authorize the fetching of edge model binaries
-AWS_ACCESS_KEY_ID - so we can pull the edge-endpoint and gl-tritonserver images from ECR
+AWS_ACCESS_KEY_ID - so we can pull the edge-endpoint and gl-edge-inference images from ECR
 AWS_SECRET_ACCESS_KEY - needed along with AWS_ACCESS_KEY_ID
 RUN_EDGE_ENDPOINT - Set this to "RUN_EDGE_ENDPOINT" to start the pods (added for glhub integration)
 ```
