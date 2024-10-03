@@ -7,6 +7,7 @@ from app.core.utils import prefixed_ksuid
 
 
 def test_save_model_to_repository():
+    test_predictor_metadata = """{"text_query":"there is a dog","mode":"BINARY"}"""
     with tempfile.TemporaryDirectory() as temp_dir:
         detector_id = "test_detector"
         ksuid_1 = prefixed_ksuid("test_")
@@ -14,6 +15,7 @@ def test_save_model_to_repository():
             detector_id=detector_id,
             model_buffer=b"test_model1",
             pipeline_config="test_pipeline_config",
+            predictor_metadata=test_predictor_metadata,
             binary_ksuid=ksuid_1,
             repository_root=temp_dir,
         )
@@ -43,6 +45,7 @@ def test_save_model_to_repository():
             detector_id=detector_id,
             model_buffer=b"test_model2",
             pipeline_config="test_pipeline_config_2",
+            predictor_metadata=test_predictor_metadata,
             binary_ksuid=ksuid_2,
             repository_root=temp_dir,
         )
@@ -72,6 +75,7 @@ def test_save_model_to_repository():
 
 
 def test_update_model_with_no_new_model_available():
+    test_predictor_metadata = """{"text_query":"there is a dog","mode":"BINARY"}"""
     with tempfile.TemporaryDirectory() as temp_dir:
         # Setup a basic model repository
         test_ksuid = prefixed_ksuid("test_")
@@ -79,6 +83,7 @@ def test_update_model_with_no_new_model_available():
             detector_id="test_detector",
             model_buffer=b"test_model1",
             pipeline_config="test_pipeline_config",
+            predictor_metadata=test_predictor_metadata,
             binary_ksuid=test_ksuid,
             repository_root=temp_dir,
         )
@@ -87,9 +92,10 @@ def test_update_model_with_no_new_model_available():
             with mock.patch("app.core.edge_inference.get_object_using_presigned_url") as mock_get_from_s3:
                 mock_fetch.return_value = {
                     "model_binary_id": test_ksuid,
+                    "predictor_metadata": test_predictor_metadata,
                 }
                 edge_manager = EdgeInferenceManager(config=None)
-                edge_manager.MODEL_REPOSITORY = temp_dir
+                edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
                 edge_manager.update_model("test_detector")
                 # We shouldnt be pulling a model from s3 if we know there is nothing new available
                 mock_get_from_s3.assert_not_called()

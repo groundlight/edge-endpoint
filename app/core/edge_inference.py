@@ -201,12 +201,13 @@ class EdgeInferenceManager:
         logger.info(f"New model binary available ({cloud_binary_ksuid}), attemping to update model for {detector_id}")
 
         pipeline_config = model_urls["pipeline_config"]
-
+        predictor_metadata = model_urls["predictor_metadata"]
         model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
         save_model_to_repository(
             detector_id,
             model_buffer,
             pipeline_config,
+            predictor_metadata,
             binary_ksuid=cloud_binary_ksuid,
             repository_root=self.MODEL_REPOSITORY,
         )
@@ -242,6 +243,7 @@ def save_model_to_repository(
     detector_id: str,
     model_buffer: bytes,
     pipeline_config: str,
+    predictor_metadata: str,
     binary_ksuid: Optional[str],
     repository_root: str,
 ) -> tuple[Optional[int], int]:
@@ -268,6 +270,8 @@ def save_model_to_repository(
         f.write(model_buffer)
     with open(os.path.join(model_version_dir, "pipeline_config.yaml"), "w") as f:
         yaml.dump(yaml.safe_load(pipeline_config), f)
+    with open(os.path.join(model_version_dir, "predictor_metadata.json"), "w") as f:
+        f.write(predictor_metadata)
     if binary_ksuid:
         with open(os.path.join(model_version_dir, "model_id.txt"), "w") as f:
             f.write(binary_ksuid)

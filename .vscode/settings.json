@@ -17,7 +17,7 @@
   "ruff.organizeImports": true,
   "ruff.lint.args": [
     "--config",
-    "pyproject.toml",
+    "pyproject.toml"
   ],
   "ruff.format.args": [
     "--config",
