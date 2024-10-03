@@ -1,5 +1,4 @@
 import logging
-import os
 from io import BytesIO
 from typing import Optional
 
@@ -109,7 +108,8 @@ async def post_image_query(
         },
     )
 
-    edge_only = bool(int(os.environ.get("EDGE_ONLY", 0)))
+    detector_config = app_state.edge_config.detectors.get(detector_id, None)
+    edge_only = detector_config.edge_only if detector_config is not None else False
 
     # TODO: instead of just forwarding want_async calls to the cloud, facilitate partial
     #       processing of the async request on the edge before escalating to the cloud.
@@ -133,7 +133,7 @@ async def post_image_query(
     if not require_human_review and motion_detection_manager.motion_detection_is_available(detector_id=detector_id):
         img_numpy = np.asarray(image)  # [H, W, C=3], dtype: uint8, RGB format
         motion_detected = motion_detection_manager.run_motion_detection(detector_id=detector_id, new_img=img_numpy)
-        # TODO motion detection logic will likely need to be altered to work with the EDGE_ONLY flag
+        # TODO motion detection logic will likely need to be altered to work with edge-only mode
         if not motion_detected:
             # Try improving the cached image query response's confidence
             # (if the cached response has low confidence)
@@ -171,7 +171,10 @@ async def post_image_query(
             confidence_threshold=confidence_threshold,
         ):
             if edge_only:
-                logger.info("EDGE_ONLY is enabled. The edge model's answer will be returned regardless of confidence.")
+                logger.info(
+                    "Edge-only mode is enabled on this detector. The edge model's answer will be returned "
+                    "regardless of confidence."
+                )
             else:
                 logger.info("Edge detector confidence is high enough to return")
 
@@ -210,7 +213,7 @@ async def post_image_query(
 
         # Fail if edge inference is not available and edge-only mode is enabled
         if edge_only:
-            raise RuntimeError("EDGE_ONLY is set to ENABLED, but edge inference is not available.")
+            raise RuntimeError("Edge-only mode is enabled on this detector, but edge inference is not available.")
 
     # Finally, fall back to submitting the image to the cloud
     if not image_query:

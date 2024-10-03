@@ -32,7 +32,7 @@ def root_config() -> RootEdgeConfig:
 
 
 def motion_detection_enabled(config: RootEdgeConfig) -> bool:
-    configured_detector_ids = [detector.detector_id for detector in config.detectors]
+    configured_detector_ids = list(config.detectors.keys())
 
     testing_detector_ids = [detector["detector_id"] for detector in DETECTORS.values()]
     return all(id_ in configured_detector_ids for id_ in testing_detector_ids)
