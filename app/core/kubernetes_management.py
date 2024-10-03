@@ -128,16 +128,9 @@ class InferenceDeploymentManager:
         deployment.spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"] = datetime.now().isoformat()
 
         # Set the correct detector_id so we dont load more than the one model in this deployment. Also rotate the shm-region.
-        deployment.spec.template.spec.containers[0].command = [
-            "tritonserver",
-            f"--model-repository={MODEL_REPOSITORY_PATH}",
-            f"--load-model={detector_id}",  # Only load the model we care about
-            "--metrics-config=summary_latencies=true",
-            "--allow-cpu-metrics=true",
-            "--allow-gpu-metrics=true",
-            "--model-control-mode=explicit",
-            f"--backend-config=python,shm-region-prefix-name={deployment_name}",
-            "--log-verbose=1",
+        deployment.spec.template.spec.containers[0].env = [
+            {"name": "MODEL_NAME", "value": detector_id},
+            {"name": "MODEL_REPOSITORY", "value": MODEL_REPOSITORY_PATH},
         ]
 
         logger.info(f"Patching an existing inference deployment: {deployment_name}")

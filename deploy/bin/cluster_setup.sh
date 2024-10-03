@@ -19,7 +19,7 @@
 # - EFS_VOLUME_ID: ID of the EFS volume to use if we are using the EFS version.
 # - DEPLOYMENT_NAMESPACE: Namespace to deploy to. Defaults to the current namespace.
 # - RUN_EDGE_ENDPOINT: Indicates whether or not to launch the edge endpoint pods.
-#           If set, launch edge endopint pods. If not set, do not launch pods. 
+#           If set, launch edge-endpoint pods. If not set, do not launch pods.
 
 set -ex
 
@@ -110,10 +110,10 @@ if [[ "${INFERENCE_FLAVOR}" == "CPU" ]]; then
     echo "Preparing inference deployments with CPU flavor"
 
     # Customize inference_deployment_template with the CPU patch
-    $K kustomize deploy/k3s/inference_deployment > inference_deployment_template.yaml
+    $K kustomize deploy/k3s/inference_deployment > temp_inference_deployment_template.yaml
     $K create configmap inference-deployment-template \
-            --from-file=inference_deployment_template.yaml
-    rm inference_deployment_template.yaml
+            --from-file=temp_inference_deployment_template.yaml
+    rm temp_inference_deployment_template.yaml
 else
     echo "Preparing inference deployments with GPU flavor"
     $K create configmap inference-deployment-template \

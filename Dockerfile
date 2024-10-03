@@ -45,7 +45,7 @@ COPY ./pyproject.toml ${APP_ROOT}/
 WORKDIR ${APP_ROOT}
 
 # Install production dependencies only
-RUN poetry install --no-interaction --no-root --without dev && \
+RUN poetry install --no-interaction --no-root --without dev --without lint && \
     poetry cache clear --all pypi
 
 # Create /etc/groundlight directory where edge-config.yaml and inference_deployment.yaml will be mounted
@@ -54,8 +54,8 @@ RUN mkdir /etc/groundlight
 RUN mkdir /etc/groundlight/edge-config && \
     mkdir /etc/groundlight/inference-deployment
 
-# Adding this here for testing purposes. In production, this will be mounted as persistent 
-# volume in the kubernetes cluster. 
+# Adding this here for testing purposes. In production, this will be mounted as persistent
+# volume in the kubernetes cluster.
 RUN mkdir -p /opt/groundlight/edge/sqlite
 
 # Copy configs
