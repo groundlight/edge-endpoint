@@ -112,7 +112,7 @@ if [[ "${INFERENCE_FLAVOR}" == "CPU" ]]; then
     # Customize inference_deployment_template with the CPU patch
     $K kustomize deploy/k3s/inference_deployment > temp_inference_deployment_template.yaml
     $K create configmap inference-deployment-template \
-            --from-file=temp_inference_deployment_template.yaml
+            --from-file=inference_deployment_template.yaml=temp_inference_deployment_template.yaml
     rm temp_inference_deployment_template.yaml
 else
     echo "Preparing inference deployments with GPU flavor"
