@@ -165,6 +165,8 @@ async def post_image_query(
         results = edge_inference_manager.run_inference(detector_id=detector_id, image=image)
         confidence = results["confidence"]
 
+        logger.info(f"On {detector_id}, got parsed edge model response. It was: {results=}")
+
         if edge_only or _is_confident_enough(
             confidence=confidence,
             detector_metadata=get_detector_metadata(detector_id=detector_id, gl=gl),

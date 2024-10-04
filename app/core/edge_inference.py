@@ -165,6 +165,7 @@ class EdgeInferenceManager:
 
         inference_client_url = self.inference_client_urls[detector_id]
         response = submit_image_for_inference(inference_client_url, image)
+        logger.info(f"Got direct response from edge model. Got: {response}")
         output_dict = parse_inference_response(response)
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000
