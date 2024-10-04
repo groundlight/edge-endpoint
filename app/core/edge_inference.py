@@ -102,9 +102,7 @@ def parse_inference_response(response: dict) -> dict:
         },
     }
 
-    # logger.info(f"Using mock count response from parse_inference_response: {mock_count_response}")
-
-    response = mock_count_response
+    response = mock_count_response # TODO remove this
 
     multi_predictions: dict = response.get("multi_predictions", None)
     predictions: dict = response.get("predictions", None)
@@ -145,8 +143,6 @@ def parse_inference_response(response: dict) -> dict:
             text = text_predictions[0]
 
     output_dict = {"confidence": confidence, "label": label, "text": text, "rois": rois}
-
-    logger.info(f"Returning output_dict from parse_inference_response: {output_dict}")
 
     return output_dict
 

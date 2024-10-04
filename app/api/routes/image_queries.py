@@ -165,7 +165,6 @@ async def post_image_query(
         detector_metadata: Detector = get_detector_metadata(detector_id=detector_id, gl=gl)
         logger.debug(f"Local inference is available for {detector_id=}. Running inference...")
         results = edge_inference_manager.run_inference(detector_id=detector_id, image=image)
-        logger.info(f"On {detector_id}, got parsed edge model response in post_image_query. It was: {results=}")
         confidence = results["confidence"]
 
         if edge_only or _is_confident_enough(
@@ -187,19 +186,16 @@ async def post_image_query(
             if confidence_threshold is None:
                 confidence_threshold = detector_metadata.confidence_threshold  # Use detector's confidence threshold
 
-            logger.info(f"detector_metadata is: {detector_metadata}")
             mode = detector_metadata.mode
             if mode == ModeEnum.BINARY:
                 result_type = ResultTypeEnum.binary_classification
-                results["label"] = "NO" if results["label"] else "YES"  # map false / 0 to "YES" and true / 1 to "NO"
+                results["label"] = "NO" if results["label"] else "YES"  # Map false / 0 to "YES" and true / 1 to "NO"
             elif mode == ModeEnum.COUNT:
                 result_type = ResultTypeEnum.counting
             elif mode == ModeEnum.MULTI_CLASS:
                 result_type = ResultTypeEnum.multi_classification
             else:
                 raise ValueError(f"Got unrecognized detector mode: {mode}")
-
-            logger.info(f"mode is {mode} and result_type is {result_type}")
 
             image_query = create_iqe(
                 detector_id=detector_id,
@@ -212,7 +208,6 @@ async def post_image_query(
                 rois=results["rois"],
                 text=results["text"],
             )
-            logger.info(f"Created image_query from edge response in post_image_query: {image_query=}")
             app_state.db_manager.create_iqe_record(record=image_query)
         else:
             logger.info(
