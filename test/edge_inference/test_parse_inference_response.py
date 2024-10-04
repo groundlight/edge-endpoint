@@ -131,7 +131,7 @@ class TestParseInferenceResponse:
         result = parse_inference_response(mock_count_response)
         assert result["confidence"] == 0.6
         assert result["label"] == 1
-        assert result["text"][0] == "This is a bird."
+        assert result["text"] == "This is a bird."
         assert len(result["rois"]) == 1
         assert result["rois"][0]["label"] == "bird"
         assert result["rois"][0]["score"] == 0.9
@@ -157,7 +157,7 @@ class TestParseInferenceResponse:
         result = parse_inference_response(mock_binary_with_text_response)
         assert result["confidence"] == 0.54
         assert result["label"] == 0
-        assert result["text"][0] == "This is a cat."
+        assert result["text"] == "This is a cat."
         assert result["rois"] is None
 
     def test_parse_invalid_response(self, mock_invalid_predictions_response):

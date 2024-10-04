@@ -90,12 +90,13 @@ def parse_inference_response(response: dict) -> dict:
         text_predictions: list[str] | None = secondary_predictions.get("text_predictions", None)
         if roi_predictions is not None:
             rois = roi_predictions[0]
-            geometry = rois[0]["geometry"]
-            # TODO add validation to calculate x and y automatically
-            x = 0.5 * (geometry["left"] + geometry["right"])
-            y = 0.5 * (geometry["top"] + geometry["bottom"])
-            rois[0]["geometry"]["x"] = x
-            rois[0]["geometry"]["y"] = y
+            for i, roi in enumerate(rois):
+                geometry = rois[i]["geometry"]
+                # TODO add validation to calculate x and y automatically
+                x = 0.5 * (geometry["left"] + geometry["right"])
+                y = 0.5 * (geometry["top"] + geometry["bottom"])
+                rois[i]["geometry"]["x"] = x
+                rois[i]["geometry"]["y"] = y
         if text_predictions is not None:
             if len(text_predictions) > 1:
                 raise ValueError("Got more than one text prediction. This should not happen.")
