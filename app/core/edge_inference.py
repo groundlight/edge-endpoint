@@ -102,7 +102,7 @@ def parse_inference_response(response: dict) -> dict:
         },
     }
 
-    response = mock_count_response # TODO remove this
+    response = mock_count_response  # TODO remove this
 
     multi_predictions: dict = response.get("multi_predictions", None)
     predictions: dict = response.get("predictions", None)
