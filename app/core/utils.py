@@ -1,10 +1,10 @@
 from datetime import datetime
 from io import BytesIO
-from typing import Any, Callable
+from typing import Callable
 
 import ksuid
 from fastapi import HTTPException
-from model import BinaryClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum, ROI
+from model import ROI, BinaryClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
 from PIL import Image
 
 from . import constants
