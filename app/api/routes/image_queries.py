@@ -3,7 +3,7 @@ from io import BytesIO
 from typing import Optional
 
 import numpy as np
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, BackgroundTasks
 from groundlight import Groundlight
 from model import Detector, ImageQuery
 from PIL import Image
@@ -110,6 +110,7 @@ async def post_image_query(
 
     detector_config = app_state.edge_config.detectors.get(detector_id, None)
     edge_only = detector_config.edge_only if detector_config is not None else False
+    edge_inference = detector_config.edge_inference if detector_config is not None else False
 
     # TODO: instead of just forwarding want_async calls to the cloud, facilitate partial
     #       processing of the async request on the edge before escalating to the cloud.
@@ -167,15 +168,22 @@ async def post_image_query(
         results = edge_inference_manager.run_inference(detector_id=detector_id, image=image)
         confidence = results["confidence"]
 
-        if edge_only or _is_confident_enough(
+        if edge_only or edge_inference or _is_confident_enough(
             confidence=confidence,
             detector_metadata=get_detector_metadata(detector_id=detector_id, gl=gl),
             confidence_threshold=confidence_threshold,
         ):
             if edge_only:
                 logger.info(
-                    "Edge-only mode is enabled on this detector. The edge model's answer will be returned "
-                    "regardless of confidence. {detector_id=}"
+                    f"Edge-only mode is enabled on this detector. The edge model's answer will be returned "
+                    f"regardless of confidence. {detector_id=}"
+                )
+            elif edge_inference:
+                logger.info(
+                    f"Edge inference mode is enabled on this detector. The edge model's answer will be "
+                    "returned regardless of confidence, but will still be escalated to the cloud if the confidence "
+                    "is not high enough. "
+                    f"{detector_id=}"
                 )
             else:
                 logger.info(f"Edge detector confidence is high enough to return. {detector_id=}")
