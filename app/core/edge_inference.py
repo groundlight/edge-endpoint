@@ -63,47 +63,6 @@ def parse_inference_response(response: dict) -> dict:
     #     "secondary_predictions": None,  # Text recognition and Obj detection results
     # }
 
-    # mock_binary_response = {
-    #     "multi_predictions": None,
-    #     "predictions": {"confidences": [0.54], "labels": [0], "probabilities": [0.45], "scores": [-2.94]},
-    #     "secondary_predictions": None
-    # }
-
-    # mock_binary_response_with_rois = {
-    #     "multi_predictions": None,
-    #     "predictions": {"confidences": [0.54], "labels": [0], "probabilities": [0.45], "scores": [-2.94]},
-    #     "secondary_predictions": {
-    #         "roi_predictions": [[
-    #             {
-    #                 "label": "bird",
-    #                 "geometry": {"left": 0.1, "top": 0.2, "right": 0.3, "bottom": 0.4, "version": "2.0"},
-    #                 "score": 0.9,
-    #                 "version": "2.0",
-    #             }
-    #         ]],
-    #         "text_predictions": ["Here is some text that was predicted."]
-    #     }
-    # }
-
-    mock_count_response = {
-        "multi_predictions": {
-            "labels": [[0, 1, 0, 0]],
-            "probabilities": [[0.1, 0.6, 0.2, 0.1]],
-        },
-        "predictions": None,
-        "secondary_predictions": {
-            "roi_predictions": [[{
-                "label": "bird",
-                "geometry": {"left": 0.1, "top": 0.2, "right": 0.3, "bottom": 0.4, "version": "2.0"},
-                "score": 0.9,
-                "version": "2.0",
-            }]],
-            "text_predictions": ["Here is some text that was predicted."],
-        },
-    }
-
-    response = mock_count_response  # TODO remove this
-
     multi_predictions: dict = response.get("multi_predictions", None)
     predictions: dict = response.get("predictions", None)
     secondary_predictions: dict = response.get("secondary_predictions", None)
@@ -132,7 +91,7 @@ def parse_inference_response(response: dict) -> dict:
         if roi_predictions is not None:
             rois = roi_predictions[0]
             geometry = rois[0]["geometry"]
-            # TODO do x and y need to be calculated manually?
+            # TODO add validation to calculate x and y automatically
             x = 0.5 * (geometry["left"] + geometry["right"])
             y = 0.5 * (geometry["top"] + geometry["bottom"])
             rois[0]["geometry"]["x"] = x
