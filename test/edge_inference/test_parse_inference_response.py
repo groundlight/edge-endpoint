@@ -153,6 +153,9 @@ class TestParseInferenceResponse:
         assert "x" in result["rois"][1]["geometry"]
         assert "y" in result["rois"][1]["geometry"]
 
+        assert result["rois"][0]["geometry"]["x"] != result["rois"][1]["geometry"]["x"]
+        assert result["rois"][0]["geometry"]["y"] != result["rois"][1]["geometry"]["y"]
+
     def test_parse_binary_with_text_response(self, mock_binary_with_text_response):
         result = parse_inference_response(mock_binary_with_text_response)
         assert result["confidence"] == 0.54
