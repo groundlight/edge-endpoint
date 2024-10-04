@@ -65,7 +65,7 @@ def mock_binary_with_text_response():
         "predictions": {"confidences": [0.54], "labels": [0], "probabilities": [0.45], "scores": [-2.94]},
         "secondary_predictions": {
             "roi_predictions": None,
-            "text_predictions": ["This is a cat"],
+            "text_predictions": ["This is a cat."],
         },
     }
 
