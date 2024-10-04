@@ -4,7 +4,7 @@ from typing import Any, Callable
 
 import ksuid
 from fastapi import HTTPException
-from model import BinaryClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
+from model import BinaryClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum, ROI
 from PIL import Image
 
 from . import constants
@@ -18,7 +18,7 @@ def create_iqe(
     confidence_threshold: float,
     query: str = "",
     patience_time: float = constants.DEFAULT_PATIENCE_TIME,
-    rois: Any | None = None,  # TODO fix typing
+    rois: list[ROI] | None = None,
     text: str | None = None,
 ) -> ImageQuery:
     iq = ImageQuery(
