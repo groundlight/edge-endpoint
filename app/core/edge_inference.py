@@ -63,6 +63,28 @@ def parse_inference_response(response: dict) -> dict:
     #     "secondary_predictions": None,  # Text recognition and Obj detection results
     # }
 
+    # mock_binary_response = {
+    #     "multi_predictions": None,
+    #     "predictions": {"confidences": [0.54], "labels": [0], "probabilities": [0.45], "scores": [-2.94]},
+    #     "secondary_predictions": None
+    # }
+
+    # mock_binary_response_with_rois = {
+    #     "multi_predictions": None,
+    #     "predictions": {"confidences": [0.54], "labels": [0], "probabilities": [0.45], "scores": [-2.94]},
+    #     "secondary_predictions": {
+    #         "roi_predictions": [[
+    #             {
+    #                 "label": "bird",
+    #                 "geometry": {"left": 0.1, "top": 0.2, "right": 0.3, "bottom": 0.4, "version": "2.0"},
+    #                 "score": 0.9,
+    #                 "version": "2.0",
+    #             }
+    #         ]],
+    #         "text_predictions": ["Here is some text that was predicted."]
+    #     }
+    # }
+
     mock_count_response = {
         "multi_predictions": {
             "labels": [[0, 1, 0, 0]],
