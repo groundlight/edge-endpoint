@@ -97,7 +97,7 @@ def parse_inference_response(response: dict) -> dict:
             rois[0]["geometry"]["x"] = x
             rois[0]["geometry"]["y"] = y
         if text_predictions is not None:
-            if len(text_predictions) > 0:
+            if len(text_predictions) > 1:
                 raise ValueError("Got more than one text prediction. This should not happen.")
             text = text_predictions[0]
 

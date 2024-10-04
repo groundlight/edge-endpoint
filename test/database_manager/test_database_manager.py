@@ -1,5 +1,5 @@
 import pytest
-from model import ImageQuery
+from model import ImageQuery, ResultTypeEnum
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
@@ -94,6 +94,7 @@ def test_get_detectors_without_deployments(db_manager, database_reset):
 def test_get_iqe_record(db_manager, database_reset):
     image_query: ImageQuery = create_iqe(
         detector_id=prefixed_ksuid("det_"),
+        result_type=ResultTypeEnum.binary_classification,
         label="test_label",
         confidence=0.5,
         query="test_query",
