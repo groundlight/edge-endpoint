@@ -1,6 +1,6 @@
 from datetime import datetime
 from io import BytesIO
-from typing import Callable
+from typing import Callable, Any
 
 import ksuid
 from fastapi import HTTPException
@@ -12,11 +12,14 @@ from . import constants
 
 def create_iqe(
     detector_id: str,
+    result_type: ResultTypeEnum,
     label: str,
     confidence: float,
     confidence_threshold: float,
     query: str = "",
     patience_time: float = constants.DEFAULT_PATIENCE_TIME,
+    rois: Any | None = None, # TODO fix typing
+    text: str | None = None,
 ) -> ImageQuery:
     iq = ImageQuery(
         metadata=None,
@@ -25,15 +28,15 @@ def create_iqe(
         created_at=datetime.utcnow(),
         query=query,
         detector_id=detector_id,
-        result_type=ResultTypeEnum.binary_classification,
+        result_type=result_type,
         result=BinaryClassificationResult(
             confidence=confidence,
             label=label,
         ),
         confidence_threshold=confidence_threshold,
         patience_time=patience_time,
-        rois=None,
-        text=None,
+        rois=rois,
+        text=text,
     )
     return iq
 
