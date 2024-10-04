@@ -1,6 +1,6 @@
 from datetime import datetime
 from io import BytesIO
-from typing import Callable, Any
+from typing import Any, Callable
 
 import ksuid
 from fastapi import HTTPException
@@ -18,7 +18,7 @@ def create_iqe(
     confidence_threshold: float,
     query: str = "",
     patience_time: float = constants.DEFAULT_PATIENCE_TIME,
-    rois: Any | None = None, # TODO fix typing
+    rois: Any | None = None,  # TODO fix typing
     text: str | None = None,
 ) -> ImageQuery:
     iq = ImageQuery(

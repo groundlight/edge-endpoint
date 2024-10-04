@@ -5,7 +5,7 @@ from typing import Optional
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from groundlight import Groundlight
-from model import Detector, ImageQuery, ResultTypeEnum, ModeEnum
+from model import Detector, ImageQuery, ModeEnum, ResultTypeEnum
 from PIL import Image
 
 from app.core import constants
@@ -186,7 +186,7 @@ async def post_image_query(
 
             if confidence_threshold is None:
                 confidence_threshold = detector_metadata.confidence_threshold  # Use detector's confidence threshold
-            
+
             logger.info(f"detector_metadata is: {detector_metadata}")
             mode = detector_metadata.mode
             if mode == ModeEnum.BINARY:
@@ -198,7 +198,7 @@ async def post_image_query(
                 result_type = ResultTypeEnum.multi_classification
             else:
                 raise ValueError(f"Got unrecognized detector mode: {mode}")
-            
+
             logger.info(f"mode is {mode} and result_type is {result_type}")
 
             image_query = create_iqe(
