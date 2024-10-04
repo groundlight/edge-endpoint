@@ -115,6 +115,7 @@ async def post_image_query(
     #       processing of the async request on the edge before escalating to the cloud.
     _want_async = want_async is not None and want_async.lower() == "true"
     if _want_async and not edge_only:  # If edge-only mode is enabled, we don't want to make cloud API calls
+        logger.debug(f"Submitting ask_async image query to cloud API server for {detector_id=}")
         return safe_call_api(
             gl.submit_image_query,
             detector=detector_id,
@@ -162,6 +163,7 @@ async def post_image_query(
     image_query = None
     if not require_human_review and edge_inference_manager.inference_is_available(detector_id=detector_id):
         detector_metadata: Detector = get_detector_metadata(detector_id=detector_id, gl=gl)
+        logger.debug(f"Local inference is available for {detector_id=}. Running inference...")
         results = edge_inference_manager.run_inference(detector_id=detector_id, image=image)
         confidence = results["confidence"]
 
@@ -175,10 +177,10 @@ async def post_image_query(
             if edge_only:
                 logger.info(
                     "Edge-only mode is enabled on this detector. The edge model's answer will be returned "
-                    "regardless of confidence."
+                    "regardless of confidence. {detector_id=}"
                 )
             else:
-                logger.info("Edge detector confidence is high enough to return")
+                logger.info(f"Edge detector confidence is high enough to return. {detector_id=}")
 
             if patience_time is None:
                 patience_time = constants.DEFAULT_PATIENCE_TIME  # Default patience time
@@ -205,6 +207,7 @@ async def post_image_query(
         # Add a record to the inference deployments table to indicate that a k8s inference deployment has not yet been
         # created for this detector.
         api_token = gl.api_client.configuration.api_key["ApiToken"]
+        logger.debug(f"Local inference not available for {detector_id=}. Creating inference deployment record.")
         app_state.db_manager.create_inference_deployment_record(
             record={
                 "detector_id": detector_id,
@@ -219,7 +222,7 @@ async def post_image_query(
 
     # Finally, fall back to submitting the image to the cloud
     if not image_query:
-        logger.debug("Submitting image query to cloud API server")
+        logger.debug(f"Submitting image query to cloud API server for {detector_id=}")
         # NOTE: Waiting is done on the customer's client, not here. Otherwise we would be blocking the
         # response to the customer's client from the edge-endpoint for many seconds. This has the
         # side effect of not allowing customers to update their detector's patience_time through the
