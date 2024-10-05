@@ -176,20 +176,8 @@ if ! $K get pvc edge-endpoint-pvc; then
     rm deploy/k3s/persistentvolume.yaml.tmp
 fi
 
-# FUSE pinamod s3 bucket on the device/node
-# Assumes AWS credentials are set up on the device
-# TODO: Prompt user to install s3fs if not installed
-# Check if user_allow_other is uncommented in /etc/fuse.conf
-if ! grep -q "^user_allow_other" /etc/fuse.conf; then
-    echo "Enabling user_allow_other in /etc/fuse.conf"
-    sudo sed -i 's/#user_allow_other/user_allow_other/' /etc/fuse.conf
-else
-    echo "user_allow_other is already enabled in /etc/fuse.conf"
-fi
-
-mkdir -p /opt/zudata/models/pinamod-public
-umount /opt/zudata/models/pinamod-public || true
-s3fs pinamod-artifacts-public:/pinamod /opt/zudata/models/pinamod-public -o ro -o allow_other -o use_cache=/tmp
+# Make pinamod directory for hostmapped volume
+sudo mkdir -p /opt/groundlight/edge/pinamod-public
 
 # Substitutes the namespace in the service_account.yaml template
 envsubst < deploy/k3s/service_account.yaml > deploy/k3s/service_account.yaml.tmp
