@@ -1,5 +1,6 @@
 import logging
 import os
+from contextlib import asynccontextmanager
 from typing import List
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -18,13 +19,58 @@ logging.basicConfig(
     level=LOG_LEVEL, format="%(asctime)s.%(msecs)03d %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
 )
 
+scheduler = AsyncIOScheduler()
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifespan context manager for the FastAPI application.
+
+    This context manager is responsible for initializing and cleaning up
+    resources when the application starts and shuts down.
+
+    Args:
+        app (FastAPI): The FastAPI application instance.
+
+    On enter (server startup):
+        - Initializes the database manager and creates the required tables.
+        - Adds a scheduled job to periodically update the inference config.
+
+    Yields (server running):
+        None
+
+    On exit (server shutdown):
+        - Disposes off the database engine.
+        - Shuts down the scheduler.
+    """
+    # Initialize the database tables
+    db_manager = app.state.app_state.db_manager
+    db_manager.create_tables()
+
+    if DEPLOY_DETECTOR_LEVEL_INFERENCE:
+        # Add job to periodically update the inference config
+        scheduler.add_job(update_inference_config, "interval", seconds=30, args=[app.state.app_state])
+        scheduler.start()
+
+    app.state.app_state = AppState()
+    app.state.app_state.is_ready = True
+
+    yield  # Go to the main application
+
+    app.state.is_ready = False
+    app.state.app_state.db_manager.shutdown()
+
+    if DEPLOY_DETECTOR_LEVEL_INFERENCE:
+        scheduler.shutdown()
+
+
+app = FastAPI(
+    title="edge-endpoint",
+    lifespan=lifespan,
+)
 app.include_router(router=api_router, prefix=API_BASE_PATH)
 app.include_router(router=ping_router)
-
-app.state.app_state = AppState()
-scheduler = AsyncIOScheduler()
 
 
 def update_inference_config(app_state: AppState) -> None:
@@ -45,26 +91,3 @@ def update_inference_config(app_state: AppState) -> None:
         for detector_record in detectors:
             detector_id, api_token = detector_record.detector_id, detector_record.api_token
             app_state.edge_inference_manager.update_inference_config(detector_id=detector_id, api_token=api_token)
-
-
-@app.on_event("startup")
-async def startup_event():
-    # Initialize the database tables
-    db_manager = app.state.app_state.db_manager
-    db_manager.create_tables()
-
-    if DEPLOY_DETECTOR_LEVEL_INFERENCE:
-        # Add job to periodically update the inference config
-        scheduler.add_job(update_inference_config, "interval", seconds=30, args=[app.state.app_state])
-
-        # Start the scheduler
-        scheduler.start()
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    # Dispose off the database engine
-    app.state.app_state.db_manager.shutdown()
-
-    if DEPLOY_DETECTOR_LEVEL_INFERENCE:
-        scheduler.shutdown()

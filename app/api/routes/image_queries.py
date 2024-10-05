@@ -16,7 +16,7 @@ from app.core.app_state import (
     get_groundlight_sdk_instance,
 )
 from app.core.motion_detection import MotionDetectionManager
-from app.core.utils import create_iqe, prefixed_ksuid, safe_call_api
+from app.core.utils import create_iqe, prefixed_ksuid, safe_call_sdk
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,7 @@ async def post_image_query(
     _want_async = want_async is not None and want_async.lower() == "true"
     if _want_async and not edge_only:  # If edge-only mode is enabled, we don't want to make cloud API calls
         logger.debug(f"Submitting ask_async image query to cloud API server for {detector_id=}")
-        return safe_call_api(
+        return safe_call_sdk(
             gl.submit_image_query,
             detector=detector_id,
             image=image,
@@ -240,7 +240,7 @@ async def post_image_query(
         # side effect of not allowing customers to update their detector's patience_time through the
         # edge-endpoint. But instead we could ask them to do that through the web app.
         # wait=0 sets patience_time=DEFAULT_PATIENCE_TIME and disables polling.
-        image_query = safe_call_api(
+        image_query = safe_call_sdk(
             gl.submit_image_query,
             detector=detector_id,
             image=image,
@@ -267,7 +267,7 @@ async def get_image_query(
         if not image_query:
             raise HTTPException(status_code=404, detail=f"Image query with ID {id} not found")
         return image_query
-    return safe_call_api(gl.get_image_query, id=id)
+    return safe_call_sdk(gl.get_image_query, id=id)
 
 
 def _improve_cached_image_query_confidence(
@@ -306,7 +306,7 @@ def _improve_cached_image_query_confidence(
         detector_id
     ].unconfident_iq_reescalation_interval_exceeded()
 
-    iq_response = safe_call_api(gl.get_image_query, id=cached_image_query.id)
+    iq_response = safe_call_sdk(gl.get_image_query, id=cached_image_query.id)
 
     confidence_is_improved = (
         iq_response.result.confidence is None or iq_response.result.confidence > cached_image_query.result.confidence
@@ -324,7 +324,7 @@ def _improve_cached_image_query_confidence(
             f"Unconfident image query re-escalation interval exceeded for {detector_id=}."
             " Re-escalating image query to the cloud API server"
         )
-        iq_response = safe_call_api(gl.submit_image_query, detector=detector_id, image=img, wait=0)
+        iq_response = safe_call_sdk(gl.submit_image_query, detector=detector_id, image=img, wait=0)
         motion_detection_manager.update_image_query_response(detector_id=detector_id, response=iq_response)
 
 
