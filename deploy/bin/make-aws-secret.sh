@@ -17,7 +17,6 @@ else
 fi
 
 
-# Create an AWS secret for the edge-endpoint to properly pull images from ECR
 # Note: needs testing
 $K delete --ignore-not-found secret registry-credentials
 
@@ -26,3 +25,8 @@ $K create secret docker-registry registry-credentials \
     --docker-server=767397850842.dkr.ecr.us-west-2.amazonaws.com \
     --docker-username=AWS \
     --docker-password=$PASSWORD
+
+# Verify secrets have been properly created
+if ! $K get secret registry-credentials; then
+    fail "registry-credentials secret not found"
+fi

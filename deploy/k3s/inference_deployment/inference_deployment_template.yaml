@@ -39,22 +39,19 @@ spec:
           maxUnavailable: 0  # Aim for no downtime during rollout
       containers:
       - name: inference-server
-        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:latest
+        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:tyler-groundingdino-edge-d55864d34-dirty-8460d5a63569ef0
         imagePullPolicy: Always
         env:
         - name: MODEL_REPOSITORY
-          value: "/opt/groundlight/edge/serving/model-repo"
+          value: &modelRepository /opt/groundlight/edge/serving/model-repo
         - name: MODEL_NAME
           value: placeholder-model-name
-        command:
-          [
-            "poetry", "run", "python3", "-m", "uvicorn", "serving.edge_inference_server.fastapi_server:app",
-            "--host", "0.0.0.0",
-            "--port", "8000"
-          ]
         volumeMounts:
         - name: edge-endpoint-persistent-volume
-          mountPath: /opt/groundlight/edge/serving/model-repo
+          mountPath: *modelRepository
+        - name: pinamod-bucket
+          mountPath:  /opt/zudata/models/pinamod
+          readOnly: true
         ports:
         - containerPort: 8000
           name: http-fastapi
@@ -78,3 +75,7 @@ spec:
       - name: edge-endpoint-persistent-volume
         persistentVolumeClaim:
           claimName: edge-endpoint-pvc
+      - name: pinamod-bucket
+        hostPath:
+          path: /opt/zudata/models/pinamod-public
+          type: Directory
