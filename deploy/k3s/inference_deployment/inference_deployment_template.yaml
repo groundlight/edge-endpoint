@@ -43,8 +43,7 @@ spec:
       initContainers:
       - name: sync-pinamod
         image: amazon/aws-cli:latest
-        # Sync models from S3 to the local hostmapped filesystem. Since this can potentially run
-        # on multiple replicas, we use a lock file to ensure that only one replica is syncing at a time.
+        # Sync models from S3 to the local hostmapped filesystem.
         command: ['sh', '-c', 'aws s3 sync s3://pinamod-artifacts-public/pinamod $PINAMOD_DIR --delete']
         env:
         - name: AWS_ACCESS_KEY_ID
@@ -65,7 +64,7 @@ spec:
 
       containers:
       - name: inference-server
-        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:tyler-groundingdino-edge-d55864d34-dirty-8460d5a63569ef0
+        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:latest
         imagePullPolicy: Always
         env:
         - name: MODEL_REPOSITORY
