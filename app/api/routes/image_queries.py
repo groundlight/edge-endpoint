@@ -110,7 +110,7 @@ async def post_image_query(
 
     detector_config = app_state.edge_config.detectors.get(detector_id, None)
     edge_only = detector_config.edge_only if detector_config is not None else False
-    edge_inference = detector_config.edge_inference if detector_config is not None else False
+    edge_only_inference = detector_config.edge_only_inference if detector_config is not None else False
 
     # TODO: instead of just forwarding want_async calls to the cloud, facilitate partial
     #       processing of the async request on the edge before escalating to the cloud.
@@ -168,7 +168,7 @@ async def post_image_query(
         results = edge_inference_manager.run_inference(detector_id=detector_id, image=image)
         confidence = results["confidence"]
 
-        if edge_only or edge_inference or _is_confident_enough(
+        if edge_only or edge_only_inference or _is_confident_enough(
             confidence=confidence,
             detector_metadata=get_detector_metadata(detector_id=detector_id, gl=gl),
             confidence_threshold=confidence_threshold,
@@ -178,9 +178,9 @@ async def post_image_query(
                     f"Edge-only mode is enabled on this detector. The edge model's answer will be returned "
                     f"regardless of confidence. {detector_id=}"
                 )
-            elif edge_inference:
+            elif edge_only_inference:
                 logger.info(
-                    f"Edge inference mode is enabled on this detector. The edge model's answer will be "
+                    f"Edge-only inference mode is enabled on this detector. The edge model's answer will be "
                     "returned regardless of confidence, but will still be escalated to the cloud if the confidence "
                     "is not high enough. "
                     f"{detector_id=}"
@@ -203,6 +203,14 @@ async def post_image_query(
                 patience_time=patience_time,
             )
             app_state.db_manager.create_iqe_record(record=image_query)
+
+            if edge_only_inference and not _is_confident_enough(
+                confidence=confidence,
+                detector_metadata=get_detector_metadata(detector_id=detector_id, gl=gl),
+                confidence_threshold=confidence_threshold,
+            ):
+                logger.info("Escalating to the cloud API server for future training due to low confidence.")
+                _post_image_query_to_cloud_async(detector_id=detector_id, image=image, gl=gl)
         else:
             logger.info(
                 "Ran inference locally, but detector confidence is not high enough to return. Current confidence:"
@@ -337,3 +345,14 @@ def _is_confident_enough(
     if confidence_threshold is not None:
         return confidence >= confidence_threshold
     return confidence >= detector_metadata.confidence_threshold
+
+async def _post_image_query_to_cloud_async(detector_id: str, image: Image.Image, gl: Groundlight, background_tasks: BackgroundTasks):
+    """
+    Submit an image query for a given detector to the cloud API server for async processing.
+
+    :param detector_id: the string id of the detector to use, like `det_12345`
+    :param image: the image to submit.
+    :param gl: Application's Groundlight SDK instance
+    :param background_tasks: fastapi BackgroundTasks object to add background tasks to the request. Automatically passed in by FastAPI.
+    """
+    background_tasks.add_task(safe_call_api, gl.ask_async, detector=detector_id, image=image)
