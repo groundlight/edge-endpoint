@@ -21,6 +21,7 @@ pyyaml = "^6.0.2"
 SQLAlchemy = "2.0.35"
 svix-ksuid = "^0.6.2"
 uvicorn = {version = "^0.31.0", extras = ["standard"]}
+python-multipart = "^0.0.12"
 
 [tool.poetry.group.dev.dependencies]
 coverage = "^7.6.1"

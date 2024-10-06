@@ -91,7 +91,7 @@ def _get_groundlight_sdk_instance_internal(api_token: str):
 
 def get_groundlight_sdk_instance(request: Request):
     """
-    Returns a Groundlight SDK instance given an API token.
+    Returns a (cached) Groundlight SDK instance given an API token.
     The SDK handles validation of the API token token itself, so there's no
     need to do that here.
     """
