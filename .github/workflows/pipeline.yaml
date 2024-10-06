@@ -162,6 +162,11 @@ jobs:
 
       - name: Run Unit Tests (that dont require docker)
         run: |
+          # Point these tests to the cloud endpoint, because to test the edge-endpoint, they
+          # dont actually issue requests. They interally setup a test client and server.
+          # The cloud endpoint is needed so that the /me endpoint succeeds and we can actually
+          # use the GL client.
+          GROUNDLIGHT_ENDPOINT="https://api.groundlight.ai/"
           source test/setup_plain_test_env.sh
           poetry run pytest -vs -k "not test_motdet and not _live"
 
