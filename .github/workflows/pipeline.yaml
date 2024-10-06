@@ -259,8 +259,8 @@ jobs:
         with:
           repository: groundlight/python-sdk
           path: groundlight-sdk
-          ref: refs/tags/0.17.6
-          fetch-tags: true
+          # v0.17.6 - couldnt get git to recognize the tag
+          ref: r3e377f54b3e76e09e8d7d97ce00d9978287a521a
 
       - name: Install Groundlight SDK dependencies
         run: |
