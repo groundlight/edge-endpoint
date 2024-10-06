@@ -9,14 +9,10 @@ from model import Detector, ImageQuery, ModeEnum, ResultTypeEnum
 from PIL import Image
 
 from app.core import constants
-from app.core.app_state import (
-    AppState,
-    get_app_state,
-    get_detector_metadata,
-    get_groundlight_sdk_instance,
-)
+from app.core.app_state import AppState, get_app_state, get_detector_metadata, get_groundlight_sdk_instance
 from app.core.motion_detection import MotionDetectionManager
 from app.core.utils import create_iqe, prefixed_ksuid, safe_call_sdk
+from app.db.models import InferenceDeployment
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +51,7 @@ async def validate_query_params_for_edge(request: Request, invalid_edge_params: 
 
 
 @router.post("", response_model=ImageQuery)
-async def post_image_query(
+async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     request: Request,
     detector_id: str = Query(...),
     image: Image.Image = Depends(validate_request_body),
@@ -147,7 +143,7 @@ async def post_image_query(
 
             # If there is no motion, return a clone of the last image query response
             logger.debug(f"No motion detected for {detector_id=}")
-            new_image_query = motion_detection_manager.get_image_query_response(detector_id=detector_id).copy(
+            new_image_query = motion_detection_manager.get_image_query_response(detector_id=detector_id).model_copy(
                 deep=True, update={"id": prefixed_ksuid(prefix="iqe_")}
             )
 
@@ -157,7 +153,7 @@ async def post_image_query(
                 confidence_threshold=confidence_threshold,
             ):
                 logger.debug("Motion detection confidence is high enough to return.")
-                app_state.db_manager.create_iqe_record(record=new_image_query)
+                app_state.db_manager.create_iqe_record(iq=new_image_query)
                 return new_image_query
 
     image_query = None
@@ -184,7 +180,8 @@ async def post_image_query(
                 patience_time = constants.DEFAULT_PATIENCE_TIME  # Default patience time
 
             if confidence_threshold is None:
-                confidence_threshold = detector_metadata.confidence_threshold  # Use detector's confidence threshold
+                # Use detector's confidence threshold
+                confidence_threshold: float = detector_metadata.confidence_threshold
 
             mode = detector_metadata.mode
             if mode == ModeEnum.BINARY:
@@ -208,7 +205,7 @@ async def post_image_query(
                 rois=results["rois"],
                 text=results["text"],
             )
-            app_state.db_manager.create_iqe_record(record=image_query)
+            app_state.db_manager.create_iqe_record(iq=image_query)
         else:
             logger.info(
                 "Ran inference locally, but detector confidence is not high enough to return. Current confidence:"
@@ -221,11 +218,7 @@ async def post_image_query(
         api_token = gl.api_client.configuration.api_key["ApiToken"]
         logger.debug(f"Local inference not available for {detector_id=}. Creating inference deployment record.")
         app_state.db_manager.create_inference_deployment_record(
-            record={
-                "detector_id": detector_id,
-                "api_token": api_token,
-                "deployment_created": False,
-            }
+            deployment=InferenceDeployment(detector_id=detector_id, api_token=api_token, deployment_created=False)
         )
 
         # Fail if edge inference is not available and edge-only mode is enabled
@@ -288,12 +281,10 @@ def _improve_cached_image_query_confidence(
 
     detector_metadata: Detector = get_detector_metadata(detector_id=detector_id, gl=gl)
     desired_detector_confidence = detector_metadata.confidence_threshold
-    cached_image_query = motion_detection_manager.get_image_query_response(detector_id=detector_id)
+    cached_image_query: ImageQuery = motion_detection_manager.get_image_query_response(detector_id=detector_id)
 
-    iq_confidence_is_improvable = (
-        cached_image_query.result.confidence is not None
-        and cached_image_query.result.confidence < desired_detector_confidence
-    )
+    confidence = cached_image_query.result.confidence
+    iq_confidence_is_improvable = confidence is not None and confidence < desired_detector_confidence
 
     if not iq_confidence_is_improvable:
         return

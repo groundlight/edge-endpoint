@@ -22,5 +22,9 @@
   "ruff.format.args": [
     "--config",
     "pyproject.toml"
-  ]
+  ],
+  "python.analysis.extraPaths": [
+    "./app"
+  ],
+  "python.languageServer": "Default"
 }

@@ -5,9 +5,9 @@ from typing import Dict, List
 
 from app.core.app_state import get_inference_and_motion_detection_configs, load_edge_config
 from app.core.configs import RootEdgeConfig
-from app.core.database import DatabaseManager
 from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions
 from app.core.kubernetes_management import InferenceDeploymentManager
+from app.db.manager import DatabaseManager, get_database_engine
 
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=log_level)
@@ -81,7 +81,7 @@ def _check_new_models_and_inference_deployments(
         # At this time, we are sure that the deployment for the detector has been successfully created and rolled out.
         db_manager.update_inference_deployment_record(
             detector_id=detector_id,
-            new_record={"deployment_created": True, "deployment_name": deployment.metadata.name},
+            fields_to_update={"deployment_created": True, "deployment_name": deployment.metadata.name},
         )
 
 
@@ -162,7 +162,8 @@ if __name__ == "__main__":
 
     # We will delegate creation of database tables to the edge-endpoint container.
     # So here we don't run a task to create the tables if they don't already exist.
-    db_manager = DatabaseManager()
+    engine = get_database_engine()
+    db_manager = DatabaseManager(engine)
 
     update_models(
         edge_inference_manager=edge_inference_manager,

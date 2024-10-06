@@ -65,6 +65,7 @@ class RootEdgeConfig(BaseModel):
     detectors: Dict[str, DetectorConfig]
 
     @validator("detectors", each_item=False)
+    @classmethod
     def validate_templates(
         cls,
         detectors: Dict[str, DetectorConfig],
@@ -92,14 +93,13 @@ class RootEdgeConfig(BaseModel):
             }
         """
         for detector in detectors.values():
-            if (
-                "motion_detection_templates" in values
-                and detector.motion_detection_template not in values["motion_detection_templates"]
-            ):
-                raise ValueError(f"Motion Detection Template {detector.motion_detection_template} not defined.")
-            if (
-                "local_inference_templates" in values
-                and detector.local_inference_template not in values["local_inference_templates"]
-            ):
-                raise ValueError(f"Local Inference Template {detector.local_inference_template} not defined.")
-        return detectors
+            missing_templates = [
+                ("motion_detection_templates", detector.motion_detection_template),
+                ("local_inference_templates", detector.local_inference_template),
+            ]
+
+            for template_type, template_name in missing_templates:
+                if template_type in values and template_name not in values[template_type]:
+                    raise ValueError(f"{template_type.replace('_', ' ').title()} {template_name} not defined.")
+
+            return detectors

@@ -1,3 +1,4 @@
+.PHONY: install install-lint install-pre-commit test lint format
 
 install:
 	poetry install --no-root

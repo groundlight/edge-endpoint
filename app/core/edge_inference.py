@@ -91,7 +91,7 @@ def parse_inference_response(response: dict) -> dict:
         if roi_predictions is not None:
             rois = roi_predictions[0]
             for i, roi in enumerate(rois):
-                geometry = rois[i]["geometry"]
+                geometry = roi["geometry"]
                 # TODO add validation to calculate x and y automatically
                 x = 0.5 * (geometry["left"] + geometry["right"])
                 y = 0.5 * (geometry["top"] + geometry["bottom"])

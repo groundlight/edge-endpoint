@@ -10,7 +10,7 @@ from PIL import Image
 from . import constants
 
 
-def create_iqe(
+def create_iqe(  # noqa: PLR0913
     detector_id: str,
     result_type: ResultTypeEnum,
     label: str,

@@ -9,12 +9,12 @@ from fastapi import Request
 from groundlight import Groundlight
 from model import Detector
 
-from .configs import LocalInferenceConfig, MotionDetectionConfig, RootEdgeConfig
-from .database import DatabaseManager
-from .edge_inference import EdgeInferenceManager
-from .file_paths import DEFAULT_EDGE_CONFIG_PATH
-from .motion_detection import MotionDetectionManager
-from .utils import safe_call_sdk
+from app.core.configs import LocalInferenceConfig, MotionDetectionConfig, RootEdgeConfig
+from app.core.edge_inference import EdgeInferenceManager
+from app.core.file_paths import DEFAULT_EDGE_CONFIG_PATH
+from app.core.motion_detection import MotionDetectionManager
+from app.core.utils import safe_call_sdk
+from app.db.manager import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +113,7 @@ def get_detector_metadata(detector_id: str, gl: Groundlight) -> Detector:
 
 
 class AppState:
-    def __init__(self):
+    def __init__(self, db_manager: DatabaseManager | None = None):
         self.edge_config = load_edge_config()
         inference_config, motion_detection_config = get_inference_and_motion_detection_configs(
             root_edge_config=self.edge_config
@@ -121,7 +121,7 @@ class AppState:
 
         self.motion_detection_manager = MotionDetectionManager(config=motion_detection_config)
         self.edge_inference_manager = EdgeInferenceManager(config=inference_config)
-        self.db_manager = DatabaseManager()
+        self.db_manager = db_manager or DatabaseManager()  # Allow injection or default to a new instance
         self.is_ready = False
 
 
