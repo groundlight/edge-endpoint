@@ -36,12 +36,11 @@ async def validate_request_body(request: Request) -> Image.Image:
         # to succeed but then fail when the image data is actually being processed.
         # To ensure that the image can be fully processed, we call img.load() to force loading
         # the entire image. If this fails, we know that the image is invalid.
-
         image.load()
-        return image
-    except Exception as ex:  # TODO: Specify the exact exceptions we want to catch, eliminate bare except
+    except IOError as ex:
         logger.error("Failed to load image", exc_info=True)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input image") from ex
+    return image
 
 
 async def validate_query_params_for_edge(request: Request, invalid_edge_params: set):

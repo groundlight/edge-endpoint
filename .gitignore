@@ -138,3 +138,6 @@ test_coverage_reports/
 
 # Editor stuff
 *.swp
+
+# SqlAlchemy
+sqlalchemy.log.*

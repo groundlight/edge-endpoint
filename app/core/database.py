@@ -40,7 +40,7 @@ class DatabaseManager:
         # A session is a mutable, stateful object that represents a single database transaction in progress.
         self.session_maker = sessionmaker(bind=self._engine)
 
-    def _setup_logging(self, level: logging._Level) -> None:
+    def _setup_logging(self, level: str | int) -> None:
         """
         Configures logging for SQLAlchemy. This is just so we can declutter the logs.
         Logs from the database will be written to the file specified by `DATABASE_ORM_LOG_FILE`.

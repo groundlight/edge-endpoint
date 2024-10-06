@@ -1,3 +1,5 @@
+from io import BytesIO
+
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
@@ -56,10 +58,15 @@ def test_post_image_query_via_sdk_with_metadata_throws_400(
     assert exc_info.value.status == status.HTTP_400_BAD_REQUEST
 
 
-def test_post_image_query(gl: Groundlight, detector: Detector, test_client: TestClient):
+def test_post_image_query(test_client: TestClient, detector: Detector):
     """Test that submitting an image query using the edge server proceeds without failure."""
     image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
-    response = test_client.post(url, headers={"Content-Type": "image/jpeg"}, data=image_bytes)
+    response = test_client.post(
+        url,
+        headers={"Content-Type": "image/jpeg"},
+        data=image_bytes,
+        params={"detector_id": detector.id},
+    )
 
     # Assert that the response status code is 200 (OK)
     assert response.status_code == status.HTTP_200_OK, "Expected status code 200 OK"
@@ -71,19 +78,93 @@ def test_post_image_query(gl: Groundlight, detector: Detector, test_client: Test
     assert "result" in response_data, "Response should contain a 'result' field"
 
 
-def test_post_image_query_invalid_content_type(test_client: TestClient):
-    response = test_client.post(url, headers={"Content-Type": "text/plain"}, data=b"not an image")
+def test_post_image_query_invalid_content_type(test_client: TestClient, detector: Detector):
+    """Test submitting an image query with an invalid content type."""
+    response = test_client.post(
+        url,
+        headers={"Content-Type": "text/plain"},
+        data=b"not an image",
+        params={"detector_id": detector.id},
+    )
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert response.json() == {"detail": "Request body must be image bytes"}
 
 
 def test_post_image_query_invalid_image_data(test_client: TestClient):
+    """Test submitting an image query with invalid image data."""
     response = test_client.post(url, headers={"Content-Type": "image/jpeg"}, data=b"not an image")
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert response.json() == {"detail": "Invalid input image"}
 
 
-def test_get_image_query_not_found(test_client: TestClient):
-    response = test_client.get("/image-queries/iqe_123")
-    assert response.status_code == status.HTTP_404_NOT_FOUND
+def test_post_image_query_with_confidence_threshold(test_client: TestClient, detector: Detector):
+    """Test submitting an image query with a confidence threshold."""
+    image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
+    response = test_client.post(
+        url,
+        headers={"Content-Type": "image/jpeg"},
+        data=image_bytes,
+        params={"confidence_threshold": 0.8, "detector_id": detector.id},
+    )
+
+    assert response.status_code == status.HTTP_200_OK, "Expected status code 200 OK"
+    response_data = response.json()
+    assert "id" in response_data, "Response should contain an 'id' field"
+    assert response_data["id"].startswith("iqe_"), "ImageQuery id should start with 'iqe_'"
+    assert "result" in response_data, "Response should contain a 'result' field"
+
+
+def test_post_image_query_with_human_review(test_client: TestClient, detector: Detector):
+    """Test submitting an image query with human review set to ALWAYS."""
+    image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
+    response = test_client.post(
+        url,
+        headers={"Content-Type": "image/jpeg"},
+        data=image_bytes,
+        params={"human_review": "ALWAYS", "detector_id": detector.id},
+    )
+
+    assert response.status_code == status.HTTP_200_OK, "Expected status code 200 OK"
+    response_data = response.json()
+    assert "id" in response_data, "Response should contain an 'id' field"
+    assert response_data["id"].startswith("iqe_"), "ImageQuery id should start with 'iqe_'"
+    assert "result" in response_data, "Response should contain a 'result' field"
+
+
+def test_post_image_query_with_invalid_detector_id(test_client: TestClient, detector: Detector):
+    """Test submitting an image query with an invalid detector ID."""
+    image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
+    response = test_client.post(
+        "/image-queries",
+        headers={"Content-Type": "image/jpeg"},
+        data=image_bytes,
+        params={"detector_id": "invalid_id"},
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND, "Expected status code 404 Not Found"
     assert response.json() == {"detail": "Not Found"}
+
+
+def test_post_image_query_with_async_request(test_client: TestClient, detector: Detector):
+    """Test submitting an image query with want_async set to true."""
+    with open("test/assets/dog.jpeg", "rb") as image_file:
+        image_bytes = BytesIO(image_file.read()).getvalue()
+    response = test_client.post(
+        url,
+        headers={"Content-Type": "image/jpeg"},
+        data=image_bytes,
+        params={"want_async": "true", "detector_id": detector.id},
+    )
+
+    assert response.status_code == status.HTTP_200_OK, "Expected status code 200 OK"
+    response_data = response.json()
+    assert "id" in response_data, "Response should contain an 'id' field"
+    assert response_data["id"].startswith("iqe_"), "ImageQuery id should start with 'iqe_'"
+    assert "result" in response_data, "Response should contain a 'result' field"
+
+
+def test_get_image_query_not_found(test_client: TestClient):
+    """Test getting an *edge* image query that does not exist."""
+    response = test_client.get(url + "/iqe_123")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "Image query with ID iqe_123 not found"}
