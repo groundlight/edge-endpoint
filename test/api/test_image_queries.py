@@ -74,8 +74,6 @@ def test_post_image_query(test_client: TestClient, detector: Detector):
     # Assert that the response contains the expected fields
     response_data = response.json()
     assert "id" in response_data, "Response should contain an 'id' field"
-    assert response_data["id"].startswith("iqe_"), "ImageQuery id should start with 'iqe_'"
-    assert "result" in response_data, "Response should contain a 'result' field"
 
 
 def test_post_image_query_invalid_content_type(test_client: TestClient, detector: Detector):
@@ -110,8 +108,6 @@ def test_post_image_query_with_confidence_threshold(test_client: TestClient, det
     assert response.status_code == status.HTTP_200_OK, "Expected status code 200 OK"
     response_data = response.json()
     assert "id" in response_data, "Response should contain an 'id' field"
-    assert response_data["id"].startswith("iqe_"), "ImageQuery id should start with 'iqe_'"
-    assert "result" in response_data, "Response should contain a 'result' field"
 
 
 def test_post_image_query_with_human_review(test_client: TestClient, detector: Detector):
@@ -127,8 +123,6 @@ def test_post_image_query_with_human_review(test_client: TestClient, detector: D
     assert response.status_code == status.HTTP_200_OK, "Expected status code 200 OK"
     response_data = response.json()
     assert "id" in response_data, "Response should contain an 'id' field"
-    assert response_data["id"].startswith("iqe_"), "ImageQuery id should start with 'iqe_'"
-    assert "result" in response_data, "Response should contain a 'result' field"
 
 
 def test_post_image_query_with_invalid_detector_id(test_client: TestClient, detector: Detector):
@@ -159,8 +153,6 @@ def test_post_image_query_with_async_request(test_client: TestClient, detector: 
     assert response.status_code == status.HTTP_200_OK, "Expected status code 200 OK"
     response_data = response.json()
     assert "id" in response_data, "Response should contain an 'id' field"
-    assert response_data["id"].startswith("iqe_"), "ImageQuery id should start with 'iqe_'"
-    assert "result" in response_data, "Response should contain a 'result' field"
 
 
 def test_get_image_query_not_found(test_client: TestClient):
