@@ -23,8 +23,5 @@
     "--config",
     "pyproject.toml"
   ],
-  "python.analysis.extraPaths": [
-    "./app"
-  ],
   "python.languageServer": "Default"
 }

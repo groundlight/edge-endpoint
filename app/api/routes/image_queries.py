@@ -3,15 +3,18 @@ from io import BytesIO
 from typing import Optional
 
 import numpy as np
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from groundlight import Groundlight
 from model import Detector, ImageQuery, ModeEnum, ResultTypeEnum
 from PIL import Image
+from sqlalchemy.orm import Session
 
 from app.core import constants
-from app.core.app_state import AppState, get_app_state, get_detector_metadata, get_groundlight_sdk_instance
+from app.core.app_state import AppState, get_detector_metadata, get_groundlight_sdk_instance
 from app.core.motion_detection import MotionDetectionManager
 from app.core.utils import create_iqe, prefixed_ksuid, safe_call_sdk
+from app.db import crud
+from app.db.database import get_db
 from app.db.models import InferenceDeployment
 
 logger = logging.getLogger(__name__)
@@ -21,7 +24,7 @@ router = APIRouter()
 
 async def validate_request_body(request: Request) -> Image.Image:
     if not request.headers.get("Content-Type", "").startswith("image/"):
-        raise HTTPException(status_code=400, detail="Request body must be image bytes")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Request body must be image bytes")
 
     image_bytes = await request.body()
     try:
@@ -37,7 +40,7 @@ async def validate_request_body(request: Request) -> Image.Image:
         return image
     except Exception as ex:  # TODO: Specify the exact exceptions we want to catch, eliminate bare except
         logger.error("Failed to load image", exc_info=True)
-        raise HTTPException(status_code=400, detail="Invalid input image") from ex
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input image") from ex
 
 
 async def validate_query_params_for_edge(request: Request, invalid_edge_params: set):
@@ -45,7 +48,7 @@ async def validate_query_params_for_edge(request: Request, invalid_edge_params: 
     invalid_provided_params = query_params.intersection(invalid_edge_params)
     if invalid_provided_params:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid query parameters for submit_image_query to edge-endpoint: {invalid_provided_params}",
         )
 
@@ -60,6 +63,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     human_review: Optional[str] = Query(None),
     want_async: Optional[str] = Query(None),
     gl: Groundlight = Depends(get_groundlight_sdk_instance),
+    db: Session = Depends(get_db),
     app_state: AppState = Depends(get_app_state),
 ):
     """
@@ -153,7 +157,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 confidence_threshold=confidence_threshold,
             ):
                 logger.debug("Motion detection confidence is high enough to return.")
-                app_state.db_manager.create_iqe_record(iq=new_image_query)
+                crud.create_iqe_record(db, iq=new_image_query)
                 return new_image_query
 
     image_query = None
@@ -205,7 +209,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 rois=results["rois"],
                 text=results["text"],
             )
-            app_state.db_manager.create_iqe_record(iq=image_query)
+            crud.create_iqe_record(db, iq=image_query)
         else:
             logger.info(
                 "Ran inference locally, but detector confidence is not high enough to return. Current confidence:"
@@ -217,8 +221,8 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         # created for this detector.
         api_token = gl.api_client.configuration.api_key["ApiToken"]
         logger.debug(f"Local inference not available for {detector_id=}. Creating inference deployment record.")
-        app_state.db_manager.create_inference_deployment_record(
-            deployment=InferenceDeployment(detector_id=detector_id, api_token=api_token, deployment_created=False)
+        crud.create_inference_deployment_record(
+            db, deployment=InferenceDeployment(detector_id=detector_id, api_token=api_token, deployment_created=False)
         )
 
         # Fail if edge inference is not available and edge-only mode is enabled
@@ -253,12 +257,12 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
 @router.get("/{id}", response_model=ImageQuery)
 async def get_image_query(
-    id: str, gl: Groundlight = Depends(get_groundlight_sdk_instance), app_state: AppState = Depends(get_app_state)
+    id: str, gl: Groundlight = Depends(get_groundlight_sdk_instance), db: AppState = Depends(get_db)
 ):
     if id.startswith("iqe_"):
-        image_query = app_state.db_manager.get_iqe_record(image_query_id=id)
+        image_query = crud.get_iqe_record(db, image_query_id=id)
         if not image_query:
-            raise HTTPException(status_code=404, detail=f"Image query with ID {id} not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Image query with ID {id} not found")
         return image_query
     return safe_call_sdk(gl.get_image_query, id=id)
 

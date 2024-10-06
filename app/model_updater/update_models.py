@@ -1,13 +1,17 @@
 import logging
 import os
 import time
-from typing import Dict, List
+from typing import Sequence
+
+from sqlmodel import Session
 
 from app.core.app_state import get_inference_and_motion_detection_configs, load_edge_config
 from app.core.configs import RootEdgeConfig
 from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions
 from app.core.kubernetes_management import InferenceDeploymentManager
-from app.db.manager import DatabaseManager, get_database_engine
+from app.db import crud
+from app.db.database import get_db
+from app.db.models import InferenceDeployment
 
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=log_level)
@@ -36,7 +40,7 @@ def _check_new_models_and_inference_deployments(
     detector_id: str,
     edge_inference_manager: EdgeInferenceManager,
     deployment_manager: InferenceDeploymentManager,
-    db_manager: DatabaseManager,
+    db: Session,
 ) -> None:
     """
     Check that a new model is available for the detector_id. If so, update the inference deployment
@@ -79,7 +83,8 @@ def _check_new_models_and_inference_deployments(
     if deployment_manager.is_inference_deployment_rollout_complete(detector_id):
         # Database transaction to update the deployment_created field for the detector_id
         # At this time, we are sure that the deployment for the detector has been successfully created and rolled out.
-        db_manager.update_inference_deployment_record(
+        crud.update_inference_deployment_record(
+            db=db,
             detector_id=detector_id,
             fields_to_update={"deployment_created": True, "deployment_name": deployment.metadata.name},
         )
@@ -88,7 +93,7 @@ def _check_new_models_and_inference_deployments(
 def update_models(
     edge_inference_manager: EdgeInferenceManager,
     deployment_manager: InferenceDeploymentManager,
-    db_manager: DatabaseManager,
+    db: Session,
     refresh_rate: float,
 ) -> None:
     """
@@ -125,7 +130,7 @@ def update_models(
                     detector_id=detector_id,
                     edge_inference_manager=edge_inference_manager,
                     deployment_manager=deployment_manager,
-                    db_manager=db_manager,
+                    db=db,
                 )
                 logging.info(f"Successfully updated model for detector_id: {detector_id}")
             except Exception as e:
@@ -140,7 +145,9 @@ def update_models(
 
         # Fetch detector IDs that need to be deployed from the database and add them to the config
         logging.info("Fetching undeployed detector IDs from the database.")
-        undeployed_detector_ids: List[Dict[str, str]] = db_manager.query_inference_deployments(deployment_created=False)
+        undeployed_detector_ids: Sequence[InferenceDeployment] = crud.get_inference_deployments(
+            db, deployment_created=False
+        )
         if undeployed_detector_ids:
             logging.info(f"Found {len(undeployed_detector_ids)} undeployed detectors. Updating inference config.")
             for detector_record in undeployed_detector_ids:
@@ -162,12 +169,11 @@ if __name__ == "__main__":
 
     # We will delegate creation of database tables to the edge-endpoint container.
     # So here we don't run a task to create the tables if they don't already exist.
-    engine = get_database_engine()
-    db_manager = DatabaseManager(engine)
+    db = get_db()
 
     update_models(
         edge_inference_manager=edge_inference_manager,
         deployment_manager=deployment_manager,
-        db_manager=db_manager,
+        db=db,
         refresh_rate=refresh_rate,
     )

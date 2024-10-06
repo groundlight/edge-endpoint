@@ -4,11 +4,13 @@ from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
+from sqlmodel import SQLModel
 
 from app.api.api import api_router, health_router, ping_router
 from app.api.naming import API_BASE_PATH
 from app.core.app_state import AppState
-from app.db.manager import DatabaseManager, get_database_engine
+from app.db import crud
+from app.db.database import engine, get_db
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 DEPLOY_DETECTOR_LEVEL_INFERENCE = bool(int(os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", 0)))
@@ -17,7 +19,10 @@ logging.basicConfig(
     level=LOG_LEVEL, format="%(asctime)s.%(msecs)03d %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
 )
 
+SQLModel.metadata.create_all(engine)
+
 scheduler = AsyncIOScheduler()
+app_state = AppState()
 
 
 @asynccontextmanager
@@ -42,9 +47,7 @@ async def lifespan(app: FastAPI):
         - Disposes off the database engine.
         - Shuts down the scheduler.
     """
-    engine = get_database_engine()
-    db_manager = DatabaseManager(engine)
-    app.state.app_state = AppState(db_manager=db_manager)
+    app.state.app_state = AppState()
 
     # Initialize the database tables
     db_manager = app.state.app_state.db_manager
@@ -80,9 +83,9 @@ app.include_router(router=health_router)
 
 def update_inference_config(app_state: AppState) -> None:
     """Update the edge inference config by querying the database for new detectors."""
-    db_manager: DatabaseManager = app_state.db_manager
-    detectors = db_manager.query_inference_deployments(deployment_created=True)
-    if detectors:
-        for detector_record in detectors:
-            detector_id, api_token = detector_record.detector_id, detector_record.api_token
-            app_state.edge_inference_manager.update_inference_config(detector_id=detector_id, api_token=api_token)
+    with get_db() as db:
+        detectors = crud.get_inference_deployments(db, deployment_created=True)
+        if detectors:
+            for detector_record in detectors:
+                detector_id, api_token = detector_record.detector_id, detector_record.api_token
+                app_state.edge_inference_manager.update_inference_config(detector_id=detector_id, api_token=api_token)

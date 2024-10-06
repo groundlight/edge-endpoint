@@ -14,7 +14,6 @@ from app.core.edge_inference import EdgeInferenceManager
 from app.core.file_paths import DEFAULT_EDGE_CONFIG_PATH
 from app.core.motion_detection import MotionDetectionManager
 from app.core.utils import safe_call_sdk
-from app.db.manager import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +112,7 @@ def get_detector_metadata(detector_id: str, gl: Groundlight) -> Detector:
 
 
 class AppState:
-    def __init__(self, db_manager: DatabaseManager | None = None):
+    def __init__(self):
         self.edge_config = load_edge_config()
         inference_config, motion_detection_config = get_inference_and_motion_detection_configs(
             root_edge_config=self.edge_config
@@ -121,9 +120,4 @@ class AppState:
 
         self.motion_detection_manager = MotionDetectionManager(config=motion_detection_config)
         self.edge_inference_manager = EdgeInferenceManager(config=inference_config)
-        self.db_manager = db_manager or DatabaseManager()  # Allow injection or default to a new instance
         self.is_ready = False
-
-
-def get_app_state(request: Request) -> AppState:
-    return request.app.state.app_state

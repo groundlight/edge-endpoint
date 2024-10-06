@@ -5,7 +5,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import SQLModel
 
 from app.core.utils import create_iqe, prefixed_ksuid
-from app.db.manager import DatabaseManager
 from app.db.models import InferenceDeployment
 
 NUM_TESTING_RECORDS = 100
@@ -61,7 +60,7 @@ def test_get_detectors_without_deployments(db_manager, reset_db):
     for deployment in test_deployments:
         db_manager.create_inference_deployment_record(deployment=deployment)
 
-    undeployed_detectors = db_manager.query_inference_deployments(deployment_created=False)
+    undeployed_detectors = db_manager.get_inference_deployments(deployment_created=False)
     assert len(undeployed_detectors) == NUM_TESTING_RECORDS
     for undeployed_detector in undeployed_detectors:
         assert undeployed_detector.detector_id in set([r.detector_id for r in test_deployments])
@@ -95,7 +94,7 @@ def test_update_api_token_for_inference_deployment(db_manager, reset_db):
         detector_id=prefixed_ksuid("det_"), api_token=prefixed_ksuid("api_"), deployment_created=False
     )
     db_manager.create_inference_deployment_record(deployment=deployment)
-    detectors = db_manager.query_inference_deployments(detector_id=deployment.detector_id)
+    detectors = db_manager.get_inference_deployments(detector_id=deployment.detector_id)
     assert len(detectors) == 1
     assert detectors[0] == deployment
 
@@ -106,12 +105,12 @@ def test_update_api_token_for_inference_deployment(db_manager, reset_db):
     )
 
     # Check that the API token has been updated
-    detectors = db_manager.query_inference_deployments(detector_id=deployment.detector_id)
+    detectors = db_manager.get_inference_deployments(detector_id=deployment.detector_id)
     assert len(detectors) == 1
     assert detectors[0].api_token == new_api_token
 
 
-def test_query_inference_deployments_raises_sqlalchemy_error(db_manager: DatabaseManager, reset_db):
+def test_get_inference_deployments_raises_sqlalchemy_error(db_manager: DatabaseManager, reset_db):
     deployment = InferenceDeployment(
         detector_id=prefixed_ksuid("det_"), api_token=prefixed_ksuid("api_"), deployment_created=False
     )
@@ -121,7 +120,7 @@ def test_query_inference_deployments_raises_sqlalchemy_error(db_manager: Databas
     # Here `image_query_id` is not a valid field in the `inference_deployments` table, so
     # we should get an error.
     with pytest.raises(SQLAlchemyError):
-        db_manager.query_inference_deployments(detector_id=deployment.detector_id, image_query_id="invalid_id")
+        db_manager.get_inference_deployments(detector_id=deployment.detector_id, image_query_id="invalid_id")
 
 
 def test_get_iqe_record(db_manager, reset_db):
