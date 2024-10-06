@@ -157,7 +157,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 confidence_threshold=confidence_threshold,
             ):
                 logger.debug("Motion detection confidence is high enough to return.")
-                app_state.db_manager.create_iqe_record(record=new_image_query)
+                app_state.db_manager.create_iqe_record(iq=new_image_query)
                 return new_image_query
 
     image_query = None
@@ -208,7 +208,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 rois=results["rois"],
                 text=results["text"],
             )
-            app_state.db_manager.create_iqe_record(record=image_query)
+            app_state.db_manager.create_iqe_record(iq=image_query)
         else:
             logger.info(
                 "Ran inference locally, but detector confidence is not high enough to return. Current confidence:"
@@ -221,7 +221,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         api_token = gl.api_client.configuration.api_key["ApiToken"]
         logger.debug(f"Local inference not available for {detector_id=}. Creating inference deployment record.")
         app_state.db_manager.create_inference_deployment_record(
-            record={
+            deployment={
                 "detector_id": detector_id,
                 "api_token": api_token,
                 "deployment_created": False,

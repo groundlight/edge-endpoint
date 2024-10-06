@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.naming import path_prefix, tag
-from app.api.routes import detectors, image_queries, ping
+from app.api.routes import detectors, health, image_queries, ping
 
 IMAGE_QUERIES = "image-queries"
 IMAGE_QUERIES_PREFIX = path_prefix(IMAGE_QUERIES)

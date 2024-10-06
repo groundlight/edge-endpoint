@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
-from app.core.app_state import AppState
+from app.core.app_state import AppState, get_app_state
 
 router = APIRouter()
 
@@ -30,6 +30,6 @@ async def readiness(app_state: AppState = Depends(get_app_state)) -> JSONRespons
             If the model is not loaded, it returns a 503 status code with "not ready" status.
             If the model is loaded, it returns a 200 status code with "ready" status and the model version.
     """
-    if not IS_READY:
+    if not app_state.is_ready:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="not ready")
     return JSONResponse(content={"status": "ready"}, status_code=status.HTTP_200_OK)

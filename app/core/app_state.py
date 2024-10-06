@@ -122,7 +122,10 @@ class AppState:
         self.motion_detection_manager = MotionDetectionManager(config=motion_detection_config)
         self.edge_inference_manager = EdgeInferenceManager(config=inference_config)
         self.db_manager = DatabaseManager()
+        self.is_ready = False
 
 
 def get_app_state(request: Request) -> AppState:
+    if not hasattr(request.app.state, "app_state"):
+        raise RuntimeError("App state is not initialized.")
     return request.app.state.app_state

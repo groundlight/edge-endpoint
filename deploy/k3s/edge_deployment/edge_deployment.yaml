@@ -78,9 +78,22 @@ spec:
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
-
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/sqlite
+        startupProbe:
+          httpGet:
+            path: /health/live  # Checks if the server is up
+            port: 6717
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 6  # Wait for up to 1 min
+        readinessProbe:
+          httpGet:
+            path: /health/ready  # Checks if the server is ready to serve requests
+            port: 6717
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 6  # Wait for up to 1 min
 
       - name: inference-model-updater
         image: *edgeEndpointImage
