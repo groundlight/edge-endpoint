@@ -27,7 +27,7 @@ class InferenceDeployment(Base):
         Boolean,
         default=False,
         nullable=False,
-        comment=("Indicates whether the given detector already has an inference deployment in the kubernetes cluster."),
+        comment="Indicates whether the given detector already has an inference deployment in the kubernetes cluster.",
     )
     deployment_name = Column(
         String(100),
