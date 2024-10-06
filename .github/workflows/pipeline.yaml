@@ -18,41 +18,6 @@ env:
   GROUNDLIGHT_ENDPOINT: http://localhost:6717
 
 jobs:
-  unit-tests:
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v3
-
-      - name: Set up python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          installer-parallel: true
-
-      - name: Load Cached venv
-        id: cached-poetry-dependencies
-        uses: actions/cache@v3
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
-
-      - name: Install edge-endpoint's python dependencies
-        run: |
-          poetry install --no-interaction --no-root
-
-      - name: Run Unit Tests
-        run: |
-          source test/setup_plain_test_env.sh
-          poetry run pytest -vs -k "not test_motdet and not _live"
-
   test-in-k3s:
     runs-on: ubuntu-22.04
     steps:
@@ -165,7 +130,7 @@ jobs:
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
-  test-with-live-edge-endpoint:
+  test-edge-endpoint:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
@@ -220,7 +185,12 @@ jobs:
         run: |
           poetry install --no-interaction --no-root
 
-      - name: Run Unit Tests
+      - name: Run Unit Tests (that dont require docker)
+        run: |
+          source test/setup_plain_test_env.sh
+          poetry run pytest -vs -k "not test_motdet and not _live"
+
+      - name: Run Unit Tests (that do require docker)
         run: |
           source test/setup_plain_test_env.sh
           poetry run pytest -k "_live"
