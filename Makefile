@@ -12,7 +12,7 @@ install-pre-commit: install  ## Install pre-commit hooks. Requires .pre-commit-c
 test: install  ## Run unit tests in verbose mode
 	. test/setup_plain_test_env.sh && poetry run pytest --cov=app --cov-report=lcov -vs -k "not test_motdet and not _live"
 
-test-live: install  # Run tests that require a live edge-endpoint server and valid GL API token
+test-with-docker: install  # Run tests that require a live edge-endpoint server and valid GL API token
 	. test/setup_plain_test_env.sh && poetry run pytest -vs -k "_live"
 	# TODO: Refactor so the config is loaded by the test
 	. test/setup_motion_detection_test_env.sh && poetry run pytest -vs test/api/test_motdet.py
