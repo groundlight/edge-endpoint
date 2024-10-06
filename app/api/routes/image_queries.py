@@ -140,9 +140,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     image_query: ImageQuery | None = None
 
     # Confirm the existence of the detector in GL, get relevant metadata
-    detector_metadata = get_detector_metadata(  # NOTE: API call (once, then cached)
-        detector_id=detector_id, gl=gl
-    )
+    detector_metadata = get_detector_metadata(detector_id=detector_id, gl=gl)  # NOTE: API call (once, then cached)
 
     if confidence_threshold is None:
         # Use detector's confidence threshold
