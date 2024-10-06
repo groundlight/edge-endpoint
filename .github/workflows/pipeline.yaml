@@ -57,7 +57,7 @@ jobs:
           kubectl rollout status deployment edge-endpoint --timeout=5m
           kubectl describe pod edge-endpoint
 
-  test-motion-detection-with-live-edge-endpoint:
+  test-motion-detection:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
@@ -130,7 +130,7 @@ jobs:
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
-  test-edge-endpoint:
+  test-general-edge-endpoint:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
@@ -140,6 +140,30 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: ${{ env.POETRY_VERSION }}
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: true
+
+      - name: Load Cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v3
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
+
+      - name: Install edge-endpoint's python dependencies
+        run: |
+          poetry install --no-interaction --no-root
+
+      - name: Run Unit Tests (that dont require docker)
+        run: |
+          source test/setup_plain_test_env.sh
+          poetry run pytest -vs -k "not test_motdet and not _live"
 
       - name: Install Docker
         run: |
@@ -165,30 +189,6 @@ jobs:
             -d -p 6717:6717 \
             groundlight-edge)
           echo "::set-output name=container_id::$container_id"
-
-      - name: Install poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          installer-parallel: true
-
-      - name: Load Cached venv
-        id: cached-poetry-dependencies
-        uses: actions/cache@v3
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
-
-      - name: Install edge-endpoint's python dependencies
-        run: |
-          poetry install --no-interaction --no-root
-
-      - name: Run Unit Tests (that dont require docker)
-        run: |
-          source test/setup_plain_test_env.sh
-          poetry run pytest -vs -k "not test_motdet and not _live"
 
       - name: Run Unit Tests (that do require docker)
         run: |
