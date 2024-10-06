@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Optional
 
 import yaml
+from fastapi import status
 from kubernetes import client as kube_client
 from kubernetes import config
 
@@ -100,7 +101,7 @@ class InferenceDeploymentManager:
             )
             return deployment
         except kube_client.rest.ApiException as e:
-            if e.status == 404:
+            if e.status == status.HTTP_404_NOT_FOUND:
                 logger.debug(
                     f"Deployment {deployment_name} does not currently exist in namespace {self._target_namespace}."
                 )

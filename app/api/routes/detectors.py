@@ -3,7 +3,7 @@ from groundlight import Groundlight
 from model import Detector
 
 from app.core.app_state import get_groundlight_sdk_instance
-from app.core.utils import safe_call_api
+from app.core.utils import safe_call_sdk
 from app.schemas.schemas import DetectorCreate
 
 router = APIRouter()
@@ -11,7 +11,7 @@ router = APIRouter()
 
 @router.post("", response_model=Detector)
 async def create_detector(props: DetectorCreate, gl: Groundlight = Depends(get_groundlight_sdk_instance)):
-    return safe_call_api(
+    return safe_call_sdk(
         gl.create_detector,
         name=props.name,
         query=props.query,
@@ -23,4 +23,4 @@ async def create_detector(props: DetectorCreate, gl: Groundlight = Depends(get_g
 
 @router.get("/{id}", response_model=Detector)
 async def get_detector(id: str, gl: Groundlight = Depends(get_groundlight_sdk_instance)):
-    return safe_call_api(gl.get_detector, id=id)
+    return safe_call_sdk(gl.get_detector, id=id)

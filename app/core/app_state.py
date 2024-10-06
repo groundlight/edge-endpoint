@@ -14,7 +14,7 @@ from .database import DatabaseManager
 from .edge_inference import EdgeInferenceManager
 from .file_paths import DEFAULT_EDGE_CONFIG_PATH
 from .motion_detection import MotionDetectionManager
-from .utils import safe_call_api
+from .utils import safe_call_sdk
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,7 @@ def get_detector_metadata(detector_id: str, gl: Groundlight) -> Detector:
     Returns detector metadata from the Groundlight API.
     Caches the result so that we don't have to make an expensive API call every time.
     """
-    detector = safe_call_api(gl.get_detector, id=detector_id)
+    detector = safe_call_sdk(gl.get_detector, id=detector_id)
     return detector
 
 

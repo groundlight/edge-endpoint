@@ -41,7 +41,7 @@ def create_iqe(
     return iq
 
 
-def safe_call_api(api_method: Callable, **kwargs):
+def safe_call_sdk(api_method: Callable, **kwargs):
     """
     This ensures that we correctly handle HTTP error status codes. In some cases,
     for instance, 400 error codes from the SDK are forwarded as 500 by FastAPI,
@@ -52,7 +52,7 @@ def safe_call_api(api_method: Callable, **kwargs):
 
     except Exception as e:
         if hasattr(e, "status"):
-            raise HTTPException(status_code=e.status, detail=str(e))
+            raise HTTPException(status_code=e.status, detail=str(e)) from e
         raise e
 
 
