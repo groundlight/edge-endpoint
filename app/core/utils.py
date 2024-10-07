@@ -54,7 +54,7 @@ def safe_call_sdk(api_method: Callable, **kwargs):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(ex))
     except Exception as ex:
         if hasattr(ex, "status"):
-            raise HTTPException(status_code=e.status, detail=str(ex)) from ex
+            raise HTTPException(status_code=ex.status, detail=str(ex)) from ex
         raise ex
 
 
