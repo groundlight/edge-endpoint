@@ -14,8 +14,6 @@ from model import (
     ImageQueryTypeEnum,
     Label,
     ModeEnum,
-    MultiClassificationResult,
-    MultiClassModeConfiguration,
     ResultTypeEnum,
     Source,
 )
@@ -56,7 +54,7 @@ def create_iqe(  # noqa: PLR0913
 
 def _mode_to_result_and_type(
     mode: ModeEnum, mode_configuration: dict[str, Any] | None, confidence: float, result_value: int
-):
+) -> tuple[ResultTypeEnum, BinaryClassificationResult | CountingResult]:
     """
     Maps the detector mode to the corresponding result type and generates the result object
     based on the provided mode, confidence, and result value.
@@ -79,7 +77,10 @@ def _mode_to_result_and_type(
             raise ValueError("mode_configuration for Counting detector shouldn't be None.")
         count_mode_configuration = CountModeConfiguration(**mode_configuration)
         max_count = count_mode_configuration.max_count
-        greater_than_max = result_value > max_count if max_count is not None else None
+        greater_than_max = False
+        if max_count is not None:
+            greater_than_max = result_value > max_count
+            result_value = max_count if greater_than_max else result_value
         result_type = ResultTypeEnum.counting
         result = CountingResult(
             confidence=confidence,
@@ -88,16 +89,8 @@ def _mode_to_result_and_type(
             greater_than_max=greater_than_max,
         )
     elif mode == ModeEnum.MULTI_CLASS:
-        if mode_configuration is None:
-            raise ValueError("mode_configuration for MultiClassification detector shouldn't be None.")
-        multiclass_mode_configuration = MultiClassModeConfiguration(**mode_configuration)
-        label = multiclass_mode_configuration.class_names[str(result_value)]
-        result_type = ResultTypeEnum.multi_classification
-        result = MultiClassificationResult(
-            confidence=confidence,
-            source=source,
-            label=label,
-        )
+        raise NotImplementedError("Multiclass functionality is not yet implemented for the edge endpoint.")
+        # TODO add support for multiclass functionality.
     else:
         raise ValueError(f"Got unrecognized or unsupported detector mode: {mode}")
     return result_type, result
