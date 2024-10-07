@@ -17,6 +17,19 @@ from app.core.utils import pil_image_to_bytes
 DETECTOR_ID = "det_2SagpFUrs83cbMZsap5hZzRjZw4"
 
 
+@pytest.fixture(scope="module", autouse=True)
+def ensure_edge_endpoint_is_live():
+    """Ensure that the edge-endpoint server is live before running tests."""
+    import requests
+
+    try:
+        response = requests.get("http://localhost:6717/health/live")
+        response.raise_for_status()
+        assert response.json().get("status") == "alive", "Edge endpoint is not live."
+    except requests.RequestException as e:
+        pytest.fail(f"Edge endpoint is not live: {e}")
+
+
 @pytest.fixture(name="gl")
 def fixture_gl() -> Groundlight:
     """Create a Groundlight client object."""
