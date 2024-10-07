@@ -8,7 +8,7 @@ from app.core.utils import pil_image_to_bytes
 
 # Tests in this file require a live edge-endpoint server and GL Api token in order to run.
 # Not ideal for unit-testing.
-
+TEST_ENDPOINT = "http://localhost:6717"
 
 # Detector ID associated with the detector with parameters
 # - name="edge_testing_det",
@@ -23,9 +23,22 @@ def ensure_edge_endpoint_is_live():
     import requests
 
     try:
-        response = requests.get("http://localhost:6717/health/live")
+        response = requests.get(TEST_ENDPOINT + "/health/live")
         response.raise_for_status()
         assert response.json().get("status") == "alive", "Edge endpoint is not live."
+    except requests.RequestException as e:
+        pytest.fail(f"Edge endpoint is not live: {e}")
+
+
+@pytest.fixture(scope="module", autouse=True)
+def ensure_edge_endpoint_is_ready():
+    """Ensure that the edge-endpoint server is ready before running tests."""
+    import requests
+
+    try:
+        response = requests.get(TEST_ENDPOINT + "/health/ready")
+        response.raise_for_status()
+        assert response.json().get("status") == "ready", "Edge endpoint is not ready."
     except requests.RequestException as e:
         pytest.fail(f"Edge endpoint is not live: {e}")
 
@@ -33,7 +46,7 @@ def ensure_edge_endpoint_is_live():
 @pytest.fixture(name="gl")
 def fixture_gl() -> Groundlight:
     """Create a Groundlight client object."""
-    return Groundlight(endpoint="http://localhost:6717")
+    return Groundlight(endpoint=TEST_ENDPOINT)
 
 
 @pytest.fixture

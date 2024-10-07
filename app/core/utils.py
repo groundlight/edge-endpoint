@@ -2,9 +2,8 @@ from datetime import datetime
 from io import BytesIO
 from typing import Callable
 
-import groundlight
 import ksuid
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from model import ROI, BinaryClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
 from PIL import Image
 
@@ -50,8 +49,8 @@ def safe_call_sdk(api_method: Callable, **kwargs):
     """
     try:
         return api_method(**kwargs)
-    except groundlight.NotFoundError as ex:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(ex))
+    # except groundlight.NotFoundError as ex:
+    #     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(ex))
     except Exception as ex:
         if hasattr(ex, "status"):
             raise HTTPException(status_code=ex.status, detail=str(ex)) from ex
