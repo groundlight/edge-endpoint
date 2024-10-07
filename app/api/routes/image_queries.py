@@ -5,7 +5,7 @@ from typing import Optional
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from groundlight import Groundlight
-from model import Detector, ImageQuery, ModeEnum, ResultTypeEnum, SourceEnum, Source
+from model import Detector, ImageQuery, ModeEnum, ResultTypeEnum
 from PIL import Image
 
 from app.core import constants

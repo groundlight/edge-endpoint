@@ -29,12 +29,12 @@ def create_iqe(  # noqa: PLR0913
         result = BinaryClassificationResult(
             confidence=confidence,
             source=source,
-            label = label,
+            label=label,
         )
     elif mode == ModeEnum.COUNT:
         result_type = ResultTypeEnum.counting
         result = CountingResult(
-            confidence = confidence,
+            confidence=confidence,
             source=source,
             count=result_value,
             # TODO: value for greater_than_max?
@@ -44,11 +44,11 @@ def create_iqe(  # noqa: PLR0913
         result = MultiClassificationResult(
             confidence=confidence,
             source=source,
-            label=str(result_value),# TODO what is the label for multiclass supposed to be?
+            label=str(result_value),  # TODO what is the label for multiclass supposed to be?
         )
     else:
         raise ValueError(f"Got unrecognized or unsupported detector mode: {mode}")
-    
+
     iq = ImageQuery(
         metadata=None,
         id=prefixed_ksuid(prefix="iqe_"),
