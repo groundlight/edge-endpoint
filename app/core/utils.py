@@ -93,6 +93,7 @@ def _mode_to_result_and_type(
         # TODO add support for multiclass functionality.
     else:
         raise ValueError(f"Got unrecognized or unsupported detector mode: {mode}")
+
     return result_type, result
 
 
