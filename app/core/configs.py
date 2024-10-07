@@ -1,7 +1,7 @@
 import logging
-from typing import Dict, Optional, Union
+from typing import Dict, Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ValidationInfo
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,14 @@ class DetectorConfig(BaseModel):
         description="Whether the detector should be in edge-only inference mode or not. Optional; defaults to False.",
     )
 
+    @field_validator('edge_only', 'edge_only_inference')
+    @classmethod
+    def validate_edge_modes(cls, v, info):
+        if 'edge_only' in info.data and 'edge_only_inference' in info.data:
+            if info.data['edge_only'] and info.data['edge_only_inference']:
+                raise ValueError("'edge_only' and 'edge_only_inference' cannot both be True")
+        return v
+
 
 class RootEdgeConfig(BaseModel):
     """
@@ -68,42 +76,25 @@ class RootEdgeConfig(BaseModel):
     local_inference_templates: Dict[str, LocalInferenceConfig]
     detectors: Dict[str, DetectorConfig]
 
-    @validator("detectors", each_item=False)
+    @field_validator("detectors")
+    @classmethod
     def validate_templates(
         cls,
         detectors: Dict[str, DetectorConfig],
-        values: Dict[str, Dict[str, Union[MotionDetectionConfig, LocalInferenceConfig]]],
+        info: ValidationInfo,
     ):
         """
         Validate the templates referenced by the detectors.
-        :param detectors: The detectors to validate.
-        :param values: The values passed to the validator. This is a dictionary of the form:
-            {
-                'motion_detection_templates': {
-                    'default': MotionDetectionConfig(
-                                    enabled=True,
-                                    percentage_threshold=0.01,
-                                    val_threshold=None,
-                                    max_time_between_images=3600.0
-                                )
-                }
-                'local_inference_templates': {
-                    'default': LocalInferenceConfig(
-                                    enabled=True,
-                                    refresh_rate=120.0
-                                )
-                }
-            }
         """
         for detector in detectors.values():
             if (
-                "motion_detection_templates" in values
-                and detector.motion_detection_template not in values["motion_detection_templates"]
+                "motion_detection_templates" in info.data
+                and detector.motion_detection_template not in info.data["motion_detection_templates"]
             ):
                 raise ValueError(f"Motion Detection Template {detector.motion_detection_template} not defined.")
             if (
-                "local_inference_templates" in values
-                and detector.local_inference_template not in values["local_inference_templates"]
+                "local_inference_templates" in info.data
+                and detector.local_inference_template not in info.data["local_inference_templates"]
             ):
                 raise ValueError(f"Local Inference Template {detector.local_inference_template} not defined.")
         return detectors
