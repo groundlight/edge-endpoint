@@ -65,6 +65,7 @@ async def post_image_query(
     want_async: Optional[str] = Query(None),
     gl: Groundlight = Depends(get_groundlight_sdk_instance),
     app_state: AppState = Depends(get_app_state),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     """
     Submit an image query for a given detector.
@@ -224,7 +225,7 @@ async def post_image_query(
                 confidence_threshold=confidence_threshold,
             ):
                 logger.info("Escalating to the cloud API server for future training due to low confidence.")
-                _post_image_query_to_cloud_async(detector_id=detector_id, image=image, gl=gl)
+                background_tasks.add_task(safe_call_api, gl.ask_async, detector=detector_id, image=image)
         else:
             logger.info(
                 "Ran inference locally, but detector confidence is not high enough to return. Current confidence:"
@@ -247,6 +248,8 @@ async def post_image_query(
         # Fail if edge inference is not available and edge-only mode is enabled
         if edge_only:
             raise RuntimeError("Edge-only mode is enabled on this detector, but edge inference is not available.")
+        elif edge_only_inference:
+            raise RuntimeError("Edge-only inference mode is enabled on this detector, but edge inference is not available.")
 
     # Finally, fall back to submitting the image to the cloud
     if not image_query:
@@ -359,14 +362,3 @@ def _is_confident_enough(
     if confidence_threshold is not None:
         return confidence >= confidence_threshold
     return confidence >= detector_metadata.confidence_threshold
-
-async def _post_image_query_to_cloud_async(detector_id: str, image: Image.Image, gl: Groundlight, background_tasks: BackgroundTasks):
-    """
-    Submit an image query for a given detector to the cloud API server for async processing.
-
-    :param detector_id: the string id of the detector to use, like `det_12345`
-    :param image: the image to submit.
-    :param gl: Application's Groundlight SDK instance
-    :param background_tasks: fastapi BackgroundTasks object to add background tasks to the request. Automatically passed in by FastAPI.
-    """
-    background_tasks.add_task(safe_call_api, gl.ask_async, detector=detector_id, image=image)
