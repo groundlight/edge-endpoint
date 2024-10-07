@@ -193,8 +193,6 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
             if patience_time is None:
                 patience_time = constants.DEFAULT_PATIENCE_TIME
-            if confidence_threshold is None:
-                confidence_threshold = detector_metadata.confidence_threshold
 
             image_query = create_iqe(
                 detector_id=detector_id,
