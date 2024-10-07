@@ -4,7 +4,7 @@ from typing import Callable
 
 import ksuid
 from fastapi import HTTPException
-from model import BinaryClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
+from model import ROI, BinaryClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
 from PIL import Image
 
 from . import constants
@@ -12,11 +12,14 @@ from . import constants
 
 def create_iqe(
     detector_id: str,
+    result_type: ResultTypeEnum,
     label: str,
     confidence: float,
     confidence_threshold: float,
     query: str = "",
     patience_time: float = constants.DEFAULT_PATIENCE_TIME,
+    rois: list[ROI] | None = None,
+    text: str | None = None,
 ) -> ImageQuery:
     iq = ImageQuery(
         metadata=None,
@@ -25,15 +28,15 @@ def create_iqe(
         created_at=datetime.utcnow(),
         query=query,
         detector_id=detector_id,
-        result_type=ResultTypeEnum.binary_classification,
+        result_type=result_type,
         result=BinaryClassificationResult(
             confidence=confidence,
             label=label,
         ),
         confidence_threshold=confidence_threshold,
         patience_time=patience_time,
-        rois=None,
-        text=None,
+        rois=rois,
+        text=text,
     )
     return iq
 
