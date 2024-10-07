@@ -198,7 +198,8 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
             image_query = create_iqe(
                 detector_id=detector_id,
-                detector_metadata=detector_metadata,
+                mode=detector_metadata.mode,
+                mode_configuration=detector_metadata.mode_configuration,
                 result_value=results["label"],
                 confidence=confidence,
                 confidence_threshold=confidence_threshold,

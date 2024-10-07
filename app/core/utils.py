@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from io import BytesIO
-from typing import Callable
+from typing import Any, Callable
 
 import groundlight
 import ksuid
@@ -10,7 +10,6 @@ from model import (
     BinaryClassificationResult,
     CountingResult,
     CountModeConfiguration,
-    Detector,
     ImageQuery,
     ImageQueryTypeEnum,
     Label,
@@ -27,7 +26,8 @@ from . import constants
 
 def create_iqe(  # noqa: PLR0913
     detector_id: str,
-    detector_metadata: Detector,
+    mode: ModeEnum,
+    mode_configuration: dict[str, Any] | None,
     result_value: int,
     confidence: float,
     confidence_threshold: float,
@@ -36,7 +36,7 @@ def create_iqe(  # noqa: PLR0913
     rois: list[ROI] | None = None,
     text: str | None = None,
 ) -> ImageQuery:
-    result_type, result = _mode_to_result_and_type(detector_metadata, confidence, result_value)
+    result_type, result = _mode_to_result_and_type(mode, mode_configuration, confidence, result_value)
     iq = ImageQuery(
         metadata=None,
         id=prefixed_ksuid(prefix="iqe_"),
@@ -54,7 +54,9 @@ def create_iqe(  # noqa: PLR0913
     return iq
 
 
-def _mode_to_result_and_type(detector_metadata: Detector, confidence: float, result_value: int):
+def _mode_to_result_and_type(
+    mode: ModeEnum, mode_configuration: dict[str, Any] | None, confidence: float, result_value: int
+):
     """
     Maps the detector mode to the corresponding result type and generates the result object
     based on the provided mode, confidence, and result value.
@@ -63,8 +65,6 @@ def _mode_to_result_and_type(detector_metadata: Detector, confidence: float, res
     :param confidence: The confidence of the predicted value.
     :param result_value: The predicted value.
     """
-    mode = detector_metadata.mode
-    mode_configuration = detector_metadata.mode_configuration
     source = Source.ALGORITHM  # Results from edge model are always from algorithm
     if mode == ModeEnum.BINARY:
         result_type = ResultTypeEnum.binary_classification
@@ -77,8 +77,8 @@ def _mode_to_result_and_type(detector_metadata: Detector, confidence: float, res
     elif mode == ModeEnum.COUNT:
         if mode_configuration is None:
             raise ValueError("mode_configuration for Counting detector shouldn't be None.")
-        mode_configuration = CountModeConfiguration(**mode_configuration)
-        max_count = mode_configuration.max_count
+        count_mode_configuration = CountModeConfiguration(**mode_configuration)
+        max_count = count_mode_configuration.max_count
         greater_than_max = result_value > max_count if max_count is not None else None
         result_type = ResultTypeEnum.counting
         result = CountingResult(
@@ -90,8 +90,8 @@ def _mode_to_result_and_type(detector_metadata: Detector, confidence: float, res
     elif mode == ModeEnum.MULTI_CLASS:
         if mode_configuration is None:
             raise ValueError("mode_configuration for MultiClassification detector shouldn't be None.")
-        mode_configuration = MultiClassModeConfiguration(**mode_configuration)
-        label = mode_configuration.class_names[str(result_value)]
+        multiclass_mode_configuration = MultiClassModeConfiguration(**mode_configuration)
+        label = multiclass_mode_configuration.class_names[str(result_value)]
         result_type = ResultTypeEnum.multi_classification
         result = MultiClassificationResult(
             confidence=confidence,

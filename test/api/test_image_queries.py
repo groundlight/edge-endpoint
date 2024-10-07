@@ -9,10 +9,13 @@ from model import (
     BinaryClassificationResult,
     Detector,
     DetectorTypeEnum,
+    EscalationTypeEnum,
     ImageQuery,
     ImageQueryTypeEnum,
+    Label,
     ModeEnum,
     ResultTypeEnum,
+    Source,
 )
 from PIL import Image
 
@@ -47,6 +50,7 @@ def detector() -> Detector:
         metadata=None,
         mode=ModeEnum.BINARY,
         mode_configuration=None,
+        escalation_type=EscalationTypeEnum.STANDARD,
     )
 
 
@@ -58,7 +62,7 @@ confident_cloud_iq = ImageQuery(
     query="",
     detector_id=DETECTOR_ID,
     result_type=ResultTypeEnum.binary_classification,
-    result=BinaryClassificationResult(confidence=1.0, label="YES"),
+    result=BinaryClassificationResult(confidence=1.0, label=Label.YES, source=Source.CLOUD),
     confidence_threshold=0.75,
     patience_time=30,
     rois=None,

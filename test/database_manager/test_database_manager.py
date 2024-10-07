@@ -1,5 +1,5 @@
 import pytest
-from model import ImageQuery, ResultTypeEnum
+from model import ImageQuery, ModeEnum
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
@@ -152,8 +152,9 @@ def test_get_inference_deployments_raises_sqlalchemy_error(db_manager: DatabaseM
 def test_get_iqe_record(db_manager, database_reset):
     image_query: ImageQuery = create_iqe(
         detector_id=prefixed_ksuid("det_"),
-        result_type=ResultTypeEnum.binary_classification,
-        label="test_label",
+        mode=ModeEnum.BINARY,
+        mode_configuration=None,
+        result_value=0,
         confidence=0.5,
         query="test_query",
         confidence_threshold=0.9,
