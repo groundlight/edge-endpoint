@@ -5,7 +5,10 @@ from typing import Optional
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from groundlight import Groundlight
-from model import Detector, ImageQuery, ModeEnum, ResultTypeEnum
+from model import (
+    Detector,
+    ImageQuery,
+)
 from PIL import Image
 
 from app.core import constants
@@ -188,16 +191,14 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             else:
                 logger.debug(f"Edge detector confidence is high enough to return. {detector_id=}")
 
-            result_type, results = _mode_to_result_type(detector_metadata.mode, results)
-            patience_time = patience_time or constants.DEFAULT_PATIENCE_TIME
-
+            if patience_time is None:
+                patience_time = constants.DEFAULT_PATIENCE_TIME
             if confidence_threshold is None:
                 confidence_threshold = detector_metadata.confidence_threshold
 
-            mode = detector_metadata.mode
             image_query = create_iqe(
                 detector_id=detector_id,
-                mode=mode,
+                detector_metadata=detector_metadata,
                 result_value=results["label"],
                 confidence=confidence,
                 confidence_threshold=confidence_threshold,
@@ -331,16 +332,3 @@ def _is_confident_enough(confidence: Optional[float], confidence_threshold: floa
     if confidence is None:
         return True  # None confidence means answered by a human, so it's confident enough to return
     return confidence >= confidence_threshold
-
-
-def _mode_to_result_type(mode: ModeEnum, results: dict):
-    if mode == ModeEnum.BINARY:
-        result_type = ResultTypeEnum.binary_classification
-        results["label"] = "NO" if results["label"] else "YES"  # Map false / 0 to "YES" and true / 1 to "NO"
-    elif mode == ModeEnum.COUNT:
-        result_type = ResultTypeEnum.counting
-    elif mode == ModeEnum.MULTI_CLASS:
-        result_type = ResultTypeEnum.multi_classification
-    else:
-        raise ValueError(f"Got unrecognized detector mode: {mode}")
-    return result_type, results

@@ -1,11 +1,25 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO
 from typing import Callable
 
 import groundlight
 import ksuid
 from fastapi import HTTPException, status
-from model import ROI, BinaryClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
+from model import (
+    ROI,
+    BinaryClassificationResult,
+    CountingResult,
+    CountModeConfiguration,
+    Detector,
+    ImageQuery,
+    ImageQueryTypeEnum,
+    Label,
+    ModeEnum,
+    MultiClassificationResult,
+    MultiClassModeConfiguration,
+    ResultTypeEnum,
+    Source,
+)
 from PIL import Image
 
 from . import constants
@@ -13,7 +27,7 @@ from . import constants
 
 def create_iqe(  # noqa: PLR0913
     detector_id: str,
-    mode: ModeEnum,
+    detector_metadata: Detector,
     result_value: int,
     confidence: float,
     confidence_threshold: float,
@@ -22,38 +36,12 @@ def create_iqe(  # noqa: PLR0913
     rois: list[ROI] | None = None,
     text: str | None = None,
 ) -> ImageQuery:
-    source = Source.ALGORITHM
-    if mode == ModeEnum.BINARY:
-        result_type = ResultTypeEnum.binary_classification
-        label = "NO" if result_value else "YES"  # Map false / 0 to "YES" and true / 1 to "NO"
-        result = BinaryClassificationResult(
-            confidence=confidence,
-            source=source,
-            label=label,
-        )
-    elif mode == ModeEnum.COUNT:
-        result_type = ResultTypeEnum.counting
-        result = CountingResult(
-            confidence=confidence,
-            source=source,
-            count=result_value,
-            # TODO: value for greater_than_max?
-        )
-    elif mode == ModeEnum.MULTI_CLASS:
-        result_type = ResultTypeEnum.multi_classification
-        result = MultiClassificationResult(
-            confidence=confidence,
-            source=source,
-            label=str(result_value),  # TODO what is the label for multiclass supposed to be?
-        )
-    else:
-        raise ValueError(f"Got unrecognized or unsupported detector mode: {mode}")
-
+    result_type, result = _mode_to_result_and_type(detector_metadata, confidence, result_value)
     iq = ImageQuery(
         metadata=None,
         id=prefixed_ksuid(prefix="iqe_"),
         type=ImageQueryTypeEnum.image_query,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
         query=query,
         detector_id=detector_id,
         result_type=result_type,
@@ -64,6 +52,55 @@ def create_iqe(  # noqa: PLR0913
         text=text,
     )
     return iq
+
+
+def _mode_to_result_and_type(detector_metadata: Detector, confidence: float, result_value: int):
+    """
+    Maps the detector mode to the corresponding result type and generates the result object
+    based on the provided mode, confidence, and result value.
+
+    :param mode: The mode of the detector.
+    :param confidence: The confidence of the predicted value.
+    :param result_value: The predicted value.
+    """
+    mode = detector_metadata.mode
+    mode_configuration = detector_metadata.mode_configuration
+    source = Source.ALGORITHM  # Results from edge model are always from algorithm
+    if mode == ModeEnum.BINARY:
+        result_type = ResultTypeEnum.binary_classification
+        label = Label.NO if result_value else Label.YES  # Map false / 0 to "YES" and true / 1 to "NO"
+        result = BinaryClassificationResult(
+            confidence=confidence,
+            source=source,
+            label=label,
+        )
+    elif mode == ModeEnum.COUNT:
+        if mode_configuration is None:
+            raise ValueError("mode_configuration for Counting detector shouldn't be None.")
+        mode_configuration = CountModeConfiguration(**mode_configuration)
+        max_count = mode_configuration.max_count
+        greater_than_max = result_value > max_count if max_count is not None else None
+        result_type = ResultTypeEnum.counting
+        result = CountingResult(
+            confidence=confidence,
+            source=source,
+            count=result_value,
+            greater_than_max=greater_than_max,
+        )
+    elif mode == ModeEnum.MULTI_CLASS:
+        if mode_configuration is None:
+            raise ValueError("mode_configuration for MultiClassification detector shouldn't be None.")
+        mode_configuration = MultiClassModeConfiguration(**mode_configuration)
+        label = mode_configuration.class_names[str(result_value)]
+        result_type = ResultTypeEnum.multi_classification
+        result = MultiClassificationResult(
+            confidence=confidence,
+            source=source,
+            label=label,
+        )
+    else:
+        raise ValueError(f"Got unrecognized or unsupported detector mode: {mode}")
+    return result_type, result
 
 
 def safe_call_sdk(api_method: Callable, **kwargs):
