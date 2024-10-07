@@ -115,7 +115,7 @@ async def post_image_query(
     # TODO: instead of just forwarding want_async calls to the cloud, facilitate partial
     #       processing of the async request on the edge before escalating to the cloud.
     _want_async = want_async is not None and want_async.lower() == "true"
-    if _want_async and not edge_only:  # If edge-only mode is enabled, we don't want to make cloud API calls
+    if _want_async and not (edge_only or edge_only_inference):  # If edge-only mode is enabled, we don't want to make cloud API calls
         logger.debug(f"Submitting ask_async image query to cloud API server for {detector_id=}")
         return safe_call_api(
             gl.submit_image_query,
