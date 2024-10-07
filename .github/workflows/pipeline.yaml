@@ -197,6 +197,7 @@ jobs:
 
       - name: Run Unit Tests (that do require docker)
         run: |
+          GROUNDLIGHT_ENDPOINT: http://localhost:6717
           source test/setup_plain_test_env.sh
           poetry run pytest -k "_live"
 
