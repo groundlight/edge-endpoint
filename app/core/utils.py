@@ -13,8 +13,8 @@ from . import constants
 
 def create_iqe(  # noqa: PLR0913
     detector_id: str,
-    result_type: ResultTypeEnum,
-    label: str,
+    mode: ModeEnum,
+    result_value: int,
     confidence: float,
     confidence_threshold: float,
     query: str = "",
@@ -22,6 +22,33 @@ def create_iqe(  # noqa: PLR0913
     rois: list[ROI] | None = None,
     text: str | None = None,
 ) -> ImageQuery:
+    source = Source.ALGORITHM
+    if mode == ModeEnum.BINARY:
+        result_type = ResultTypeEnum.binary_classification
+        label = "NO" if result_value else "YES"  # Map false / 0 to "YES" and true / 1 to "NO"
+        result = BinaryClassificationResult(
+            confidence=confidence,
+            source=source,
+            label = label,
+        )
+    elif mode == ModeEnum.COUNT:
+        result_type = ResultTypeEnum.counting
+        result = CountingResult(
+            confidence = confidence,
+            source=source,
+            count=result_value,
+            # TODO: value for greater_than_max?
+        )
+    elif mode == ModeEnum.MULTI_CLASS:
+        result_type = ResultTypeEnum.multi_classification
+        result = MultiClassificationResult(
+            confidence=confidence,
+            source=source,
+            label=str(result_value),# TODO what is the label for multiclass supposed to be?
+        )
+    else:
+        raise ValueError(f"Got unrecognized or unsupported detector mode: {mode}")
+    
     iq = ImageQuery(
         metadata=None,
         id=prefixed_ksuid(prefix="iqe_"),
@@ -30,12 +57,9 @@ def create_iqe(  # noqa: PLR0913
         query=query,
         detector_id=detector_id,
         result_type=result_type,
-        result=BinaryClassificationResult(
-            confidence=confidence,
-            label=label,
-        ),
-        confidence_threshold=confidence_threshold,
+        result=result,
         patience_time=patience_time,
+        confidence_threshold=confidence_threshold,
         rois=rois,
         text=text,
     )

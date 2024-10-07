@@ -5,7 +5,7 @@ from typing import Optional
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from groundlight import Groundlight
-from model import Detector, ImageQuery, ModeEnum, ResultTypeEnum
+from model import Detector, ImageQuery, ModeEnum, ResultTypeEnum, SourceEnum, Source
 from PIL import Image
 
 from app.core import constants
@@ -191,13 +191,17 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             result_type, results = _mode_to_result_type(detector_metadata.mode, results)
             patience_time = patience_time or constants.DEFAULT_PATIENCE_TIME
 
+            if confidence_threshold is None:
+                confidence_threshold = detector_metadata.confidence_threshold
+
+            mode = detector_metadata.mode
             image_query = create_iqe(
                 detector_id=detector_id,
-                result_type=result_type,
-                label=results["label"],
+                mode=mode,
+                result_value=results["label"],
                 confidence=confidence,
-                query=detector_metadata.query,
                 confidence_threshold=confidence_threshold,
+                query=detector_metadata.query,
                 patience_time=patience_time,
                 rois=results["rois"],
                 text=results["text"],
