@@ -1,4 +1,7 @@
+import time
+
 import pytest
+import requests
 from fastapi import status
 from groundlight import ApiException, Groundlight
 from model import Detector
@@ -8,7 +11,8 @@ from app.core.utils import pil_image_to_bytes
 
 # Tests in this file require a live edge-endpoint server and GL Api token in order to run.
 # Not ideal for unit-testing.
-
+TEST_ENDPOINT = "http://localhost:6717"
+MAX_WAIT_TIME_S = 60
 
 # Detector ID associated with the detector with parameters
 # - name="edge_testing_det",
@@ -17,10 +21,29 @@ from app.core.utils import pil_image_to_bytes
 DETECTOR_ID = "det_2SagpFUrs83cbMZsap5hZzRjZw4"
 
 
+@pytest.fixture(scope="module", autouse=True)
+def ensure_edge_endpoint_is_live_and_ready():
+    """Ensure that the edge-endpoint server is live and ready before running tests."""
+    start_time = time.time()
+    final_exception = None
+    while time.time() - start_time < MAX_WAIT_TIME_S:
+        try:
+            live_response = requests.get(TEST_ENDPOINT + "/health/live")
+            live_response.raise_for_status()
+            ready_response = requests.get(TEST_ENDPOINT + "/health/ready")
+            ready_response.raise_for_status()
+            if live_response.json().get("status") == "alive" and ready_response.json().get("status") == "ready":
+                return
+        except requests.RequestException as e:
+            final_exception = e
+            time.sleep(1)  # wait for 1 second before retrying
+    pytest.fail(f"Edge endpoint is not live and ready after polling for {MAX_WAIT_TIME_S} seconds. {final_exception=}")
+
+
 @pytest.fixture(name="gl")
 def fixture_gl() -> Groundlight:
     """Create a Groundlight client object."""
-    return Groundlight(endpoint="http://localhost:6717")
+    return Groundlight(endpoint=TEST_ENDPOINT)
 
 
 @pytest.fixture

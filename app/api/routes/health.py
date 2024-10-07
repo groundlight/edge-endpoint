@@ -5,9 +5,6 @@ from app.core.app_state import AppState, get_app_state
 
 router = APIRouter()
 
-# Flag that gets set to True when the App is ready to serve requests
-IS_READY = False
-
 
 @router.get("/live")
 async def liveness() -> JSONResponse:
