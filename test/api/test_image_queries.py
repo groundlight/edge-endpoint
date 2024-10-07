@@ -34,7 +34,7 @@ DETECTOR_ID = "det_abcdefghijklmnopqrstuvwxyz"
 
 @pytest.fixture
 def detector() -> Detector:
-    """Retrieve the detector using the Groundlight client."""
+    """Retrieve a faked Detector."""
     return Detector(
         id=DETECTOR_ID,
         type=DetectorTypeEnum.detector,

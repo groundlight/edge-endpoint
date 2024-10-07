@@ -5,8 +5,6 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
-TEST_URL = "http://testserver"
-
 
 @pytest.fixture(scope="module")
 def test_client() -> TestClient:
@@ -15,6 +13,6 @@ def test_client() -> TestClient:
         return "sqlite:///:memory:"
 
     with patch("app.core.database.get_database_url", mock_get_database_url):
-        with TestClient(app, base_url="http://testserver") as client:
+        with TestClient(app) as client:
             # Context manager handles lifecycle of the TestClient
             yield client
