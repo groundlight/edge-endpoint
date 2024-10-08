@@ -8,18 +8,17 @@ from model import (
     Source,
 )
 
-from app.core.utils import create_iqe
+from app.core.utils import create_iqe, prefixed_ksuid
 
 
 class TestCreateIQE:
     def setup_method(self):
-        self.detector_id = "det_xxx"
         self.confidence_threshold = 0.75
 
     def test_create_binary_iqe(self):
         """Test creating a basic binary IQE."""
         iqe = create_iqe(
-            detector_id=self.detector_id,
+            detector_id=prefixed_ksuid("det_"),
             mode=ModeEnum.BINARY,
             mode_configuration=None,
             result_value=0,
@@ -37,7 +36,7 @@ class TestCreateIQE:
         """Test creating a basic count IQE."""
         count_value = 2
         iqe = create_iqe(
-            detector_id=self.detector_id,
+            detector_id=prefixed_ksuid("det_"),
             mode=ModeEnum.COUNT,
             mode_configuration={"max_count": 5},
             result_value=count_value,
@@ -57,7 +56,7 @@ class TestCreateIQE:
         count_value = 6
         max_count_value = 5
         iqe = create_iqe(
-            detector_id=self.detector_id,
+            detector_id=prefixed_ksuid("det_"),
             mode=ModeEnum.COUNT,
             mode_configuration={"max_count": max_count_value},
             result_value=count_value,
@@ -79,7 +78,7 @@ class TestCreateIQE:
             NotImplementedError, match="Multiclass functionality is not yet implemented for the edge endpoint."
         ):
             create_iqe(
-                detector_id=self.detector_id,
+                detector_id=prefixed_ksuid("det_"),
                 mode=ModeEnum.MULTI_CLASS,
                 mode_configuration={},
                 result_value=1,
@@ -92,7 +91,7 @@ class TestCreateIQE:
         """Test creating a count IQE with no mode_configuration."""
         with pytest.raises(ValueError, match="mode_configuration for Counting detector shouldn't be None."):
             create_iqe(
-                detector_id=self.detector_id,
+                detector_id=prefixed_ksuid("det_"),
                 mode=ModeEnum.COUNT,
                 mode_configuration=None,
                 result_value=1,
