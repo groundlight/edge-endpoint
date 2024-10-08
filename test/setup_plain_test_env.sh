@@ -52,8 +52,6 @@ detectors:
   - detector_id: 'det_2UOxao4HZyB9gv4ZVtwMOvdqgh9'
     motion_detection_template: 'disabled'
     local_inference_template: 'disabled'
-    edge_only_inference: true
-EOM
 )
 
 export EDGE_CONFIG
