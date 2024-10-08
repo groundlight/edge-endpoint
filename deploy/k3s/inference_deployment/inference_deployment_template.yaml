@@ -105,3 +105,17 @@ spec:
         hostPath:
           path: /opt/groundlight/edge/pinamod-public
           type: Directory
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: image-cache-warmer
+spec:
+  template:
+    spec:
+      containers:
+      - name: image-puller
+        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:latest
+        command: ["echo", "Pulling image to warm cache"]
+      restartPolicy: Never
+  backoffLimit: 1

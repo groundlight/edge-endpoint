@@ -38,34 +38,34 @@ export GROUNDLIGHT_API_TOKEN="api_xxxxxx"
 # Choose an inference flavor, either CPU or (default) GPU.
 # Note that appropriate setup for GPU may need to be done separately.
 export INFERENCE_FLAVOR="CPU"
-# export INFERENCE_FLAVOR = "GPU"
+# export INFERENCE_FLAVOR="GPU"
 ```
 
 You'll also need to configure your AWS credentials using `aws configure` to include credentials that have permissions to pull from the appropriate ECR location (if you don't already have the AWS CLI installed, refer to the instructions [here](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)).
 
 To start the cluster, run 
 ```shell 
-> ./deploy/bin/cluster_setup.sh
+./deploy/bin/cluster_setup.sh
 ```
 
 Sometimes it might be desirable to reset all database tables(i.e., delete all existing data) for a fresh start. In that case, 
 you will need to start the cluster with an extra argument:
 
 ```shell
-> ./deploy/bin/cluster_setup.sh db_reset
+./deploy/bin/cluster_setup.sh db_reset
 ```
 
 This will create the edge-endpoint deployment with two containers: one for the edge logic and another one for creating/updating inference
 deployments. After a while you should be able to see something like this if you run `kubectl get pods`:
 
-```shell
+```
 NAME                                    READY   STATUS    RESTARTS   AGE
 edge-endpoint-594d645588-5mf28          2/2     Running   0          4s
 ```
 
 If you added detectors to the [edge config file](../configs/edge-config.yaml), you should also see a pod for each of them, e.g.:
 
-```shell
+```
 NAME                                                              READY   STATUS    RESTARTS   AGE
 edge-endpoint-594d645588-5mf28                                    2/2     Running   0          4s
 inferencemodel-det-3jemxiunjuekdjzbuxavuevw15k-5d8b454bcb-xqf8m   1/1     Running   0          2s
