@@ -1,8 +1,8 @@
 import logging
 from typing import Dict, Optional
-from typing_extensions import Self
 
 from pydantic import BaseModel, Field, model_validator
+from typing_extensions import Self
 
 logger = logging.getLogger(__name__)
 
