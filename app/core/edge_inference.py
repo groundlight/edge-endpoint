@@ -85,12 +85,12 @@ def parse_inference_response(response: dict) -> dict:
     text: str | None = None
     # Attempt to extract rois / text
     if secondary_predictions is not None:
-        roi_predictions: list[list[dict]] | None = secondary_predictions.get("roi_predictions", None)
+        roi_predictions: dict[str, list[list[dict]]] | None = secondary_predictions.get("roi_predictions", None)
         text_predictions: list[str] | None = secondary_predictions.get("text_predictions", None)
         if roi_predictions is not None:
-            rois = roi_predictions[0]
+            rois = roi_predictions["rois"][0]
             for i, roi in enumerate(rois):
-                geometry = rois[i]["geometry"]
+                geometry = roi["geometry"]
                 # TODO add validation to calculate x and y automatically
                 x = 0.5 * (geometry["left"] + geometry["right"])
                 y = 0.5 * (geometry["top"] + geometry["bottom"])
