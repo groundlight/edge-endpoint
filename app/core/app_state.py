@@ -14,7 +14,7 @@ from .database import DatabaseManager
 from .edge_inference import EdgeInferenceManager
 from .file_paths import DEFAULT_EDGE_CONFIG_PATH
 from .motion_detection import MotionDetectionManager
-from .utils import safe_call_api
+from .utils import safe_call_sdk
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +91,7 @@ def _get_groundlight_sdk_instance_internal(api_token: str):
 
 def get_groundlight_sdk_instance(request: Request):
     """
-    Returns a Groundlight SDK instance given an API token.
+    Returns a (cached) Groundlight SDK instance given an API token.
     The SDK handles validation of the API token token itself, so there's no
     need to do that here.
     """
@@ -108,7 +108,7 @@ def get_detector_metadata(detector_id: str, gl: Groundlight) -> Detector:
     Returns detector metadata from the Groundlight API.
     Caches the result so that we don't have to make an expensive API call every time.
     """
-    detector = safe_call_api(gl.get_detector, id=detector_id)
+    detector = safe_call_sdk(gl.get_detector, id=detector_id)
     return detector
 
 
@@ -122,7 +122,10 @@ class AppState:
         self.motion_detection_manager = MotionDetectionManager(config=motion_detection_config)
         self.edge_inference_manager = EdgeInferenceManager(config=inference_config)
         self.db_manager = DatabaseManager()
+        self.is_ready = False
 
 
 def get_app_state(request: Request) -> AppState:
+    if not hasattr(request.app.state, "app_state"):
+        raise RuntimeError("App state is not initialized.")
     return request.app.state.app_state

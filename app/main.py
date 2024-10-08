@@ -1,15 +1,12 @@
 import logging
 import os
-from typing import List
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 
-from app.api.api import api_router, ping_router
+from app.api.api import api_router, health_router, ping_router
 from app.api.naming import API_BASE_PATH
-
-from .core.app_state import AppState
-from .core.database import DatabaseManager
+from app.core.app_state import AppState
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 DEPLOY_DETECTOR_LEVEL_INFERENCE = bool(int(os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", 0)))
@@ -19,52 +16,44 @@ logging.basicConfig(
 )
 
 
-app = FastAPI()
+app = FastAPI(title="edge-endpoint")
 app.include_router(router=api_router, prefix=API_BASE_PATH)
 app.include_router(router=ping_router)
+app.include_router(router=health_router)
 
-app.state.app_state = AppState()
 scheduler = AsyncIOScheduler()
 
 
 def update_inference_config(app_state: AppState) -> None:
-    """
-    Update the edge inference config by querying the database for new detectors.
-
-    :param app_state: Application's state manager.
-    :type app_state: AppState
-    :return: None
-    :rtype: None
-    """
-
-    db_manager = app_state.db_manager
-    detectors: List[DatabaseManager.InferenceDeployment] = db_manager.query_inference_deployments(
-        deployment_created=True
-    )
+    """Update the App's edge-inference config by querying the database for new detectors."""
+    detectors = app_state.db_manager.get_inference_deployments(deployment_created=True)
     if detectors:
         for detector_record in detectors:
-            detector_id, api_token = detector_record.detector_id, detector_record.api_token
-            app_state.edge_inference_manager.update_inference_config(detector_id=detector_id, api_token=api_token)
+            app_state.edge_inference_manager.update_inference_config(
+                detector_id=detector_record.detector_id,  # type: ignore
+                api_token=detector_record.api_token,  # type: ignore
+            )
 
 
 @app.on_event("startup")
 async def startup_event():
-    # Initialize the database tables
-    db_manager = app.state.app_state.db_manager
-    db_manager.create_tables()
+    """Lifecycle event that is triggered when the application starts."""
+    app.state.app_state = AppState()
+    app.state.app_state.db_manager.create_tables()  # ...if they don't already exist
 
     if DEPLOY_DETECTOR_LEVEL_INFERENCE:
         # Add job to periodically update the inference config
         scheduler.add_job(update_inference_config, "interval", seconds=30, args=[app.state.app_state])
-
-        # Start the scheduler
         scheduler.start()
+
+    app.state.app_state.is_ready = True
+    logging.info("Application is ready to server requests.")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    # Dispose off the database engine
+    """Lifecycle event that is triggered when the application is shutting down."""
+    app.state.app_state.is_ready = False
     app.state.app_state.db_manager.shutdown()
-
     if DEPLOY_DETECTOR_LEVEL_INFERENCE:
         scheduler.shutdown()

@@ -49,6 +49,7 @@ htmlcov/
 .cache
 nosetests.xml
 coverage.xml
+coverage.lcov
 *.cover
 *.py,cover
 .hypothesis/
@@ -138,3 +139,6 @@ test_coverage_reports/
 
 # Editor stuff
 *.swp
+
+# SqlAlchemy
+sqlalchemy.log.*

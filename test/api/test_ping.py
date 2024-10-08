@@ -1,9 +1,9 @@
+from test.conftest import TestClient
+from test.parsing import parse
+
 from app.api.api import PING
 from app.api.naming import path_prefix
 from app.schemas.ping import Ping
-
-from ..conftest import TestClient
-from ..parsing import parse
 
 
 def test_ping(test_client: TestClient):

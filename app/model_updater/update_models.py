@@ -81,7 +81,7 @@ def _check_new_models_and_inference_deployments(
         # At this time, we are sure that the deployment for the detector has been successfully created and rolled out.
         db_manager.update_inference_deployment_record(
             detector_id=detector_id,
-            new_record={"deployment_created": True, "deployment_name": deployment.metadata.name},
+            fields_to_update={"deployment_created": True, "deployment_name": deployment.metadata.name},
         )
 
 
@@ -140,7 +140,7 @@ def update_models(
 
         # Fetch detector IDs that need to be deployed from the database and add them to the config
         logging.info("Fetching undeployed detector IDs from the database.")
-        undeployed_detector_ids: List[Dict[str, str]] = db_manager.query_inference_deployments(deployment_created=False)
+        undeployed_detector_ids: List[Dict[str, str]] = db_manager.get_inference_deployments(deployment_created=False)
         if undeployed_detector_ids:
             logging.info(f"Found {len(undeployed_detector_ids)} undeployed detectors. Updating inference config.")
             for detector_record in undeployed_detector_ids:
