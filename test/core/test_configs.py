@@ -1,8 +1,8 @@
+import pytest
 from pydantic import ValidationError
 
 from app.core.configs import DetectorConfig
 
-import pytest
 
 def test_detector_config():
     with pytest.raises(ValidationError):
@@ -11,5 +11,5 @@ def test_detector_config():
             local_inference_template="default",
             motion_detection_template="default",
             edge_only=True,
-            edge_only_inference=True
+            edge_only_inference=True,
         )
