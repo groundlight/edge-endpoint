@@ -50,7 +50,9 @@ print(f"The answer is {image_query.result}")
 See the [SDK's getting started guide](https://code.groundlight.ai/python-sdk/docs/getting-started) for more info.
 
 ### Experimental: getting only edge model answers
-If you only want to receive answers from the edge model for a detector, you can enable edge-only mode for it. To do this, edit the detector's configuration in the [edge config file](./configs/edge-config.yaml) like so:
+If you only want to receive answers from the edge model for a detector, you can enable edge-only mode for it. This will prevent the edge endpoint from sending image queries to the cloud API. If you want fast edge answers regardless of confidence but still want the edge model to improve, you can enable edge-only inference for that detector. This mode will always return the edge model's answer, but it will also submit low confidence image queries to the cloud API for training.
+
+To do this, edit the detector's configuration in the [edge config file](./configs/edge-config.yaml) like so:
 ```
 detectors:
   - detector_id: 'det_xyz'
@@ -58,15 +60,22 @@ detectors:
     local_inference_template: "default"
     edge_only: true
 
+  - detector_id: 'det_ijk'
+    motion_detection_template: "disabled"
+    local_inference_template: "default"
+    edge_only_inference: true
+
   - detector_id: 'det_abc'
     motion_detection_template: "default"
     local_inference_template: "default"
 ```
-In this example, `det_xyz` will have edge-only mode enabled because `edge_only` is set to `true`. If `edge_only` is not specified, it defaults to false, so `det_abc` will have edge-only mode disabled.
+In this example, `det_xyz` will have edge-only mode enabled because `edge_only` is set to `true`. `det_ijk` will have edge-only inference enabled because `edge_only_inference` is set to `true`. If `edge_only` or `edge_only_inference` are not specified, they default to false, so `det_abc` will have edge-only mode disabled. Only one of `edge_only` or `edge_only_inference` can be set to `true` for a detector.
 
 With edge-only mode enabled for a detector, when you make requests to it, you will only receive answers from the edge model (regardless of the confidence). Additionally, note that no image queries submitted this way will show up in the web app or be used to train the model. This option should therefore only be used if you don't need the model to improve and only want fast answers from the edge model.
 
-If edge-only mode is enabled on a detector and the edge inference model for that detector is not available, attempting to send image queries to that detector will return a 500 error response.
+With edge-only inference enabled for a detector, when you make requests to it, you will only receive answers from the edge model (regardless of the confidence). However, image queries submitted this way with confidences below the threshold will be escalated to the cloud and used to train the model. This option should be used when you want fast edge answers (regardless of confidence) but still want the model to improve.
+
+If edge-only or edge-only inference mode is enabled on a detector and the edge inference model for that detector is not available, attempting to send image queries to that detector will return a 500 error response.
 
 This feature is currently not fully compatible with motion detection. If motion detection is enabled, some image queries may still be sent to the cloud API.
 

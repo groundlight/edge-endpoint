@@ -2,6 +2,7 @@ import logging
 from typing import Dict, Optional
 
 from pydantic import BaseModel, Field, model_validator
+from typing_extensions import Self
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +52,19 @@ class DetectorConfig(BaseModel):
     local_inference_template: str = Field(..., description="Template for local edge inference.")
     motion_detection_template: str = Field(..., description="Template for motion detection.")
     edge_only: bool = Field(
-        False, description="Whether the detector should be in edge-only mode or not. Optional; defaults to False."
+        default=False,
+        description="Whether the detector should be in edge-only mode or not. Optional; defaults to False.",
     )
+    edge_only_inference: bool = Field(
+        default=False,
+        description="Whether the detector should be in edge-only inference mode or not. Optional; defaults to False.",
+    )
+
+    @model_validator(mode="after")
+    def validate_edge_modes(self) -> Self:
+        if self.edge_only and self.edge_only_inference:
+            raise ValueError("'edge_only' and 'edge_only_inference' cannot both be True")
+        return self
 
 
 class RootEdgeConfig(BaseModel):

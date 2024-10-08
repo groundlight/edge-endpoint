@@ -82,7 +82,7 @@ image to ECR see [Pushing/Pulling Images from ECR](#pushingpulling-images-from-e
 We currently have a hard-coded docker image in our k3s deployment, which is not ideal. 
 If you're testing things locally and want to use a different docker image, you can do so
 by first creating a docker image locally, pushing it to ECR, retrieving the image ID and 
-then using that ID in the [edge_deployment](/edge-endpoint/deploy/k3s/edge_deployment.yaml) file. 
+then using that ID in the [edge_deployment](k3s/edge_deployment/edge_deployment.yaml) file. 
 
 Follow the following steps:
 

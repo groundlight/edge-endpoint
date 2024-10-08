@@ -3,7 +3,7 @@ from io import BytesIO
 from typing import Optional
 
 import numpy as np
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from groundlight import Groundlight
 from model import (
     Detector,
@@ -75,6 +75,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     want_async: Optional[str] = Query(None),
     gl: Groundlight = Depends(get_groundlight_sdk_instance),
     app_state: AppState = Depends(get_app_state),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     """
     Submit an image query for a given detector.
@@ -120,11 +121,14 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
     detector_config = app_state.edge_config.detectors.get(detector_id, None)
     edge_only = detector_config.edge_only if detector_config is not None else False
+    edge_only_inference = detector_config.edge_only_inference if detector_config is not None else False
 
     # TODO: instead of just forwarding want_async calls to the cloud, facilitate partial
     #       processing of the async request on the edge before escalating to the cloud.
     _want_async = want_async is not None and want_async.lower() == "true"
-    if _want_async and not edge_only:  # If edge-only mode is enabled, we don't want to make cloud API calls
+    if _want_async and not (
+        edge_only or edge_only_inference
+    ):  # If edge-only mode is enabled, we don't want to make cloud API calls
         logger.debug(f"Submitting ask_async image query to cloud API server for {detector_id=}")
         return safe_call_sdk(
             gl.submit_image_query,
@@ -183,10 +187,24 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         results = edge_inference_manager.run_inference(detector_id=detector_id, image=image)
         confidence = results["confidence"]
 
-        if edge_only or _is_confident_enough(confidence=confidence, confidence_threshold=confidence_threshold):
+        if (
+            edge_only
+            or edge_only_inference
+            or _is_confident_enough(
+                confidence=confidence,
+                confidence_threshold=confidence_threshold,
+            )
+        ):
             if edge_only:
                 logger.debug(
                     f"Edge-only mode enabled - will not escalate to cloud, regardless of confidence. {detector_id=}"
+                )
+            elif edge_only_inference:
+                logger.debug(
+                    "Edge-only inference mode is enabled on this detector. The edge model's answer will be "
+                    "returned regardless of confidence, but will still be escalated to the cloud if the confidence "
+                    "is not high enough. "
+                    f"{detector_id=}"
                 )
             else:
                 logger.debug(f"Edge detector confidence is high enough to return. {detector_id=}")
@@ -207,6 +225,13 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 text=results["text"],
             )
             app_state.db_manager.create_iqe_record(iq=image_query)
+
+            if edge_only_inference and not _is_confident_enough(
+                confidence=confidence,
+                confidence_threshold=confidence_threshold,
+            ):
+                logger.info("Escalating to the cloud API server for future training due to low confidence.")
+                background_tasks.add_task(safe_call_sdk, gl.ask_async, detector=detector_id, image=image)
         else:
             logger.info(
                 f"Edge-inference is not confident, escalating to cloud. ({confidence} < thresh={confidence_threshold})"
@@ -224,6 +249,10 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         # Fail if edge inference is not available and edge-only mode is enabled
         if edge_only:
             raise RuntimeError("Edge-only mode is enabled on this detector, but edge inference is not available.")
+        elif edge_only_inference:
+            raise RuntimeError(
+                "Edge-only inference mode is enabled on this detector, but edge inference is not available."
+            )
 
     # Finally, fall back to submitting the image to the cloud
     if not image_query:

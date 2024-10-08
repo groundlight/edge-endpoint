@@ -38,3 +38,5 @@ detectors:
     - detector_id: ''
       motion_detection_template: "default"
       local_inference_template: "default"
+      edge_only: false
+      edge_only_inference: false
