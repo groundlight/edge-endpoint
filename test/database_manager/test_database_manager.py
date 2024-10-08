@@ -1,5 +1,5 @@
 import pytest
-from model import ImageQuery, ResultTypeEnum
+from model import ImageQuery, ModeEnum
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
@@ -149,11 +149,29 @@ def test_get_inference_deployments_raises_sqlalchemy_error(db_manager: DatabaseM
         db_manager.get_inference_deployments(detector_id=deployment["detector_id"], image_query_id="invalid_id")
 
 
-def test_get_iqe_record(db_manager, database_reset):
+def test_get_binary_iqe_record(db_manager, database_reset):
     image_query: ImageQuery = create_iqe(
         detector_id=prefixed_ksuid("det_"),
-        result_type=ResultTypeEnum.binary_classification,
-        label="test_label",
+        mode=ModeEnum.BINARY,
+        mode_configuration=None,
+        result_value=0,
+        confidence=0.5,
+        query="test_query",
+        confidence_threshold=0.9,
+    )
+    db_manager.create_iqe_record(iq=image_query)
+
+    # Get the record
+    retrieved_record = db_manager.get_iqe_record(image_query_id=image_query.id)
+    assert retrieved_record == image_query
+
+
+def test_get_count_iqe_record(db_manager, database_reset):
+    image_query: ImageQuery = create_iqe(
+        detector_id=prefixed_ksuid("det_"),
+        mode=ModeEnum.COUNT,
+        mode_configuration={"max_count": 5},
+        result_value=0,
         confidence=0.5,
         query="test_query",
         confidence_threshold=0.9,

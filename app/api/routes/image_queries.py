@@ -5,7 +5,10 @@ from typing import Optional
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from groundlight import Groundlight
-from model import Detector, ImageQuery, ModeEnum, ResultTypeEnum
+from model import (
+    Detector,
+    ImageQuery,
+)
 from PIL import Image
 
 from app.core import constants
@@ -188,16 +191,17 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             else:
                 logger.debug(f"Edge detector confidence is high enough to return. {detector_id=}")
 
-            result_type, results = _mode_to_result_type(detector_metadata.mode, results)
-            patience_time = patience_time or constants.DEFAULT_PATIENCE_TIME
+            if patience_time is None:
+                patience_time = constants.DEFAULT_PATIENCE_TIME
 
             image_query = create_iqe(
                 detector_id=detector_id,
-                result_type=result_type,
-                label=results["label"],
+                mode=detector_metadata.mode,
+                mode_configuration=detector_metadata.mode_configuration,
+                result_value=results["label"],
                 confidence=confidence,
-                query=detector_metadata.query,
                 confidence_threshold=confidence_threshold,
+                query=detector_metadata.query,
                 patience_time=patience_time,
                 rois=results["rois"],
                 text=results["text"],
@@ -327,16 +331,3 @@ def _is_confident_enough(confidence: Optional[float], confidence_threshold: floa
     if confidence is None:
         return True  # None confidence means answered by a human, so it's confident enough to return
     return confidence >= confidence_threshold
-
-
-def _mode_to_result_type(mode: ModeEnum, results: dict):
-    if mode == ModeEnum.BINARY:
-        result_type = ResultTypeEnum.binary_classification
-        results["label"] = "NO" if results["label"] else "YES"  # Map false / 0 to "YES" and true / 1 to "NO"
-    elif mode == ModeEnum.COUNT:
-        result_type = ResultTypeEnum.counting
-    elif mode == ModeEnum.MULTI_CLASS:
-        result_type = ResultTypeEnum.multi_classification
-    else:
-        raise ValueError(f"Got unrecognized detector mode: {mode}")
-    return result_type, results

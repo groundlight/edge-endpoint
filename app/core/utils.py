@@ -1,10 +1,21 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO
-from typing import Callable
+from typing import Any, Callable
 
 import ksuid
 from fastapi import HTTPException
-from model import ROI, BinaryClassificationResult, ImageQuery, ImageQueryTypeEnum, ResultTypeEnum
+from model import (
+    ROI,
+    BinaryClassificationResult,
+    CountingResult,
+    CountModeConfiguration,
+    ImageQuery,
+    ImageQueryTypeEnum,
+    Label,
+    ModeEnum,
+    ResultTypeEnum,
+    Source,
+)
 from PIL import Image
 
 from . import constants
@@ -12,8 +23,9 @@ from . import constants
 
 def create_iqe(  # noqa: PLR0913
     detector_id: str,
-    result_type: ResultTypeEnum,
-    label: str,
+    mode: ModeEnum,
+    mode_configuration: dict[str, Any] | None,
+    result_value: int,
     confidence: float,
     confidence_threshold: float,
     query: str = "",
@@ -21,24 +33,67 @@ def create_iqe(  # noqa: PLR0913
     rois: list[ROI] | None = None,
     text: str | None = None,
 ) -> ImageQuery:
+    result_type, result = _mode_to_result_and_type(mode, mode_configuration, confidence, result_value)
     iq = ImageQuery(
         metadata=None,
         id=prefixed_ksuid(prefix="iqe_"),
         type=ImageQueryTypeEnum.image_query,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
         query=query,
         detector_id=detector_id,
         result_type=result_type,
-        result=BinaryClassificationResult(
-            confidence=confidence,
-            label=label,
-        ),
-        confidence_threshold=confidence_threshold,
+        result=result,
         patience_time=patience_time,
+        confidence_threshold=confidence_threshold,
         rois=rois,
         text=text,
     )
     return iq
+
+
+def _mode_to_result_and_type(
+    mode: ModeEnum, mode_configuration: dict[str, Any] | None, confidence: float, result_value: int
+) -> tuple[ResultTypeEnum, BinaryClassificationResult | CountingResult]:
+    """
+    Maps the detector mode to the corresponding result type and generates the result object
+    based on the provided mode, confidence, and result value.
+
+    :param mode: The mode of the detector.
+    :param confidence: The confidence of the predicted value.
+    :param result_value: The predicted value.
+    """
+    source = Source.ALGORITHM  # Results from edge model are always from algorithm
+    if mode == ModeEnum.BINARY:
+        result_type = ResultTypeEnum.binary_classification
+        label = Label.NO if result_value else Label.YES  # Map false / 0 to "YES" and true / 1 to "NO"
+        result = BinaryClassificationResult(
+            confidence=confidence,
+            source=source,
+            label=label,
+        )
+    elif mode == ModeEnum.COUNT:
+        if mode_configuration is None:
+            raise ValueError("mode_configuration for Counting detector shouldn't be None.")
+        count_mode_configuration = CountModeConfiguration(**mode_configuration)
+        max_count = count_mode_configuration.max_count
+        greater_than_max = False
+        if max_count is not None:
+            greater_than_max = result_value > max_count
+            result_value = max_count if greater_than_max else result_value
+        result_type = ResultTypeEnum.counting
+        result = CountingResult(
+            confidence=confidence,
+            source=source,
+            count=result_value,
+            greater_than_max=greater_than_max,
+        )
+    elif mode == ModeEnum.MULTI_CLASS:
+        raise NotImplementedError("Multiclass functionality is not yet implemented for the edge endpoint.")
+        # TODO add support for multiclass functionality.
+    else:
+        raise ValueError(f"Got unrecognized or unsupported detector mode: {mode}")
+
+    return result_type, result
 
 
 def safe_call_sdk(api_method: Callable, **kwargs):
