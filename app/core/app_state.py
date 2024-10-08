@@ -62,7 +62,7 @@ def _load_config_from_yaml(yaml_config) -> RootEdgeConfig:
 
 def get_inference_and_motion_detection_configs(
     root_edge_config: RootEdgeConfig,
-) -> Tuple[Dict[str, LocalInferenceConfig], Dict[str, MotionDetectionConfig]]:
+) -> Tuple[Dict[str, LocalInferenceConfig] | None, Dict[str, MotionDetectionConfig] | None]:
     motion_detection_templates: Dict[str, MotionDetectionConfig] = root_edge_config.motion_detection_templates
     edge_inference_templates: Dict[str, LocalInferenceConfig] = root_edge_config.local_inference_templates
 
@@ -72,11 +72,11 @@ def get_inference_and_motion_detection_configs(
     motion_detection_config = None
     inference_config = None
     if detectors:
-        motion_detection_config: Dict[str, MotionDetectionConfig] = {
+        motion_detection_config = {
             detector_id: motion_detection_templates[detector_config.motion_detection_template]
             for detector_id, detector_config in detectors.items()
         }
-        inference_config: Dict[str, LocalInferenceConfig] = {
+        inference_config = {
             detector_id: edge_inference_templates[detector_config.local_inference_template]
             for detector_id, detector_config in detectors.items()
         }
