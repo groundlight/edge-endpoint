@@ -1,11 +1,10 @@
 import pytest
-from pydantic import ValidationError
 
 from app.core.configs import DetectorConfig
 
 
 def test_detector_config():
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValueError):
         DetectorConfig(
             detector_id="det_xyz",
             local_inference_template="default",
