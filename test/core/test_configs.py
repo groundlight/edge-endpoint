@@ -3,7 +3,7 @@ import pytest
 from app.core.configs import DetectorConfig
 
 
-def test_detector_config():
+def test_detector_config_both_edge_modes():
     with pytest.raises(ValueError):
         DetectorConfig(
             detector_id="det_xyz",

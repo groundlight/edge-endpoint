@@ -69,11 +69,11 @@ detectors:
     motion_detection_template: "default"
     local_inference_template: "default"
 ```
-In this example, `det_xyz` will have edge-only mode enabled because `edge_only` is set to `true`. `det_ijk` will have edge-only inference enabled because `edge_only_inference` is set to `true`. If `edge_only` or `edge_only_inference` are not specified, they defaults to false, so `det_abc` will have edge-only mode disabled. Only one of `edge_only` or `edge_only_inference` can be set to `true` for a detector.
+In this example, `det_xyz` will have edge-only mode enabled because `edge_only` is set to `true`. `det_ijk` will have edge-only inference enabled because `edge_only_inference` is set to `true`. If `edge_only` or `edge_only_inference` are not specified, they default to false, so `det_abc` will have edge-only mode disabled. Only one of `edge_only` or `edge_only_inference` can be set to `true` for a detector.
 
 With edge-only mode enabled for a detector, when you make requests to it, you will only receive answers from the edge model (regardless of the confidence). Additionally, note that no image queries submitted this way will show up in the web app or be used to train the model. This option should therefore only be used if you don't need the model to improve and only want fast answers from the edge model.
 
-With edge-only inference enabled for a detector, when you make requests to it, you will only receive answers from the edge model (regardless of the confidence). However, image queries submitted this way with confidences below the threshold will be used to train the model. This option should be used when you want fast edge answers regardless of confidence but still want the model to improve.
+With edge-only inference enabled for a detector, when you make requests to it, you will only receive answers from the edge model (regardless of the confidence). However, image queries submitted this way with confidences below the threshold will be escalated to the cloud and used to train the model. This option should be used when you want fast edge answers (regardless of confidence) but still want the model to improve.
 
 If edge-only or edge-only inference mode is enabled on a detector and the edge inference model for that detector is not available, attempting to send image queries to that detector will return a 500 error response.
 
