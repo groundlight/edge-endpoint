@@ -5,6 +5,8 @@ metadata:
 spec:
   template:
     spec:
+      imagePullSecrets:
+      - name: registry-credentials
       containers:
       - name: image-puller
         image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:latest
