@@ -21,6 +21,7 @@ fi
 $K delete --ignore-not-found secret registry-credentials
 $K delete --ignore-not-found secret aws-credentials
 
+# NOTE: these credentials seem to be expiring, causing problems later.
 PASSWORD=$(aws ecr get-login-password --region us-west-2)
 $K create secret docker-registry registry-credentials \
     --docker-server=767397850842.dkr.ecr.us-west-2.amazonaws.com \
