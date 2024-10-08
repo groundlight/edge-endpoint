@@ -22,12 +22,14 @@ def mock_count_response():
         },
         "predictions": None,
         "secondary_predictions": {
-            "roi_predictions": [[{
-                "label": "bird",
-                "geometry": {"left": 0.1, "top": 0.2, "right": 0.3, "bottom": 0.4, "version": "2.0"},
-                "score": 0.9,
-                "version": "2.0",
-            }]],
+            "roi_predictions": {
+                "rois": [[{
+                    "label": "bird",
+                    "geometry": {"left": 0.1, "top": 0.2, "right": 0.3, "bottom": 0.4, "version": "2.0"},
+                    "score": 0.9,
+                    "version": "2.0",
+                }]]
+            },
             "text_predictions": ["This is a bird."],
         },
     }
@@ -39,20 +41,22 @@ def mock_binary_with_rois_response():
         "multi_predictions": None,
         "predictions": {"confidences": [0.54], "labels": [0], "probabilities": [0.45], "scores": [-2.94]},
         "secondary_predictions": {
-            "roi_predictions": [[
-                {
-                    "label": "cat",
-                    "geometry": {"left": 0.1, "top": 0.2, "right": 0.3, "bottom": 0.4, "version": "2.0"},
-                    "score": 0.8,
-                    "version": "2.0",
-                },
-                {
-                    "label": "cat",
-                    "geometry": {"left": 0.6, "top": 0.7, "right": 0.8, "bottom": 0.9, "version": "2.0"},
-                    "score": 0.7,
-                    "version": "2.0",
-                },
-            ]],
+            "roi_predictions": {
+                "rois": [[
+                    {
+                        "label": "cat",
+                        "geometry": {"left": 0.1, "top": 0.2, "right": 0.3, "bottom": 0.4, "version": "2.0"},
+                        "score": 0.8,
+                        "version": "2.0",
+                    },
+                    {
+                        "label": "cat",
+                        "geometry": {"left": 0.6, "top": 0.7, "right": 0.8, "bottom": 0.9, "version": "2.0"},
+                        "score": 0.7,
+                        "version": "2.0",
+                    },
+                ]]
+            },
             "text_predictions": None,
         },
     }
@@ -79,12 +83,14 @@ def mock_invalid_predictions_response():
         },
         "predictions": {"confidences": [0.54], "labels": [0], "probabilities": [0.45], "scores": [-2.94]},
         "secondary_predictions": {
-            "roi_predictions": [[{
-                "label": "bird",
-                "geometry": {"left": 0.1, "top": 0.2, "right": 0.3, "bottom": 0.4, "version": "2.0"},
-                "score": 0.9,
-                "version": "2.0",
-            }]],
+            "roi_predictions": {
+                "rois": [[{
+                    "label": "bird",
+                    "geometry": {"left": 0.1, "top": 0.2, "right": 0.3, "bottom": 0.4, "version": "2.0"},
+                    "score": 0.9,
+                    "version": "2.0",
+                }]]
+            },
             "text_predictions": None,
         },
     }
@@ -96,12 +102,14 @@ def mock_invalid_predictions_missing_response():
         "multi_predictions": None,
         "predictions": None,
         "secondary_predictions": {
-            "roi_predictions": [[{
-                "label": "bird",
-                "geometry": {"left": 0.1, "top": 0.2, "right": 0.3, "bottom": 0.4, "version": "2.0"},
-                "score": 0.9,
-                "version": "2.0",
-            }]],
+            "roi_predictions": {
+                "rois": [[{
+                    "label": "bird",
+                    "geometry": {"left": 0.1, "top": 0.2, "right": 0.3, "bottom": 0.4, "version": "2.0"},
+                    "score": 0.9,
+                    "version": "2.0",
+                }]]
+            },
             "text_predictions": None,
         },
     }
