@@ -35,7 +35,7 @@ detectors:
   # Blank id implies that no detectors have been configured to use motion detection
   # and/or local edge inference. The "default" templates are just examples of how one
   # might configure these features.
-  - detector_id: 'det_2moISb6wdgxCgQPDu00KyFAM7GG'
+  - detector_id: 'det_'
     motion_detection_template: "disabled"
     local_inference_template: "default"
     edge_only: false
