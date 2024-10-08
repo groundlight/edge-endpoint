@@ -61,7 +61,6 @@ class DetectorConfig(BaseModel):
     )
 
     @model_validator(mode="after")
-    @classmethod
     def validate_edge_modes(self) -> Self:
         if self.edge_only and self.edge_only_inference:
             raise ValueError("'edge_only' and 'edge_only_inference' cannot both be True")
