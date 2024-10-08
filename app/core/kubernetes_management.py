@@ -4,11 +4,12 @@ from datetime import datetime
 from typing import Optional
 
 import yaml
+from fastapi import status
 from kubernetes import client as kube_client
 from kubernetes import config
 
 from .edge_inference import get_edge_inference_deployment_name, get_edge_inference_service_name
-from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH, MODEL_REPOSITORY_PATH
+from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +86,17 @@ class InferenceDeploymentManager:
         return inference_deployment.strip()
 
     def create_inference_deployment(self, detector_id) -> None:
+        """
+        Creates an inference deployment for a given detector ID.
+
+        This method substitutes placeholders in the inference deployment template
+        with the provided detector ID, service name, and deployment name, and then
+        applies the manifest to the Kubernetes cluster.
+
+        Args:
+            detector_id (str): The unique identifier for the detector for which
+                               the inference deployment is to be created.
+        """
         deployment_name = get_edge_inference_deployment_name(detector_id)
         service_name = get_edge_inference_service_name(detector_id)
         inference_deployment = self._substitute_placeholders(
@@ -93,6 +105,16 @@ class InferenceDeploymentManager:
         self._create_from_kube_manifest(namespace=self._target_namespace, manifest=inference_deployment)
 
     def get_inference_deployment(self, detector_id) -> Optional["V1Deployment"]:
+        """
+        Retrieves the inference deployment for a given detector ID.
+
+        Args:
+            detector_id (str): The unique identifier for the detector whose inference deployment
+                               is to be retrieved.
+
+        Returns:
+            Optional[V1Deployment]: The deployment object if it exists, otherwise None.
+        """
         deployment_name = get_edge_inference_deployment_name(detector_id)
         try:
             deployment = self._app_kube_client.read_namespaced_deployment(
@@ -100,7 +122,7 @@ class InferenceDeploymentManager:
             )
             return deployment
         except kube_client.rest.ApiException as e:
-            if e.status == 404:
+            if e.status == status.HTTP_404_NOT_FOUND:
                 logger.debug(
                     f"Deployment {deployment_name} does not currently exist in namespace {self._target_namespace}."
                 )
@@ -108,6 +130,18 @@ class InferenceDeploymentManager:
             raise e
 
     def get_or_create_inference_deployment(self, detector_id) -> Optional["V1Deployment"]:
+        """
+        Retrieves an existing inference deployment for the specified detector ID, or creates a new
+        one if it does not exist.
+
+        Args:
+            detector_id (str): The unique identifier for the detector whose inference deployment
+                               is to be retrieved or created.
+
+        Returns:
+            Optional[V1Deployment]: The existing deployment if found, otherwise None if a new
+                                    deployment is created.
+        """
         deployment = self.get_inference_deployment(detector_id)
         if deployment is not None:
             return deployment
@@ -117,6 +151,21 @@ class InferenceDeploymentManager:
         return None
 
     def update_inference_deployment(self, detector_id: str) -> bool:
+        """
+        Updates the inference deployment for a given detector ID.
+
+        This method checks if an inference deployment already exists for the specified detector ID.
+        If it does not exist, it creates a new deployment. If it exists, it updates the deployment
+        by setting the appropriate environment variables and annotations to ensure the correct model
+        is loaded and the deployment is restarted.
+
+        Args:
+            detector_id (str): The unique identifier for the detector whose inference deployment
+                               needs to be updated.
+
+        Returns:
+            bool: True if the deployment was updated, False if a new deployment was created.
+        """
         deployment_name = get_edge_inference_deployment_name(detector_id)
         deployment = self.get_or_create_inference_deployment(detector_id)
         if deployment is None:
@@ -127,11 +176,11 @@ class InferenceDeploymentManager:
             deployment.spec.template.metadata.annotations = {}
         deployment.spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"] = datetime.now().isoformat()
 
-        # Set the correct detector_id so we dont load more than the one model in this deployment. Also rotate the shm-region.
-        deployment.spec.template.spec.containers[0].env = [
-            {"name": "MODEL_NAME", "value": detector_id},
-            {"name": "MODEL_REPOSITORY", "value": MODEL_REPOSITORY_PATH},
-        ]
+        # Set the correct model name for this inference deployment
+        for env_var in deployment.spec.template.spec.containers[0].env:
+            if env_var["name"] == "MODEL_NAME":
+                env_var["value"] = detector_id
+                break
 
         logger.info(f"Patching an existing inference deployment: {deployment_name}")
         self._app_kube_client.patch_namespaced_deployment(
@@ -140,6 +189,21 @@ class InferenceDeploymentManager:
         return True
 
     def is_inference_deployment_rollout_complete(self, detector_id: str) -> bool:
+        """
+        Checks if the rollout of the inference deployment for a given detector ID is complete.
+
+        This method retrieves the deployment associated with the specified detector ID and compares
+        the desired number of replicas with the updated and available replicas. If all these values
+        match, it indicates that the deployment rollout is complete.
+
+        Args:
+            detector_id (str): The unique identifier for the detector whose inference deployment
+                                rollout status needs to be checked.
+
+        Returns:
+            bool: True if the deployment rollout is complete, False otherwise.
+        """
+
         # Fetch the Deployment object
         deployment = self.get_inference_deployment(detector_id)
         if deployment is None:

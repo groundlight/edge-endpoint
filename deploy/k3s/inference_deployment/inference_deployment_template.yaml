@@ -32,29 +32,53 @@ spec:
         instance: placeholder-inference-instance-name
     spec:
       runtimeClassName: nvidia  # Required for GPU use in k3s
+      imagePullSecrets:
+      - name: registry-credentials
       strategy:
         type: RollingUpdate
         rollingUpdate:
           maxSurge: 1
           maxUnavailable: 0  # Aim for no downtime during rollout
+
+      initContainers:
+      - name: sync-pinamod
+        image: amazon/aws-cli:latest
+        # Sync models from S3 to the local hostmapped filesystem.
+        command: ['sh', '-c', 'aws s3 sync s3://pinamod-artifacts-public/pinamod $PINAMOD_DIR --delete']
+        env:
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: aws_access_key_id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: aws_secret_access_key
+        - name: PINAMOD_DIR
+          value: /opt/models/pinamod
+        volumeMounts:
+        - name: pina-models
+          mountPath: /opt/models
+
       containers:
       - name: inference-server
         image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:latest
         imagePullPolicy: Always
         env:
         - name: MODEL_REPOSITORY
-          value: "/opt/groundlight/edge/serving/model-repo"
+          value: &modelRepository /opt/groundlight/edge/serving/model-repo
         - name: MODEL_NAME
           value: placeholder-model-name
-        command:
-          [
-            "poetry", "run", "python3", "-m", "uvicorn", "serving.edge_inference_server.fastapi_server:app",
-            "--host", "0.0.0.0",
-            "--port", "8000"
-          ]
+        - name: PINAMOD_DIR
+          value: /opt/models/pinamod
         volumeMounts:
         - name: edge-endpoint-persistent-volume
-          mountPath: /opt/groundlight/edge/serving/model-repo
+          mountPath: *modelRepository
+        - name: pina-models
+          mountPath: /opt/models
+          readOnly: true
         ports:
         - containerPort: 8000
           name: http-fastapi
@@ -72,9 +96,12 @@ spec:
           initialDelaySeconds: 10
           periodSeconds: 10
           failureThreshold: 30  # Wait for up to 5 min
-      imagePullSecrets:
-      - name: registry-credentials
+
       volumes:
       - name: edge-endpoint-persistent-volume
         persistentVolumeClaim:
           claimName: edge-endpoint-pvc
+      - name: pina-models
+        hostPath:
+          path: /opt/groundlight/edge/pinamod-public
+          type: Directory
