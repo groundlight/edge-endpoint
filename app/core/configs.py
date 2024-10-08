@@ -60,9 +60,12 @@ class DetectorConfig(BaseModel):
     )
 
     @validator("edge_only", "edge_only_inference")
-    def validate_edge_modes(cls, v, values):
-        if "edge_only" in values and "edge_only_inference" in values:
-            if values["edge_only"] and values["edge_only_inference"]:
+    def validate_edge_modes(cls, v, values, field):
+        if field.name == 'edge_only_inference' and v:
+            if values.get('edge_only'):
+                raise ValueError("'edge_only' and 'edge_only_inference' cannot both be True")
+        elif field.name == 'edge_only' and v:
+            if values.get('edge_only_inference'):
                 raise ValueError("'edge_only' and 'edge_only_inference' cannot both be True")
         return v
 
