@@ -74,14 +74,11 @@ K="$K -n $DEPLOYMENT_NAMESPACE"
 # move to the root directory of the repo
 cd "$(dirname "$0")"/../..
 
-# Secrets
-./deploy/bin/make-aws-secret.sh
-
-# Verify secrets have been properly created
-if ! $K get secret registry-credentials; then
-    fail "registry-credentials secret not found"
+# Create Secrets
+if ! ./deploy/bin/make-aws-secret.sh; then
+    echo "Failed to execute make-aws-secret.sh successfully. Exiting."
+    exit 1
 fi
-
 
 # Configmaps, secrets, and deployments
 $K delete configmap --ignore-not-found edge-config -n ${DEPLOYMENT_NAMESPACE}
@@ -167,7 +164,6 @@ else
     rm deploy/k3s/persistentvolume.yaml
 fi
 
-
 # Check if the edge-endpoint-pvc exists. If not, create it
 if ! $K get pvc edge-endpoint-pvc; then
     # If environment variable EFS_VOLUME_ID is not set, exit
@@ -179,6 +175,9 @@ if ! $K get pvc edge-endpoint-pvc; then
     $K apply -f deploy/k3s/persistentvolume.yaml.tmp
     rm deploy/k3s/persistentvolume.yaml.tmp
 fi
+
+# Make pinamod directory for hostmapped volume
+sudo mkdir -p /opt/groundlight/edge/pinamod-public
 
 # Substitutes the namespace in the service_account.yaml template
 envsubst < deploy/k3s/service_account.yaml > deploy/k3s/service_account.yaml.tmp
