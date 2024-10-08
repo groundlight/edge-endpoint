@@ -206,6 +206,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                     "returned regardless of confidence, but will still be escalated to the cloud if the confidence "
                     "is not high enough. "
                     f"{detector_id=}"
+                )
             else:
                 logger.debug(f"Edge detector confidence is high enough to return. {detector_id=}")
 
