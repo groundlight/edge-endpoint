@@ -192,7 +192,6 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             or edge_only_inference
             or _is_confident_enough(
                 confidence=confidence,
-                detector_metadata=get_detector_metadata(detector_id=detector_id, gl=gl),
                 confidence_threshold=confidence_threshold,
             )
         ):
@@ -229,11 +228,10 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
             if edge_only_inference and not _is_confident_enough(
                 confidence=confidence,
-                detector_metadata=get_detector_metadata(detector_id=detector_id, gl=gl),
                 confidence_threshold=confidence_threshold,
             ):
                 logger.info("Escalating to the cloud API server for future training due to low confidence.")
-                background_tasks.add_task(safe_call_api, gl.ask_async, detector=detector_id, image=image)
+                background_tasks.add_task(safe_call_sdk, gl.ask_async, detector=detector_id, image=image)
         else:
             logger.info(
                 f"Edge-inference is not confident, escalating to cloud. ({confidence} < thresh={confidence_threshold})"
