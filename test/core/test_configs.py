@@ -5,7 +5,7 @@ from app.core.configs import DetectorConfig
 
 
 def test_detector_config():
-    with pytest.raises(ValidationError):
+    try:
         DetectorConfig(
             detector_id="det_xyz",
             local_inference_template="default",
@@ -13,3 +13,9 @@ def test_detector_config():
             edge_only=True,
             edge_only_inference=True,
         )
+    except Exception as e:
+        print(f"Caught exception: {type(e).__name__}")
+        print(f"Exception message: {str(e)}")
+        raise
+
+    pytest.fail("Expected ValidationError was not raised")
