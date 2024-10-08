@@ -1,11 +1,12 @@
 import logging
 import os
 from datetime import datetime
-from typing import Optional
 
 import yaml
+from fastapi import status
 from kubernetes import client as kube_client
 from kubernetes import config
+from kubernetes.client.models.v1_deployment import V1Deployment
 
 from .edge_inference import get_edge_inference_deployment_name, get_edge_inference_service_name
 from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH, MODEL_REPOSITORY_PATH
@@ -69,7 +70,7 @@ class InferenceDeploymentManager:
                     raise NotImplementedError(f"Unsupported kubernetes manifest kind: {document['kind']}")
 
             except kube_client.rest.ApiException as e:
-                if e.status == 409:
+                if e.status == status.HTTP_409_CONFLICT:
                     logger.error(f"Failed to create a kubernetes service or deployment because it already exists: {e}")
                 else:
                     raise e
@@ -92,7 +93,7 @@ class InferenceDeploymentManager:
         )
         self._create_from_kube_manifest(namespace=self._target_namespace, manifest=inference_deployment)
 
-    def get_inference_deployment(self, detector_id) -> Optional["V1Deployment"]:
+    def get_inference_deployment(self, detector_id) -> V1Deployment | None:
         deployment_name = get_edge_inference_deployment_name(detector_id)
         try:
             deployment = self._app_kube_client.read_namespaced_deployment(
@@ -100,14 +101,14 @@ class InferenceDeploymentManager:
             )
             return deployment
         except kube_client.rest.ApiException as e:
-            if e.status == 404:
+            if e.status == status.HTTP_404_NOT_FOUND:
                 logger.debug(
                     f"Deployment {deployment_name} does not currently exist in namespace {self._target_namespace}."
                 )
                 return None
             raise e
 
-    def get_or_create_inference_deployment(self, detector_id) -> Optional["V1Deployment"]:
+    def get_or_create_inference_deployment(self, detector_id) -> V1Deployment | None:
         deployment = self.get_inference_deployment(detector_id)
         if deployment is not None:
             return deployment

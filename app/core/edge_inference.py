@@ -62,7 +62,6 @@ def parse_inference_response(response: dict) -> dict:
     #     "predictions": {"confidences": [0.54], "labels": [0], "probabilities": [0.45], "scores": [-2.94]},  # Binary results
     #     "secondary_predictions": None,  # Text recognition and Obj detection results
     # }
-
     multi_predictions: dict = response.get("multi_predictions", None)
     predictions: dict = response.get("predictions", None)
     secondary_predictions: dict = response.get("secondary_predictions", None)
