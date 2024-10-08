@@ -35,37 +35,8 @@ detectors:
   # Blank id implies that no detectors have been configured to use motion detection
   # and/or local edge inference. The "default" templates are just examples of how one
   # might configure these features.
-  # - detector_id: ''
-  #   motion_detection_template: "default"
-  #   local_inference_template: "default"
-
-  # - detector_id: 'det_2mFopR3SwaBLe1ObbnapNPj8kQt' # demo medical drawer open on Harry's account
-  #   motion_detection_template: "default"
-  #   local_inference_template: "default"
-
-  # - detector_id: 'det_2mFoxXOUHvDIDTQ1byXOW1xZjeC' # demo medical person reaching drawer on Harry's account
-  #   motion_detection_template: "default"
-  #   local_inference_template: "default"
-
-  # - detector_id: 'det_2mFp5Ly4gSROLbsw10axUTimPn6' # demo medical person holding medicine on Harry's account
-  #   motion_detection_template: "default"
-  #   local_inference_template: "default"
-
-  - detector_id: 'det_2mqyCT5wVi9DIjgq9cFOBiGt3ku' # demo medical drawer open on my account
-    motion_detection_template: "disabled"
+  - detector_id: ''
+    motion_detection_template: "default"
     local_inference_template: "default"
     edge_only: false
-
-  - detector_id: 'det_2mrJDOtf0SWT6wuTxFWKALkhmBl' # demo person reaching into drawer on my account
-    motion_detection_template: "disabled"
-    local_inference_template: "default"
-    edge_only: false
-
-  - detector_id: 'det_2mrJK8nynkgMnO1bLX8Lk87vzq7' # demo person holding medicine on my account
-    motion_detection_template: "disabled"
-    local_inference_template: "default"
-    edge_only: false
-    
-  # - detector_id: 'det_2mtdxGmvVHhn7D8HrTWUXtDsiTE' # demo count tylenol packets on my account
-  #   motion_detection_template: "disabled"
-  #   local_inference_template: "default"
+    edge_only_inference: false

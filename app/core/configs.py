@@ -1,7 +1,7 @@
 import logging
 from typing import Dict, Optional, Union
 
-from pydantic import BaseModel, Field, field_validator, validator
+from pydantic import BaseModel, Field, validator
 
 logger = logging.getLogger(__name__)
 
@@ -59,11 +59,10 @@ class DetectorConfig(BaseModel):
         description="Whether the detector should be in edge-only inference mode or not. Optional; defaults to False.",
     )
 
-    @field_validator("edge_only", "edge_only_inference")
-    @classmethod
-    def validate_edge_modes(cls, v, info):
-        if "edge_only" in info.data and "edge_only_inference" in info.data:
-            if info.data["edge_only"] and info.data["edge_only_inference"]:
+    @validator("edge_only", "edge_only_inference")
+    def validate_edge_modes(cls, v, values):
+        if "edge_only" in values and "edge_only_inference" in values:
+            if values["edge_only"] and values["edge_only_inference"]:
                 raise ValueError("'edge_only' and 'edge_only_inference' cannot both be True")
         return v
 
