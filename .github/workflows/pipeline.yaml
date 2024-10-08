@@ -55,7 +55,7 @@ jobs:
             -e EDGE_CONFIG \
             -d -p 6717:6717 \
             groundlight-edge)
-          echo "container_id=$container_id" >> $GITHUB_ENV
+          echo "::set-output name=container_id::$container_id"
 
       - name: Install poetry
         uses: snok/install-poetry@v1
@@ -154,7 +154,7 @@ jobs:
             -e EDGE_CONFIG \
             -d -p 6717:6717 \
             groundlight-edge)
-          echo "container_id=$container_id" >> $GITHUB_ENV
+          echo "::set-output name=container_id::$container_id"
 
       - name: Run Unit Tests (that do require docker)
         run: |
@@ -177,7 +177,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Set up python
         uses: actions/setup-python@v4
@@ -207,7 +207,7 @@ jobs:
             -e EDGE_CONFIG \
             -d -p 6717:6717 \
             groundlight-edge)
-          echo "container_id=$container_id" >> $GITHUB_ENV
+          echo "::set-output name=container_id::$container_id"
 
       - name: Install poetry
         uses: snok/install-poetry@v1
@@ -227,7 +227,7 @@ jobs:
       # Note that we're pulling the latest main from the SDK repo
       # This might be ahead of what's published to pypi, but it's useful to test things before they're released.
       - name: Checkout Groundlight SDK
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
         with:
           repository: groundlight/python-sdk
           path: groundlight-sdk
@@ -289,7 +289,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Install k3s
         run: |
