@@ -59,8 +59,7 @@ class DetectorConfig(BaseModel):
         description="Whether the detector should be in edge-only inference mode or not. Optional; defaults to False.",
     )
 
-    @field_validator("edge_only", "edge_only_inference")
-    @classmethod
+    @model_validator(mode="after")
     def validate_edge_modes(cls, v: bool, info: ValidationInfo) -> bool:
         if "edge_only" in info.data and "edge_only_inference" in info.data:
             if info.data["edge_only"] and info.data["edge_only_inference"]:
