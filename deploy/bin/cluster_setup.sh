@@ -184,6 +184,7 @@ envsubst < deploy/k3s/service_account.yaml > deploy/k3s/service_account.yaml.tmp
 $K apply -f deploy/k3s/service_account.yaml.tmp
 rm deploy/k3s/service_account.yaml.tmp
 
+$K apply -f deploy/k3s/inference_deployment/warmup_inference_model.yaml
 $K apply -f deploy/k3s/edge_deployment/edge_deployment.yaml
 
 $K describe deployment edge-endpoint

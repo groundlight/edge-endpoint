@@ -41,6 +41,8 @@ spec:
           maxUnavailable: 0  # Aim for no downtime during rollout
 
       initContainers:
+      # NOTE: the sync-pinamod container is duplicated in the warmup_inference_model.yaml Job
+      # TODO: refactor to share code between the Job and the initContainer in the Deployment
       - name: sync-pinamod
         image: amazon/aws-cli:latest
         # Sync models from S3 to the local hostmapped filesystem.
