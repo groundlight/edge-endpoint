@@ -1,12 +1,12 @@
 import logging
 import os
 from datetime import datetime
-from typing import Optional
 
 import yaml
 from fastapi import status
 from kubernetes import client as kube_client
 from kubernetes import config
+from kubernetes.client import V1Deployment
 
 from .edge_inference import get_edge_inference_deployment_name, get_edge_inference_service_name
 from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH
@@ -20,10 +20,7 @@ class InferenceDeploymentManager:
         self._inference_deployment_template = self._load_inference_deployment_template()
 
     def _setup_kube_client(self) -> None:
-        """
-        Sets up the kubernetes client in order to access resources in the cluster.
-        """
-
+        """Sets up the kubernetes client in order to access resources in the cluster."""
         # Requires the application to be running inside kubernetes.
         config.load_incluster_config()
 
@@ -36,16 +33,12 @@ class InferenceDeploymentManager:
 
         if not os.path.exists(KUBERNETES_NAMESPACE_PATH):
             raise FileNotFoundError(f"Could not find kubernetes namespace file at {KUBERNETES_NAMESPACE_PATH}.")
-
         with open(KUBERNETES_NAMESPACE_PATH, "r") as f:
             self._target_namespace = f.read().strip()
-
         logger.info(f"Using {self._target_namespace} namespace.")
 
     def _load_inference_deployment_template(self) -> str:
-        """
-        Loads the inference deployment template.
-        """
+        """Loads the inference deployment template."""
         if os.path.exists(INFERENCE_DEPLOYMENT_TEMPLATE_PATH):
             with open(INFERENCE_DEPLOYMENT_TEMPLATE_PATH, "r") as f:
                 return f.read()
@@ -85,7 +78,7 @@ class InferenceDeploymentManager:
         inference_deployment = inference_deployment.replace("placeholder-model-name", detector_id)
         return inference_deployment.strip()
 
-    def create_inference_deployment(self, detector_id) -> None:
+    def create_inference_deployment(self, detector_id: str) -> None:
         """
         Creates an inference deployment for a given detector ID.
 
@@ -104,7 +97,7 @@ class InferenceDeploymentManager:
         )
         self._create_from_kube_manifest(namespace=self._target_namespace, manifest=inference_deployment)
 
-    def get_inference_deployment(self, detector_id) -> Optional["V1Deployment"]:
+    def get_inference_deployment(self, detector_id) -> V1Deployment | None:
         """
         Retrieves the inference deployment for a given detector ID.
 
@@ -129,7 +122,7 @@ class InferenceDeploymentManager:
                 return None
             raise e
 
-    def get_or_create_inference_deployment(self, detector_id) -> Optional["V1Deployment"]:
+    def get_or_create_inference_deployment(self, detector_id: str) -> V1Deployment | None:
         """
         Retrieves an existing inference deployment for the specified detector ID, or creates a new
         one if it does not exist.
@@ -147,7 +140,7 @@ class InferenceDeploymentManager:
             return deployment
 
         logger.debug(f"Deployment for {detector_id} does not currently exist in namespace {self._target_namespace}.")
-        self.create_inference_deployment(detector_id)
+        self.create_inference_deployment(detector_id=detector_id)
         return None
 
     def update_inference_deployment(self, detector_id: str) -> bool:
