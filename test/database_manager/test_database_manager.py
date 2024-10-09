@@ -30,11 +30,7 @@ def db_manager():
 @pytest.fixture(scope="function")
 def database_reset(db_manager: DatabaseManager):
     """Reset the database before every test function."""
-    with db_manager.session_maker() as session:
-        session.execute(text("DELETE FROM inference_deployments"))
-        session.execute(text("DELETE FROM image_queries_edge"))
-        session.commit()
-        yield
+    db_manager.reset_database()
 
 
 def test_create_inference_deployment_record(db_manager: DatabaseManager, database_reset):
@@ -76,7 +72,7 @@ def test_get_detectors_without_deployments(db_manager, database_reset):
     for deployment in deployments:
         db_manager.create_inference_deployment_record(deployment=deployment)
 
-    undeployed_detectors = db_manager.get_inference_deployments(deployment_created=False)
+    undeployed_detectors = db_manager.get_inference_deployment_records(deployment_created=False)
     assert len(undeployed_detectors) == NUM_TESTING_RECORDS
     for record in undeployed_detectors:
         assert record.detector_id in set([r["detector_id"] for r in deployments])
@@ -118,7 +114,7 @@ def test_update_api_token_for_detector(db_manager, database_reset):
         "deployment_created": False,
     }
     db_manager.create_inference_deployment_record(deployment=deployment)
-    detectors = db_manager.get_inference_deployments(detector_id=deployment["detector_id"])
+    detectors = db_manager.get_inference_deployment_records(detector_id=deployment["detector_id"])
     assert len(detectors) == 1
     assert detectors[0].api_token == deployment["api_token"]
     assert bool(detectors[0].deployment_created) is False
@@ -130,25 +126,26 @@ def test_update_api_token_for_detector(db_manager, database_reset):
     )
 
     # Check that the API token has been updated
-    detectors = db_manager.get_inference_deployments(detector_id=deployment["detector_id"])
+    detectors = db_manager.get_inference_deployment_records(detector_id=deployment["detector_id"])
     assert len(detectors) == 1
     assert detectors[0].api_token == new_api_token
     assert bool(detectors[0].deployment_created) is False
 
 
-def test_create_drop_reset_database_tables(db_manager):
-    inspector = inspect(db_manager._engine)
-
+def test_create_drop_reset_database_tables(db_manager, database_reset):
     # Ensure tables are created first
     db_manager.create_tables()
+    inspector = inspect(db_manager._engine)
     tables = inspector.get_table_names()
     assert set(tables) == set(Base.metadata.tables.keys())
 
     db_manager.drop_tables()
+    inspector = inspect(db_manager._engine)
     tables = inspector.get_table_names()
     assert len(tables) == 0
 
     db_manager.reset_database()
+    inspector = inspect(db_manager._engine)
     tables = inspector.get_table_names()
     assert set(tables) == set(Base.metadata.tables.keys())
 
