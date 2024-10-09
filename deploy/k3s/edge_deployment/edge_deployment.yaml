@@ -40,7 +40,7 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       initContainers:
       - name: database-prep
-        image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:latest
+        image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-fix-unconfigured-detector-deployment-bug-1f08c6d66-dirty-bc1d3f8d3b2fe9e
         imagePullPolicy: Always
         env:
         # Flag to indicate whether or not to reset all database tables. Resetting WILL delete

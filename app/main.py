@@ -39,8 +39,7 @@ def update_inference_config(app_state: AppState) -> None:
 async def startup_event():
     """Lifecycle event that is triggered when the application starts."""
     app.state.app_state = AppState()
-    app.state.app_state.db_manager.create_tables()  # ...if they don't already exist
-    app.state.app_state.db_manager.delete_inference_deployment_records()  # ...so they can be re-created
+    app.state.app_state.db_manager.reset_database()
 
     if DEPLOY_DETECTOR_LEVEL_INFERENCE:
         # Add job to periodically update the inference config
@@ -55,6 +54,7 @@ async def startup_event():
 async def shutdown_event():
     """Lifecycle event that is triggered when the application is shutting down."""
     app.state.app_state.is_ready = False
+    app.state.app_state.db_manager.drop_tables()
     app.state.app_state.db_manager.shutdown()
     if DEPLOY_DETECTOR_LEVEL_INFERENCE:
         scheduler.shutdown()

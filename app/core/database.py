@@ -120,12 +120,6 @@ class DatabaseManager:
             query_results = session.execute(query)
             return query_results.scalars().all()
 
-    def delete_inference_deployment_records(self) -> None:
-        """Delete all records in the `inference_deployments` table."""
-        with self.session_maker() as session:
-            session.query(InferenceDeployment).delete()
-            session.commit()
-
     def create_iqe_record(self, iq: ImageQuery) -> None:
         """
         Creates a new record in the `image_queries_edge` table.
@@ -153,6 +147,16 @@ class DatabaseManager:
         """Create the database tables, if they don't already exist."""
         with self._engine.begin() as connection:
             Base.metadata.create_all(connection)
+
+    def drop_tables(self) -> None:
+        """Drop all tables in the database."""
+        with self._engine.begin() as connection:
+            Base.metadata.drop_all(connection)
+
+    def reset_database(self) -> None:
+        """Reset the database by deleting all tables and then recreating them."""
+        self.drop_tables()
+        self.create_tables()
 
     def shutdown(self) -> None:
         self._engine.dispose()

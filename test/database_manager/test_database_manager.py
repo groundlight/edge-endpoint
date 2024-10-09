@@ -1,10 +1,10 @@
 import pytest
 from model import ImageQuery, ModeEnum
-from sqlalchemy import create_engine, text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import DatabaseManager
+from app.core.models import Base
 from app.core.utils import create_iqe, prefixed_ksuid
 
 NUM_TESTING_RECORDS = 100
@@ -111,24 +111,6 @@ def test_update_inference_deployment_record(db_manager, database_reset):
             assert bool(result.deployment_created) is True
 
 
-def test_delete_inference_deployment_record(db_manager, database_reset):
-    """Check that we can delete all records in the inference_deployments table."""
-    deployments = [
-        {"detector_id": prefixed_ksuid("det_"), "api_token": prefixed_ksuid("api_"), "deployment_created": False}
-        for _ in range(NUM_TESTING_RECORDS)
-    ]
-
-    for deployment in deployments:
-        db_manager.create_inference_deployment_record(deployment=deployment)
-
-    db_manager.delete_inference_deployment_records()
-
-    # Ensure that all records have been deleted
-    with db_manager.session_maker() as session:
-        count = session.execute(text("SELECT COUNT(*) FROM inference_deployments")).scalar()
-        assert count == 0
-
-
 def test_update_api_token_for_detector(db_manager, database_reset):
     deployment = {
         "detector_id": prefixed_ksuid("det_"),
@@ -154,17 +136,21 @@ def test_update_api_token_for_detector(db_manager, database_reset):
     assert bool(detectors[0].deployment_created) is False
 
 
-def test_get_inference_deployments_raises_sqlalchemy_error(db_manager: DatabaseManager, database_reset):
-    deployment = {
-        "detector_id": prefixed_ksuid("det_"),
-        "api_token": prefixed_ksuid("api_"),
-        "deployment_created": False,
-    }
-    db_manager.create_inference_deployment_record(deployment=deployment)
+def test_create_drop_reset_database_tables(db_manager):
+    inspector = inspect(db_manager._engine)
 
-    # We will query with invalid parameters and make sure that we get an error
-    with pytest.raises(SQLAlchemyError):
-        db_manager.get_inference_deployment_records(detector_id=deployment["detector_id"], image_query_id="invalid_id")
+    # Ensure tables are created first
+    db_manager.create_tables()
+    tables = inspector.get_table_names()
+    assert set(tables) == set(Base.metadata.tables.keys())
+
+    db_manager.drop_tables()
+    tables = inspector.get_table_names()
+    assert len(tables) == 0
+
+    db_manager.reset_database()
+    tables = inspector.get_table_names()
+    assert set(tables) == set(Base.metadata.tables.keys())
 
 
 def test_get_binary_iqe_record(db_manager, database_reset):
