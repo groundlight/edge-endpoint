@@ -40,16 +40,8 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       initContainers:
       - name: database-prep
-        image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-fix-unconfigured-detector-deployment-bug-1f08c6d66-dirty-bc1d3f8d3b2fe9e
+        image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-fix-unconfigured-detector-deployment-bug-1bb99d030-dirty-341a94b766ec6fb
         imagePullPolicy: Always
-        env:
-        # Flag to indicate whether or not to reset all database tables. Resetting WILL delete
-        # all existing data in the database, so set this flag to 1 with caution.
-        - name: DB_RESET
-          valueFrom:
-            configMapKeyRef:
-              name: db-reset
-              key: DB_RESET
         volumeMounts:
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/sqlite

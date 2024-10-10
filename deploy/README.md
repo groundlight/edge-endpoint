@@ -3,19 +3,19 @@
 
 The edge endpoint is run as a k3s deployment. Follow the steps below to get it set up.
 
-## Starting the k3s Cluster 
+## Starting the k3s Cluster
 
-If you don't have [k3s](https://docs.k3s.io/) installed, go ahead and install it by running 
+If you don't have [k3s](https://docs.k3s.io/) installed, go ahead and install it by running
 
 ```shell
 > ./deploy/bin/install-k3s.sh
 ```
 
 
-If you intend to run motion detection, make sure to add the detector ID's to the 
+If you intend to run motion detection, make sure to add the detector ID's to the
 [edge config file](../configs/edge-config.yaml). For edge inference, adding detector ID's to the config file will cause
-inference pods to be initialized automatically for each detector. Even if they aren't configured in the config file, 
-edge inference will be set up for each detector ID for which the Groundlight service receives requests (note that it 
+inference pods to be initialized automatically for each detector. Even if they aren't configured in the config file,
+edge inference will be set up for each detector ID for which the Groundlight service receives requests (note that it
 takes some time for each inference pod to become available the first time).
 
 Before starting the cluster, you need to create/specify the namespace for the deployment. If you're creating a new one, run:
@@ -43,16 +43,9 @@ export INFERENCE_FLAVOR="CPU"
 
 You'll also need to configure your AWS credentials using `aws configure` to include credentials that have permissions to pull from the appropriate ECR location (if you don't already have the AWS CLI installed, refer to the instructions [here](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)).
 
-To start the cluster, run 
-```shell 
-./deploy/bin/cluster_setup.sh
-```
-
-Sometimes it might be desirable to reset all database tables(i.e., delete all existing data) for a fresh start. In that case, 
-you will need to start the cluster with an extra argument:
-
+To start the cluster, run
 ```shell
-./deploy/bin/cluster_setup.sh db_reset
+./deploy/bin/cluster_setup.sh
 ```
 
 This will create the edge-endpoint deployment with two containers: one for the edge logic and another one for creating/updating inference
@@ -72,23 +65,21 @@ inferencemodel-det-3jemxiunjuekdjzbuxavuevw15k-5d8b454bcb-xqf8m   1/1     Runnin
 ```
 
 
-We currently have a hard-coded docker image from ECR in the [edge-endpoint](/edge-endpoint/deploy/k3s/edge_deployment.yaml) 
-deployment. If you want to make modifications to the edge endpoint code and push a different 
+We currently have a hard-coded docker image from ECR in the [edge-endpoint](/edge-endpoint/deploy/k3s/edge_deployment.yaml)
+deployment. If you want to make modifications to the edge endpoint code and push a different
 image to ECR see [Pushing/Pulling Images from ECR](#pushingpulling-images-from-elastic-container-registry-ecr).
 
 
 ## Pushing/Pulling Images from Elastic Container Registry (ECR)
 
-We currently have a hard-coded docker image in our k3s deployment, which is not ideal. 
+We currently have a hard-coded docker image in our k3s deployment, which is not ideal.
 If you're testing things locally and want to use a different docker image, you can do so
-by first creating a docker image locally, pushing it to ECR, retrieving the image ID and 
-then using that ID in the [edge_deployment](k3s/edge_deployment/edge_deployment.yaml) file. 
+by first creating a docker image locally, pushing it to ECR, retrieving the image ID and
+then using that ID in the [edge_deployment](k3s/edge_deployment/edge_deployment.yaml) file.
 
 Follow the following steps:
 
 ```shell
 # Build and push image to ECR
-> ./deploy/bin/build-push-edge-endpoint-image.sh 
+> ./deploy/bin/build-push-edge-endpoint-image.sh
 ```
-
-
