@@ -5,7 +5,7 @@
 Run your Groundlight models on-prem by hosting an Edge Endpoint on your own hardware.  The Edge Endpoint exposes the exact same API as the Groundlight cloud service, so any Groundlight application can point to the Edge Endpoint simply by configuring the `GROUNDLIGHT_ENDPOINT` environment variable as follows:
 
 ```
-GROUNDLIGHT_ENDPOINT=http://localhost:30101
+GROUNDLIGHT_ENDPOINT=http://localhost:6717
 # This assumes your Groundlight SDK application is running on the same host as the Edge Endpoint.
 ```
 
@@ -20,23 +20,23 @@ To set up the Edge Endpoint, please refer to the [deploy README](deploy/README.m
 Any application written with the [Groundlight SDK](https://pypi.org/project/groundlight/) can work with an Edge Endpoint without any code changes.  Simply set an environment variable with the URL of your Edge Endpoint like:
 
 ```bash
-export GROUNDLIGHT_ENDPOINT=http://localhost:30101
+export GROUNDLIGHT_ENDPOINT=http://localhost:6717
 ```
 
 To find the correct port, run `kubectl get services` and you should see an entry like this:
 ```
 NAME                                                        TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)                         AGE
-service/edge-endpoint-service                               NodePort   10.43.141.253   <none>        6717:30101/TCP                  23m
+service/edge-endpoint-service                               NodePort   10.43.141.253   <none>        6717:6717/TCP                  23m
 ```
 
-The port is the second number listed under ports for the `edge-endpoint-service` (in this case, 30101).
+The port is the second number listed under ports for the `edge-endpoint-service` (in this case, 6717).
 
 If you'd like more control, you can also initialize the `Groundlight` SDK object with the endpoint explicitly like this:
 
 ```python
 from groundlight import Groundlight
 
-gl = Groundlight(endpoint="http://localhost:30101")
+gl = Groundlight(endpoint="http://localhost:6717")
 
 det = gl.get_or_create_detector(name="doorway", query="Is the doorway open?")
 img = "./docs/static/img/doorway.jpg"  
@@ -99,4 +99,4 @@ Each inferencemodel pod is specific to a detector. It contains one container.
 
 * `Cloud API:` This is the upstream API that we use as a fallback in case the edge logic server encounters problems. It is set to `https://api.groundlight.ai`. 
 
-* `Edge endpoint:` This is the user-visible endpoint (i.e., the upstream you can set for the Groundlight application). This is set to `http://localhost:30101`. 
+* `Edge endpoint:` This is the user-visible endpoint (i.e., the upstream you can set for the Groundlight application). This is set to `http://localhost:6717`. 

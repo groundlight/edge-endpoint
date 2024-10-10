@@ -16,7 +16,7 @@ spec:
   - protocol: TCP
     # Service port for NGINX
     port: 6717
-    nodePort: 30101
+    nodePort: 6717
   type: NodePort
 ---
 apiVersion: apps/v1

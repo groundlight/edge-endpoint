@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-
-import argparse
-import random
-from io import BytesIO
-
-import requests
-from groundlight import Groundlight
-from PIL import Image
-
 """
 Usage Instructions:
 -------------------
@@ -27,8 +18,16 @@ Example Usage:
 
 Note:
 -----
-Ensure that the Groundlight edge-endpoint is running locally on http://localhost:30101.
+Ensure that the Groundlight edge-endpoint is running locally on http://localhost:6717.
 """
+
+import argparse
+import random
+from io import BytesIO
+
+import requests
+from groundlight import Groundlight
+from PIL import Image
 
 
 def generate_random_image(width=224, height=224):
@@ -42,7 +41,7 @@ def submit_image_to_local_edge_endpoint(image, detector_id):
     image.save(buffered, format="JPEG")
     image_bytes = buffered.getvalue()
 
-    client = Groundlight(endpoint="http://localhost:30101")
+    client = Groundlight(endpoint="http://localhost:6717")
 
     detector = client.get_detector(detector_id)
     response = client.ask_ml(detector=detector, image=image_bytes)
