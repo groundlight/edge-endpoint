@@ -32,14 +32,13 @@ class LocalInferenceConfig(BaseModel):
     Configuration for local edge inference on a specific detector.
     """
 
-    enabled: bool = Field(False, description="Determines if local edge inference is enabled for a specific detector.")
-    api_token: Optional[str] = Field(None, description="API token to fetch the inference model for this detector.")
-    refresh_rate: float = Field(
-        default=120.0,
-        description=(
-            "The refresh rate for the inference server (in seconds). This means how often to check for an updated model"
-            " binary."
-        ),
+    enabled: bool = Field(default=False, description="True if edge-inference is enabled for a specific detector.")
+    api_token: Optional[str] = Field(
+        default=None, description="API token used to fetch the inference model for this detector."
+    )
+    refresh_rate: float = Field(  # TODO: this field is not used on a per-detector basis, remove it
+        default=60,
+        description="The interval (in seconds) at which the inference server checks for a new model binary update.",
     )
 
 
