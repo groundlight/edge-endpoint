@@ -89,14 +89,14 @@ def process_all_logs(log_dir):
 
             if total_requests > 0:
                 process_count += 1
-                print(f"Results for {log_file}:")
-                print(f"  Total Requests: {total_requests}")
-                print(f"  Requests per Second: {requests_per_second:.2f}")
-                print(f"  Errors: {error_count}")
-                print(f"  Errors per Second: {errors_per_second:.4f}")
-                print(f"  Average Response Time: {average_response_time:.4f} seconds")
-                print(f"  Median Response Time: {median_response_time:.4f} seconds")
-                print(f"  Maximum Response Time: {max_response_time:.4f} seconds\n")
+                # print(f"Results for {log_file}:")
+                # print(f"  Total Requests: {total_requests}")
+                # print(f"  Requests per Second: {requests_per_second:.2f}")
+                # print(f"  Errors: {error_count}")
+                # print(f"  Errors per Second: {errors_per_second:.4f}")
+                # print(f"  Average Response Time: {average_response_time:.4f} seconds")
+                # print(f"  Median Response Time: {median_response_time:.4f} seconds")
+                # print(f"  Maximum Response Time: {max_response_time:.4f} seconds\n")
 
                 total_requests_aggregate += total_requests
                 total_time_aggregate += total_requests / requests_per_second

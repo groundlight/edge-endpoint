@@ -14,12 +14,11 @@ if ENDPOINT_URL is None:
 DETECTOR_NAME = "edge_test_cat"
 DETECTOR_QUERY = "Is there a cat?"
 IMAGE_PATH = "./images/dog.jpeg"
-REQUESTS_PER_SECOND = 0.5  # Number of requests per second per process
+REQUESTS_PER_SECOND = 10  # Number of requests per second per process
 NUM_PROCESSES = 60  # Number of processes
 LOG_DIR = "./logs"  # Directory to store logs
-LOG_INTERVAL = 5  # How often to log statistics
-MAIN_PROCESS_STATUS_INTERVAL = 2  # Main process status interval in seconds
-DELAY_PER_PROCESS = 0.3  # How long to stagger each process start time, in seconds
+MAIN_PROCESS_STATUS_INTERVAL = 20  # Main process status interval in seconds
+DELAY_PER_PROCESS = 0  # How long to stagger each process start time, in seconds
 
 
 def send_image_requests(process_id, detector, num_requests_per_second, duration, start_delay):
