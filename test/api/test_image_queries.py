@@ -30,9 +30,8 @@ DETECTOR_ID = "det_abcdefghijklmnopqrstuvwxyz"
 
 # TODO: Add missing tests for the following functionality:
 # 1. Edge inference is available, runs and is confident / not confident
-# 2. Edge-only mode
-# 3. Motion-detection enabled
-# 4. Inference-deployment record created in DB if one doesn't already exist
+# 2. always_return_edge_prediction == True
+# 3. Inference-deployment record created in DB if one doesn't already exist
 
 
 @pytest.fixture
@@ -89,8 +88,8 @@ def assert_escalated_to_gl(*, sdk_response: ImageQuery, detector: Detector, subm
 
             if submitted_with:
                 mock_submit.assert_called_once_with(
-                    **{k: v for k, v in submitted_with.items()},
-                    **{k: mock.ANY for k in mock_submit.call_args.kwargs if k not in submitted_with},
+                    *[mock.ANY for v in mock_submit.call_args.args],
+                    **{k: v if k in submitted_with else mock.ANY for k, v in mock_submit.call_args.kwargs.items()},
                 )
             else:
                 mock_submit.assert_called_once()
@@ -181,7 +180,7 @@ def test_post_image_query_with_async_request(test_client: TestClient, detector: 
             url,
             headers={"Content-Type": "image/jpeg"},
             content=image_bytes,
-            params={"confidence_threshold": 1.0, "want_async": "true", "detector_id": detector.id},
+            params={"confidence_threshold": 1.0, "want_async": True, "detector_id": detector.id},
         )
         assert response.status_code == status.HTTP_200_OK, response.json()["detail"]
         response_data = response.json()

@@ -1,8 +1,8 @@
-import io
 import logging
 import os
 import shutil
 import time
+from io import BytesIO
 from typing import Dict, Optional
 
 import requests
@@ -29,7 +29,7 @@ def is_edge_inference_ready(inference_client_url: str) -> bool:
         return False
 
 
-def submit_image_for_inference(inference_client_url: str, image: Image.Image) -> dict:
+def submit_image_for_inference(inference_client_url: str, image_bytes: BytesIO) -> dict:
     inference_url = f"http://{inference_client_url}/infer"
 
     # Convert the PIL image to a WebP byte stream
@@ -118,10 +118,6 @@ class EdgeInferenceManager:
         Args:
             config: Dictionary of detector IDs to LocalInferenceConfig objects
             verbose: Whether to print verbose logs from the inference server client
-
-        NOTE: 1) The detector IDs should match the detector IDs in the motion detection config.
-              2) the `LocalInferenceConfig` object determines if local inference is enabled for
-                a specific detector and the model name and version to use for inference.
         """
         self.verbose = verbose
         self.inference_config, self.inference_client_urls = {}, {}

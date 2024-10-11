@@ -13,7 +13,7 @@ The Edge Endpoint will attempt to answer image queries using local models for yo
 
 ## Running the Edge Endpoint
 
-To set up the Edge Endpoint, please refer to the [deploy README](deploy/README.md). 
+To set up the Edge Endpoint, please refer to the [deploy README](deploy/README.md).
 
 ### Using the Edge Endpoint with your Groundlight application.
 
@@ -39,7 +39,7 @@ from groundlight import Groundlight
 gl = Groundlight(endpoint="http://localhost:30101")
 
 det = gl.get_or_create_detector(name="doorway", query="Is the doorway open?")
-img = "./docs/static/img/doorway.jpg"  
+img = "./docs/static/img/doorway.jpg"
 with open(img, "rb") as img_file:
     byte_stream = img_file.read()
 
@@ -50,34 +50,30 @@ print(f"The answer is {image_query.result}")
 See the [SDK's getting started guide](https://code.groundlight.ai/python-sdk/docs/getting-started) for more info.
 
 ### Experimental: getting only edge model answers
-If you only want to receive answers from the edge model for a detector, you can enable edge-only mode for it. This will prevent the edge endpoint from sending image queries to the cloud API. If you want fast edge answers regardless of confidence but still want the edge model to improve, you can enable edge-only inference for that detector. This mode will always return the edge model's answer, but it will also submit low confidence image queries to the cloud API for training.
+If you only want to receive (high FPS) answers from the edge ml model for a detector, you can enable that by setting `always_return_edge_prediction=True` and `disable_cloud_escalation=True`. This will prevent the edge-endpoint from sending image queries to the cloud API. If you want fast edge answers regardless of confidence but still want the edge model to improve, you can set `always_return_edge_prediction=True` and `disable_cloud_escalation=False`. This mode will always return the edge ml model's answer, but it will also submit low confidence image queries to the cloud API for training so we can further improve the edge model.
 
 To do this, edit the detector's configuration in the [edge config file](./configs/edge-config.yaml) like so:
 ```
 detectors:
   - detector_id: 'det_xyz'
-    motion_detection_template: "disabled"
     local_inference_template: "default"
-    edge_only: true
+    always_return_edge_prediction: true
+    disable_cloud_escalation: true
 
   - detector_id: 'det_ijk'
-    motion_detection_template: "disabled"
     local_inference_template: "default"
-    edge_only_inference: true
+    always_return_edge_prediction: true
 
   - detector_id: 'det_abc'
-    motion_detection_template: "default"
     local_inference_template: "default"
 ```
-In this example, `det_xyz` will have edge-only mode enabled because `edge_only` is set to `true`. `det_ijk` will have edge-only inference enabled because `edge_only_inference` is set to `true`. If `edge_only` or `edge_only_inference` are not specified, they default to false, so `det_abc` will have edge-only mode disabled. Only one of `edge_only` or `edge_only_inference` can be set to `true` for a detector.
+In this example, `det_xyz` will have cloud escalation disabled because `disable_cloud_escalation` is set to `true` and `always_return_edge_prediction` is also `true`. `det_ijk` will have edge-only inference enabled because `always_return_edge_prediction` is set to `true` while `disable_cloud_escalation` is `false`. If neither `always_return_edge_prediction` nor `disable_cloud_escalation` are specified, they default to `false`, so `det_abc` will have both options disabled.
 
-With edge-only mode enabled for a detector, when you make requests to it, you will only receive answers from the edge model (regardless of the confidence). Additionally, note that no image queries submitted this way will show up in the web app or be used to train the model. This option should therefore only be used if you don't need the model to improve and only want fast answers from the edge model.
+With `always_return_edge_prediction` enabled for a detector, when you make requests to it, you will receive answers from the edge model regardless of the confidence level. However, if `disable_cloud_escalation` is not set to `true`, image queries with confidences below the threshold will be escalated to the cloud and used to train the model. This configuration is useful when you want fast edge answers but still want the model to improve.
 
-With edge-only inference enabled for a detector, when you make requests to it, you will only receive answers from the edge model (regardless of the confidence). However, image queries submitted this way with confidences below the threshold will be escalated to the cloud and used to train the model. This option should be used when you want fast edge answers (regardless of confidence) but still want the model to improve.
+If `disable_cloud_escalation` is set to `true`, the edge endpoint will not send image queries to the cloud API, and you will only receive answers from the edge model. This option should be used if you don't need the model to improve and only want fast answers from the edge model. Note that no image queries submitted this way will show up in the web app or be used to train the model.
 
-If edge-only or edge-only inference mode is enabled on a detector and the edge inference model for that detector is not available, attempting to send image queries to that detector will return a 500 error response.
-
-This feature is currently not fully compatible with motion detection. If motion detection is enabled, some image queries may still be sent to the cloud API.
+If `always_return_edge_prediction=True` is set for a detector and the edge inference-server for that detector is not available, attempting to send image queries to that detector will return a 503 error response.
 
 This is an experimental feature and may be modified or removed in the future.
 
@@ -88,15 +84,15 @@ This might be useful for tuning operational aspects of your endpoint, contributi
 
 ### Components and terms
 
-Inside the edge-endpoint pod there are two containers: one for the edge logic and another one for creating/updating inference deployments. 
+Inside the edge-endpoint pod there are two containers: one for the edge logic and another one for creating/updating inference deployments.
 
 * `edge-endpoint container`: This container handles the edge logic.
 * `inference-model-updater container`: This container checks for changes to the models being used for edge inference and updates them when new versions are available.
 
 Each inferencemodel pod is specific to a detector. It contains one container.
 
-* `inference-server container`: This container holds the edge model 
+* `inference-server container`: This container holds the edge model
 
-* `Cloud API:` This is the upstream API that we use as a fallback in case the edge logic server encounters problems. It is set to `https://api.groundlight.ai`. 
+* `Cloud API:` This is the upstream API that we use as a fallback in case the edge logic server encounters problems. It is set to `https://api.groundlight.ai`.
 
-* `Edge endpoint:` This is the user-visible endpoint (i.e., the upstream you can set for the Groundlight application). This is set to `http://localhost:30101`. 
+* `Edge endpoint:` This is the user-visible endpoint (i.e., the upstream you can set for the Groundlight application). This is set to `http://localhost:30101`.

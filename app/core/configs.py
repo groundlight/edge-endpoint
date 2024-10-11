@@ -7,26 +7,6 @@ from typing_extensions import Self
 logger = logging.getLogger(__name__)
 
 
-class MotionDetectionConfig(BaseModel):
-    enabled: bool = Field(..., description="Determines if motion detection is enabled for this detector")
-    percentage_threshold: Optional[float] = Field(
-        default=None, description="Percent of pixels needed to change before motion is detected."
-    )
-    val_threshold: Optional[int] = Field(
-        default=None, description="The minimum brightness change for a pixel for it to be considered changed."
-    )
-    max_time_between_images: Optional[float] = Field(
-        default=None,
-        description=(
-            "Specifies the maximum time (seconds) between images sent to the cloud. This will be honored even if no"
-            " motion has been detected. Defaults to 1 hour."
-        ),
-    )
-    unconfident_iq_reescalation_interval: float = Field(
-        60.0, description="How often to re-escalate unconfident Image queries."
-    )
-
-
 class LocalInferenceConfig(BaseModel):
     """
     Configuration for local edge inference on a specific detector.
@@ -49,29 +29,36 @@ class DetectorConfig(BaseModel):
 
     detector_id: str = Field(..., description="Detector ID")
     local_inference_template: str = Field(..., description="Template for local edge inference.")
-    motion_detection_template: str = Field(..., description="Template for motion detection.")
-    edge_only: bool = Field(
+    always_return_edge_prediction: bool = Field(
         default=False,
-        description="Whether the detector should be in edge-only mode or not. Optional; defaults to False.",
+        description=(
+            "Indicates if the edge-endpoint should always provide edge ML predictions, regardless of confidence. "
+            "When this setting is true, whether or not the edge-endpoint should escalate low-confidence predictions "
+            "to the cloud is determined by `disable_cloud_escalation`."
+        ),
     )
-    edge_only_inference: bool = Field(
+    disable_cloud_escalation: bool = Field(
         default=False,
-        description="Whether the detector should be in edge-only inference mode or not. Optional; defaults to False.",
+        description=(
+            "Never escalate ImageQueries from the edge-endpoint to the cloud."
+            "Requires `always_return_edge_prediction=True`."
+        ),
     )
 
     @model_validator(mode="after")
-    def validate_edge_modes(self) -> Self:
-        if self.edge_only and self.edge_only_inference:
-            raise ValueError("'edge_only' and 'edge_only_inference' cannot both be True")
+    def validate_configuration(self) -> Self:
+        if self.disable_cloud_escalation and not self.always_return_edge_prediction:
+            raise ValueError(
+                "The `disable_cloud_escalation` flag is only valid when `always_return_edge_prediction` is set to True."
+            )
         return self
 
 
 class RootEdgeConfig(BaseModel):
     """
-    Root configuration for edge inference and motion detection.
+    Root configuration for edge inference.
     """
 
-    motion_detection_templates: Dict[str, MotionDetectionConfig]
     local_inference_templates: Dict[str, LocalInferenceConfig]
     detectors: Dict[str, DetectorConfig]
 
@@ -85,16 +72,7 @@ class RootEdgeConfig(BaseModel):
                     'detector_1': DetectorConfig(
                                     detector_id='det_123',
                                     local_inference_template='default',
-                                    motion_detection_template='default',
-                                    edge_only=False
-                                )
-                },
-                'motion_detection_templates': {
-                    'default': MotionDetectionConfig(
-                                    enabled=True,
-                                    percentage_threshold=0.01,
-                                    val_threshold=None,
-                                    max_time_between_images=3600.0
+                                    always_return_edge_prediction=False
                                 )
                 },
                 'local_inference_templates': {
@@ -106,8 +84,6 @@ class RootEdgeConfig(BaseModel):
             }
         """
         for detector in self.detectors.values():
-            if detector.motion_detection_template not in self.motion_detection_templates:
-                raise ValueError(f"Motion Detection Template {detector.motion_detection_template} not defined.")
             if detector.local_inference_template not in self.local_inference_templates:
                 raise ValueError(f"Local Inference Template {detector.local_inference_template} not defined.")
         return self
