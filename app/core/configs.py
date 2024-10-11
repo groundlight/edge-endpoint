@@ -1,7 +1,8 @@
 import logging
-from typing import Dict, Optional, Union
+from typing import Dict, Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, model_validator
+from typing_extensions import Self
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +52,19 @@ class DetectorConfig(BaseModel):
     local_inference_template: str = Field(..., description="Template for local edge inference.")
     motion_detection_template: str = Field(..., description="Template for motion detection.")
     edge_only: bool = Field(
-        False, description="Whether the detector should be in edge-only mode or not. Optional; defaults to False."
+        default=False,
+        description="Whether the detector should be in edge-only mode or not. Optional; defaults to False.",
     )
+    edge_only_inference: bool = Field(
+        default=False,
+        description="Whether the detector should be in edge-only inference mode or not. Optional; defaults to False.",
+    )
+
+    @model_validator(mode="after")
+    def validate_edge_modes(self) -> Self:
+        if self.edge_only and self.edge_only_inference:
+            raise ValueError("'edge_only' and 'edge_only_inference' cannot both be True")
+        return self
 
 
 class RootEdgeConfig(BaseModel):
@@ -64,17 +76,20 @@ class RootEdgeConfig(BaseModel):
     local_inference_templates: Dict[str, LocalInferenceConfig]
     detectors: Dict[str, DetectorConfig]
 
-    @validator("detectors", each_item=False)
-    def validate_templates(
-        cls,
-        detectors: Dict[str, DetectorConfig],
-        values: Dict[str, Dict[str, Union[MotionDetectionConfig, LocalInferenceConfig]]],
-    ):
+    @model_validator(mode="after")
+    def validate_templates(self):
         """
         Validate the templates referenced by the detectors.
-        :param detectors: The detectors to validate.
         :param values: The values passed to the validator. This is a dictionary of the form:
             {
+                'detectors': {
+                    'detector_1': DetectorConfig(
+                                    detector_id='det_123',
+                                    local_inference_template='default',
+                                    motion_detection_template='default',
+                                    edge_only=False
+                                )
+                },
                 'motion_detection_templates': {
                     'default': MotionDetectionConfig(
                                     enabled=True,
@@ -82,7 +97,7 @@ class RootEdgeConfig(BaseModel):
                                     val_threshold=None,
                                     max_time_between_images=3600.0
                                 )
-                }
+                },
                 'local_inference_templates': {
                     'default': LocalInferenceConfig(
                                     enabled=True,
@@ -91,15 +106,9 @@ class RootEdgeConfig(BaseModel):
                 }
             }
         """
-        for detector in detectors.values():
-            if (
-                "motion_detection_templates" in values
-                and detector.motion_detection_template not in values["motion_detection_templates"]
-            ):
+        for detector in self.detectors.values():
+            if detector.motion_detection_template not in self.motion_detection_templates:
                 raise ValueError(f"Motion Detection Template {detector.motion_detection_template} not defined.")
-            if (
-                "local_inference_templates" in values
-                and detector.local_inference_template not in values["local_inference_templates"]
-            ):
+            if detector.local_inference_template not in self.local_inference_templates:
                 raise ValueError(f"Local Inference Template {detector.local_inference_template} not defined.")
-        return detectors
+        return self

@@ -9,15 +9,18 @@ from app.core.database import DatabaseManager
 from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions
 from app.core.kubernetes_management import InferenceDeploymentManager
 
-log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
-logging.basicConfig(level=log_level)
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=LOG_LEVEL, format="%(asctime)s.%(msecs)03d %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+)
+logger = logging.getLogger(__name__)
 
 TEN_MINUTES = 60 * 10
 
 
 def sleep_forever(message: str | None = None):
     while True:
-        logging.info(message)
+        logger.info(message)
         time.sleep(TEN_MINUTES)
 
 
@@ -55,13 +58,13 @@ def _check_new_models_and_inference_deployments(
 
     deployment = deployment_manager.get_inference_deployment(detector_id=detector_id)
     if deployment is None:
-        logging.info(f"Creating a new inference deployment for {detector_id}")
+        logger.info(f"Creating a new inference deployment for {detector_id}")
         deployment_manager.create_inference_deployment(detector_id=detector_id)
         return
 
     if new_model:
         # Update inference deployment and rollout a new pod
-        logging.info(f"Updating inference deployment for {detector_id}")
+        logger.info(f"Updating inference deployment for {detector_id}")
         deployment_manager.update_inference_deployment(detector_id=detector_id)
 
         poll_start = time.time()
@@ -73,7 +76,7 @@ def _check_new_models_and_inference_deployments(
         # Now that we have successfully rolled out a new model version, we can clean up our model repository a bit.
         # To be a bit conservative, we keep the current model version as well as the version before that. Older
         # versions of the model for the current detector_id will be removed from disk.
-        logging.info(f"Cleaning up old model versions for {detector_id}")
+        logger.info(f"Cleaning up old model versions for {detector_id}")
         delete_old_model_versions(detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2)
 
     if deployment_manager.is_inference_deployment_rollout_complete(detector_id):
@@ -81,7 +84,7 @@ def _check_new_models_and_inference_deployments(
         # At this time, we are sure that the deployment for the detector has been successfully created and rolled out.
         db_manager.update_inference_deployment_record(
             detector_id=detector_id,
-            new_record={"deployment_created": True, "deployment_name": deployment.metadata.name},
+            fields_to_update={"deployment_created": True, "deployment_name": deployment.metadata.name},
         )
 
 
@@ -117,39 +120,39 @@ def update_models(
 
     while True:
         start = time.time()
-        logging.info("Starting model update check for existing inference deployments.")
+        logger.info("Starting model update check for existing inference deployments.")
         for detector_id in edge_inference_manager.inference_config.keys():
             try:
-                logging.debug(f"Checking new models and inference deployments for detector_id: {detector_id}")
+                logger.debug(f"Checking new models and inference deployments for detector_id: {detector_id}")
                 _check_new_models_and_inference_deployments(
                     detector_id=detector_id,
                     edge_inference_manager=edge_inference_manager,
                     deployment_manager=deployment_manager,
                     db_manager=db_manager,
                 )
-                logging.info(f"Successfully updated model for detector_id: {detector_id}")
+                logger.info(f"Successfully updated model for detector_id: {detector_id}")
             except Exception as e:
-                logging.error(f"Failed to update model for detector_id: {detector_id}. Error: {e}", exc_info=True)
+                logger.error(f"Failed to update model for detector_id: {detector_id}. Error: {e}", exc_info=True)
 
         elapsed_s = time.time() - start
-        logging.info(f"Model update check completed in {elapsed_s:.2f} seconds.")
+        logger.info(f"Model update check completed in {elapsed_s:.2f} seconds.")
         if elapsed_s < refresh_rate:
             sleep_duration = refresh_rate - elapsed_s
-            logging.info(f"Sleeping for {sleep_duration:.2f} seconds before next update cycle.")
+            logger.info(f"Sleeping for {sleep_duration:.2f} seconds before next update cycle.")
             time.sleep(sleep_duration)
 
         # Fetch detector IDs that need to be deployed from the database and add them to the config
-        logging.info("Fetching undeployed detector IDs from the database.")
-        undeployed_detector_ids: List[Dict[str, str]] = db_manager.query_inference_deployments(deployment_created=False)
+        logger.info("Fetching undeployed detector IDs from the database.")
+        undeployed_detector_ids: List[Dict[str, str]] = db_manager.get_inference_deployments(deployment_created=False)
         if undeployed_detector_ids:
-            logging.info(f"Found {len(undeployed_detector_ids)} undeployed detectors. Updating inference config.")
+            logger.info(f"Found {len(undeployed_detector_ids)} undeployed detectors. Updating inference config.")
             for detector_record in undeployed_detector_ids:
-                logging.debug(f"Updating inference config for detector_id: {detector_record.detector_id}")
+                logger.debug(f"Updating inference config for detector_id: {detector_record.detector_id}")
                 edge_inference_manager.update_inference_config(
                     detector_id=detector_record.detector_id, api_token=detector_record.api_token
                 )
         else:
-            logging.info("No undeployed detectors found.")
+            logger.info("No undeployed detectors found.")
 
 
 if __name__ == "__main__":
