@@ -21,6 +21,8 @@ pyyaml = "^6.0.2"
 SQLAlchemy = "2.0.35"
 svix-ksuid = "^0.6.2"
 uvicorn = {version = "^0.31.0", extras = ["standard"]}
+gputil = "^1.4.0"
+psutil = "^6.0.0"
 
 [tool.poetry.group.dev.dependencies]
 coverage = "^7.6.1"

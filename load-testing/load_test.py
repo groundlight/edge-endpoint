@@ -13,7 +13,7 @@ if ENDPOINT_URL is None:
 # Define constants
 DETECTOR_NAME = "edge_test_cat"
 DETECTOR_QUERY = "Is there a cat?"
-IMAGE_PATH = "./images/dog.jpeg"
+IMAGE_PATH = "./images/resized_dog.jpeg"  # The resized dog is 256x256
 REQUESTS_PER_SECOND = 10  # Number of requests per second per process
 NUM_PROCESSES = 60  # Number of processes
 LOG_DIR = "./logs"  # Directory to store logs
@@ -41,7 +41,7 @@ def send_image_requests(process_id, detector, num_requests_per_second, duration,
 
             try:
                 # Send the image query request
-                image_query = gl.ask_ml(detector=detector, image=IMAGE_PATH, wait=0)
+                image_query = gl.ask_ml(detector=detector, image=IMAGE_PATH, wait=5)
                 response_time = time.time() - request_start_time
                 log.write(
                     f"{time.strftime('%Y-%m-%d %H:%M:%S')} | Request Start: {request_start_time:.4f} | Response Time: {response_time:.4f} seconds | Result: {image_query.result}\n"
