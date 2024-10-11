@@ -40,7 +40,7 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       initContainers:
       - name: database-prep
-        image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-fix-unconfigured-detector-deployment-bug-5142166ef-dirty-e1d92c296fdad43
+        image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:latest
         imagePullPolicy: Always
         volumeMounts:
         - name: edge-endpoint-persistent-volume
