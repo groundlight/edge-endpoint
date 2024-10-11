@@ -197,7 +197,9 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         if return_edge_prediction:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Edge predictions are required, but an edge-inference server is not available for {detector_id=}.",
+                detail=(
+                    f"Edge predictions are required, but an edge-inference server is not available for {detector_id=}."
+                ),
             )
 
     # Finally, fall back to submitting the image to the cloud
