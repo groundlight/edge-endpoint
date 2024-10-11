@@ -58,7 +58,7 @@ class DatabaseManager:
         # Ensure that other handlers do not propagate here
         sqlalchemy_logger.propagate = False
 
-    def create_inference_deployment_record(self, deployment: Dict[str, str]) -> None:
+    def create_or_update_inference_deployment_record(self, deployment: Dict[str, str]) -> None:
         """
         Creates a new record in the `inference_deployments` table. If the record exists, but the API token has
         changed, we will update the record with the new API token.

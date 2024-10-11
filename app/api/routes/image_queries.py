@@ -110,13 +110,24 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         HTTPException: If there are issues with the request parameters or processing.
     """
     await validate_query_params_for_edge(request)
-    detector_config = app_state.edge_config.detectors.get(detector_id)
-    edge_only = detector_config.edge_only if detector_config is not None else False
-    edge_only_inference = detector_config.edge_only_inference if detector_config is not None else False
-    is_edge_only = edge_only or edge_only_inference
 
-    # Early return for async requests in non-edge-only mode
-    if want_async and not is_edge_only:
+    require_human_review = human_review == "ALWAYS"
+    detector_config = app_state.edge_config.detectors.get(detector_id)
+    return_edge_prediction = detector_config.always_return_edge_prediction if detector_config is not None else False
+    disable_cloud_escalation = detector_config.disable_cloud_escalation if detector_config is not None else False
+
+    if require_human_review and return_edge_prediction:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Human review cannot be required if edge predictions are required.",
+        )
+
+    if want_async:  # just submit to the cloud w/ ask_async
+        if return_edge_prediction:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Async requests are not supported when 'always_return_edge_prediction' is set to True.",
+            )
         logger.debug(f"Submitting ask_async image query to cloud API server for {detector_id=}")
         return safe_call_sdk(
             gl.ask_async,
@@ -127,24 +138,20 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             human_review=human_review,
         )
 
-    edge_inference_manager = app_state.edge_inference_manager
-    require_human_review = human_review == "ALWAYS"
-
     # Confirm the existence of the detector in GL, get relevant metadata
     detector_metadata = get_detector_metadata(detector_id=detector_id, gl=gl)  # NOTE: API call (once, then cached)
     confidence_threshold = confidence_threshold or detector_metadata.confidence_threshold
 
     # -- Edge-model Inference --
-    if not require_human_review and edge_inference_manager.inference_is_available(detector_id=detector_id):
+    if app_state.edge_inference_manager.inference_is_available(detector_id=detector_id):
         logger.debug(f"Local inference is available for {detector_id=}. Running inference...")
-        results = edge_inference_manager.run_inference(detector_id=detector_id, image=image)
-        confidence = results["confidence"]
+        results = app_state.edge_inference_manager.run_inference(detector_id=detector_id, image=image)
+        ml_confidence = results["confidence"]
 
-        if is_edge_only or _is_confident_enough(confidence=confidence, confidence_threshold=confidence_threshold):
-            if edge_only:
-                logger.debug(f"Edge-only mode: no cloud escalation. {detector_id=}")
-            elif edge_only_inference:
-                logger.debug(f"Edge-only inference: may escalate to cloud to aid training. {detector_id=}")
+        is_confident_enough = ml_confidence >= confidence_threshold
+        if return_edge_prediction or is_confident_enough:  # return the edge prediction
+            if return_edge_prediction:
+                logger.debug(f"Returning edge prediction without cloud escalation. {detector_id=}")
             else:
                 logger.debug(f"Edge detector confidence sufficient. {detector_id=}")
 
@@ -153,20 +160,19 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 mode=detector_metadata.mode,
                 mode_configuration=detector_metadata.mode_configuration,
                 result_value=results["label"],
-                confidence=confidence,
+                confidence=ml_confidence,
                 confidence_threshold=confidence_threshold,
                 query=detector_metadata.query,
                 patience_time=patience_time,
                 rois=results["rois"],
                 text=results["text"],
             )
-            background_tasks.add_task(app_state.db_manager.create_iqe_record, iq=image_query)
+            app_state.db_manager.create_iqe_record(image_query)
 
-            if edge_only_inference and not _is_confident_enough(
-                confidence=confidence,
-                confidence_threshold=confidence_threshold,
-            ):
-                logger.debug("Escalating to the cloud API server for future training due to low confidence.")
+            if not disable_cloud_escalation and not is_confident_enough:  # escalate after returning edge prediction
+                logger.debug(
+                    f"Escalating to cloud due to low confidence: {ml_confidence} < thresh={confidence_threshold}"
+                )
                 background_tasks.add_task(
                     safe_call_sdk,
                     gl.ask_async,
@@ -179,33 +185,31 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
             return image_query
 
-        logger.debug(f"Escalating to cloud due to low confidence: {confidence} < thresh={confidence_threshold}")
-
     # -- Edge-inference is not available --
     else:
-        # Create an edge-inference deployment record, which may be used to spin up an edge-inference, if applicable.
-        api_token = gl.api_client.configuration.api_key["ApiToken"]
+        # Create an edge-inference deployment record, which may be used to spin up an edge-inference server.
         logger.debug(f"Local inference not available for {detector_id=}. Creating inference deployment record.")
-        app_state.db_manager.create_inference_deployment_record(
+        api_token = gl.api_client.configuration.api_key["ApiToken"]
+        app_state.db_manager.create_or_update_inference_deployment_record(
             deployment={"detector_id": detector_id, "api_token": api_token, "deployment_created": False}
         )
 
-        # Fail if edge inference is not available and edge-only mode is enabled
-        if is_edge_only:
-            mode = "Edge-only mode" if edge_only else "Edge-only inference mode"
-            raise RuntimeError(f"{mode} is enabled, but edge inference is not available.")
+        if return_edge_prediction:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Edge predictions are required, but an edge-inference server is not available for {detector_id=}.",
+            )
 
     # Finally, fall back to submitting the image to the cloud
-    # NOTE: Waiting is done on the customer's client, not here. Otherwise we would be blocking the
-    # response to the customer's client from the edge-endpoint for many seconds. This has the side
-    # effect of not allowing customers to set patience_time on a per-iq basis when using the edge-endpoint.
-    # TODO: patch in the edge inference results if the cloud results are not confident enough?
+    if disable_cloud_escalation:
+        raise AssertionError("Cloud escalation is disabled.")  # ...should never reach this point
+
     logger.debug(f"Submitting image query to cloud for {detector_id=}")
     return safe_call_sdk(
         gl.submit_image_query,
         detector=detector_id,
         image=image,
-        wait=0,
+        wait=0,  # wait on the client, not here
         patience_time=patience_time,
         confidence_threshold=confidence_threshold,
         human_review=human_review,
@@ -222,15 +226,3 @@ async def get_image_query(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Image query with ID {id} not found")
         return image_query
     return safe_call_sdk(gl.get_image_query, id=id)
-
-
-def _is_confident_enough(confidence: Optional[float], confidence_threshold: float) -> bool:
-    """
-    Determine if an image query is confident enough to return.
-    :param image_query: the image query to check
-    :param confidence_threshold: the confidence threshold to use. If not set, use the detector's confidence threshold.
-    :return: True if the image query is confident enough to return, False otherwise
-    """
-    if confidence is None:
-        return True  # None confidence means answered by a human, so it's confident enough to return
-    return confidence >= confidence_threshold

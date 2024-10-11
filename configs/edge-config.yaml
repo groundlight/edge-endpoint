@@ -12,5 +12,5 @@ detectors:
   # The "default" templates are just examples of how one might configure inference.
     - detector_id: ''
       local_inference_template: "default"
-      edge_only: false
-      edge_only_inference: false
+      always_return_edge_prediction: false
+      disable_cloud_escalation: false

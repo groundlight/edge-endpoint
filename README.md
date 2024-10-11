@@ -50,29 +50,30 @@ print(f"The answer is {image_query.result}")
 See the [SDK's getting started guide](https://code.groundlight.ai/python-sdk/docs/getting-started) for more info.
 
 ### Experimental: getting only edge model answers
-If you only want to receive answers from the edge model for a detector, you can enable edge-only mode for it. This will prevent the edge endpoint from sending image queries to the cloud API. If you want fast edge answers regardless of confidence but still want the edge model to improve, you can enable edge-only inference for that detector. This mode will always return the edge model's answer, but it will also submit low confidence image queries to the cloud API for training.
+If you only want to receive (high FPS) answers from the edge ml model for a detector, you can enable that by setting `always_return_edge_prediction=True` and `disable_cloud_escalation=True`. This will prevent the edge-endpoint from sending image queries to the cloud API. If you want fast edge answers regardless of confidence but still want the edge model to improve, you can set `always_return_edge_prediction=True` and `disable_cloud_escalation=False`. This mode will always return the edge ml model's answer, but it will also submit low confidence image queries to the cloud API for training so we can further improve the edge model.
 
 To do this, edit the detector's configuration in the [edge config file](./configs/edge-config.yaml) like so:
 ```
 detectors:
   - detector_id: 'det_xyz'
     local_inference_template: "default"
-    edge_only: true
+    always_return_edge_prediction: true
+    disable_cloud_escalation: true
 
   - detector_id: 'det_ijk'
     local_inference_template: "default"
-    edge_only_inference: true
+    always_return_edge_prediction: true
 
   - detector_id: 'det_abc'
     local_inference_template: "default"
 ```
-In this example, `det_xyz` will have edge-only mode enabled because `edge_only` is set to `true`. `det_ijk` will have edge-only inference enabled because `edge_only_inference` is set to `true`. If `edge_only` or `edge_only_inference` are not specified, they default to false, so `det_abc` will have edge-only mode disabled. Only one of `edge_only` or `edge_only_inference` can be set to `true` for a detector.
+In this example, `det_xyz` will have cloud escalation disabled because `disable_cloud_escalation` is set to `true` and `always_return_edge_prediction` is also `true`. `det_ijk` will have edge-only inference enabled because `always_return_edge_prediction` is set to `true` while `disable_cloud_escalation` is `false`. If neither `always_return_edge_prediction` nor `disable_cloud_escalation` are specified, they default to `false`, so `det_abc` will have both options disabled.
 
-With edge-only mode enabled for a detector, when you make requests to it, you will only receive answers from the edge model (regardless of the confidence). Additionally, note that no image queries submitted this way will show up in the web app or be used to train the model. This option should therefore only be used if you don't need the model to improve and only want fast answers from the edge model.
+With `always_return_edge_prediction` enabled for a detector, when you make requests to it, you will receive answers from the edge model regardless of the confidence level. However, if `disable_cloud_escalation` is not set to `true`, image queries with confidences below the threshold will be escalated to the cloud and used to train the model. This configuration is useful when you want fast edge answers but still want the model to improve.
 
-With edge-only inference enabled for a detector, when you make requests to it, you will only receive answers from the edge model (regardless of the confidence). However, image queries submitted this way with confidences below the threshold will be escalated to the cloud and used to train the model. This option should be used when you want fast edge answers (regardless of confidence) but still want the model to improve.
+If `disable_cloud_escalation` is set to `true`, the edge endpoint will not send image queries to the cloud API, and you will only receive answers from the edge model. This option should be used if you don't need the model to improve and only want fast answers from the edge model. Note that no image queries submitted this way will show up in the web app or be used to train the model.
 
-If edge-only or edge-only inference mode is enabled on a detector and the edge inference model for that detector is not available, attempting to send image queries to that detector will return a 500 error response.
+If `always_return_edge_prediction=True` is set for a detector and the edge inference-server for that detector is not available, attempting to send image queries to that detector will return a 503 error response.
 
 This is an experimental feature and may be modified or removed in the future.
 

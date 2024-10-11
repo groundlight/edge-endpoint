@@ -29,19 +29,28 @@ class DetectorConfig(BaseModel):
 
     detector_id: str = Field(..., description="Detector ID")
     local_inference_template: str = Field(..., description="Template for local edge inference.")
-    edge_only: bool = Field(
+    always_return_edge_prediction: bool = Field(
         default=False,
-        description="Whether the detector should be in edge-only mode or not. Optional; defaults to False.",
+        description=(
+            "Indicates if the edge-endpoint should always provide edge ML predictions, regardless of confidence. "
+            "When this setting is true, whether or not the edge-endpoint should escalate low-confidence predictions "
+            "to the cloud is determined by `disable_cloud_escalation`."
+        ),
     )
-    edge_only_inference: bool = Field(
+    disable_cloud_escalation: bool = Field(
         default=False,
-        description="Whether the detector should be in edge-only inference mode or not. Optional; defaults to False.",
+        description=(
+            "Never escalate ImageQueries from the edge-endpoint to the cloud."
+            "Requires `always_return_edge_prediction=True`."
+        ),
     )
 
     @model_validator(mode="after")
-    def validate_edge_modes(self) -> Self:
-        if self.edge_only and self.edge_only_inference:
-            raise ValueError("'edge_only' and 'edge_only_inference' cannot both be True")
+    def validate_configuration(self) -> Self:
+        if self.disable_cloud_escalation and not self.always_return_edge_prediction:
+            raise ValueError(
+                "The `disable_cloud_escalation` flag is only valid when `always_return_edge_prediction` is set to True."
+            )
         return self
 
 
@@ -63,7 +72,7 @@ class RootEdgeConfig(BaseModel):
                     'detector_1': DetectorConfig(
                                     detector_id='det_123',
                                     local_inference_template='default',
-                                    edge_only=False
+                                    always_return_edge_prediction=False
                                 )
                 },
                 'local_inference_templates': {
