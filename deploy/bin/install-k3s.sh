@@ -8,6 +8,13 @@ K="k3s kubectl"
 sudo apt update && sudo apt upgrade -y
 
 
+# Set up a config file that lets us bind service ports down to 6000 so that
+# we can put the edge endpoint at 6717.
+mkdir -p /etc/rancher/k3s/config.yaml.d
+cat > /etc/rancher/k3s/config.yaml.d/service-ports.yaml << EOF
+service-node-port-range: "6000-32767"
+EOF
+
 # Install k3s
 echo "Installing k3s..."
 curl -sfL https://get.k3s.io |  K3S_KUBECONFIG_MODE="644" sh -s - --disable=traefik
