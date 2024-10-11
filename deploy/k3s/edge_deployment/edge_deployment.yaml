@@ -42,14 +42,6 @@ spec:
       - name: database-prep
         image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:latest
         imagePullPolicy: Always
-        env:
-        # Flag to indicate whether or not to reset all database tables. Resetting WILL delete
-        # all existing data in the database, so set this flag to 1 with caution.
-        - name: DB_RESET
-          valueFrom:
-            configMapKeyRef:
-              name: db-reset
-              key: DB_RESET
         volumeMounts:
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/sqlite

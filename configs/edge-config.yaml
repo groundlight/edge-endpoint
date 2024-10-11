@@ -25,8 +25,8 @@ motion_detection_templates:
 local_inference_templates:
   default:
     enabled: true
-    # How often to fetch a new model binary (in seconds)
-    refresh_rate: 120
+    # How often to attempt to fetch a new ml model binary (in seconds)
+    refresh_rate: 60
 
   disabled:
     enabled: false

@@ -1,7 +1,6 @@
 import logging
 import os
 import time
-from typing import Dict, List
 
 from app.core.app_state import get_inference_and_motion_detection_configs, load_edge_config
 from app.core.configs import RootEdgeConfig
@@ -143,7 +142,7 @@ def update_models(
 
         # Fetch detector IDs that need to be deployed from the database and add them to the config
         logger.info("Fetching undeployed detector IDs from the database.")
-        undeployed_detector_ids: List[Dict[str, str]] = db_manager.get_inference_deployments(deployment_created=False)
+        undeployed_detector_ids = db_manager.get_inference_deployment_records(deployment_created=False)
         if undeployed_detector_ids:
             logger.info(f"Found {len(undeployed_detector_ids)} undeployed detectors. Updating inference config.")
             for detector_record in undeployed_detector_ids:
@@ -153,6 +152,15 @@ def update_models(
                 )
         else:
             logger.info("No undeployed detectors found.")
+
+        # Update the status of the inference deployments in the database
+        deployment_records = db_manager.get_inference_deployment_records()
+        for record in deployment_records:
+            deployment_created = deployment_manager.get_inference_deployment(record.detector_id) is not None
+            db_manager.update_inference_deployment_record(
+                detector_id=record.detector_id,
+                fields_to_update={"deployment_created": deployment_created},
+            )
 
 
 if __name__ == "__main__":
