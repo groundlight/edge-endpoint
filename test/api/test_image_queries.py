@@ -31,8 +31,7 @@ DETECTOR_ID = "det_abcdefghijklmnopqrstuvwxyz"
 # TODO: Add missing tests for the following functionality:
 # 1. Edge inference is available, runs and is confident / not confident
 # 2. Edge-only mode
-# 3. Motion-detection enabled
-# 4. Inference-deployment record created in DB if one doesn't already exist
+# 3. Inference-deployment record created in DB if one doesn't already exist
 
 
 @pytest.fixture

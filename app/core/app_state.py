@@ -1,7 +1,7 @@
 import logging
 import os
 from functools import lru_cache
-from typing import Dict, Tuple
+from typing import Dict
 
 import cachetools
 import yaml
@@ -9,11 +9,10 @@ from fastapi import Request
 from groundlight import Groundlight
 from model import Detector
 
-from .configs import LocalInferenceConfig, MotionDetectionConfig, RootEdgeConfig
+from .configs import LocalInferenceConfig, RootEdgeConfig
 from .database import DatabaseManager
 from .edge_inference import EdgeInferenceManager
 from .file_paths import DEFAULT_EDGE_CONFIG_PATH
-from .motion_detection import MotionDetectionManager
 from .utils import safe_call_sdk
 
 logger = logging.getLogger(__name__)
@@ -60,28 +59,22 @@ def _load_config_from_yaml(yaml_config) -> RootEdgeConfig:
     return RootEdgeConfig(**config)
 
 
-def get_inference_and_motion_detection_configs(
+def get_inference_configs(
     root_edge_config: RootEdgeConfig,
-) -> Tuple[Dict[str, LocalInferenceConfig] | None, Dict[str, MotionDetectionConfig] | None]:
-    motion_detection_templates: Dict[str, MotionDetectionConfig] = root_edge_config.motion_detection_templates
+) -> Dict[str, LocalInferenceConfig] | None:
     edge_inference_templates: Dict[str, LocalInferenceConfig] = root_edge_config.local_inference_templates
 
     # Filter out detectors whose ID's are empty strings
     detectors = {det_id: detector for det_id, detector in root_edge_config.detectors.items() if det_id != ""}
 
-    motion_detection_config = None
     inference_config = None
     if detectors:
-        motion_detection_config = {
-            detector_id: motion_detection_templates[detector_config.motion_detection_template]
-            for detector_id, detector_config in detectors.items()
-        }
         inference_config = {
             detector_id: edge_inference_templates[detector_config.local_inference_template]
             for detector_id, detector_config in detectors.items()
         }
 
-    return inference_config, motion_detection_config
+    return inference_config
 
 
 @lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
@@ -115,11 +108,7 @@ def get_detector_metadata(detector_id: str, gl: Groundlight) -> Detector:
 class AppState:
     def __init__(self):
         self.edge_config = load_edge_config()
-        inference_config, motion_detection_config = get_inference_and_motion_detection_configs(
-            root_edge_config=self.edge_config
-        )
-
-        self.motion_detection_manager = MotionDetectionManager(config=motion_detection_config)
+        inference_config = get_inference_configs(root_edge_config=self.edge_config)
         self.edge_inference_manager = EdgeInferenceManager(config=inference_config)
         self.db_manager = DatabaseManager()
         self.is_ready = False

@@ -8,7 +8,6 @@ def test_detector_config_both_edge_modes():
         DetectorConfig(
             detector_id="det_xyz",
             local_inference_template="default",
-            motion_detection_template="default",
             edge_only=True,
             edge_only_inference=True,
         )

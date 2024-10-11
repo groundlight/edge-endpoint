@@ -118,10 +118,6 @@ class EdgeInferenceManager:
         Args:
             config: Dictionary of detector IDs to LocalInferenceConfig objects
             verbose: Whether to print verbose logs from the inference server client
-
-        NOTE: 1) The detector IDs should match the detector IDs in the motion detection config.
-              2) the `LocalInferenceConfig` object determines if local inference is enabled for
-                a specific detector and the model name and version to use for inference.
         """
         self.verbose = verbose
         self.inference_config, self.inference_client_urls = {}, {}

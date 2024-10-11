@@ -12,11 +12,11 @@ If you don't have [k3s](https://docs.k3s.io/) installed, go ahead and install it
 ```
 
 
-If you intend to run motion detection, make sure to add the detector ID's to the
-[edge config file](../configs/edge-config.yaml). For edge inference, adding detector ID's to the config file will cause
+If you intend to run edge inference, make sure to add the detector ID's to the
+[edge config file](../configs/edge-config.yaml). Adding detector ID's to the config file will cause
 inference pods to be initialized automatically for each detector. Even if they aren't configured in the config file,
 edge inference will be set up for each detector ID for which the Groundlight service receives requests (note that it
-takes some time for each inference pod to become available the first time).
+takes some time for each inference pod to become available for the first time).
 
 Before starting the cluster, you need to create/specify the namespace for the deployment. If you're creating a new one, run:
 

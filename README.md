@@ -13,7 +13,7 @@ The Edge Endpoint will attempt to answer image queries using local models for yo
 
 ## Running the Edge Endpoint
 
-To set up the Edge Endpoint, please refer to the [deploy README](deploy/README.md). 
+To set up the Edge Endpoint, please refer to the [deploy README](deploy/README.md).
 
 ### Using the Edge Endpoint with your Groundlight application.
 
@@ -39,7 +39,7 @@ from groundlight import Groundlight
 gl = Groundlight(endpoint="http://localhost:30101")
 
 det = gl.get_or_create_detector(name="doorway", query="Is the doorway open?")
-img = "./docs/static/img/doorway.jpg"  
+img = "./docs/static/img/doorway.jpg"
 with open(img, "rb") as img_file:
     byte_stream = img_file.read()
 
@@ -56,17 +56,14 @@ To do this, edit the detector's configuration in the [edge config file](./config
 ```
 detectors:
   - detector_id: 'det_xyz'
-    motion_detection_template: "disabled"
     local_inference_template: "default"
     edge_only: true
 
   - detector_id: 'det_ijk'
-    motion_detection_template: "disabled"
     local_inference_template: "default"
     edge_only_inference: true
 
   - detector_id: 'det_abc'
-    motion_detection_template: "default"
     local_inference_template: "default"
 ```
 In this example, `det_xyz` will have edge-only mode enabled because `edge_only` is set to `true`. `det_ijk` will have edge-only inference enabled because `edge_only_inference` is set to `true`. If `edge_only` or `edge_only_inference` are not specified, they default to false, so `det_abc` will have edge-only mode disabled. Only one of `edge_only` or `edge_only_inference` can be set to `true` for a detector.
@@ -77,8 +74,6 @@ With edge-only inference enabled for a detector, when you make requests to it, y
 
 If edge-only or edge-only inference mode is enabled on a detector and the edge inference model for that detector is not available, attempting to send image queries to that detector will return a 500 error response.
 
-This feature is currently not fully compatible with motion detection. If motion detection is enabled, some image queries may still be sent to the cloud API.
-
 This is an experimental feature and may be modified or removed in the future.
 
 ## Development and Internal Architecture
@@ -88,15 +83,15 @@ This might be useful for tuning operational aspects of your endpoint, contributi
 
 ### Components and terms
 
-Inside the edge-endpoint pod there are two containers: one for the edge logic and another one for creating/updating inference deployments. 
+Inside the edge-endpoint pod there are two containers: one for the edge logic and another one for creating/updating inference deployments.
 
 * `edge-endpoint container`: This container handles the edge logic.
 * `inference-model-updater container`: This container checks for changes to the models being used for edge inference and updates them when new versions are available.
 
 Each inferencemodel pod is specific to a detector. It contains one container.
 
-* `inference-server container`: This container holds the edge model 
+* `inference-server container`: This container holds the edge model
 
-* `Cloud API:` This is the upstream API that we use as a fallback in case the edge logic server encounters problems. It is set to `https://api.groundlight.ai`. 
+* `Cloud API:` This is the upstream API that we use as a fallback in case the edge logic server encounters problems. It is set to `https://api.groundlight.ai`.
 
-* `Edge endpoint:` This is the user-visible endpoint (i.e., the upstream you can set for the Groundlight application). This is set to `http://localhost:30101`. 
+* `Edge endpoint:` This is the user-visible endpoint (i.e., the upstream you can set for the Groundlight application). This is set to `http://localhost:30101`.
