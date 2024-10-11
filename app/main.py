@@ -26,7 +26,7 @@ scheduler = AsyncIOScheduler()
 
 def update_inference_config(app_state: AppState) -> None:
     """Update the App's edge-inference config by querying the database for new detectors."""
-    detectors = app_state.db_manager.get_inference_deployments(deployment_created=True)
+    detectors = app_state.db_manager.get_inference_deployment_records(deployment_created=True)
     if detectors:
         for detector_record in detectors:
             app_state.edge_inference_manager.update_inference_config(
@@ -39,7 +39,7 @@ def update_inference_config(app_state: AppState) -> None:
 async def startup_event():
     """Lifecycle event that is triggered when the application starts."""
     app.state.app_state = AppState()
-    app.state.app_state.db_manager.create_tables()  # ...if they don't already exist
+    app.state.app_state.db_manager.reset_database()
 
     if DEPLOY_DETECTOR_LEVEL_INFERENCE:
         # Add job to periodically update the inference config

@@ -1,7 +1,7 @@
 import json
 import logging
 from logging.handlers import RotatingFileHandler
-from typing import Dict, Sequence
+from typing import Any, Dict, Sequence
 
 from model import ImageQuery
 from sqlalchemy import create_engine, select
@@ -82,7 +82,7 @@ class DatabaseManager:
         :param deployment: A dictionary containing the deployment details.
         """
         logger.debug(f"Detector ID {deployment['detector_id']} already exists in the database.")
-        detectors = self.get_inference_deployments(detector_id=deployment["detector_id"])
+        detectors = self.get_inference_deployment_records(detector_id=deployment["detector_id"])
         if len(detectors) != 1:
             raise AssertionError("Expected exactly one detector to be returned.")
 
@@ -91,7 +91,7 @@ class DatabaseManager:
             logger.info(f"Updating API token for detector ID {deployment['detector_id']}.")
             self.update_inference_deployment_record(detector_id=deployment["detector_id"], fields_to_update=deployment)
 
-    def update_inference_deployment_record(self, detector_id: str, fields_to_update: Dict[str, str]):
+    def update_inference_deployment_record(self, detector_id: str, fields_to_update: Dict[str, Any]):
         """
         Update the record for the given detector.
         :param detector_id: Detector ID
@@ -110,7 +110,7 @@ class DatabaseManager:
                     setattr(detector_record, field, value)
             session.commit()
 
-    def get_inference_deployments(self, **kwargs) -> Sequence[InferenceDeployment]:
+    def get_inference_deployment_records(self, **kwargs) -> Sequence[InferenceDeployment]:
         """
         Query the database table for detectors based on a given query predicate.
         :param kwargs: A dictionary containing the query predicate.
@@ -147,6 +147,16 @@ class DatabaseManager:
         """Create the database tables, if they don't already exist."""
         with self._engine.begin() as connection:
             Base.metadata.create_all(connection)
+
+    def drop_tables(self) -> None:
+        """Drop all tables in the database."""
+        with self._engine.begin() as connection:
+            Base.metadata.drop_all(connection)
+
+    def reset_database(self) -> None:
+        """Reset the database by deleting all tables and then recreating them."""
+        self.drop_tables()
+        self.create_tables()
 
     def shutdown(self) -> None:
         self._engine.dispose()

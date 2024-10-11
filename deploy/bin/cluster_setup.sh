@@ -1,25 +1,19 @@
 #!/bin/bash
 
-# How to use this script:
-# ./deploy/bin/cluster_setup.sh [db_reset]
+# Usage:
+# Execute the script using the following command:
+# ./deploy/bin/cluster_setup.sh
 #
-# The optional argument "db_reset" will delete all the data in the database.
-# For now, this means all
-# - detectors in the `inference_deployments` table
-# - image queries in the `image_queries_edge` table
-# For more on these tables you can examine the database file at
-# /opt/groundlight/edge/sqlite/sqlite.db on the attached volume (EFS/local).
-
-# Possible env vars:
-# - KUBECTL_CMD: path to kubectl command. Defaults to "kubectl" but can be set to "k3s kubectl" if using k3s
-# - INFERENCE_FLAVOR: "CPU" or "GPU". Defaults to "GPU"
-# - EDGE_CONFIG: contents of edge-config.yaml. If not set, will use configs/edge-config.yaml
-# - DEPLOY_LOCAL_VERSION: Indicates whether we are building the local version of the edge endpoint.
-#           If set to 0, we will attach an EFS instead of a local volume. Defaults to 1.
-# - EFS_VOLUME_ID: ID of the EFS volume to use if we are using the EFS version.
-# - DEPLOYMENT_NAMESPACE: Namespace to deploy to. Defaults to the current namespace.
-# - RUN_EDGE_ENDPOINT: Indicates whether or not to launch the edge endpoint pods.
-#           If set, launch edge-endpoint pods. If not set, do not launch pods.
+# Environment Variables:
+# - KUBECTL_CMD: Specifies the path to the kubectl command. Defaults to "kubectl". If using k3s, set to "k3s kubectl".
+# - INFERENCE_FLAVOR: Determines the inference type, either "CPU" or "GPU". Defaults to "GPU".
+# - EDGE_CONFIG: Specifies the contents of edge-config.yaml. If not set, defaults to configs/edge-config.yaml.
+# - DEPLOY_LOCAL_VERSION: Indicates if the local version of the edge endpoint is being built.
+#   - Set to 0 to attach an EFS instead of a local volume. Defaults to 1.
+# - EFS_VOLUME_ID: The ID of the EFS volume to use when deploying the EFS version.
+# - DEPLOYMENT_NAMESPACE: The namespace for deployment. Defaults to the current namespace.
+# - RUN_EDGE_ENDPOINT: Controls the launch of edge endpoint pods.
+#   - If set, the edge-endpoint pods will be launched. If not set, pods will not be launched.
 
 set -ex
 
@@ -64,7 +58,6 @@ echo "RUN_EDGE_ENDPOINT is set to '${RUN_EDGE_ENDPOINT}'. Starting edge endpoint
 
 K=${KUBECTL_CMD:-"kubectl"}
 INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"GPU"}
-DB_RESET=$1
 DEPLOY_LOCAL_VERSION=${DEPLOY_LOCAL_VERSION:-1}
 DEPLOYMENT_NAMESPACE=${DEPLOYMENT_NAMESPACE:-$($K config view -o json | jq -r '.contexts[] | select(.name == "'$($K config current-context)'") | .context.namespace // "default"')}
 
@@ -122,16 +115,10 @@ $K create configmap kubernetes-namespace --from-literal=namespace=${DEPLOYMENT_N
 
 $K create configmap setup-db --from-file=$(pwd)/deploy/bin/setup_db.sh -n ${DEPLOYMENT_NAMESPACE}
 
-# If db_reset is passed as an argument, create a environment variable DB_RESET
-if [[ "$DB_RESET" == "db_reset" ]]; then
-    $K create configmap db-reset --from-literal=DB_RESET=1
-else
-    $K create configmap db-reset --from-literal=DB_RESET=0
-fi
-
 # Clean up existing deployments and services (if they exist)
 $K delete --ignore-not-found deployment edge-endpoint
 $K delete --ignore-not-found service edge-endpoint-service
+$K delete --ignore-not-found deployment warmup-inference-model
 $K get deployments -o custom-columns=":metadata.name" --no-headers=true | \
     grep "inferencemodel" | \
     xargs -I {} $K delete deployments {}
