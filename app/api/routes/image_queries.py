@@ -1,6 +1,6 @@
 import logging
 from io import BytesIO
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from groundlight import Groundlight
@@ -9,7 +9,6 @@ from model import (
 )
 from PIL import Image
 
-from app.core import constants
 from app.core.app_state import (
     AppState,
     get_app_state,
@@ -51,102 +50,89 @@ async def validate_image(request: Request) -> Image.Image:
     return image
 
 
-async def validate_query_params_for_edge(request: Request, invalid_edge_params: set):
+async def validate_query_params_for_edge(request: Request):
+    invalid_edge_params = {
+        "inspection_id",  # inspection_id will not be supported on the edge
+        "metadata",  # metadata is not supported on the edge currently, we need to set up persistent storage first
+    }
     query_params = set(request.query_params.keys())
     invalid_provided_params = query_params.intersection(invalid_edge_params)
     if invalid_provided_params:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid query parameters for submit_image_query to edge-endpoint: {invalid_provided_params}",
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid query parameters: {invalid_provided_params}"
         )
 
 
 @router.post("", response_model=ImageQuery)
 async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     request: Request,
+    background_tasks: BackgroundTasks,
     detector_id: str = Query(...),
     image: Image.Image = Depends(validate_image),
-    patience_time: Optional[float] = Query(None),
-    confidence_threshold: Optional[float] = Query(None),
-    human_review: Optional[str] = Query(None),
-    want_async: Optional[str] = Query(None),
+    patience_time: Optional[float] = Query(None, ge=0),
+    confidence_threshold: Optional[float] = Query(None, ge=0, le=1),
+    human_review: Optional[Literal["DEFAULT", "ALWAYS", "NEVER"]] = Query(None),
+    want_async: bool = Query(False),
     gl: Groundlight = Depends(get_groundlight_sdk_instance),
     app_state: AppState = Depends(get_app_state),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     """
     Submit an image query for a given detector.
 
-    TODO: fixup
-    In addition, this will also attempt to run inference locally on the edge if the edge inference server is available
-    before deciding to submit the image to the cloud.
+    This function attempts to run inference locally on the edge, if possible,
+    before potentially escalating to the cloud.
 
-    :param detector_id: the string id of the detector to use, like `det_12345`
+    Args:
+        detector_id (str): The unique identifier of the detector to use, e.g., 'det_12345'.
+        image (Image.Image): The image to submit.
+        patience_time (Optional[float]): Maximum time (in seconds) to wait for a confident answer.
+            Longer patience times increase the likelihood of obtaining a confident answer.
+            During this period, Groundlight may update ML predictions and prioritize human review if necessary.
+            This is a soft server-side timeout. If not set, the detector's default patience time is used.
+        confidence_threshold (Optional[float]): The minimum confidence level required for an answer.
+            If not set, the detector's default confidence threshold is used.
+        human_review (Optional[Literal["DEFAULT", "ALWAYS", "NEVER"]]):
+            - "DEFAULT" or None: Send for human review only if the ML prediction is not confident.
+            - "ALWAYS": Always send for human review.
+            - "NEVER": Never send for human review.
+        want_async (bool): If True, returns immediately after query submission without waiting for a prediction.
+            The returned ImageQuery will have a 'result' of None. Requires 'wait' to be set to 0.
 
-    :param image: the image to submit.
+    Dependencies:
+        gl (Groundlight): Application's Groundlight SDK instance.
+        app_state (AppState): Application's state manager.
+        background_tasks (BackgroundTasks): FastAPI background tasks manager for asynchronous operations.
 
-    :param patience_time: How long to wait (in seconds) for a confident answer for this image query.
-        The longer the patience_time, the more likely Groundlight will arrive at a confident answer.
-        Within patience_time, Groundlight will update ML predictions based on stronger findings,
-        and, additionally, Groundlight will prioritize human review of the image query if necessary.
-        This is a soft server-side timeout. If not set, use the detector's patience_time.
+    Returns:
+        ImageQuery: The submitted image query, potentially with results depending on the mode of operation.
 
-    :param confidence_threshold: The confidence threshold to wait for.
-        If not set, use the detector's confidence threshold.
-
-    :param human_review: If `None` or `DEFAULT`, send the image query for human review
-        only if the ML prediction is not confident.
-        If set to `ALWAYS`, always send the image query for human review.
-        If set to `NEVER`, never send the image query for human review.
-
-    :param want_async: If True, the client will return as soon as the image query is submitted and will not wait for
-        an ML/human prediction. The returned `ImageQuery` will have a `result` of None. Must set `wait` to 0 to use
-        want_async.
-
-    :param gl: Application's Groundlight SDK instance
-
-    :param app_state: Application's state manager.
+    Raises:
+        HTTPException: If there are issues with the request parameters or processing.
     """
-    await validate_query_params_for_edge(
-        request,
-        invalid_edge_params={
-            "inspection_id",  # inspection_id will not be supported on the edge
-            "metadata",  # metadata is not supported on the edge currently, we need to set up persistent storage first
-        },
-    )
-
-    detector_config = app_state.edge_config.detectors.get(detector_id, None)
+    await validate_query_params_for_edge(request)
+    detector_config = app_state.edge_config.detectors.get(detector_id)
     edge_only = detector_config.edge_only if detector_config is not None else False
     edge_only_inference = detector_config.edge_only_inference if detector_config is not None else False
+    is_edge_only = edge_only or edge_only_inference
 
-    # TODO: instead of just forwarding want_async calls to the cloud, facilitate partial
-    #       processing of the async request on the edge before escalating to the cloud.
-    _want_async = want_async is not None and want_async.lower() == "true"
-    if _want_async and not (
-        edge_only or edge_only_inference
-    ):  # If edge-only mode is enabled, we don't want to make cloud API calls
+    # Early return for async requests in non-edge-only mode
+    if want_async and not is_edge_only:
         logger.debug(f"Submitting ask_async image query to cloud API server for {detector_id=}")
         return safe_call_sdk(
-            gl.submit_image_query,
+            gl.ask_async,
             detector=detector_id,
             image=image,
-            wait=0,
             patience_time=patience_time,
             confidence_threshold=confidence_threshold,
             human_review=human_review,
-            want_async=True,
         )
 
     edge_inference_manager = app_state.edge_inference_manager
     require_human_review = human_review == "ALWAYS"
-    image_query: ImageQuery | None = None
 
     # Confirm the existence of the detector in GL, get relevant metadata
     detector_metadata = get_detector_metadata(detector_id=detector_id, gl=gl)  # NOTE: API call (once, then cached)
-
-    if confidence_threshold is None:
-        # Use detector's confidence threshold
-        confidence_threshold: float = detector_metadata.confidence_threshold
+    confidence_threshold = confidence_threshold or detector_metadata.confidence_threshold
 
     # -- Edge-model Inference --
     if not require_human_review and edge_inference_manager.inference_is_available(detector_id=detector_id):
@@ -154,30 +140,13 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         results = edge_inference_manager.run_inference(detector_id=detector_id, image=image)
         confidence = results["confidence"]
 
-        if (
-            edge_only
-            or edge_only_inference
-            or _is_confident_enough(
-                confidence=confidence,
-                confidence_threshold=confidence_threshold,
-            )
-        ):
+        if is_edge_only or _is_confident_enough(confidence=confidence, confidence_threshold=confidence_threshold):
             if edge_only:
-                logger.debug(
-                    f"Edge-only mode enabled - will not escalate to cloud, regardless of confidence. {detector_id=}"
-                )
+                logger.debug(f"Edge-only mode: no cloud escalation. {detector_id=}")
             elif edge_only_inference:
-                logger.debug(
-                    "Edge-only inference mode is enabled on this detector. The edge model's answer will be "
-                    "returned regardless of confidence, but will still be escalated to the cloud if the confidence "
-                    "is not high enough. "
-                    f"{detector_id=}"
-                )
+                logger.debug(f"Edge-only inference: may escalate to cloud to aid training. {detector_id=}")
             else:
-                logger.debug(f"Edge detector confidence is high enough to return. {detector_id=}")
-
-            if patience_time is None:
-                patience_time = constants.DEFAULT_PATIENCE_TIME
+                logger.debug(f"Edge detector confidence sufficient. {detector_id=}")
 
             image_query = create_iqe(
                 detector_id=detector_id,
@@ -191,18 +160,26 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 rois=results["rois"],
                 text=results["text"],
             )
-            app_state.db_manager.create_iqe_record(iq=image_query)
+            background_tasks.add_task(app_state.db_manager.create_iqe_record, iq=image_query)
 
             if edge_only_inference and not _is_confident_enough(
                 confidence=confidence,
                 confidence_threshold=confidence_threshold,
             ):
-                logger.info("Escalating to the cloud API server for future training due to low confidence.")
-                background_tasks.add_task(safe_call_sdk, gl.ask_async, detector=detector_id, image=image)
-        else:
-            logger.info(
-                f"Edge-inference is not confident, escalating to cloud. ({confidence} < thresh={confidence_threshold})"
-            )
+                logger.debug("Escalating to the cloud API server for future training due to low confidence.")
+                background_tasks.add_task(
+                    safe_call_sdk,
+                    gl.ask_async,
+                    detector=detector_id,
+                    image=image,
+                    patience_time=patience_time,
+                    confidence_threshold=confidence_threshold,
+                    human_review=human_review,
+                )
+
+            return image_query
+
+        logger.debug(f"Escalating to cloud due to low confidence: {confidence} < thresh={confidence_threshold}")
 
     # -- Edge-inference is not available --
     else:
@@ -214,33 +191,25 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         )
 
         # Fail if edge inference is not available and edge-only mode is enabled
-        if edge_only:
-            raise RuntimeError("Edge-only mode is enabled on this detector, but edge inference is not available.")
-        elif edge_only_inference:
-            raise RuntimeError(
-                "Edge-only inference mode is enabled on this detector, but edge inference is not available."
-            )
+        if is_edge_only:
+            mode = "Edge-only mode" if edge_only else "Edge-only inference mode"
+            raise RuntimeError(f"{mode} is enabled, but edge inference is not available.")
 
     # Finally, fall back to submitting the image to the cloud
-    if not image_query:
-        logger.debug(f"Submitting image query to cloud API server for {detector_id=}")
-        # NOTE: Waiting is done on the customer's client, not here. Otherwise we would be blocking the
-        # response to the customer's client from the edge-endpoint for many seconds. This has the
-        # side effect of not allowing customers to update their detector's patience_time through the
-        # edge-endpoint. But instead we could ask them to do that through the web app.
-        # wait=0 sets patience_time=DEFAULT_PATIENCE_TIME and disables polling.
-        image_query: ImageQuery = safe_call_sdk(
-            gl.submit_image_query,
-            detector=detector_id,
-            image=image,
-            wait=0,
-            patience_time=patience_time,
-            confidence_threshold=confidence_threshold,
-            human_review=human_review,
-        )
-        # TODO: patch in the edge inference results if the cloud results are not confident enough?
-
-    return image_query
+    # NOTE: Waiting is done on the customer's client, not here. Otherwise we would be blocking the
+    # response to the customer's client from the edge-endpoint for many seconds. This has the side
+    # effect of not allowing customers to set patience_time on a per-iq basis when using the edge-endpoint.
+    # TODO: patch in the edge inference results if the cloud results are not confident enough?
+    logger.debug(f"Submitting image query to cloud for {detector_id=}")
+    return safe_call_sdk(
+        gl.submit_image_query,
+        detector=detector_id,
+        image=image,
+        wait=0,
+        patience_time=patience_time,
+        confidence_threshold=confidence_threshold,
+        human_review=human_review,
+    )
 
 
 @router.get("/{id}", response_model=ImageQuery)
