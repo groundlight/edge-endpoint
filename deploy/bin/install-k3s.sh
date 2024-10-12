@@ -10,8 +10,8 @@ sudo apt update && sudo apt upgrade -y
 
 # Set up a config file that lets us bind service ports down to 6000 so that
 # we can put the edge endpoint at 6717.
-mkdir -p /etc/rancher/k3s/config.yaml.d
-cat > /etc/rancher/k3s/config.yaml.d/service-ports.yaml << EOF
+sudo mkdir -p /etc/rancher/k3s/config.yaml.d
+sudo tee /etc/rancher/k3s/config.yaml.d/service-ports.yaml > /dev/null << EOF
 service-node-port-range: "6000-32767"
 EOF
 
@@ -43,6 +43,4 @@ else
 fi
 
 # Set up kubeconfig for the current user
-mkdir -p ~/.kube
-cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
-chmod 600 ~/.kube/config
+"$(dirname "$0")"/add-k3s-cluster-to-config.sh
