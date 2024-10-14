@@ -1,5 +1,4 @@
 import logging
-from io import BytesIO
 from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
@@ -7,7 +6,6 @@ from groundlight import Groundlight
 from model import (
     ImageQuery,
 )
-from PIL import Image
 
 from app.core.app_state import (
     AppState,
@@ -22,32 +20,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-async def validate_image(request: Request) -> Image.Image:
-    """
-    Validate the image file contained in the request body and return a PIL Image object.
-    :param file: The uploaded image file to be validated.
-    :return: A PIL Image object if the file is a valid image.
-    :raises HTTPException: If the file is not an image or cannot be processed.
-    """
+async def validate_content_type(request: Request) -> str:
     if not request.headers.get("Content-Type", "").startswith("image/"):
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Request body must be image bytes"
         )
+    return request.headers.get("Content-Type", "")
 
+
+async def validate_image_bytes(request: Request, content_type: str = Depends(validate_content_type)) -> bytes:
     image_bytes = await request.body()
-    try:
-        # Attempt to open the image
-        image = Image.open(BytesIO(image_bytes))
-
-        # Image.open() does not fully process the image data. It's possible for Image.open()
-        # to succeed but then fail when the image data is actually being processed.
-        # To ensure that the image can be fully processed, we call img.load() to force loading
-        # the entire image. If this fails, we know that the image is invalid.
-        image.load()
-    except IOError as ex:
-        logger.error("Failed to load image", exc_info=True)
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid input image") from ex
-    return image
+    return image_bytes
 
 
 async def validate_query_params_for_edge(request: Request):
@@ -68,7 +51,8 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     request: Request,
     background_tasks: BackgroundTasks,
     detector_id: str = Query(...),
-    image: Image.Image = Depends(validate_image),
+    content_type: str = Depends(validate_content_type),
+    image_bytes: bytes = Depends(validate_image_bytes),
     patience_time: Optional[float] = Query(None, ge=0),
     confidence_threshold: Optional[float] = Query(None, ge=0, le=1),
     human_review: Optional[Literal["DEFAULT", "ALWAYS", "NEVER"]] = Query(None),
@@ -84,7 +68,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
     Args:
         detector_id (str): The unique identifier of the detector to use, e.g., 'det_12345'.
-        image (Image.Image): The image to submit.
+        image_bytes (bytes): The raw binary data of the image to be analyzed.
         patience_time (Optional[float]): Maximum time (in seconds) to wait for a confident answer.
             Longer patience times increase the likelihood of obtaining a confident answer.
             During this period, Groundlight may update ML predictions and prioritize human review if necessary.
@@ -132,7 +116,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         return safe_call_sdk(
             gl.ask_async,
             detector=detector_id,
-            image=image,
+            image=image_bytes,
             patience_time=patience_time,
             confidence_threshold=confidence_threshold,
             human_review=human_review,
@@ -145,7 +129,9 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     # -- Edge-model Inference --
     if app_state.edge_inference_manager.inference_is_available(detector_id=detector_id):
         logger.debug(f"Local inference is available for {detector_id=}. Running inference...")
-        results = app_state.edge_inference_manager.run_inference(detector_id=detector_id, image=image)
+        results = app_state.edge_inference_manager.run_inference(
+            detector_id=detector_id, image_bytes=image_bytes, content_type=content_type
+        )
         ml_confidence = results["confidence"]
 
         is_confident_enough = ml_confidence >= confidence_threshold
@@ -177,7 +163,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                     safe_call_sdk,
                     gl.ask_async,
                     detector=detector_id,
-                    image=image,
+                    image=image_bytes,
                     patience_time=patience_time,
                     confidence_threshold=confidence_threshold,
                     human_review=human_review,
@@ -210,7 +196,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     return safe_call_sdk(
         gl.submit_image_query,
         detector=detector_id,
-        image=image,
+        image=image_bytes,
         wait=0,  # wait on the client, not here
         patience_time=patience_time,
         confidence_threshold=confidence_threshold,

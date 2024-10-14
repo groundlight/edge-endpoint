@@ -2,14 +2,12 @@ import logging
 import os
 import shutil
 import time
-from io import BytesIO
 from typing import Dict, Optional
 
 import requests
 import yaml
 from fastapi import HTTPException, status
 from jinja2 import Template
-from PIL import Image
 
 from app.core.file_paths import MODEL_REPOSITORY_PATH
 from app.core.speedmon import SpeedMonitor
@@ -29,16 +27,11 @@ def is_edge_inference_ready(inference_client_url: str) -> bool:
         return False
 
 
-def submit_image_for_inference(inference_client_url: str, image: Image.Image) -> dict:
+def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, content_type: str) -> dict:
     inference_url = f"http://{inference_client_url}/infer"
-
-    # Convert the PIL image to a WebP byte stream
-    byte_arr = BytesIO()
-    image.save(byte_arr, format="WEBP")
-    byte_arr.seek(0)
-    files = {"file": ("image.webp", byte_arr, "image/webp")}
+    headers = {"Content-Type": content_type}
     try:
-        response = requests.post(inference_url, files=files)
+        response = requests.post(inference_url, data=image_bytes, headers=headers)
         if response.status_code != status.HTTP_200_OK:
             logger.error(f"Inference server returned an error: {response.status_code} - {response.text}")
             raise RuntimeError(f"Inference server error: {response.status_code} - {response.text}")
@@ -176,12 +169,13 @@ class EdgeInferenceManager:
             return False
         return True
 
-    def run_inference(self, detector_id: str, image: Image.Image) -> dict:
+    def run_inference(self, detector_id: str, image_bytes: bytes, content_type: str) -> dict:
         """
         Submit an image to the inference server, route to a specific model, and return the results.
         Args:
             detector_id: ID of the detector on which to run local edge inference
-            img_numpy: Image as a numpy array (assumes HWC uint8 RGB image)
+            image_bytes: The serialized image to submit for inference
+            content_type: The content type of the image
         Returns:
             Dictionary of inference results with keys:
                 - "score": float
@@ -193,7 +187,7 @@ class EdgeInferenceManager:
         start_time = time.perf_counter()
 
         inference_client_url = self.inference_client_urls[detector_id]
-        response = submit_image_for_inference(inference_client_url, image)
+        response = submit_image_for_inference(inference_client_url, image_bytes, content_type)
         output_dict = parse_inference_response(response)
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000
