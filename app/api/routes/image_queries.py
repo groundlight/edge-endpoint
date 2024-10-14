@@ -68,7 +68,8 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
     Args:
         detector_id (str): The unique identifier of the detector to use, e.g., 'det_12345'.
-        image_bytes (bytes): The raw binary data of the image to be analyzed.
+        content_type (str): The content type of the image, e.g., 'image/jpeg'.
+        image_bytes (bytes): The raw binary data of the image.
         patience_time (Optional[float]): Maximum time (in seconds) to wait for a confident answer.
             Longer patience times increase the likelihood of obtaining a confident answer.
             During this period, Groundlight may update ML predictions and prioritize human review if necessary.
