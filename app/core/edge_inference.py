@@ -1,8 +1,8 @@
-import io
 import logging
 import os
 import shutil
 import time
+from io import BytesIO
 from typing import Dict, Optional
 
 import requests
@@ -33,7 +33,7 @@ def submit_image_for_inference(inference_client_url: str, image: Image.Image) ->
     inference_url = f"http://{inference_client_url}/infer"
 
     # Convert the PIL image to a WebP byte stream
-    byte_arr = io.BytesIO()
+    byte_arr = BytesIO()
     image.save(byte_arr, format="WEBP")
     byte_arr.seek(0)
     files = {"file": ("image.webp", byte_arr, "image/webp")}
