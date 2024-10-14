@@ -1,8 +1,8 @@
+import io
 import logging
 import os
 import shutil
 import time
-from io import BytesIO
 from typing import Dict, Optional
 
 import requests
@@ -29,7 +29,7 @@ def is_edge_inference_ready(inference_client_url: str) -> bool:
         return False
 
 
-def submit_image_for_inference(inference_client_url: str, image_bytes: BytesIO) -> dict:
+def submit_image_for_inference(inference_client_url: str, image: Image.Image) -> dict:
     inference_url = f"http://{inference_client_url}/infer"
 
     # Convert the PIL image to a WebP byte stream
