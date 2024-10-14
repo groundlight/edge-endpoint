@@ -2,7 +2,7 @@ import logging
 import os
 import time
 
-from app.core.app_state import get_inference_and_motion_detection_configs, load_edge_config
+from app.core.app_state import get_inference_configs, load_edge_config
 from app.core.configs import RootEdgeConfig
 from app.core.database import DatabaseManager
 from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions
@@ -166,7 +166,7 @@ def update_models(
 if __name__ == "__main__":
     edge_config: RootEdgeConfig = load_edge_config()
     refresh_rate = get_refresh_rate(root_edge_config=edge_config)
-    inference_config, _ = get_inference_and_motion_detection_configs(root_edge_config=edge_config)
+    inference_config = get_inference_configs(root_edge_config=edge_config)
 
     edge_inference_manager = EdgeInferenceManager(config=inference_config, verbose=True)
     deployment_manager = InferenceDeploymentManager()

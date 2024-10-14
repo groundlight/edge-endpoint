@@ -33,7 +33,7 @@ def database_reset(db_manager: DatabaseManager):
     db_manager.reset_database()
 
 
-def test_create_inference_deployment_record(db_manager: DatabaseManager, database_reset):
+def test_create_or_update_inference_deployment_record(db_manager: DatabaseManager, database_reset):
     """Test creating a new detector deployment record."""
 
     deployments = [
@@ -46,7 +46,7 @@ def test_create_inference_deployment_record(db_manager: DatabaseManager, databas
     ]
 
     for deployment in deployments:
-        db_manager.create_inference_deployment_record(deployment=deployment)
+        db_manager.create_or_update_inference_deployment_record(deployment=deployment)
         with db_manager.session_maker() as session:
             query_text = f"SELECT * FROM inference_deployments WHERE detector_id = '{deployment['detector_id']}'"
             query = session.execute(text(query_text))
@@ -70,7 +70,7 @@ def test_get_detectors_without_deployments(db_manager, database_reset):
     ]
 
     for deployment in deployments:
-        db_manager.create_inference_deployment_record(deployment=deployment)
+        db_manager.create_or_update_inference_deployment_record(deployment=deployment)
 
     undeployed_detectors = db_manager.get_inference_deployment_records(deployment_created=False)
     assert len(undeployed_detectors) == NUM_TESTING_RECORDS
@@ -93,7 +93,7 @@ def test_update_inference_deployment_record(db_manager, database_reset):
     ]
 
     for deployment in deployments:
-        db_manager.create_inference_deployment_record(deployment=deployment)
+        db_manager.create_or_update_inference_deployment_record(deployment=deployment)
         db_manager.update_inference_deployment_record(
             detector_id=deployment["detector_id"], fields_to_update={"deployment_created": True}
         )
@@ -113,7 +113,7 @@ def test_update_api_token_for_detector(db_manager, database_reset):
         "api_token": prefixed_ksuid("api_"),
         "deployment_created": False,
     }
-    db_manager.create_inference_deployment_record(deployment=deployment)
+    db_manager.create_or_update_inference_deployment_record(deployment=deployment)
     detectors = db_manager.get_inference_deployment_records(detector_id=deployment["detector_id"])
     assert len(detectors) == 1
     assert detectors[0].api_token == deployment["api_token"]

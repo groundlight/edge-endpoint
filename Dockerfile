@@ -86,7 +86,7 @@ COPY --from=production-dependencies-build-stage ${APP_ROOT}/configs/nginx.conf /
 # Remove default nginx config
 RUN rm /etc/nginx/sites-enabled/default
 
-CMD nginx && poetry run uvicorn --workers 64 --host 0.0.0.0 --port ${APP_PORT} --proxy-headers app.main:app
+CMD nginx && poetry run uvicorn --workers 8 --host 0.0.0.0 --port ${APP_PORT} --proxy-headers app.main:app
 
 # Document the exposed port which was configured in start_uvicorn.sh
 # https://docs.docker.com/engine/reference/builder/#expose

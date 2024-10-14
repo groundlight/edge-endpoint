@@ -18,7 +18,7 @@ from model import (
 )
 from PIL import Image
 
-from . import constants
+from app.core import constants
 
 
 def create_iqe(  # noqa: PLR0913
@@ -29,12 +29,15 @@ def create_iqe(  # noqa: PLR0913
     confidence: float,
     confidence_threshold: float,
     query: str = "",
-    patience_time: float = constants.DEFAULT_PATIENCE_TIME,
+    patience_time: float | None = None,
     rois: list[ROI] | None = None,
     text: str | None = None,
 ) -> ImageQuery:
+    if patience_time is None:
+        patience_time = constants.DEFAULT_PATIENCE_TIME
     result_type, result = _mode_to_result_and_type(mode, mode_configuration, confidence, result_value)
-    iq = ImageQuery(
+
+    return ImageQuery(
         metadata=None,
         id=prefixed_ksuid(prefix="iqe_"),
         type=ImageQueryTypeEnum.image_query,
@@ -48,7 +51,6 @@ def create_iqe(  # noqa: PLR0913
         rois=rois,
         text=text,
     )
-    return iq
 
 
 def _mode_to_result_and_type(
@@ -112,7 +114,7 @@ def safe_call_sdk(api_method: Callable, **kwargs):
         raise ex
 
 
-def prefixed_ksuid(prefix: str = None) -> str:
+def prefixed_ksuid(prefix: str | None = None) -> str:
     """Returns a unique identifier, with a bunch of nice properties.
     It's statistically guaranteed unique, about as strongly as UUIDv4 are.
     They're sortable by time, approximately, assuming your clocks are sync'd properly.

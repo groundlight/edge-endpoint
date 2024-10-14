@@ -18,79 +18,6 @@ env:
   GROUNDLIGHT_ENDPOINT: http://localhost:6717
 
 jobs:
-  test-motion-detection:
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-
-      - name: Set up python
-        uses: actions/setup-python@v4
-        with :
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install Docker
-        # moby-runc is a CLI tool for spawning and running containers according to the Open Container Initiative (OCI)
-        # specification, and it is used by the Docker runtime. The existing version of moby-runc on the GitHub Actions runner
-        # is often incompatible with the version of Docker we want to install, so we need to remove it first.
-        run: |
-          sudo apt-get update
-          sudo apt-get remove moby-runc
-          sudo apt-get install apt-transport-https ca-certificates curl software-properties-common
-          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-          sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-          sudo apt-get update
-          sudo apt-get install docker-ce
-
-      - name: Build Docker Image
-        run: docker build --tag groundlight-edge .
-
-      - name: Start Docker Container
-        id: start_container
-        run: |
-          source test/setup_motion_detection_test_env.sh
-          echo "EDGE_CONFIG=$EDGE_CONFIG"
-          container_id=$(docker run \
-            -e LOG_LEVEL=DEBUG \
-            -e EDGE_CONFIG \
-            -d -p 6717:6717 \
-            groundlight-edge)
-          echo "::set-output name=container_id::$container_id"
-
-      - name: Install poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          installer-parallel: true
-
-      - name: Load Cached venv
-        id: cached-poetry-dependencies
-        uses: actions/cache@v3
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
-
-      - name: Install package
-        run: |
-          poetry install --no-interaction
-
-      - name: Run Motion Detection Tests
-        run: |
-          source test/setup_motion_detection_test_env.sh
-          poetry run pytest -vs test/api/test_motdet.py
-
-      - name: Dump Logs from Docker Container
-        if: always()
-        run: docker logs ${{ steps.start_container.outputs.container_id }}
-
-      - name: Stop Docker Container
-        # This ensures that we always stop the container regardless of the outcomes of
-        # the previous steps
-        if: always()
-        run: docker stop ${{ steps.start_container.outputs.container_id }}
-
   test-general-edge-endpoint:
     runs-on: ubuntu-22.04
     steps:
@@ -129,7 +56,7 @@ jobs:
           # use the GL client.
           GROUNDLIGHT_ENDPOINT="https://api.groundlight.ai/"
           source test/setup_plain_test_env.sh
-          poetry run pytest -vs -k "not test_motdet and not _live"
+          poetry run pytest -vs -k "not _live"
 
       - name: Install Docker
         run: |
@@ -258,7 +185,6 @@ jobs:
     if: (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
     # We only run this action if all the prior test actions succeed
     needs:
-      - test-motion-detection
       - test-general-edge-endpoint
       - test-sdk
     runs-on: ubuntu-22.04
