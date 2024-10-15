@@ -42,6 +42,9 @@ if [ "$1" == "dev" ]; then
   docker build --tag ${EDGE_ENDPOINT_IMAGE} ../..
   docker tag ${EDGE_ENDPOINT_IMAGE}:latest ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG}
   docker push ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG}
+
+  echo "Successfully pushed image to ECR_URL=${ECR_URL}"
+  echo "${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG}"
   exit 0
 fi
 
@@ -72,3 +75,7 @@ docker buildx build \
   --tag ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG} \
   --tag ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:latest \
   ../.. --push
+
+echo "Successfully pushed image to ECR_URL=${ECR_URL}"
+echo "${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG}"
+echo "${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:latest"
