@@ -2,11 +2,14 @@ import datetime as dt
 import json
 import os
 import re
+from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
 import matplotlib.pyplot as plt
 from pydantic import BaseModel
+
+REQUESTS_PER_SECOND = 10  # TODO this should be synced b/t this file and load_test.py
 
 
 class LoadTestResults(BaseModel):
@@ -17,6 +20,10 @@ class LoadTestResults(BaseModel):
     response_times: list[float]
     average_latency_by_time: dict[datetime, float]
     average_latency_by_clients: dict[int, float]
+    successes_by_time: dict[datetime, int]
+    errors_by_time: dict[datetime, int]
+    requests_by_time: dict[datetime, int]
+    clients_by_time: dict[datetime, int]
 
 
 def parse_log_file(log_file: str) -> LoadTestResults:
@@ -28,6 +35,10 @@ def parse_log_file(log_file: str) -> LoadTestResults:
     throughput_data = {}  # Dictionary to store throughput per number of workers
     latency_buckets = {}
     latency_by_clients = {}  # Track latencies by the number of clients
+    success_buckets = {}
+    error_buckets = {}
+    total_request_buckets = {}
+    client_buckets = {}
 
     # Read the log file and extract request start timestamps, response times, and errors
     with open(log_file) as file:
@@ -52,6 +63,22 @@ def parse_log_file(log_file: str) -> LoadTestResults:
                 if time_bucket not in latency_buckets:
                     latency_buckets[time_bucket] = []
                 latency_buckets[time_bucket].append(log_data["latency"])
+
+                # Bucketing throughput
+                if time_bucket not in success_buckets:
+                    success_buckets[time_bucket] = 0
+                if time_bucket not in error_buckets:
+                    error_buckets[time_bucket] = 0
+                if time_bucket not in total_request_buckets:
+                    total_request_buckets[time_bucket] = 0
+                if not log_data["success"]:
+                    error_buckets[time_bucket] += 1
+                else:
+                    success_buckets[time_bucket] += 1
+                total_request_buckets[time_bucket] += 1
+
+                if time_bucket not in client_buckets:
+                    client_buckets[time_bucket] = num_clients
 
                 # Track latencies by the number of clients
                 if num_clients not in latency_by_clients:
@@ -90,6 +117,10 @@ def parse_log_file(log_file: str) -> LoadTestResults:
         "response_times": response_times,
         "average_latency_by_time": average_latencies,
         "average_latency_by_clients": average_latency_by_clients,
+        "successes_by_time": success_buckets,
+        "errors_by_time": error_buckets,
+        "requests_by_time": total_request_buckets,
+        "clients_by_time": client_buckets,
     }
     return LoadTestResults(**output_dict)
 
@@ -128,34 +159,72 @@ def calculate_throughput(throughput_data: dict[int, dict[str, Any]]) -> dict[int
     return client_throughput
 
 
-# def print_static_results(workers, first_time, last_time, error_count, response_times):
-#     """Prints the standard results for static mode."""
-#     total_seconds = last_time - first_time
-#     total_requests = len(response_times)
-#     requests_per_second = total_requests / total_seconds if total_seconds > 0 else 0
-#     errors_per_second = error_count / total_seconds if total_seconds > 0 else 0
-#     average_response_time = sum(response_times) / len(response_times) if response_times else 0.0
-#     median_response_time = statistics.median(response_times) if response_times else 0.0
-#     max_response_time = max(response_times) if response_times else 0.0
+import os
+from datetime import datetime
 
-#     aggregate_error_percentage = error_count / total_requests if total_requests > 0 else 0
-#     requests_per_second_per_worker = requests_per_second / len(workers)
-
-#     print("Aggregate Results:")
-#     print(f"  # of Processes: {len(workers)}")
-#     print(f"  Total Seconds: {total_seconds}")
-#     print(f"  Total Requests: {total_requests}")
-#     print(f"  Average Requests per Second: {requests_per_second:.2f}")
-#     print(f"  Average Requests per Second per Process: {requests_per_second_per_worker:.2f}")
-#     print(f"  Total Errors: {error_count}")
-#     print(f"  Total Error Percentage: {aggregate_error_percentage * 100:.2f}%")
-#     print(f"  Average Errors per Second: {errors_per_second:.4f}")
-#     print(f"  Average Response Time: {average_response_time:.4f} seconds")
-#     print(f"  Median Response Time: {median_response_time:.4f} seconds")
-#     print(f"  Maximum Response Time: {max_response_time:.4f} seconds")
+import matplotlib.pyplot as plt
 
 
-def plot_throughput(client_throughput: dict[int, ThroughputResults], output_dir: str = "./plots"):
+def plot_throughput_by_time(
+    successes: dict[datetime, int],
+    errors: dict[datetime, int],
+    requests: dict[datetime, int],
+    clients: dict[datetime, int],
+    start_time: datetime,
+    output_dir: str = "./plots",
+):
+    """Plot number of clients vs throughput, success rate, and error rate, then save to a file."""
+    # Ensure the output directory exists
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Filepath for saving the figure
+    output_file = os.path.join(output_dir, "time_vs_throughput.png")
+
+    # Sort the latency data by time
+    success_times, success_rate = zip(*sorted(successes.items()))
+    error_times, error_rate = zip(*sorted(errors.items()))
+    request_times, request_rate = zip(*sorted(requests.items()))
+    client_times, num_clients = zip(*sorted(clients.items()))
+    expected_response_rate = [REQUESTS_PER_SECOND * client_count for client_count in num_clients]
+
+    # Calculate elapsed time in seconds
+    success_elapsed_seconds = [(time - start_time).total_seconds() for time in success_times]
+    error_elapsed_seconds = [(time - start_time).total_seconds() for time in error_times]
+    request_elapsed_seconds = [(time - start_time).total_seconds() for time in request_times]
+    client_elapsed_seconds = [(time - start_time).total_seconds() for time in client_times]
+
+    # Create the main plot
+    fig, ax1 = plt.subplots(figsize=(8, 6))
+
+    # Plot throughput, successes, and errors on the main y-axis
+    ax1.plot(request_elapsed_seconds, request_rate, linestyle="-", label="Throughput (Requests/s)", alpha=0.8)
+    ax1.plot(success_elapsed_seconds, success_rate, linestyle="--", label="Successes (Requests/s)", alpha=0.8)
+    ax1.plot(error_elapsed_seconds, error_rate, linestyle="-", label="Errors (Requests/s)", alpha=0.8)
+    ax1.plot(client_elapsed_seconds, expected_response_rate, linestyle="-", label="Expected Requests/s", alpha=0.8)
+
+    ax1.set_xlabel("Elapsed Time (s)")
+    ax1.set_ylabel("Requests / Second")
+    ax1.grid(True)
+    ax1.legend(loc="upper left")
+
+    # Set a fixed y-axis limit to avoid it adjusting based on the expected response rate
+    ax1.set_ylim([0, max(max(request_rate), max(success_rate), max(error_rate)) * 1.4])
+
+    # Create a secondary y-axis for the number of clients
+    ax2 = ax1.twinx()
+    ax2.plot(client_elapsed_seconds, num_clients, linestyle="-", color="purple", label="Num Clients", alpha=1)
+    ax2.set_ylabel("Number of Clients")
+    ax2.legend(loc="upper right")
+
+    # Set title and save the figure
+    plt.title("Elapsed Time vs Throughput, Successes, Errors, and Clients")
+    plt.savefig(output_file)
+
+    # Print the file path to the saved plot
+    print(f"Plot saved to: {output_file}")
+
+
+def plot_throughput_by_clients(client_throughput: dict[int, ThroughputResults], output_dir: str = "./plots"):
     """Plot number of clients vs throughput, success rate, and error rate, then save to a file."""
     num_clients = []
     throughputs = []
@@ -196,7 +265,6 @@ def plot_throughput(client_throughput: dict[int, ThroughputResults], output_dir:
 def plot_latency_over_time(
     average_latencies: dict[datetime, float],
     start_time: datetime,
-    throughput_data: dict[int, dict[str, Any]],
     output_dir: str = "./plots",
 ):
     """Plot average latency over elapsed time (in seconds) with vertical lines for client increases."""
@@ -211,33 +279,15 @@ def plot_latency_over_time(
         os.makedirs(output_dir, exist_ok=True)
 
         # Filepath for saving the figure
-        output_file = os.path.join(output_dir, "average_latency_with_clients.png")
+        output_file = os.path.join(output_dir, "average_latency_over_time.png")
 
         # Plot
         plt.figure(figsize=(8, 6))
         plt.plot(elapsed_seconds, avg_latencies, marker="o", linestyle="-", label="Average Latency (ms)")
-        plt.title("Average Latency Over Elapsed Time with Client Increases")
+        plt.title("Average Latency Over Elapsed Time")
         plt.xlabel("Elapsed Time (seconds)")
-        plt.ylabel("Latency (ms)")
+        plt.ylabel("Latency (s)")
         plt.grid(True)
-
-        # Add vertical lines for when the number of clients increased
-        for num_clients, data in throughput_data.items():
-            # Calculate elapsed time when the number of clients increased
-            client_increase_time = (data["start_time"] - start_time).total_seconds()
-
-            # Add vertical line at the time the number of clients increased
-            plt.axvline(x=client_increase_time, color="r", linestyle="--", alpha=0.7)
-
-            # Annotate the number of clients at the top of the plot
-            plt.text(
-                client_increase_time,
-                max(avg_latencies),
-                f"{num_clients} clients",
-                rotation=90,
-                verticalalignment="bottom",
-                color="r",
-            )
 
         # Save the figure to the output file
         plt.savefig(output_file)
@@ -265,7 +315,7 @@ def plot_latency_vs_clients(average_latencies: dict[int, float], output_dir: str
         plt.plot(clients, avg_latencies, marker="o", linestyle="-", label="Average Latency (ms)")
         plt.title("Average Latency vs Number of Clients")
         plt.xlabel("Number of Clients")
-        plt.ylabel("Latency (ms)")
+        plt.ylabel("Latency (s)")
         plt.grid(True)
 
         # Save the figure to the output file
@@ -278,24 +328,53 @@ def plot_latency_vs_clients(average_latencies: dict[int, float], output_dir: str
 
 
 def show_load_test_results():
-    log_file = "./logs/load_test_log.txt"  # Path to the single log file
+    log_file = "./logs/load_test_log.txt"  # Path to the log file
 
     if not os.path.exists(log_file):
         print(f"Log file {log_file} not found.")
     else:
         load_test_results = parse_log_file(log_file)
 
-        # # Determine if this is a ramp-up run or a static run
-        # if len(throughput_data) == 1:  # Static mode: Only one client count
-        #     print_static_results(workers, first_time, last_time, error_count, response_times)
-        # else:  # Ramp-up mode: Multiple client counts
         client_throughput = calculate_throughput(load_test_results.throughput_data)
-        plot_throughput(client_throughput)
-        plot_latency_over_time(
-            load_test_results.average_latency_by_time, load_test_results.start_time, load_test_results.throughput_data
+
+        plot_throughput_by_clients(client_throughput)
+        plot_throughput_by_time(
+            load_test_results.successes_by_time,
+            load_test_results.errors_by_time,
+            load_test_results.requests_by_time,
+            load_test_results.clients_by_time,
+            load_test_results.start_time,
         )
+        plot_latency_over_time(load_test_results.average_latency_by_time, load_test_results.start_time)
         plot_latency_vs_clients(load_test_results.average_latency_by_clients)
 
 
 if __name__ == "__main__":
     show_load_test_results()
+
+
+# def print_static_results(workers, first_time, last_time, error_count, response_times):
+#     """Prints the standard results for static mode."""
+#     total_seconds = last_time - first_time
+#     total_requests = len(response_times)
+#     requests_per_second = total_requests / total_seconds if total_seconds > 0 else 0
+#     errors_per_second = error_count / total_seconds if total_seconds > 0 else 0
+#     average_response_time = sum(response_times) / len(response_times) if response_times else 0.0
+#     median_response_time = statistics.median(response_times) if response_times else 0.0
+#     max_response_time = max(response_times) if response_times else 0.0
+
+#     aggregate_error_percentage = error_count / total_requests if total_requests > 0 else 0
+#     requests_per_second_per_worker = requests_per_second / len(workers)
+
+#     print("Aggregate Results:")
+#     print(f"  # of Processes: {len(workers)}")
+#     print(f"  Total Seconds: {total_seconds}")
+#     print(f"  Total Requests: {total_requests}")
+#     print(f"  Average Requests per Second: {requests_per_second:.2f}")
+#     print(f"  Average Requests per Second per Process: {requests_per_second_per_worker:.2f}")
+#     print(f"  Total Errors: {error_count}")
+#     print(f"  Total Error Percentage: {aggregate_error_percentage * 100:.2f}%")
+#     print(f"  Average Errors per Second: {errors_per_second:.4f}")
+#     print(f"  Average Response Time: {average_response_time:.4f} seconds")
+#     print(f"  Median Response Time: {median_response_time:.4f} seconds")
+#     print(f"  Maximum Response Time: {max_response_time:.4f} seconds")

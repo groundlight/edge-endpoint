@@ -2,6 +2,7 @@ import argparse
 import json
 import multiprocessing
 import os
+import sys
 import time
 from datetime import datetime
 
@@ -21,10 +22,13 @@ TIME_BETWEEN_RAMP = 30
 REQUESTS_PER_SECOND = 10
 
 
-def send_image_requests(
+def send_image_requests(  # noqa: PLR0913
     process_id: int, detector: Detector, gl_client: Groundlight, num_requests_per_second: float, duration, log_file: str
 ):
     os.makedirs(os.path.dirname(log_file), exist_ok=True)
+
+    # Prevent errors from appearing in terminal
+    sys.stderr = open(os.devnull, "w")
 
     start_time = time.time()
     request_number = 1
@@ -77,23 +81,32 @@ def initialize_and_start_processes(num_processes, requests_per_second, detector,
         process.join()
 
 
-def ramp_up_processes(max_processes, step_size, requests_per_second, detector, gl_client):  # noqa: PLR0913
+def ramp_up_processes(max_processes, step_size, requests_per_second, detector, gl_client, custom_ramp: bool = False):  # noqa: PLR0913
     """Ramp-up mode: Gradually increase the number of processes that run until the end."""
     if os.path.exists(LOG_FILE):
         os.remove(LOG_FILE)
     os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
 
-    total_duration = TIME_BETWEEN_RAMP * max_processes / step_size
-    print(f"Ramping up to {max_processes} in steps of {step_size} over {total_duration:.2f} seconds.")
+    if custom_ramp:
+        print("Using custom ramp schedule.")
+        ramp_steps = [1, 2, 3, 4, 5, 10, 15, 20, 30, 40, 50, 60]
+    else:
+        print(f"Using step size of {step_size}.")
+        ramp_steps = [step_size * i for i in range(1, round((max_processes / step_size)) + 1)]
+
+    total_duration = TIME_BETWEEN_RAMP * len(ramp_steps)
+    print(f"Ramping up to {ramp_steps[-1]} over {total_duration:.2f} seconds.")
 
     active_processes = []
     start_time = time.time()
 
-    for curr_processes in range(step_size, max_processes + 1, step_size):
+    for num_clients_ramping_to in ramp_steps:
+        print(f"Ramping up to {num_clients_ramping_to} clients.")
         with open(LOG_FILE, "a") as log:
-            log.write(f"RAMP {curr_processes}\n")
+            log.write(f"RAMP {num_clients_ramping_to}\n")
         # Start new processes in increments of step_size
-        for _ in range(step_size):
+        num_existing_clients = len(active_processes)
+        for _ in range(num_clients_ramping_to - num_existing_clients):
             process_id = len(active_processes)
             remaining_time = total_duration - (time.time() - start_time)
             process = multiprocessing.Process(
@@ -135,6 +148,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--step-size", type=int, default=1, help="Number of clients to add at each step in ramp-up mode."
     )
+    parser.add_argument("--custom-ramp", action="store_true", help="Enable custom ramping mode.")
     args = parser.parse_args()
 
     gl = Groundlight(endpoint=ENDPOINT_URL)
@@ -143,7 +157,7 @@ if __name__ == "__main__":
     if args.mode == "ramp-up":
         print("Running in ramp-up mode")
         # In ramp-up mode, progressively increase the number of clients
-        ramp_up_processes(args.max_clients, args.step_size, REQUESTS_PER_SECOND, detector, gl)
+        ramp_up_processes(args.max_clients, args.step_size, REQUESTS_PER_SECOND, detector, gl, args.custom_ramp)
     else:
         print("no static mode right now")
         # print("Running in static mode")
