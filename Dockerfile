@@ -1,5 +1,6 @@
 # Build args
-ARG APP_PORT=6718
+ARG NGINX_PORT=6717
+ARG UVICORN_PORT=6718
 ARG APP_ROOT="/groundlight-edge"
 ARG POETRY_HOME="/opt/poetry"
 ARG POETRY_VERSION=1.5.1
@@ -71,10 +72,11 @@ COPY deploy/k3s/inference_deployment/inference_deployment_template.yaml \
 FROM production-dependencies-build-stage as production-image
 
 ARG APP_ROOT
-ARG APP_PORT
+ARG NGINX_PORT
+ARG UVICORN_PORT
 
 ENV PATH=${POETRY_HOME}/bin:$PATH \
-    APP_PORT=${APP_PORT}
+    APP_PORT=${UVICORN_PORT}
 
 WORKDIR ${APP_ROOT}
 
@@ -86,8 +88,11 @@ COPY --from=production-dependencies-build-stage ${APP_ROOT}/configs/nginx.conf /
 # Remove default nginx config
 RUN rm /etc/nginx/sites-enabled/default
 
+# Ensure Nginx logs to stdout and stderr
+RUN ln -sf /dev/stdout /var/log/nginx/access.log && \
+    ln -sf /dev/stderr /var/log/nginx/error.log
+
 CMD nginx && poetry run uvicorn --workers 8 --host 0.0.0.0 --port ${APP_PORT} --proxy-headers app.main:app
 
-# Document the exposed port which was configured in start_uvicorn.sh
-# https://docs.docker.com/engine/reference/builder/#expose
-EXPOSE ${APP_PORT}
+# Document the exposed port, which is configured in nginx.conf
+EXPOSE ${NGINX_PORT}
