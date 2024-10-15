@@ -40,7 +40,7 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       initContainers:
       - name: database-prep
-        image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:tyler-dont-deserialize-image-on-ee-fcad91983-dirty-a7fd43ede742402
+        image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:latest
         imagePullPolicy: Always
         volumeMounts:
         - name: edge-endpoint-persistent-volume
@@ -57,7 +57,7 @@ spec:
         - containerPort: 6717
         env:
         - name: LOG_LEVEL
-          value: "DEBUG"
+          value: "INFO"
         # We need this feature flag since we run the edge logic server in two separate environments:
         # 1. In docker (on the GitHub Actions runner) for testing
         # 2. In kubernetes (currently a dedicated EC2 instance)
