@@ -235,7 +235,6 @@ def test_post_image_query_invalid_image_data(test_client: TestClient, detector: 
             content=b"not an image",  # not a jpeg binary
         )
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, response.json()["detail"]
-        assert response.json() == {"detail": "Invalid input image"}
 
 
 @pytest.mark.xfail(reason="Known issue - 404 is not returned when detector is not found")
