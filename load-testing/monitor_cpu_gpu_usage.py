@@ -112,7 +112,7 @@ def plot_gpu_data(gpu_data):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="System Monitoring Script")
-    parser.add_argument("--duration", type=int, required=True, help="Total time to monitor (in seconds)")
+    parser.add_argument("duration", type=int, help="Total time to monitor (in seconds)")
     args = parser.parse_args()
 
     monitor_system(args.duration, interval)

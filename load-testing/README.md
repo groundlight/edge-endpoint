@@ -55,11 +55,11 @@ poetry run python load_test.py [options]
 ```
 
 #### Options
-* --max-clients (optional, default: 10)
+* `--max-clients` (optional, default: 10)
     * Specifies the maximum number of processes (clients) to ramp up to during the test.
-* --step-size (optional, default: 1)
+* `--step-size` (optional, default: 1)
     * Sets the number of clients to add at each step in ramp-up mode. This will also be the starting number of clients.
-* --custom-ramp (optional)
+* `--custom-ramp` (optional)
     * Enables custom ramping mode, which will ignore step-size and max-clients values and instead follow a custom ramping logic defined in the script. 
     * This mode will ramp from 1 to 60 clients, with smaller steps at the beginning and larger steps towards the end.
 
@@ -70,13 +70,13 @@ poetry run python parse_load_test_logs.py
 
 If you want to monitor CPU and GPU utilization on the host machine during the load test, you can run `monitor_cpu_gpu_usage.py`: 
 ```
-poetry run python monitor_cpu_gpu_usage.py [options]
+poetry run python monitor_cpu_gpu_usage.py <duration>
 ```
 
-#### Options
-* --duration (required)
+#### Positional Arguments
+* `\<duration>` (required)
     * Specifies the number of seconds to monitor the system utilization for. 
 
-To monitor system utilization during the load test, you'll want to begin the load testing and then separately run the monitoring script from a window on the host machine. The duration should be set to the duration of the load test (which is determined by `TIME_BETWEEN_RAMP * <number of steps>`). 
+To monitor system utilization during the load test, you'll want to begin the load testing and then separately run the monitoring script on the host machine. The duration should be set to the duration of the load test (which is determined by `TIME_BETWEEN_RAMP * <number of steps>` and printed to the console right after running `load_test.py`). 
 
 Once the scripts have finished running, you can review the generated plots to assess the results.
