@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Simple TTL cache for is_edge_inference_ready checks to avoid having to re-check every time a request is processed.
 # This will be process-specific, so each edge-endpoint worker will have its own cache instance.
-ttl_cache = TTLCache(maxsize=10, ttl=30)
+ttl_cache = TTLCache(maxsize=128, ttl=30)
 
 
 @cached(ttl_cache)
