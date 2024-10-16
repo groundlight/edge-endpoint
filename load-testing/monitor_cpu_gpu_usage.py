@@ -1,3 +1,4 @@
+import argparse
 import os
 import time
 
@@ -6,7 +7,6 @@ import matplotlib.pyplot as plt
 import psutil
 
 # Parameters
-duration = 358  # Total time to monitor (in seconds)
 interval = 1  # Time between each measurement (in seconds)
 output_dir = "./plots"
 
@@ -111,6 +111,10 @@ def plot_gpu_data(gpu_data):
 
 
 if __name__ == "__main__":
-    monitor_system(duration, interval)
+    parser = argparse.ArgumentParser(description="System Monitoring Script")
+    parser.add_argument("--duration", type=int, required=True, help="Total time to monitor (in seconds)")
+    args = parser.parse_args()
+
+    monitor_system(args.duration, interval)
     plot_cpu_memory(elapsed_time, cpu_usage, memory_usage)
     plot_gpu_data(gpu_data)
