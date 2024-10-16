@@ -1,13 +1,10 @@
-import datetime as dt
 import json
 import os
 import re
-from collections import defaultdict
 from datetime import datetime
-from typing import Any
 
 import matplotlib.pyplot as plt
-from config import REQUESTS_PER_SECOND
+from config import LOG_FILE, REQUESTS_PER_SECOND
 from pydantic import BaseModel
 
 
@@ -21,7 +18,7 @@ class LoadTestResults(BaseModel):
 
 
 def parse_log_file(log_file: str) -> LoadTestResults:
-    """Parse the log file to gather throughput data for static or ramp-up mode."""
+    """Parse the log file to gather load test results."""
     start_time = None
     latency_buckets = {}
     success_buckets = {}
@@ -74,12 +71,6 @@ def parse_log_file(log_file: str) -> LoadTestResults:
     return LoadTestResults(**output_dict)
 
 
-class ThroughputResults(BaseModel):
-    requests_per_second: float
-    successes_per_second: float
-    errors_per_second: float
-
-
 def plot_throughput_by_time(
     load_test_results: LoadTestResults,
     output_dir: str = "./plots",
@@ -103,10 +94,10 @@ def plot_throughput_by_time(
     fig, ax1 = plt.subplots(figsize=(8, 6))
 
     # Plot throughput, successes, and errors on the main y-axis
-    ax1.plot(request_elapsed_seconds, request_rate, linestyle="-", label="Throughput (Requests/s)", alpha=0.8)
-    ax1.plot(success_elapsed_seconds, success_rate, linestyle="--", label="Successes (Requests/s)", alpha=0.8)
-    ax1.plot(error_elapsed_seconds, error_rate, linestyle="-", label="Errors (Requests/s)", alpha=0.8)
-    ax1.plot(client_elapsed_seconds, expected_response_rate, linestyle="-", label="Expected Requests/s", alpha=0.8)
+    ax1.plot(request_elapsed_seconds, request_rate, linestyle="-", label="Throughput", alpha=0.8)
+    ax1.plot(success_elapsed_seconds, success_rate, linestyle="--", label="Successes", alpha=0.8)
+    ax1.plot(error_elapsed_seconds, error_rate, linestyle="-", label="Errors", alpha=0.8)
+    ax1.plot(client_elapsed_seconds, expected_response_rate, linestyle="-", label="Expected Requests", alpha=0.8)
     ax1.set_xlabel("Elapsed Time (s)")
     ax1.set_ylabel("Requests / Second")
     ax1.grid(True)
@@ -174,12 +165,10 @@ def plot_latency_over_time(
 
 
 def show_load_test_results():
-    log_file = "./logs/load_test_log.txt"  # Path to the log file
-
-    if not os.path.exists(log_file):
-        print(f"Log file {log_file} not found.")
+    if not os.path.exists(LOG_FILE):
+        print(f"Log file {LOG_FILE} not found.")
     else:
-        load_test_results = parse_log_file(log_file)
+        load_test_results = parse_log_file(LOG_FILE)
 
         plot_throughput_by_time(load_test_results)
         plot_latency_over_time(

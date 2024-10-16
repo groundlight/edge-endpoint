@@ -53,32 +53,6 @@ def send_image_requests(  # noqa: PLR0913
         time.sleep(max(0, (1 / num_requests_per_second) - (time.time() - request_start_time)))
 
 
-def initialize_and_start_processes(num_processes, requests_per_second, detector, gl_client, duration):
-    """Static mode: Start all processes at once."""
-    if os.path.exists(LOG_FILE):
-        os.remove(LOG_FILE)
-    os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
-
-    processes = []
-    for i in range(num_processes):
-        process = multiprocessing.Process(
-            target=send_image_requests,
-            args=(i, detector, gl_client, requests_per_second, duration, LOG_FILE),
-        )
-        processes.append(process)
-        process.start()
-
-    while any(process.is_alive() for process in processes):
-        print(
-            f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Active processes: {sum(p.is_alive() for p in processes)}"
-            f" / {num_processes}"
-        )
-        time.sleep(10)
-
-    for process in processes:
-        process.join()
-
-
 def ramp_up_processes(max_processes, step_size, requests_per_second, detector, gl_client, custom_ramp: bool = False):  # noqa: PLR0913
     """Ramp-up mode: Gradually increase the number of processes that run until the end."""
     if os.path.exists(LOG_FILE):
@@ -86,11 +60,14 @@ def ramp_up_processes(max_processes, step_size, requests_per_second, detector, g
     os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
 
     if custom_ramp:
-        print("Using custom ramp schedule.")
         ramp_steps = [1, 2, 3, 4, 5, 10, 15, 20, 30, 40, 50, 60]
+        print(f"Using custom ramp schedule: {ramp_steps} with {TIME_BETWEEN_RAMP} seconds between each step.")
     else:
-        print(f"Using step size of {step_size}.")
         ramp_steps = [step_size * i for i in range(1, round((max_processes / step_size)) + 1)]
+        print(
+            f"Using step size of {step_size} with {TIME_BETWEEN_RAMP} seconds between each step. "
+            f"Ramp schedule is: {ramp_steps}"
+        )
 
     total_duration = TIME_BETWEEN_RAMP * len(ramp_steps)
     print(f"Ramping up to {ramp_steps[-1]} over {total_duration:.2f} seconds.")
@@ -137,12 +114,6 @@ if __name__ == "__main__":
     # parser.add_argument("duration", type=int, help="Number of seconds to run the script")
     parser.add_argument("--max-clients", type=int, default=10, help="Number of processes to ramp up to")
     parser.add_argument(
-        "--mode",
-        choices=["static", "ramp-up"],
-        default="static",
-        help="Choose between static mode (default) or ramp-up mode.",
-    )
-    parser.add_argument(
         "--step-size", type=int, default=1, help="Number of clients to add at each step in ramp-up mode."
     )
     parser.add_argument("--custom-ramp", action="store_true", help="Enable custom ramping mode.")
@@ -151,14 +122,9 @@ if __name__ == "__main__":
     gl = Groundlight(endpoint=ENDPOINT_URL)
     detector = gl.get_or_create_detector(name=DETECTOR_NAME, query=DETECTOR_QUERY)
 
-    if args.mode == "ramp-up":
-        print("Running in ramp-up mode")
-        # In ramp-up mode, progressively increase the number of clients
-        ramp_up_processes(args.max_clients, args.step_size, REQUESTS_PER_SECOND, detector, gl, args.custom_ramp)
-    else:
-        print("no static mode right now")
-        # print("Running in static mode")
-        # # In static mode, start all clients at once
-        # initialize_and_start_processes(NUM_PROCESSES, REQUESTS_PER_SECOND, detector, gl, args.duration)
+    if args.custom_ramp:
+        print("Running in custom-ramp mode. Step size and max clients will be ignored.")
+
+    ramp_up_processes(args.max_clients, args.step_size, REQUESTS_PER_SECOND, detector, gl, args.custom_ramp)
 
     show_load_test_results()
