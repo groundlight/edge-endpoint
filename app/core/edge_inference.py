@@ -25,13 +25,11 @@ ttl_cache = TTLCache(maxsize=128, ttl=30)
 @cached(ttl_cache)
 def is_edge_inference_ready(inference_client_url: str) -> bool:
     model_ready_url = f"http://{inference_client_url}/health/ready"
-    start_time = time.time()  # Start the timer
     try:
         response = requests.get(model_ready_url)
-        elapsed_time = time.time() - start_time  # Calculate elapsed time
-        logger.debug(f"Request to {model_ready_url} took {elapsed_time:.4f} seconds")
         return response.status_code == status.HTTP_200_OK
-    except requests.exceptions.RequestException:
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Failed to connect to {model_ready_url}: {e}")
         return False
 
 

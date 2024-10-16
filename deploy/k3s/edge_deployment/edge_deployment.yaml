@@ -16,7 +16,7 @@ spec:
   - protocol: TCP
     # Service port for NGINX
     port: 6717
-    nodePort: 30103
+    nodePort: 30101
   type: NodePort
 ---
 apiVersion: apps/v1
@@ -40,7 +40,7 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       initContainers:
       - name: database-prep
-        image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:load-test-84393ea3c-dirty-3b45d0b4f06203d
+        image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:latest
         imagePullPolicy: Always
         volumeMounts:
         - name: edge-endpoint-persistent-volume
