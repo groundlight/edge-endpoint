@@ -7,9 +7,8 @@ from datetime import datetime
 from typing import Any
 
 import matplotlib.pyplot as plt
+from config import REQUESTS_PER_SECOND
 from pydantic import BaseModel
-
-REQUESTS_PER_SECOND = 10  # TODO this should be synced b/t this file and load_test.py
 
 
 class LoadTestResults(BaseModel):
@@ -113,6 +112,7 @@ def plot_throughput_by_time(
     ax1.grid(True)
     ax1.legend(loc="upper left")
     # Set a fixed y-axis limit to avoid it adjusting based on the expected response rate
+    print(f"{max(*request_rate, *success_rate, *error_rate)=}")
     ax1.set_ylim((0, max(*request_rate, *success_rate, *error_rate) * 1.4))
 
     # Create a secondary y-axis for the number of clients

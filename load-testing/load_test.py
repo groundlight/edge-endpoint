@@ -6,20 +6,17 @@ import sys
 import time
 from datetime import datetime
 
+from config import (
+    DETECTOR_NAME,
+    DETECTOR_QUERY,
+    ENDPOINT_URL,
+    IMAGE_PATH,
+    LOG_FILE,
+    REQUESTS_PER_SECOND,
+    TIME_BETWEEN_RAMP,
+)
 from groundlight import Detector, Groundlight
 from parse_load_test_logs import show_load_test_results
-
-ENDPOINT_URL = os.getenv("ENDPOINT_URL")
-if not ENDPOINT_URL:
-    raise OSError("The ENDPOINT_URL environment variable is not set.")
-
-DETECTOR_NAME = "edge_test_cat"
-DETECTOR_QUERY = "Is there a cat?"
-IMAGE_PATH = "./images/resized_dog.jpeg"
-LOG_FILE = "./logs/load_test_log.txt"
-MAIN_PROCESS_STATUS_INTERVAL = 10
-TIME_BETWEEN_RAMP = 30
-REQUESTS_PER_SECOND = 10
 
 
 def send_image_requests(  # noqa: PLR0913
@@ -73,9 +70,10 @@ def initialize_and_start_processes(num_processes, requests_per_second, detector,
 
     while any(process.is_alive() for process in processes):
         print(
-            f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Active processes: {sum(p.is_alive() for p in processes)} / {num_processes}"
+            f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Active processes: {sum(p.is_alive() for p in processes)}"
+            f" / {num_processes}"
         )
-        time.sleep(MAIN_PROCESS_STATUS_INTERVAL)
+        time.sleep(10)
 
     for process in processes:
         process.join()
@@ -104,7 +102,7 @@ def ramp_up_processes(max_processes, step_size, requests_per_second, detector, g
         print(f"Ramping up to {num_clients_ramping_to} clients.")
         with open(LOG_FILE, "a") as log:
             log.write(f"RAMP {num_clients_ramping_to}\n")
-        # Start new processes in increments of step_size
+        # Start new processes in incremental steps
         num_existing_clients = len(active_processes)
         for _ in range(num_clients_ramping_to - num_existing_clients):
             process_id = len(active_processes)
@@ -123,12 +121,11 @@ def ramp_up_processes(max_processes, step_size, requests_per_second, detector, g
             process.start()
             active_processes.append(process)
 
-        # Monitor the system and log throughput for the current client count
         print(f"Running with {len(active_processes)} clients...")
 
         # Allow processes to run for some time before ramping up again
         print(f"Sleeping for {TIME_BETWEEN_RAMP} seconds.")
-        time.sleep(TIME_BETWEEN_RAMP)  # Adjust based on the stabilization time needed
+        time.sleep(TIME_BETWEEN_RAMP)
 
     # Ensure all processes finish
     for process in active_processes:
