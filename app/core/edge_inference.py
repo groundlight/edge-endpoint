@@ -6,6 +6,7 @@ from typing import Dict, Optional
 
 import requests
 import yaml
+from cachetools import TTLCache, cached
 from fastapi import HTTPException, status
 from jinja2 import Template
 
@@ -16,7 +17,12 @@ from .configs import LocalInferenceConfig
 
 logger = logging.getLogger(__name__)
 
+# Simple TTL cache for is_edge_inference_ready checks to avoid having to re-check every time a request is processed.
+# This will be process-specific, so each edge-endpoint worker will have its own cache instance.
+ttl_cache = TTLCache(maxsize=128, ttl=30)
 
+
+@cached(ttl_cache)
 def is_edge_inference_ready(inference_client_url: str) -> bool:
     model_ready_url = f"http://{inference_client_url}/health/ready"
     start_time = time.time()  # Start the timer
