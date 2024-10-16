@@ -17,8 +17,8 @@ detectors:
 ```
 
 * You'll want to configure the edge-endpoint proxy and the inference server to have as many workers as possible without running out of CPU/GPU space. 
-    * To increase the number of edge-endpoint proxy workers, change the `--workers` param in the CMD line of the [Dockerfile](/edge-endpoint/Dockerfile). 
-    * To increase the number of inference server workers, in the [inference_deployment_template](/edge-endpoint/deploy/k3s/inference_deployment/inference_deployment_template.yaml) locate the below command and change the argument for `--workers`.
+    * To increase the number of edge-endpoint proxy workers, change the `--workers` param in the CMD line of the [Dockerfile](/Dockerfile). 
+    * To increase the number of inference server workers, in the [inference_deployment_template](/deploy/k3s/inference_deployment/inference_deployment_template.yaml) locate the below command and change the argument for `--workers`.
 ```
 command:
     [
@@ -31,7 +31,7 @@ command:
 
 Some trial and error will be necessary to figure out the ideal configuration. For reference: on a machine with 32 CPU cores and 126 G of RAM, and a RTX 3090 GPU with 24 Gi of RAM, setting edge-endpoint proxy workers to 128 and inference server workers to 61 was able to run successfully. 
 
-After setting these config options, you should run/re-run the [cluster setup script](/edge-endpoint/deploy/bin/cluster_setup.sh) to deploy with your new configuration. You can monitor the inference pod's logs to see when all of the workers have finished starting up (if the number of workers is high, this will likely be after the pod reports being ready). 
+After setting these config options, you should run/re-run the [cluster setup script](/deploy/bin/cluster_setup.sh) to deploy with your new configuration. You can monitor the inference pod's logs to see when all of the workers have finished starting up (if the number of workers is high, this will likely be after the pod reports being ready). 
 
 ### Configuring the load testing scripts
 
