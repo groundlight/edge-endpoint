@@ -22,6 +22,7 @@ from parse_load_test_logs import show_load_test_results
 def send_image_requests(  # noqa: PLR0913
     process_id: int, detector: Detector, gl_client: Groundlight, num_requests_per_second: float, duration, log_file: str
 ):
+    """Sends image requests to a Groundlight endpoint for a specified duration and logs results."""
     os.makedirs(os.path.dirname(log_file), exist_ok=True)
 
     # Prevent errors from appearing in terminal
@@ -54,7 +55,7 @@ def send_image_requests(  # noqa: PLR0913
 
 
 def ramp_up_processes(max_processes, step_size, requests_per_second, detector, gl_client, custom_ramp: bool = False):  # noqa: PLR0913
-    """Ramp-up mode: Gradually increase the number of processes that run until the end."""
+    """Ramps up the number of client processes over time."""
     if os.path.exists(LOG_FILE):
         os.remove(LOG_FILE)
     os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
