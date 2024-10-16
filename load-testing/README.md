@@ -6,7 +6,7 @@ This directory contains scripts to 'load test' an edge endpoint, i.e., simulate 
 
 ### Setting up an edge endpoint
 
-An edge endpoint should be set up on the machine you want to do load testing for. Follow the steps in the [main README](/edge-endpoint/README.md). Additionally, you'll want to make the following modifications:
+An edge endpoint should be set up on the machine you want to do load testing for. Follow the steps in the [main README](/README.md). Additionally, you'll want to make the following modifications:
 * When load testing, queries should always be answered by the edge model and never escalated to the cloud. To achieve this, in `edge_config.yaml` your entry for the detector that you'll be submitting images to should look like:
 ```
 detectors:
