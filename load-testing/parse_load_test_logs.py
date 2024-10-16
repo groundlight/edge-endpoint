@@ -13,7 +13,6 @@ REQUESTS_PER_SECOND = 10  # TODO this should be synced b/t this file and load_te
 
 
 class LoadTestResults(BaseModel):
-    throughput_data: dict[int, dict[str, Any]]
     start_time: datetime
     end_time: datetime
     error_count: int
@@ -32,7 +31,6 @@ def parse_log_file(log_file: str) -> LoadTestResults:
     error_count = 0
     start_time, end_time = None, None
 
-    throughput_data = {}  # Dictionary to store throughput per number of workers
     latency_buckets = {}
     latency_by_clients = {}  # Track latencies by the number of clients
     success_buckets = {}
@@ -86,21 +84,6 @@ def parse_log_file(log_file: str) -> LoadTestResults:
 
                 latency_by_clients[num_clients].append(log_data["latency"])
 
-                # Count requests and throughput based on the number of workers
-                if num_clients not in throughput_data:
-                    throughput_data[num_clients] = {
-                        "start_time": timestamp,
-                        "requests": 0,
-                        "errors": 0,
-                        "latencies": [],
-                    }
-
-                throughput_data[num_clients]["requests"] += 1
-                throughput_data[num_clients]["latencies"].append(log_data["latency"])
-                if not log_data["success"]:
-                    throughput_data[num_clients]["errors"] += 1
-                throughput_data[num_clients]["end_time"] = timestamp
-
     # Calculate average latencies for each time bucket
     average_latencies = {bucket: sum(latencies) / len(latencies) for bucket, latencies in latency_buckets.items()}
 
@@ -110,7 +93,6 @@ def parse_log_file(log_file: str) -> LoadTestResults:
     }
 
     output_dict = {
-        "throughput_data": throughput_data,
         "start_time": start_time,
         "end_time": end_time,
         "error_count": error_count,
@@ -129,40 +111,6 @@ class ThroughputResults(BaseModel):
     requests_per_second: float
     successes_per_second: float
     errors_per_second: float
-
-
-def calculate_throughput(throughput_data: dict[int, dict[str, Any]]) -> dict[int, ThroughputResults]:
-    """Calculate throughput (requests per second) for each client count."""
-    client_throughput: dict[int, ThroughputResults] = {}
-
-    def calculate_rate(num_items: int, time_span: float) -> float:
-        return num_items / time_span if time_span > 0 else 0.0
-
-    for num_workers, data in throughput_data.items():
-        total_requests: int = data["requests"]
-        num_errors: int = data["errors"]
-        num_successes: int = total_requests - num_errors
-
-        total_seconds: float = (data["end_time"] - data["start_time"]).total_seconds()
-        requests_per_second = calculate_rate(total_requests, total_seconds)
-        successes_per_second = calculate_rate(num_successes, total_seconds)
-        errors_per_second = calculate_rate(num_errors, total_seconds)
-
-        throughput_results = ThroughputResults(
-            requests_per_second=requests_per_second,
-            successes_per_second=successes_per_second,
-            errors_per_second=errors_per_second,
-        )
-
-        client_throughput[num_workers] = throughput_results
-
-    return client_throughput
-
-
-import os
-from datetime import datetime
-
-import matplotlib.pyplot as plt
 
 
 def plot_throughput_by_time(
@@ -208,7 +156,7 @@ def plot_throughput_by_time(
     ax1.legend(loc="upper left")
 
     # Set a fixed y-axis limit to avoid it adjusting based on the expected response rate
-    ax1.set_ylim([0, max(max(request_rate), max(success_rate), max(error_rate)) * 1.4])
+    ax1.set_ylim((0, max(*request_rate, *success_rate, *error_rate) * 1.4))
 
     # Create a secondary y-axis for the number of clients
     ax2 = ax1.twinx()
@@ -335,9 +283,6 @@ def show_load_test_results():
     else:
         load_test_results = parse_log_file(log_file)
 
-        client_throughput = calculate_throughput(load_test_results.throughput_data)
-
-        plot_throughput_by_clients(client_throughput)
         plot_throughput_by_time(
             load_test_results.successes_by_time,
             load_test_results.errors_by_time,
