@@ -121,8 +121,6 @@ class EdgeInferenceManager:
         self.verbose = verbose
         self.inference_config, self.inference_client_urls = {}, {}
         self.speedmon = SpeedMonitor()
-        # Last time we escalated to cloud for each detector
-        self.last_escalation_times = {detector_id: None for detector_id in self.inference_config.keys()}
 
         if config:
             self.inference_config = config
@@ -131,6 +129,8 @@ class EdgeInferenceManager:
                 for detector_id in self.inference_config.keys()
                 if self.detector_configured_for_local_inference(detector_id)
             }
+            # Last time we escalated to cloud for each detector
+            self.last_escalation_times = {detector_id: None for detector_id in self.inference_config.keys()}
 
     def update_inference_config(self, detector_id: str, api_token: str) -> None:
         """
