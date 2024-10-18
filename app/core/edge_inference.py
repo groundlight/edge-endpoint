@@ -121,6 +121,9 @@ class EdgeInferenceManager:
         self.verbose = verbose
         self.inference_config, self.inference_client_urls = {}, {}
         self.speedmon = SpeedMonitor()
+        # Last time we escalated to cloud for each detector
+        self.last_escalation_times = {detector_id: None for detector_id in self.inference_config.keys()}
+
         if config:
             self.inference_config = config
             self.inference_client_urls = {
@@ -247,6 +250,16 @@ class EdgeInferenceManager:
             repository_root=self.MODEL_REPOSITORY,
         )
         return True
+
+    def escalation_cooldown_complete(self, detector_id: str, min_time_between_escalations: float = 2) -> bool:
+        """
+        Check if the time since the last escalation is long enough ago that we should escalate again.
+        """
+        if self.last_escalation_times[detector_id] is None or time.time() - self.last_escalation_times[detector_id] > min_time_between_escalations:
+            self.last_escalation_times[detector_id] = time.time()
+            return True
+        else:
+            return False
 
 
 def fetch_model_urls(detector_id: str, api_token: Optional[str] = None) -> dict[str, str]:
