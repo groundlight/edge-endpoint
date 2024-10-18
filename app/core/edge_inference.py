@@ -111,7 +111,12 @@ class EdgeInferenceManager:
     INFERENCE_SERVER_URL = "inference-service:8000"
     MODEL_REPOSITORY = MODEL_REPOSITORY_PATH
 
-    def __init__(self, inference_configs: Dict[str, LocalInferenceConfig] | None, edge_config: Optional[RootEdgeConfig] = None, verbose: bool = False) -> None:
+    def __init__(
+        self,
+        inference_configs: Dict[str, LocalInferenceConfig] | None,
+        edge_config: Optional[RootEdgeConfig] = None,
+        verbose: bool = False,
+    ) -> None:
         """
         Initializes the edge inference manager.
         Args:
@@ -134,7 +139,10 @@ class EdgeInferenceManager:
             # Last time we escalated to cloud for each detector
             self.last_escalation_times = {detector_id: None for detector_id in edge_config.detectors.keys()}
             # Minimum time between escalations for each detector
-            self.min_times_between_escalations = {detector_id: edge_config.detectors.get(detector_id).min_time_between_escalations for detector_id in edge_config.detectors.keys()}
+            self.min_times_between_escalations = {
+                detector_id: edge_config.detectors.get(detector_id).min_time_between_escalations
+                for detector_id in edge_config.detectors.keys()
+            }
 
     def update_inference_config(self, detector_id: str, api_token: str) -> None:
         """

@@ -168,7 +168,9 @@ if __name__ == "__main__":
     refresh_rate = get_refresh_rate(root_edge_config=edge_config)
     inference_config = get_inference_configs(root_edge_config=edge_config)
 
-    edge_inference_manager = EdgeInferenceManager(inference_configs=inference_config, edge_config=edge_config, verbose=True)
+    edge_inference_manager = EdgeInferenceManager(
+        inference_configs=inference_config, edge_config=edge_config, verbose=True
+    )
     deployment_manager = InferenceDeploymentManager()
 
     # We will delegate creation of database tables to the edge-endpoint container.
