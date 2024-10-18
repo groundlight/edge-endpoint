@@ -156,19 +156,26 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             )
             app_state.db_manager.create_iqe_record(image_query)
 
-            if not disable_cloud_escalation and not is_confident_enough:  # escalate after returning edge prediction
-                logger.debug(
-                    f"Escalating to cloud due to low confidence: {ml_confidence} < thresh={confidence_threshold}"
-                )
-                background_tasks.add_task(
-                    safe_call_sdk,
-                    gl.ask_async,
-                    detector=detector_id,
-                    image=image_bytes,
-                    patience_time=patience_time,
-                    confidence_threshold=confidence_threshold,
-                    human_review=human_review,
-                )
+            # Escalate after returning edge prediction if escalation is enabled and we have low confidence
+            if not disable_cloud_escalation and not is_confident_enough:
+                # Only escalate if we haven't escalated on this detector too recently
+                if app_state.edge_inference_manager.escalation_cooldown_complete(detector_id=detector_id):
+                    logger.debug(
+                        f"Escalating to cloud due to low confidence: {ml_confidence} < thresh={confidence_threshold}"
+                    )
+                    background_tasks.add_task(
+                        safe_call_sdk,
+                        gl.ask_async,
+                        detector=detector_id,
+                        image=image_bytes,
+                        patience_time=patience_time,
+                        confidence_threshold=confidence_threshold,
+                        human_review=human_review,
+                    )
+                else:
+                    logger.debug(
+                        f"Not escalating to cloud due to rate limit on background cloud escalations: {detector_id=}"
+                    )
 
             return image_query
 
