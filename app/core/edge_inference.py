@@ -251,24 +251,31 @@ class EdgeInferenceManager:
         )
         return True
 
-    def escalation_cooldown_complete(self, detector_id: str, min_time_between_escalations: float = 2) -> bool:
+    def escalation_cooldown_complete(self, detector_id: str) -> bool:
         """
         Check if the time since the last escalation is long enough ago that we should escalate again.
-
+        The minimum time between escalations for a detector is set by the `min_time_between_escalations` field in the
+        detector's config. If the field is not set, we use a default of 2 seconds.
+        
         Args:
             detector_id: ID of the detector to check
-            min_time_between_escalations: Minimum number of seconds between escalations. Defaults to 2.
         Returns:
-            True if there hasn't been an escalation on this detector in the last `min_time_between_escalations` seconds, False otherwise
+            True if there hasn't been an escalation on this detector in the last `min_time_between_escalations` seconds, False otherwise.
         """
+        min_time_between_escalations = self.inference_config.detectors.get(detector_id).min_time_between_escalations
+
+        # Use 2 seconds as a default when min_time_between_escalations is not set for a detector in its config
+        if min_time_between_escalations is None:
+            min_time_between_escalations = 2
+
         if (
             self.last_escalation_times[detector_id] is None
-            or time.time() - self.last_escalation_times[detector_id] > min_time_between_escalations
+            or (time.time() - self.last_escalation_times[detector_id]) > min_time_between_escalations
         ):
             self.last_escalation_times[detector_id] = time.time()
             return True
-        else:
-            return False
+
+        return False
 
 
 def fetch_model_urls(detector_id: str, api_token: Optional[str] = None) -> dict[str, str]:
