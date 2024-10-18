@@ -254,6 +254,12 @@ class EdgeInferenceManager:
     def escalation_cooldown_complete(self, detector_id: str, min_time_between_escalations: float = 2) -> bool:
         """
         Check if the time since the last escalation is long enough ago that we should escalate again.
+
+        Args:
+            detector_id: ID of the detector to check
+            min_time_between_escalations: Minimum number of seconds between escalations. Defaults to 2.
+        Returns:
+            True if there hasn't been an escalation on this detector in the last `min_time_between_escalations` seconds, False otherwise
         """
         if self.last_escalation_times[detector_id] is None or time.time() - self.last_escalation_times[detector_id] > min_time_between_escalations:
             self.last_escalation_times[detector_id] = time.time()
