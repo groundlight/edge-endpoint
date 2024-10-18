@@ -255,7 +255,10 @@ class EdgeInferenceManager:
         """
         Check if the time since the last escalation is long enough ago that we should escalate again.
         """
-        if self.last_escalation_times[detector_id] is None or time.time() - self.last_escalation_times[detector_id] > min_time_between_escalations:
+        if (
+            self.last_escalation_times[detector_id] is None
+            or time.time() - self.last_escalation_times[detector_id] > min_time_between_escalations
+        ):
             self.last_escalation_times[detector_id] = time.time()
             return True
         else:
