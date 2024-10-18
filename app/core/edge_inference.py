@@ -260,7 +260,7 @@ class EdgeInferenceManager:
         Check if the time since the last escalation is long enough ago that we should escalate again.
         The minimum time between escalations for a detector is set by the `min_time_between_escalations` field in the
         detector's config. If the field is not set, we use a default of 2 seconds.
-        
+
         Args:
             detector_id: ID of the detector to check
         Returns:

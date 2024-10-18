@@ -62,7 +62,8 @@ class DetectorConfig(BaseModel):
             not self.always_return_edge_prediction or self.disable_cloud_escalation
         ) and self.min_time_between_escalations is not None:
             raise ValueError(
-                "The `min_time_between_escalations` field is only valid when `always_return_edge_prediction` is set to True and `disable_cloud_escalation` is set to False."
+                "The `min_time_between_escalations` field is only valid when `always_return_edge_prediction` is set to"
+                " True and `disable_cloud_escalation` is set to False."
             )
         return self
 
