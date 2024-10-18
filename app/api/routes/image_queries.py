@@ -157,7 +157,11 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             app_state.db_manager.create_iqe_record(image_query)
 
             # escalate after returning edge prediction
-            if not disable_cloud_escalation and not is_confident_enough and app_state.edge_inference_manager.escalation_cooldown_complete(detector_id=detector_id):  
+            if (
+                not disable_cloud_escalation
+                and not is_confident_enough
+                and app_state.edge_inference_manager.escalation_cooldown_complete(detector_id=detector_id)
+            ):
                 logger.debug(
                     f"Escalating to cloud due to low confidence: {ml_confidence} < thresh={confidence_threshold}"
                 )

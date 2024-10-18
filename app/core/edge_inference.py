@@ -261,7 +261,10 @@ class EdgeInferenceManager:
         Returns:
             True if there hasn't been an escalation on this detector in the last `min_time_between_escalations` seconds, False otherwise
         """
-        if self.last_escalation_times[detector_id] is None or time.time() - self.last_escalation_times[detector_id] > min_time_between_escalations:
+        if (
+            self.last_escalation_times[detector_id] is None
+            or time.time() - self.last_escalation_times[detector_id] > min_time_between_escalations
+        ):
             self.last_escalation_times[detector_id] = time.time()
             return True
         else:
