@@ -156,7 +156,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             )
             app_state.db_manager.create_iqe_record(image_query)
 
-            # escalate after returning edge prediction
+            # escalate after returning edge prediction if enabled and we haven't escalated on this detector too recently
             if (
                 not disable_cloud_escalation
                 and not is_confident_enough
