@@ -129,12 +129,9 @@ class EdgeInferenceManager:
         self.speedmon = SpeedMonitor()
 
         # Last time we escalated to cloud for each detector
-        self.last_escalation_times = {detector_id: None for detector_id in edge_config.detectors.keys()}
+        self.last_escalation_times = {detector_id: None for detector_id in edge_config.detectors.keys()} if edge_config else {}
         # Minimum time between escalations for each detector
-        self.min_times_between_escalations = {
-            detector_id: detector_config.min_time_between_escalations
-            for detector_id, detector_config in edge_config.detectors.items()
-        }
+        self.min_times_between_escalations = {detector_id: detector_config.min_time_between_escalations for detector_id, detector_config in edge_config.detectors.items()} if edge_config else {}
 
         if inference_configs:
             self.inference_configs = inference_configs
