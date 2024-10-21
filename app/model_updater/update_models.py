@@ -120,7 +120,7 @@ def update_models(
     while True:
         start = time.time()
         logger.info("Starting model update check for existing inference deployments.")
-        for detector_id in edge_inference_manager.inference_config.keys():
+        for detector_id in edge_inference_manager.inference_configs.keys():
             try:
                 logger.debug(f"Checking new models and inference deployments for detector_id: {detector_id}")
                 _check_new_models_and_inference_deployments(
@@ -168,7 +168,9 @@ if __name__ == "__main__":
     refresh_rate = get_refresh_rate(root_edge_config=edge_config)
     inference_config = get_inference_configs(root_edge_config=edge_config)
 
-    edge_inference_manager = EdgeInferenceManager(config=inference_config, verbose=True)
+    edge_inference_manager = EdgeInferenceManager(
+        inference_configs=inference_config, edge_config=edge_config, verbose=True
+    )
     deployment_manager = InferenceDeploymentManager()
 
     # We will delegate creation of database tables to the edge-endpoint container.

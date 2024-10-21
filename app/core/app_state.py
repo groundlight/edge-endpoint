@@ -109,7 +109,9 @@ class AppState:
     def __init__(self):
         self.edge_config = load_edge_config()
         inference_config = get_inference_configs(root_edge_config=self.edge_config)
-        self.edge_inference_manager = EdgeInferenceManager(config=inference_config)
+        self.edge_inference_manager = EdgeInferenceManager(
+            inference_configs=inference_config, edge_config=self.edge_config
+        )
         self.db_manager = DatabaseManager()
         self.is_ready = False
 
