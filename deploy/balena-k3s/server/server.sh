@@ -11,4 +11,5 @@ set -eu
 # clusters require using ectd as a datastore, instead of the default mysql. Etcd
 # doesnt work well when the underlying storage is an sd card, like on raspberry pi.
 # If we ever do want multi-node we'd have to pass `--server` or `--cluster-init` args to k3s
+mkdir -p /opt/groundlight/edge/pinamod-public
 exec /bin/k3s server ${EXTRA_K3S_SERVER_ARGS:-}

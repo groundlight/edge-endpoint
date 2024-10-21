@@ -30,13 +30,32 @@ $K create secret docker-registry registry-credentials \
 
 # Store AWS credentials in a Kubernetes secret
 if command -v aws >/dev/null 2>&1; then
-    $K create secret generic aws-credentials \
-        --from-literal=aws_access_key_id=$(aws configure get aws_access_key_id) \
-        --from-literal=aws_secret_access_key=$(aws configure get aws_secret_access_key)
+
+    ACCESS_KEY_ID=$(aws configure get aws_access_key_id)
+    SECRET_ACCESS_KEY=$(aws configure get aws_secret_access_key)
+
+    # If either AWS credential is missing, fall back to environment variables
+    if [ -z "$ACCESS_KEY_ID" ] || [ -z "$SECRET_ACCESS_KEY" ]; then
+        echo "AWS CLI is installed but not configured. Falling back to environment variables..."
+        ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+        SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    fi
+
 else
+    echo "AWS CLI is not installed. Using environment variables..."
+    ACCESS_KEY_ID=$(aws configure get aws_access_key_id)
+    SECRET_ACCESS_KEY=$(aws configure get aws_secret_access_key)
+fi
+
+# Create the Kubernetes secret using either AWS CLI configuration or environment variables
+if [ -n "$ACCESS_KEY_ID" ] && [ -n "$SECRET_ACCESS_KEY" ]; then
     $K create secret generic aws-credentials \
-        --from-literal=aws_access_key_id=${AWS_ACCESS_KEY_ID} \
-        --from-literal=aws_secret_access_key=${AWS_SECRET_ACCESS_KEY}
+        --from-literal=aws_access_key_id="$ACCESS_KEY_ID" \
+        --from-literal=aws_secret_access_key="$SECRET_ACCESS_KEY"
+    echo "Secret aws-credentials created successfully."
+else
+    echo "Error: AWS credentials are not set in AWS CLI or environment variables."
+    exit 1
 fi
 
 # Verify secrets have been properly created

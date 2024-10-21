@@ -163,8 +163,10 @@ if ! $K get pvc edge-endpoint-pvc; then
     rm deploy/k3s/persistentvolume.yaml.tmp
 fi
 
-# Make pinamod directory for hostmapped volume
-sudo mkdir -p /opt/groundlight/edge/pinamod-public
+if [ -z "$BALENA" ]; then
+    # Make pinamod directory for hostmapped volume
+    sudo mkdir -p /opt/groundlight/edge/pinamod-public
+fi
 
 # Substitutes the namespace in the service_account.yaml template
 envsubst < deploy/k3s/service_account.yaml > deploy/k3s/service_account.yaml.tmp
