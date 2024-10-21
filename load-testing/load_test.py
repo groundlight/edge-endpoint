@@ -22,7 +22,12 @@ if ENDPOINT_URL == "":
 
 
 def send_image_requests(  # noqa: PLR0913
-    process_id: int, detector: Detector, gl_client: Groundlight, num_requests_per_second: float, duration, log_file: str
+    process_id: int,
+    detector: Detector,
+    gl_client: Groundlight,
+    num_requests_per_second: float,
+    duration: float,
+    log_file: str,
 ):
     """Sends image requests to a Groundlight endpoint for a specified duration and logs results."""
     os.makedirs(os.path.dirname(log_file), exist_ok=True)
@@ -34,13 +39,12 @@ def send_image_requests(  # noqa: PLR0913
     request_number = 1
 
     while time.time() - start_time < duration:
-        request_start_time = time.time()
-
         log_data = {
             "asctime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "worker_number": process_id,
             "request_number": request_number,
         }
+        request_start_time = time.time()
 
         try:
             gl_client.ask_ml(detector=detector, image=IMAGE_PATH, wait=1)
@@ -56,9 +60,14 @@ def send_image_requests(  # noqa: PLR0913
         time.sleep(max(0, (1 / num_requests_per_second) - (time.time() - request_start_time)))
 
 
-def ramp_up_processes(
-    max_processes, step_size, requests_per_second, detectors: list[Detector], gl_client, custom_ramp: bool = False
-):  # noqa: PLR0913
+def incremental_client_ramp_up(  # noqa: PLR0913
+    max_processes: int,
+    step_size: int,
+    requests_per_second: int,
+    detectors: list[Detector],
+    gl_client: Groundlight,
+    custom_ramp: bool = False,
+):
     """Ramps up the number of client processes over time and distributes them across multiple detectors."""
     if os.path.exists(LOG_FILE):
         os.remove(LOG_FILE)
@@ -137,6 +146,6 @@ if __name__ == "__main__":
     if args.custom_ramp:
         print("Running in custom-ramp mode. Step size and max clients will be ignored.")
 
-    ramp_up_processes(args.max_clients, args.step_size, REQUESTS_PER_SECOND, detectors, gl, args.custom_ramp)
+    incremental_client_ramp_up(args.max_clients, args.step_size, REQUESTS_PER_SECOND, detectors, gl, args.custom_ramp)
 
     show_load_test_results()
