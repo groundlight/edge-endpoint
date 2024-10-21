@@ -132,8 +132,8 @@ class EdgeInferenceManager:
         self.last_escalation_times = {detector_id: None for detector_id in edge_config.detectors.keys()}
         # Minimum time between escalations for each detector
         self.min_times_between_escalations = {
-            detector_id: edge_config.detectors.get(detector_id).min_time_between_escalations
-            for detector_id in edge_config.detectors.keys()
+            detector_id: detector_config.min_time_between_escalations
+            for detector_id, detector_config in edge_config.detectors.items()
         }
 
         if inference_configs:
