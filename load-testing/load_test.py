@@ -7,8 +7,7 @@ import time
 from datetime import datetime
 
 from config import (
-    DETECTOR_NAME,
-    DETECTOR_QUERY,
+    DETECTOR_IDS,
     ENDPOINT_URL,
     GROUNDLIGHT_API_TOKEN,
     IMAGE_PATH,
@@ -63,8 +62,10 @@ def send_image_requests(  # noqa: PLR0913
         time.sleep(max(0, (1 / num_requests_per_second) - (time.time() - request_start_time)))
 
 
-def ramp_up_processes(max_processes, step_size, requests_per_second, detector, gl_client, custom_ramp: bool = False):  # noqa: PLR0913
-    """Ramps up the number of client processes over time."""
+def ramp_up_processes(
+    max_processes, step_size, requests_per_second, detectors: list[Detector], gl_client, custom_ramp: bool = False
+):  # noqa: PLR0913
+    """Ramps up the number of client processes over time and distributes them across multiple detectors."""
     if os.path.exists(LOG_FILE):
         os.remove(LOG_FILE)
     os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
@@ -84,6 +85,7 @@ def ramp_up_processes(max_processes, step_size, requests_per_second, detector, g
 
     active_processes = []
     start_time = time.time()
+    num_detectors = len(detectors)
 
     for num_clients_ramping_to in ramp_steps:
         print(f"Ramping up to {num_clients_ramping_to} clients.")
@@ -94,6 +96,9 @@ def ramp_up_processes(max_processes, step_size, requests_per_second, detector, g
         for _ in range(num_clients_ramping_to - num_existing_clients):
             process_id = len(active_processes)
             remaining_time = total_duration - (time.time() - start_time)
+            # Distribute clients across detectors
+            detector = detectors[process_id % num_detectors]
+
             process = multiprocessing.Process(
                 target=send_image_requests,
                 args=(
@@ -130,11 +135,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     gl = Groundlight(endpoint=ENDPOINT_URL)
-    detector = gl.get_or_create_detector(name=DETECTOR_NAME, query=DETECTOR_QUERY)
+    # Fetch detectors ahead of time
+    detectors = [gl.get_detector(id=detector_id) for detector_id in DETECTOR_IDS]
+
+    print(f"Running load test for {len(detectors)} detector(s).")
 
     if args.custom_ramp:
         print("Running in custom-ramp mode. Step size and max clients will be ignored.")
 
-    ramp_up_processes(args.max_clients, args.step_size, REQUESTS_PER_SECOND, detector, gl, args.custom_ramp)
+    ramp_up_processes(args.max_clients, args.step_size, REQUESTS_PER_SECOND, detectors, gl, args.custom_ramp)
 
     show_load_test_results()
