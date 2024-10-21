@@ -66,16 +66,16 @@ def incremental_client_ramp_up(  # noqa: PLR0913
     requests_per_second: int,
     detectors: list[Detector],
     gl_client: Groundlight,
-    custom_ramp: bool = False,
+    use_preset_schedule: bool = False,
 ):
     """Ramps up the number of client processes over time and distributes them across multiple detectors."""
     if os.path.exists(LOG_FILE):
         os.remove(LOG_FILE)
     os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
 
-    if custom_ramp:
+    if use_preset_schedule:
         ramp_steps = [1, 2, 3, 4, 5, 10, 15, 20, 30, 40, 50, 60]
-        print(f"Using custom ramp schedule: {ramp_steps} with {TIME_BETWEEN_RAMP} seconds between each step.")
+        print(f"Using preset ramp schedule: {ramp_steps} with {TIME_BETWEEN_RAMP} seconds between each step.")
     else:
         ramp_steps = [step_size * i for i in range(1, round((max_processes / step_size)) + 1)]
         print(
@@ -134,7 +134,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--step-size", type=int, default=1, help="Number of clients to add at each step in ramp-up mode."
     )
-    parser.add_argument("--custom-ramp", action="store_true", help="Enable custom ramping mode.")
+    parser.add_argument("--use-preset-schedule", action="store_true", help="Enable using a preset schedule.")
     args = parser.parse_args()
 
     gl = Groundlight(endpoint=ENDPOINT_URL)
@@ -143,9 +143,11 @@ if __name__ == "__main__":
 
     print(f"Running load test for {len(detectors)} detector(s).")
 
-    if args.custom_ramp:
-        print("Running in custom-ramp mode. Step size and max clients will be ignored.")
+    if args.use_preset_schedule:
+        print("Using preset schedule. Step size and max clients will be ignored.")
 
-    incremental_client_ramp_up(args.max_clients, args.step_size, REQUESTS_PER_SECOND, detectors, gl, args.custom_ramp)
+    incremental_client_ramp_up(
+        args.max_clients, args.step_size, REQUESTS_PER_SECOND, detectors, gl, args.use_preset_schedule
+    )
 
     show_load_test_results()
