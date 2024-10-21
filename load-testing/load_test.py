@@ -9,7 +9,6 @@ from datetime import datetime
 from config import (
     DETECTOR_IDS,
     ENDPOINT_URL,
-    GROUNDLIGHT_API_TOKEN,
     IMAGE_PATH,
     LOG_FILE,
     REQUESTS_PER_SECOND,
@@ -20,11 +19,6 @@ from parse_load_test_logs import show_load_test_results
 
 if ENDPOINT_URL == "":
     raise ValueError("ENDPOINT_URL cannot be an empty string.")
-
-if GROUNDLIGHT_API_TOKEN == "":
-    GROUNDLIGHT_API_TOKEN = os.environ.get("GROUNDLIGHT_API_TOKEN")
-    if GROUNDLIGHT_API_TOKEN is None:
-        raise ValueError("The GROUNDLIGHT_API_TOKEN must be set in config.py or as an environment variable.")
 
 
 def send_image_requests(  # noqa: PLR0913

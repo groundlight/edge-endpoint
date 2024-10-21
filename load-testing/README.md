@@ -37,7 +37,6 @@ After setting these config options, you should run/re-run the [cluster setup scr
 
 Most configuration of the load testing scripts is done in [config.py](./config.py).
 * `ENDPOINT_URL` is the url of the edge endpoint that you've set up. This will follow the format `http://<ip of host machine>:<exposed edge-endpoint-service port>`. 
-* `GROUNDLIGHT_API_TOKEN` is your Groundlight api token. It can also be set as an environment variable. If set in `config.py`, that value will override the environment variable. 
 * `DETECTOR_NAME` is the name of the detector that you've configured.
 * `DETECTOR_QUERY` is the query of the detector that you've configured.
 * `IMAGE_PATH` is the path to the image that the client processes will submit to the endpoint as part of load testing. To avoid resizing by the inference server, this should ideally be a 256x256 image. By default, this points to `dog_resized_256x256.jpeg`.
@@ -48,6 +47,8 @@ Most configuration of the load testing scripts is done in [config.py](./config.p
 ### Running the load testing scripts.
 
 It's recommended to generate the load from a separate machine than the one hosting the endpoint to ensure maximum resources are available for the endpoint to use.
+
+Before running the script, ensure you have set the `GROUNDLIGHT_API_TOKEN` environment variable. The api token should belong to an account with access to the detectors you will be sending image queries to.
 
 The usage of `load_test.py` is:
 ```
