@@ -5,37 +5,37 @@ import time
 import GPUtil
 import matplotlib.pyplot as plt
 import psutil
+from pydantic import BaseModel
 
-# Parameters
-interval = 1  # Time between each measurement (in seconds)
-output_dir = "./plots"
 
-# Ensure the output directory exists
-os.makedirs(output_dir, exist_ok=True)
-
-# Lists to store CPU and Memory data
-elapsed_time = []
-cpu_usage = []
-memory_usage = []
-
-# Dictionary to store GPU data per device
-gpu_data = {}
+class MonitoringResults(BaseModel):
+    elapsed_time: list[float]
+    cpu_usage: list[float]
+    memory_usage: list[float]
+    gpu_data: dict[int, dict[str, list[float]]]
 
 
 def monitor_system(duration, interval):
+    elapsed_time = []
+    cpu_usage = []
+    memory_usage = []
+    gpu_data = {}
+
     print(f"Monitoring system for {duration} seconds...")
-    start_time = time.time()
 
     # Get GPU devices
     gpus = GPUtil.getGPUs()
     for gpu in gpus:
         gpu_data[gpu.id] = {"elapsed_time": [], "gpu_usage": [], "memory_usage": []}
 
+    start_time = time.time()
+
     while (time.time() - start_time) < duration:
+        elapsed = time.time() - start_time
+
         # Collect CPU and memory data
         cpu = psutil.cpu_percent(interval=interval)
         memory = psutil.virtual_memory().percent
-        elapsed = time.time() - start_time
 
         # Append to lists
         elapsed_time.append(elapsed)
@@ -53,8 +53,16 @@ def monitor_system(duration, interval):
         for gpu in gpus:
             print(f"GPU {gpu.id}: Usage: {gpu.load*100:.2f}%, Memory: {gpu.memoryUtil*100:.2f}%")
 
+    results = {
+        "elapsed_time": elapsed_time,
+        "cpu_usage": cpu_usage,
+        "memory_usage": memory_usage,
+        "gpu_data": gpu_data,
+    }
+    return MonitoringResults(**results)
 
-def plot_cpu_memory(elapsed_time, cpu_usage, memory_usage):
+
+def plot_cpu_data(elapsed_time, cpu_usage, memory_usage):
     # Create figure for CPU and Memory
     plt.figure(figsize=(12, 6))
 
@@ -75,7 +83,7 @@ def plot_cpu_memory(elapsed_time, cpu_usage, memory_usage):
     plt.grid(True)
 
     plt.tight_layout()
-    output_file = os.path.join(output_dir, "cpu_memory_monitoring.png")
+    output_file = os.path.join(output_dir, "cpu_monitoring.png")
     plt.savefig(output_file)
     plt.show()
     print(f"CPU and Memory graphs saved to {output_file}")
@@ -111,10 +119,16 @@ def plot_gpu_data(gpu_data):
 
 
 if __name__ == "__main__":
+    # Parameters
+    interval = 1  # Time between each measurement (in seconds)
+    output_dir = "./plots"
+
+    os.makedirs(output_dir, exist_ok=True)
+
     parser = argparse.ArgumentParser(description="System Monitoring Script")
     parser.add_argument("duration", type=int, help="Total time to monitor (in seconds)")
     args = parser.parse_args()
 
-    monitor_system(args.duration, interval)
-    plot_cpu_memory(elapsed_time, cpu_usage, memory_usage)
-    plot_gpu_data(gpu_data)
+    results = monitor_system(args.duration, interval)
+    plot_cpu_data(results.elapsed_time, results.cpu_usage, results.memory_usage)
+    plot_gpu_data(results.gpu_data)
