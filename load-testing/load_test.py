@@ -129,7 +129,6 @@ def incremental_client_ramp_up(  # noqa: PLR0913
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Load test an endpoint by submitting images.")
-    # parser.add_argument("duration", type=int, help="Number of seconds to run the script")
     parser.add_argument("--max-clients", type=int, default=10, help="Number of processes to ramp up to")
     parser.add_argument(
         "--step-size", type=int, default=1, help="Number of clients to add at each step in ramp-up mode."
@@ -138,9 +137,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     gl = Groundlight(endpoint=ENDPOINT_URL)
+
     # Fetch detectors ahead of time
     detectors = [gl.get_detector(id=detector_id) for detector_id in DETECTOR_IDS]
-
+    if len(detectors) == 0:
+        raise ValueError("At least one detector must be specified in the config.")
     print(f"Running load test for {len(detectors)} detector(s).")
 
     if args.use_preset_schedule:
