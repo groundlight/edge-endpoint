@@ -306,7 +306,12 @@ def fetch_model_urls(detector_id: str, api_token: Optional[str] = None) -> dict[
     if response.status_code == status.HTTP_200_OK:
         return response.json()
     else:
-        raise HTTPException(status_code=response.status_code, detail=f"Failed to fetch model URLs for {detector_id=}.")
+        response_json = response.json()
+        exception_string = f"Failed to fetch model URLs for {detector_id=}."
+        if "detail" in response_json:  # Include additional detail on the error if available
+            exception_string = exception_string + f" Received error: {response_json['detail']}"
+
+        raise HTTPException(status_code=response.status_code, detail=exception_string)
 
 
 def get_object_using_presigned_url(presigned_url: str) -> bytes:
