@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # Install k3s and configure GPU support
+# This does the GPU stuff, but calls the other install-k3s.sh script to do the rest.
 # Tested on an AWS EC2 G4 instance using the following AMI:
 # Deep Learning OSS Nvidia Driver AMI GPU PyTorch 2.3.0 (Ubuntu 20.04) 20240825
 
