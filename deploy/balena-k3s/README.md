@@ -10,7 +10,7 @@ balena push <your-fleet>
 ```
 This will build and push two "services" to the edge devices in your chosen fleet. The first is a [k3s server](https://docs.k3s.io/architecture) named `server`, which effectively acts as our k3s cluster node. The second is the `bastion` service, from which a user can access the k3s cluster (e.g. by running `kubectl get nodes`). The `bastion` service also contains a copy of this repo at `/app/edge-endpoint`.
 
-Now, we have our k3s cluster built and running, but we have not started our edge deployment.
+Now, we have our k3s single-node cluster built and running, but we have not started our edge deployment.
 
 Configure the following variables via the `<fleet>/Variables` or `<device>/Device Variables` interfaces on the BalenaCloud dashboard:
 ```
@@ -26,5 +26,5 @@ Dockerfile will automatically run the following command as `bastion` launches so
 
 ```bash
 cd /app/edge-endpoint
-INFERENCE_FLAVOR="CPU" DEPLOYMENT_NAMESPACE="default" ./deploy/bin/cluster_setup.sh
+INFERENCE_FLAVOR="CPU" DEPLOYMENT_NAMESPACE="default" ./deploy/bin/setup-ee.sh
 ```

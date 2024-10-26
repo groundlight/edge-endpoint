@@ -46,7 +46,7 @@ You'll also need to configure your AWS credentials using `aws configure` to incl
 
 To install the edge-endpoint, run:
 ```shell
-./deploy/bin/cluster_setup.sh
+./deploy/bin/setup-ee.sh
 ```
 
 This will create the edge-endpoint deployment which is the both the SDK proxy and coordination service. After a while you should be able to see something like this if you run `kubectl get pods`:

@@ -241,7 +241,7 @@ jobs:
           # source test/setup_inference_test_env.sh
           export INFERENCE_FLAVOR="CPU"
           export DEPLOYMENT_NAMESPACE="default"
-          bash deploy/bin/cluster_setup.sh
+          bash deploy/bin/setup-ee.sh
           kubectl describe deployment
 
       - name: Wait for edge-endpoint pod to be ready

@@ -49,7 +49,7 @@ class InferenceDeploymentManager:
 
     def _create_from_kube_manifest(self, namespace: str, manifest: str) -> None:
         """
-        Applies manifest to the kubernetes cluster. This is not blocking since the kubernetes API
+        Applies manifest to the kubernetes namespace. This is not blocking since the kubernetes API
         creates deployments and services asynchronously.
         """
         logger.debug(f"Applying kubernetes manifest to namespace `{namespace}`...")
@@ -84,7 +84,7 @@ class InferenceDeploymentManager:
 
         This method substitutes placeholders in the inference deployment template
         with the provided detector ID, service name, and deployment name, and then
-        applies the manifest to the Kubernetes cluster.
+        applies the manifest to the Kubernetes namespace.
 
         Args:
             detector_id (str): The unique identifier for the detector for which
