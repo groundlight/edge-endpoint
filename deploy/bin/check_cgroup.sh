@@ -1,17 +1,20 @@
 #!/bin/bash
 
-# Function to check if memory cgroup is mounted
-check_memory_cgroup_mounted() {
-    if mount | grep -q "cgroup/memory"; then
-        echo "Memory cgroup is mounted."
+# Function to check if memory cgroups are available (v1 or v2)
+check_cgroup() {
+    if mount | grep -q "cgroup2"; then
+        echo "Cgroup v2 is enabled."
+        return 0
+    elif mount | grep -q "cgroup/memory"; then
+        echo "Cgroup v1 (memory) is enabled."
         return 0
     else
-        echo "Memory cgroup is NOT mounted."
+        echo "No memory cgroup found."
         return 1
     fi
 }
 
-# Function to check kernel cmdline parameters for cgroup settings
+# Function to check if required parameters are in /proc/cmdline
 check_cmdline_params() {
     CMDLINE=$(cat /proc/cmdline)
     if echo "$CMDLINE" | grep -q "cgroup_memory=1" && echo "$CMDLINE" | grep -q "cgroup_enable=memory"; then
@@ -23,18 +26,19 @@ check_cmdline_params() {
     fi
 }
 
-# Run both checks and determine overall status
-check_memory_cgroup_mounted
-MOUNT_STATUS=$?
+# Run the checks
+check_cgroup
+CGROUP_STATUS=$?
 
 check_cmdline_params
 PARAM_STATUS=$?
 
-if [ $MOUNT_STATUS -eq 0 ] && [ $PARAM_STATUS -eq 0 ]; then
-    echo "Memory cgroup is properly enabled."
+# Final result
+if [ $CGROUP_STATUS -eq 0 ] && [ $PARAM_STATUS -eq 0 ]; then
+    echo "Cgroup setup looks good."
     exit 0
 else
-    echo "Memory cgroup is NOT properly enabled."
+    echo "Cgroup setup is NOT correct."
     exit 1
 fi
 
