@@ -14,4 +14,4 @@ detectors:
       local_inference_template: "default"
       always_return_edge_prediction: false
       disable_cloud_escalation: false
-      min_time_between_escalations: None
+      #min_time_between_escalations: 1
