@@ -7,6 +7,20 @@ K="k3s kubectl"
 # Update system
 sudo apt update && sudo apt upgrade -y
 
+# Check cgroup setup
+./check_cgroup.sh
+CGROUP_STATUS=$?    
+
+if [ $CGROUP_STATUS -eq 1 ]; then
+    cat << EOF
+Cgroup setup is NOT correct.  k3s will probably not work on this system.
+To fix, add the following to the kernel command line in your bootloader configuration:
+    cgroup_memory=1 cgroup_enable=memory
+You can do this with grub on most systems, 
+or on Raspberry Pi by editing /boot/cmdline.txt or /boot/firmware/cmdline.txt.
+EOF
+    exit 1
+fi
 
 # Install k3s
 echo "Installing k3s..."
