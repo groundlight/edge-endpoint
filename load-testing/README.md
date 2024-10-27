@@ -31,7 +31,7 @@ command:
 
 Some trial and error will be necessary to figure out the ideal configuration. For reference: on a machine with 32 CPU cores and 126 G of RAM, and a RTX 3090 GPU with 24 Gi of RAM, setting edge-endpoint proxy workers to 128 and inference server workers to 61 was able to run successfully. 
 
-After setting these config options, you should run/re-run the [cluster setup script](/deploy/bin/cluster_setup.sh) to deploy with your new configuration. You can monitor the inference pod's logs to see when all of the workers have finished starting up (if the number of workers is high, this will likely be after the pod reports being ready). 
+After setting these config options, you should run/re-run the [setup edge endpoint script](/deploy/bin/setup-ee.sh) to deploy with your new configuration. You can monitor the inference pod's logs to see when all of the workers have finished starting up (if the number of workers is high, this will likely be after the pod reports being ready). 
 
 ### Configuring the load testing scripts
 

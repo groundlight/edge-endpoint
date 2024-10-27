@@ -2,7 +2,7 @@
 
 # Usage:
 # Execute the script using the following command:
-# ./deploy/bin/cluster_setup.sh
+# ./deploy/bin/setup-ee.sh
 #
 # Environment Variables:
 # - KUBECTL_CMD: Specifies the path to the kubectl command. Defaults to "kubectl". If using k3s, set to "k3s kubectl".

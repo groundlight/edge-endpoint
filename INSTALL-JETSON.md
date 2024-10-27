@@ -30,10 +30,10 @@ aws sts get-caller-identity
 ```
 
 
-5) Setup the cluster.
+5) Setup the edge endpoint.
 
 ```
-./deploy/bin/cluster_setup.sh
+./deploy/bin/setup-ee.sh
 ```
 
 6) Figure out the URL of the edge endpoint.
