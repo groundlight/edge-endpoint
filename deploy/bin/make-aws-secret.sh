@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e  # Exit on error
+
 K=${KUBECTL_CMD:-"kubectl"}
 DEPLOYMENT_NAMESPACE=${DEPLOYMENT_NAMESPACE:-$($K config view -o json | jq -r '.contexts[] | select(.name == "'$($K config current-context)'") | .context.namespace // "default"')}
 # Update K to include the deployment namespace
@@ -16,12 +18,19 @@ else
     echo "Docker is not installed. Skipping docker ECR login."
 fi
 
-
 # Note: needs testing
 $K delete --ignore-not-found secret registry-credentials
 $K delete --ignore-not-found secret aws-credentials
 
+# First call aws sts get-caller-identity to verify the credentials are valid.
+aws sts get-caller-identity
+if [ $? -ne 0 ]; then
+    echo "AWS credentials are not valid. Exiting."
+    exit 1
+fi
+
 # NOTE: these credentials seem to be expiring, causing problems later.
+# TODO: Change this auth strategy.
 PASSWORD=$(aws ecr get-login-password --region us-west-2)
 $K create secret docker-registry registry-credentials \
     --docker-server=767397850842.dkr.ecr.us-west-2.amazonaws.com \

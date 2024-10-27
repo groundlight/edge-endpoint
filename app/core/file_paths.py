@@ -3,6 +3,7 @@ INFERENCE_DEPLOYMENT_TEMPLATE_PATH = "/etc/groundlight/inference-deployment/infe
 
 # A file with the namespace to be operating within
 KUBERNETES_NAMESPACE_PATH = "/etc/groundlight/kubernetes-namespace/namespace"
+#TODO: Just use the namespace we're in.
 
 # Path to the database file.
 # This must also match the path used in the PersistentVolumeClaim definition for the database.
