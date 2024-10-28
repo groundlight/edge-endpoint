@@ -1,7 +1,7 @@
 import datetime
 import logging
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, String
+from sqlalchemy import Boolean, Column, DateTime, String
 from sqlalchemy.orm import declarative_base
 
 logger = logging.getLogger(__name__)
@@ -45,25 +45,3 @@ class InferenceDeployment(Base):
         onupdate=datetime.datetime.utcnow,
         comment="Timestamp of record update",
     )
-
-
-class ImageQueryEdge(Base):
-    """
-    Schema for the `image_queries_edge` database table.
-    This table is used  by the `edge-endpoint` container to store image queries created from the
-    `POST /image-queries` endpoint on the edge.
-
-    This is necessary because the core Groundlight service does not recognize these image queries.
-    Storing them in this table allows us to properly handle `GET /image-queries/{image_query_id}` on the edge.
-    """
-
-    __tablename__ = "image_queries_edge"
-    image_query_id = Column(
-        String,
-        primary_key=True,
-        unique=True,
-        nullable=False,
-        index=True,
-        comment="Image query ID. This is expected to be prefixed with `iqe_`.",
-    )
-    image_query = Column(JSON, nullable=False, comment="JSON representation of the ImageQuery data model.")

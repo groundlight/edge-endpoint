@@ -154,7 +154,8 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 rois=results["rois"],
                 text=results["text"],
             )
-            app_state.db_manager.create_iqe_record(image_query)
+
+            # TODO how will the IQ make it to the cloud? submit it through ask_async, and supply the ID if an edge prediction was returned?
 
             # Escalate after returning edge prediction if escalation is enabled and we have low confidence
             if not disable_cloud_escalation and not is_confident_enough:
@@ -213,12 +214,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
 
 @router.get("/{id}", response_model=ImageQuery)
-async def get_image_query(
-    id: str, gl: Groundlight = Depends(get_groundlight_sdk_instance), app_state: AppState = Depends(get_app_state)
-):
-    if id.startswith("iqe_"):
-        image_query = app_state.db_manager.get_iqe_record(image_query_id=id)
-        if not image_query:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Image query with ID {id} not found")
-        return image_query
-    return safe_call_sdk(gl.get_image_query, id=id)
+async def get_image_query(id: str, gl: Groundlight = Depends(get_groundlight_sdk_instance)):
+    return safe_call_sdk(
+        gl.get_image_query, id=id
+    )  # TODO do we still need this, or will it automatically get forwarded if this is gone?

@@ -21,6 +21,7 @@ from PIL import Image
 from app.core import constants
 
 
+# TODO rename and update this to no longer be for IQEs
 def create_iqe(  # noqa: PLR0913
     detector_id: str,
     mode: ModeEnum,
