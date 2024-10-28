@@ -60,6 +60,11 @@ K=${KUBECTL_CMD:-"kubectl"}
 INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"GPU"}
 DEPLOY_LOCAL_VERSION=${DEPLOY_LOCAL_VERSION:-1}
 DEPLOYMENT_NAMESPACE=${DEPLOYMENT_NAMESPACE:-$($K config view -o json | jq -r '.contexts[] | select(.name == "'$($K config current-context)'") | .context.namespace // "default"')}
+# Refuse to deploy to default namespace or if namespace is not set
+if [[ "$DEPLOYMENT_NAMESPACE" == "default" ]]; then
+    echo "Refusing to deploy to default namespace. Please specify a non-default namespace."
+    exit 1
+fi
 
 # Update K to include the deployment namespace
 K="$K -n $DEPLOYMENT_NAMESPACE"
@@ -74,17 +79,17 @@ if ! ./deploy/bin/make-aws-secret.sh; then
 fi
 
 # Configmaps, secrets, and deployments
-$K delete configmap --ignore-not-found edge-config -n ${DEPLOYMENT_NAMESPACE}
-$K delete configmap --ignore-not-found inference-deployment-template -n ${DEPLOYMENT_NAMESPACE}
-$K delete configmap --ignore-not-found kubernetes-namespace -n ${DEPLOYMENT_NAMESPACE}
-$K delete configmap --ignore-not-found setup-db -n ${DEPLOYMENT_NAMESPACE}
-$K delete configmap --ignore-not-found db-reset -n ${DEPLOYMENT_NAMESPACE}
-$K delete secret --ignore-not-found groundlight-api-token -n ${DEPLOYMENT_NAMESPACE}
+$K delete configmap --ignore-not-found edge-config
+$K delete configmap --ignore-not-found inference-deployment-template
+$K delete configmap --ignore-not-found kubernetes-namespace
+$K delete configmap --ignore-not-found setup-db
+$K delete configmap --ignore-not-found db-reset
+$K delete secret --ignore-not-found groundlight-api-token
 
 set +x  # temporarily disable command echoing to avoid printing secrets
 if [[ -n "${GROUNDLIGHT_API_TOKEN}" ]]; then
     echo "Creating groundlight-api-token secret"
-    $K create secret generic groundlight-api-token --from-literal=GROUNDLIGHT_API_TOKEN=${GROUNDLIGHT_API_TOKEN} -n ${DEPLOYMENT_NAMESPACE}
+    $K create secret generic groundlight-api-token --from-literal=GROUNDLIGHT_API_TOKEN=${GROUNDLIGHT_API_TOKEN}
 fi
 set -x  # re-enable command echoing
 
@@ -111,9 +116,10 @@ else
 fi
 
 # Create a configmap corresponding to the namespace we are deploying to
+# TODO: A configmap with the namespace's name is deeply silly and should be removed.
 $K create configmap kubernetes-namespace --from-literal=namespace=${DEPLOYMENT_NAMESPACE}
 
-$K create configmap setup-db --from-file=$(pwd)/deploy/bin/setup_db.sh -n ${DEPLOYMENT_NAMESPACE}
+$K create configmap setup-db --from-file=$(pwd)/deploy/bin/setup_db.sh
 
 # Clean up existing deployments and services (if they exist)
 $K delete --ignore-not-found deployment edge-endpoint

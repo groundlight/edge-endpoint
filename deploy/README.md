@@ -19,15 +19,15 @@ You might want to customize the [edge config file](../configs/edge-config.yaml) 
 edge inference will be set up for each detector ID for which the Groundlight service receives requests (note that it
 takes some time for each inference pod to become available for the first time).
 
-Before installing the edge-endpoint, you need to create/specify the namespace for the deployment. If you're creating a new one, run:
+Before installing the edge-endpoint, you must pick a namespace for your edge-endpoint.  We recommend creating a new namespace.  In these examples we'll use `groundlight-edge` but you can use any name you like.
 
 ```
-kubectl create namespace "your-namespace-name"
+kubectl create namespace groundlight-edge
 ```
 
 Whether you created a new namespace or are using an existing one, set the DEPLOYMENT_NAMESPACE environment variable:
 ```
-export DEPLOYMENT_NAMESPACE="your-namespace-name"
+export DEPLOYMENT_NAMESPACE="groundlight-edge"
 ```
 
 Some other environment variables should also be set. You'll need to have created
@@ -42,7 +42,9 @@ export INFERENCE_FLAVOR="CPU"
 # export INFERENCE_FLAVOR="GPU"
 ```
 
-You'll also need to configure your AWS credentials using `aws configure` to include credentials that have permissions to pull from the appropriate ECR location (if you don't already have the AWS CLI installed, refer to the instructions [here](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)).
+You'll also need to configure AWS credentials which are authorized to pull from Groundlight's ECR repositories for the inference pods.
+If your system is not already configured for this, contact Groundlight support to get the IAM credentials you need.
+Once you have the credentials, you can configure them using `aws configure` to include credentials that have permissions to pull from the appropriate ECR location (if you don't already have the AWS CLI installed, refer to the instructions [here](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)).
 
 To install the edge-endpoint, run:
 ```shell
