@@ -210,10 +210,3 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         confidence_threshold=confidence_threshold,
         human_review=human_review,
     )
-
-
-@router.get("/{id}", response_model=ImageQuery)
-async def get_image_query(id: str, gl: Groundlight = Depends(get_groundlight_sdk_instance)):
-    return safe_call_sdk(
-        gl.get_image_query, id=id
-    )  # TODO do we still need this, or will it automatically get forwarded if this is gone?
