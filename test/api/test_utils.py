@@ -28,7 +28,7 @@ class TestCreateIQE:
         )
 
         assert iqe.result_type == ResultTypeEnum.binary_classification
-        assert type(iqe.result) == BinaryClassificationResult
+        assert isinstance(iqe.result, BinaryClassificationResult)
         assert iqe.result.source == Source.ALGORITHM
         assert iqe.result.label == Label.YES
 
@@ -46,7 +46,7 @@ class TestCreateIQE:
         )
 
         assert iqe.result_type == ResultTypeEnum.counting
-        assert type(iqe.result) == CountingResult
+        assert isinstance(iqe.result, CountingResult)
         assert iqe.result.source == Source.ALGORITHM
         assert iqe.result.count == count_value
         assert not iqe.result.greater_than_max
@@ -66,7 +66,7 @@ class TestCreateIQE:
         )
 
         assert iqe.result_type == ResultTypeEnum.counting
-        assert type(iqe.result) == CountingResult
+        assert isinstance(iqe.result, CountingResult)
         assert iqe.result.source == Source.ALGORITHM
         assert iqe.result.greater_than_max
         assert iqe.result.count == max_count_value
