@@ -155,7 +155,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 text=results["text"],
             )
 
-            # TODO how will the IQ make it to the cloud? submit it through ask_async, and supply the ID if an edge prediction was returned?
+            # TODO do we want all edge queries to have corresponding queries in the cloud? or only unconfident ones?
 
             # Escalate after returning edge prediction if escalation is enabled and we have low confidence
             if not disable_cloud_escalation and not is_confident_enough:
@@ -172,6 +172,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         patience_time=patience_time,
                         confidence_threshold=confidence_threshold,
                         human_review=human_review,
+                        image_query_id=image_query.id,
                     )
                 else:
                     logger.debug(
