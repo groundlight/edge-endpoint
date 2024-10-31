@@ -46,7 +46,7 @@ def create_iq(  # noqa: PLR0913
     :param rois: The ROIs associated with the prediction, if applicable.
     :param text: The text associated with the prediction, if applicable.
 
-    :return: The ImageQuery created.
+    :return: The created ImageQuery.
     """
     if patience_time is None:
         patience_time = constants.DEFAULT_PATIENCE_TIME
@@ -80,7 +80,7 @@ def _mode_to_result_and_type(
     :param confidence: The confidence of the predicted value.
     :param result_value: The predicted value.
 
-    :return: A tuple of the result type and the result.
+    :return: A tuple of the result type and the generated result object.
     """
     source = Source.ALGORITHM  # Results from edge model are always from algorithm
     if mode == ModeEnum.BINARY:
