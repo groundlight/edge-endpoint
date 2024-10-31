@@ -13,7 +13,7 @@ from app.core.app_state import (
     get_detector_metadata,
     get_groundlight_sdk_instance,
 )
-from app.core.utils import create_iqe, safe_call_sdk
+from app.core.utils import create_iq, safe_call_sdk
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +142,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             else:
                 logger.debug(f"Edge detector confidence sufficient. {detector_id=}")
 
-            image_query = create_iqe(
+            image_query = create_iq(
                 detector_id=detector_id,
                 mode=detector_metadata.mode,
                 mode_configuration=detector_metadata.mode_configuration,
