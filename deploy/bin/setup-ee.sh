@@ -17,6 +17,13 @@
 
 set -ex
 
+# If we're in a container, sudo won't be available. But otherwise there are commands where we want sudo.
+if command -v sudo &>/dev/null; then
+    MAYBE_SUDO=sudo
+else
+    MAYBE_SUDO=
+fi
+
 fail() {
     echo $1
     exit 1
@@ -164,7 +171,7 @@ if ! $K get pvc edge-endpoint-pvc; then
 fi
 
 # Make pinamod directory for hostmapped volume
-sudo mkdir -p /opt/groundlight/edge/pinamod-public
+$MAYBE_SUDO mkdir -p /opt/groundlight/edge/pinamod-public
 
 # Substitutes the namespace in the service_account.yaml template
 envsubst < deploy/k3s/service_account.yaml > deploy/k3s/service_account.yaml.tmp

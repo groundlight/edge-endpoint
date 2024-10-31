@@ -20,7 +20,7 @@ AWS_SECRET_ACCESS_KEY - needed along with AWS_ACCESS_KEY_ID
 RUN_EDGE_ENDPOINT - Set this to "RUN_EDGE_ENDPOINT" to start the pods (added for glhub integration)
 ```
 
-Optionally you can also configure `EDGE_INFERENCE_FLAVOR` to use GPU instead. It will default to CPU if not set.
+Optionally you can also configure `INFERENCE_FLAVOR` to support CPU (-only) mode instead. It will default to GPU mode if not set.
 
 Dockerfile will automatically run the following command as `bastion` launches so no need to run this anymore but leaving this command as a reference if we need to start the clusters manually.
 
