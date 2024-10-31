@@ -58,15 +58,6 @@ class DetectorConfig(BaseModel):
             raise ValueError(
                 "The `disable_cloud_escalation` flag is only valid when `always_return_edge_prediction` is set to True."
             )
-        if (
-            not self.always_return_edge_prediction or self.disable_cloud_escalation
-        ) and self.min_time_between_escalations > 0.0:
-            logger.warning(
-                f"min_time_between_escalations is set to {self.min_time_between_escalations} but"
-                f" always_return_edge_prediction is set to {self.always_return_edge_prediction} and"
-                f" disable_cloud_escalation is set to {self.disable_cloud_escalation}. min_time_between_escalations"
-                " will be ignored. Set min_time_between_escalations to 0.0 to avoid this warning."
-            )
         return self
 
 
