@@ -8,7 +8,7 @@ from model import (
     Source,
 )
 
-from app.core.utils import create_iqe, prefixed_ksuid
+from app.core.utils import create_iq, prefixed_ksuid
 
 
 class TestCreateIQE:
@@ -17,7 +17,7 @@ class TestCreateIQE:
 
     def test_create_binary_iqe(self):
         """Test creating a basic binary IQE."""
-        iqe = create_iqe(
+        iqe = create_iq(
             detector_id=prefixed_ksuid("det_"),
             mode=ModeEnum.BINARY,
             mode_configuration=None,
@@ -35,7 +35,7 @@ class TestCreateIQE:
     def test_create_count_iqe(self):
         """Test creating a basic count IQE."""
         count_value = 2
-        iqe = create_iqe(
+        iqe = create_iq(
             detector_id=prefixed_ksuid("det_"),
             mode=ModeEnum.COUNT,
             mode_configuration={"max_count": 5},
@@ -55,7 +55,7 @@ class TestCreateIQE:
         """Test creating a count IQE with count greater than the max count."""
         count_value = 6
         max_count_value = 5
-        iqe = create_iqe(
+        iqe = create_iq(
             detector_id=prefixed_ksuid("det_"),
             mode=ModeEnum.COUNT,
             mode_configuration={"max_count": max_count_value},
@@ -77,7 +77,7 @@ class TestCreateIQE:
         with pytest.raises(
             NotImplementedError, match="Multiclass functionality is not yet implemented for the edge endpoint."
         ):
-            create_iqe(
+            create_iq(
                 detector_id=prefixed_ksuid("det_"),
                 mode=ModeEnum.MULTI_CLASS,
                 mode_configuration={},
@@ -90,7 +90,7 @@ class TestCreateIQE:
     def test_create_count_iqe_without_configuration(self):
         """Test creating a count IQE with no mode_configuration."""
         with pytest.raises(ValueError, match="mode_configuration for Counting detector shouldn't be None."):
-            create_iqe(
+            create_iq(
                 detector_id=prefixed_ksuid("det_"),
                 mode=ModeEnum.COUNT,
                 mode_configuration=None,
