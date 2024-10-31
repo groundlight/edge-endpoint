@@ -155,8 +155,6 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 text=results["text"],
             )
 
-            # TODO do we want all edge queries to have corresponding queries in the cloud? or only unconfident ones?
-
             # Escalate after returning edge prediction if escalation is enabled and we have low confidence
             if not disable_cloud_escalation and not is_confident_enough:
                 # Only escalate if we haven't escalated on this detector too recently
