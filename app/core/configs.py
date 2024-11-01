@@ -44,8 +44,8 @@ class DetectorConfig(BaseModel):
             "Requires `always_return_edge_prediction=True`."
         ),
     )
-    min_time_between_escalations: Optional[float] = Field(
-        default=None,
+    min_time_between_escalations: float = Field(
+        default=0.0,
         description=(
             "The minimum time (in seconds) to wait between cloud escalations for a given detector. "
             "Only applies when `always_return_edge_prediction=True` and `disable_cloud_escalation=False`."
@@ -60,9 +60,9 @@ class DetectorConfig(BaseModel):
             )
         if (
             not self.always_return_edge_prediction or self.disable_cloud_escalation
-        ) and self.min_time_between_escalations is not None:
+        ) and self.min_time_between_escalations > 0.0:
             raise ValueError(
-                "The `min_time_between_escalations` field is only valid when `always_return_edge_prediction` is set to"
+                "`min_time_between_escalations` is only valid when `always_return_edge_prediction` is set to"
                 " True and `disable_cloud_escalation` is set to False."
             )
         return self

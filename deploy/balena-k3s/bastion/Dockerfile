@@ -32,7 +32,8 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Note that currently this is only for ARM
-RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"
+# RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 RUN unzip awscliv2.zip && rm awscliv2.zip
 RUN ./aws/install
 RUN aws --version
@@ -58,4 +59,4 @@ RUN echo "source /app/edge-endpoint/deploy/balena-k3s/bastion/src/kube-bash.sh" 
 RUN chmod +x ./edge-endpoint/deploy/bin/setup-ee.sh
 
 ENTRYPOINT []
-CMD ["/bin/sh", "-c", "./edge-endpoint/deploy/bin/setup-ee.sh && tail -f /dev/null"]
+CMD ["/bin/sh", "-c", "RUN_EDGE_ENDPOINT=1 ./edge-endpoint/deploy/bin/setup-ee.sh && tail -f /dev/null"]

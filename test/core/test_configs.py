@@ -46,7 +46,7 @@ def test_detector_config_validation():
         local_inference_template="default",
         always_return_edge_prediction=True,
         disable_cloud_escalation=True,
-        min_time_between_escalations=None,
+        min_time_between_escalations=0.0,
     )
 
     # disable_cloud_escalation cannot be True if always_return_edge_prediction is False

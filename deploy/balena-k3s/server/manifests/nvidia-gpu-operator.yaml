@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gpu-operator
+---
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: nvidia-gpu-operator
+  namespace: kube-system
+  annotations:
+    helm.cattle.io/helm-controller: "true"
+spec:
+  repo: https://nvidia.github.io/gpu-operator
+  chart: gpu-operator
+  targetNamespace: gpu-operator
+  wait: true
+  bootstrap: true  # Add this to ensure it's processed during bootstrap
