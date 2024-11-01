@@ -33,6 +33,9 @@ RUN curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_START=true INSTALL_K3S_SKIP_
 RUN mkdir -p /opt/k3s/manifests/
 COPY manifests/nvidia-gpu-operator.yaml /opt/k3s/manifests/
 
+# Make pinamod-public directory for hostmapped volume
+RUN mkdir -p /opt/groundlight/edge/pinamod-public
+
 WORKDIR /workspace
 
 COPY server.sh ./server.sh
