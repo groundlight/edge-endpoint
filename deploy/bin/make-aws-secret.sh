@@ -30,10 +30,23 @@ $K create secret docker-registry registry-credentials \
 
 # Store AWS credentials in a Kubernetes secret
 if command -v aws >/dev/null 2>&1; then
-    $K create secret generic aws-credentials \
-        --from-literal=aws_access_key_id=$(aws configure get aws_access_key_id) \
-        --from-literal=aws_secret_access_key=$(aws configure get aws_secret_access_key)
+    # Try to retrieve AWS credentials from aws configure
+    AWS_ACCESS_KEY_ID_CMD=$(aws configure get aws_access_key_id 2>/dev/null)
+    AWS_SECRET_ACCESS_KEY_CMD=$(aws configure get aws_secret_access_key 2>/dev/null)
+
+    # Check if both keys have values
+    if [ -n "$AWS_ACCESS_KEY_ID_CMD" ] && [ -n "$AWS_SECRET_ACCESS_KEY_CMD" ]; then
+        $K create secret generic aws-credentials \
+            --from-literal=aws_access_key_id=$AWS_ACCESS_KEY_ID_CMD \
+            --from-literal=aws_secret_access_key=$AWS_SECRET_ACCESS_KEY_CMD
+    else
+        # Use environment variables if keys are missing in aws configure
+        $K create secret generic aws-credentials \
+            --from-literal=aws_access_key_id=${AWS_ACCESS_KEY_ID} \
+            --from-literal=aws_secret_access_key=${AWS_SECRET_ACCESS_KEY}
+    fi
 else
+    # Use environment variables if aws command does not exist
     $K create secret generic aws-credentials \
         --from-literal=aws_access_key_id=${AWS_ACCESS_KEY_ID} \
         --from-literal=aws_secret_access_key=${AWS_SECRET_ACCESS_KEY}
