@@ -69,6 +69,14 @@ deployment. If you want to make modifications to the edge endpoint code and push
 image to ECR see [Pushing/Pulling Images from ECR](#pushingpulling-images-from-elastic-container-registry-ecr).
 
 
+## Troubleshooting Deployments
+If your edge-endpoint pod comes online, but not of your inference pods come online, you may be experiencing DNS issues inside the containers.
+```bash
+username@hostname:~/edge-endpoint$ kubectl get pods -n <MY-NAMESPACE>
+NAME                                                              READY   STATUS             RESTARTS        AGE
+edge-endpoint-78cddd689d-vls5m                                    2/2     Running            0               11m
+```
+
 ## Pushing/Pulling Images from Elastic Container Registry (ECR)
 
 We currently have a hard-coded docker image in our k3s deployment, which is not ideal.
