@@ -70,6 +70,7 @@ image to ECR see [Pushing/Pulling Images from ECR](#pushingpulling-images-from-e
 
 
 ## Troubleshooting Deployments
+### DNS Issues Inside Containers
 If your edge-endpoint pod comes online, but none of your inference pods come online, you may be experiencing DNS issues inside the containers.
 ```bash
 username@hostname:~/edge-endpoint$ kubectl get pods -n <YOUR-NAMESPACE>
@@ -87,14 +88,14 @@ Err:1 https://deb.debian.org/debian bullseye InRelease
 ...
 ```
 Notice how debian.org is resolving to a local IP address here. If this is the case, you can fix the issue by configuring the network to use Google’s DNS servers, bypassing the local router’s DNS.
-### Step 1: Confirm Your Network Interface
+#### Step 1: Confirm Your Network Interface
 
 First, confirm the name of your network interface (often wlo1 for Wi-Fi or eth0 for Ethernet) by running:
 
 ```bash
 nmcli device status
 ```
-### Step 2: Update DNS Settings with nmcli
+#### Step 2: Update DNS Settings with nmcli
 
 Use nmcli to set the DNS servers to Google’s DNS (8.8.8.8 and 8.8.4.4) and ignore the DNS settings provided by DHCP:
 
@@ -104,14 +105,14 @@ sudo nmcli connection modify <YOUR-CONNECTION-NAME> ipv4.ignore-auto-dns yes
 ```
 
 Replace <YOUR-CONNECTION-NAME> with the name of your active connection, such as your Wi-Fi network name.
-### Step 3: Restart the Interface
+#### Step 3: Restart the Interface
 
 Restart the connection to apply the changes:
 
 ```bash
 sudo nmcli connection down <YOUR-CONNECTION-NAME> && sudo nmcli connection up <YOUR-CONNECTION-NAME>
 ```
-### Step 4: Confirm the Update Worked
+#### Step 4: Confirm the Update Worked
 
 Verify that the DNS settings have been applied correctly by running:
 
@@ -121,7 +122,7 @@ nmcli connection show "<YOUR-CONNECTION-NAME>" | grep ipv4.dns
 
 This should show the configured DNS servers, `8.8.8.8` and `8.8.4.4`.
 
-### Step 5: Uninstall and Reinstall k3s.
+#### Step 5: Uninstall and Reinstall k3s.
 Uninstall by running `sudo /usr/local/bin/k3s-uninstall.sh`.
 
 Reinstall by following the instructions earlier in this readme.
