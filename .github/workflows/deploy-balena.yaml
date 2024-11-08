@@ -1,0 +1,48 @@
+name: Setup and Deploy to Balena Fleet
+
+on:
+  workflow_call:
+    inputs:
+      environmentName:
+        required: true
+        type: string
+    secrets:
+      BALENA_AUTH_TOKEN:
+        required: true
+      FLEET_NAME: 
+        required: true
+      
+
+jobs:
+  setup-and-deploy:
+    runs-on: ubuntu-22.04
+    environment: ${{ inputs.environmentName }}
+    outputs:
+      cli-path: ${{ steps.setup_cli.outputs.cli-path }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install Balena CLI
+        id: setup_cli
+        run: |
+          set -ex 
+          sudo apt-get update && sudo apt-get -y install curl unzip
+          curl -L -o balena-cli.zip "https://github.com/balena-io/balena-cli/releases/download/v18.0.0/balena-cli-v18.0.0-linux-x64-standalone.zip"
+          unzip balena-cli.zip -d $HOME/balena-cli
+          BALENA_CLI_PATH=$(find $HOME/balena-cli -name 'balena' -type f -executable | head -n 1)
+          if [[ ! -z "$BALENA_CLI_PATH" ]]; then
+            chmod +x "$BALENA_CLI_PATH"
+            echo "$(dirname $BALENA_CLI_PATH)" >> $GITHUB_PATH
+            echo "::set-output name=cli-path::$(dirname $BALENA_CLI_PATH)"
+          else
+            echo "Balena CLI executable not found"
+            exit 1
+          fi
+        shell: bash
+
+      - name: Check Balena CLI version
+        run: balena --version
+      - name: Login and Push to Fleet 
+        run: |
+          balena login --token ${{ secrets.BALENA_AUTH_TOKEN }}
+          balena push ${{ secrets.FLEET_NAME }}
