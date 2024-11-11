@@ -24,12 +24,12 @@ app.include_router(router=health_router)
 scheduler = AsyncIOScheduler()
 
 
-def update_inference_config(app_state: AppState) -> None:
-    """Update the App's edge-inference config by querying the database for new detectors."""
+def update_detector_config(app_state: AppState) -> None:
+    """Update the App's edge-detector config by querying the database for new detectors."""
     detectors = app_state.db_manager.get_inference_deployment_records(deployment_created=True)
     if detectors:
         for detector_record in detectors:
-            app_state.edge_inference_manager.update_inference_config(
+            app_state.edge_inference_manager.update_detector_config(
                 detector_id=detector_record.detector_id,  # type: ignore
                 api_token=detector_record.api_token,  # type: ignore
             )
@@ -43,7 +43,7 @@ async def startup_event():
 
     if DEPLOY_DETECTOR_LEVEL_INFERENCE:
         # Add job to periodically update the inference config
-        scheduler.add_job(update_inference_config, "interval", seconds=30, args=[app.state.app_state])
+        scheduler.add_job(update_detector_config, "interval", seconds=30, args=[app.state.app_state])
         scheduler.start()
 
     app.state.app_state.is_ready = True

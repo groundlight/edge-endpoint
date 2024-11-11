@@ -114,7 +114,7 @@ class InferenceDeploymentManager:
                 name=deployment_name, namespace=self._target_namespace
             )
             return deployment
-        except kube_client.rest.ApiException as e:
+        except kube_client.ApiException as e:
             if e.status == status.HTTP_404_NOT_FOUND:
                 logger.debug(
                     f"Deployment {deployment_name} does not currently exist in namespace {self._target_namespace}."

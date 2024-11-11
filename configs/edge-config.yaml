@@ -1,16 +1,9 @@
-local_inference_templates:
-  default:
-    enabled: true
-    # How often to attempt to fetch a new ml model binary (in seconds)
-    refresh_rate: 60
-
-  disabled:
-    enabled: false
+refresh_rate: 20 # How often to attempt to fetch a new ML model binary (in seconds). If not set, defaults to 60.
 
 detectors:
-  # Blank id implies that no detectors have been configured to use local edge inference
-  # The "default" templates are just examples of how one might configure inference.
+  # Blank ID means that no detectors have been configured to use local edge inference.
     - detector_id: ''
+      enabled: true
       local_inference_template: "default"
       always_return_edge_prediction: false
       disable_cloud_escalation: false

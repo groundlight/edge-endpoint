@@ -2,7 +2,7 @@ import logging
 import os
 import shutil
 import time
-from typing import Dict, Optional
+from typing import Optional
 
 import requests
 import yaml
@@ -13,7 +13,7 @@ from jinja2 import Template
 from app.core.file_paths import MODEL_REPOSITORY_PATH
 from app.core.speedmon import SpeedMonitor
 
-from .configs import LocalInferenceConfig, RootEdgeConfig
+from .configs import DetectorConfig, RootEdgeConfig
 
 logger = logging.getLogger(__name__)
 
@@ -113,23 +113,22 @@ class EdgeInferenceManager:
 
     def __init__(
         self,
-        inference_configs: Dict[str, LocalInferenceConfig] | None,
         edge_config: RootEdgeConfig,
         verbose: bool = False,
     ) -> None:
         """
         Initializes the edge inference manager.
         Args:
-            inference_configs: Dictionary of detector IDs to LocalInferenceConfig objects
             edge_config: RootEdgeConfig object
             verbose: Whether to print verbose logs from the inference server client
         """
+        self.edge_config = edge_config
         self.verbose = verbose
-        self.inference_configs, self.inference_client_urls = {}, {}
+        self.inference_client_urls = {}
         self.speedmon = SpeedMonitor()
 
         # Last time we escalated to cloud for each detector
-        self.last_escalation_times = (
+        self.last_escalation_times: dict[str, None | float] = (
             {detector_id: None for detector_id in edge_config.detectors.keys()} if edge_config else {}
         )
         # Minimum time between escalations for each detector
@@ -142,25 +141,28 @@ class EdgeInferenceManager:
             else {}
         )
 
-        if inference_configs:
-            self.inference_configs = inference_configs
+        if len(edge_config.detectors.keys()) > 0:
             self.inference_client_urls = {
                 detector_id: get_edge_inference_service_name(detector_id) + ":8000"
-                for detector_id in self.inference_configs.keys()
+                for detector_id in edge_config.detectors.keys()
                 if self.detector_configured_for_local_inference(detector_id)
             }
 
-    def update_inference_config(self, detector_id: str, api_token: str) -> None:
+    def update_detector_config(self, detector_id: str, api_token: str) -> None:
         """
-        Adds a new detector to the inference config at runtime. This is useful when new
+        Adds a new detector to the detector config at runtime. This is useful when new
         detectors are added to the database and we want to create an inference deployment for them.
         Args:
             detector_id: ID of the detector on which to run local edge inference
             api_token: API token required to fetch inference models
-
         """
-        if detector_id not in self.inference_configs.keys():
-            self.inference_configs[detector_id] = LocalInferenceConfig(enabled=True, api_token=api_token)
+        if detector_id not in self.edge_config.detectors.keys():
+            detector_config = {
+                "detector_id": detector_id,
+                "enabled": True,
+                "api_token": api_token,
+            }
+            self.edge_config.detectors[detector_id] = DetectorConfig(**detector_config)
             self.inference_client_urls[detector_id] = get_edge_inference_service_name(detector_id) + ":8000"
             logger.info(f"Set up edge inference for {detector_id}")
 
@@ -172,10 +174,7 @@ class EdgeInferenceManager:
         Returns:
             True if the detector is configured to run local inference, False otherwise
         """
-        if not self.inference_configs:
-            return False
-
-        return detector_id in self.inference_configs.keys() and self.inference_configs[detector_id].enabled
+        return detector_id in self.edge_config.detectors.keys() and self.edge_config.detectors[detector_id].enabled
 
     def inference_is_available(self, detector_id: str) -> bool:
         """
@@ -235,7 +234,7 @@ class EdgeInferenceManager:
         logger.info(f"Checking if there is a new model available for {detector_id}")
 
         api_token = (
-            self.inference_configs[detector_id].api_token
+            self.edge_config.detectors[detector_id].api_token
             if self.detector_configured_for_local_inference(detector_id)
             else None
         )
@@ -278,14 +277,13 @@ class EdgeInferenceManager:
         Args:
             detector_id: ID of the detector to check
         Returns:
-            True if there hasn't been an escalation on this detector in the last `min_time_between_escalations` seconds, False otherwise.
+            True if there hasn't been an escalation on this detector in the last `min_time_between_escalations` seconds,
+            False otherwise.
         """
         min_time_between_escalations = self.min_times_between_escalations.get(detector_id, 2)
 
-        if (
-            self.last_escalation_times[detector_id] is None
-            or (time.time() - self.last_escalation_times[detector_id]) > min_time_between_escalations
-        ):
+        last_escalation_time = self.last_escalation_times[detector_id]
+        if last_escalation_time is None or (time.time() - last_escalation_time) > min_time_between_escalations:
             self.last_escalation_times[detector_id] = time.time()
             return True
 
@@ -322,7 +320,7 @@ def get_object_using_presigned_url(presigned_url: str) -> bytes:
         raise HTTPException(status_code=response.status_code, detail=f"Failed to retrieve data from {presigned_url}.")
 
 
-def save_model_to_repository(
+def save_model_to_repository(  # noqa: PLR0913
     detector_id: str,
     model_buffer: bytes,
     pipeline_config: str,
@@ -412,8 +410,8 @@ def create_file_from_template(template_values: dict, destination: str, template:
         template_content = template_file.read()
 
     # Step 2: Substitute placeholders with actual values
-    template = Template(template_content)
-    filled_content = template.render(**template_values)
+    created_template = Template(template_content)
+    filled_content = created_template.render(**template_values)
 
     # Step 3: Write the filled content to a new file
     os.makedirs(os.path.dirname(destination), exist_ok=True)

@@ -1,7 +1,7 @@
 import logging
 import os
 from functools import lru_cache
-from typing import Dict
+from typing import Any
 
 import cachetools
 import yaml
@@ -9,7 +9,7 @@ from fastapi import Request
 from groundlight import Groundlight
 from model import Detector
 
-from .configs import LocalInferenceConfig, RootEdgeConfig
+from .configs import RootEdgeConfig
 from .database import DatabaseManager
 from .edge_inference import EdgeInferenceManager
 from .file_paths import DEFAULT_EDGE_CONFIG_PATH
@@ -46,35 +46,30 @@ def _load_config_from_yaml(yaml_config) -> RootEdgeConfig:
     Creates a `RootEdgeConfig` from the config yaml. Raises an error if there are duplicate detector ids.
     """
     config = yaml.safe_load(yaml_config)
+    detectors: list[dict[str, Any]] = config.get(
+        "detectors", []
+    )  # A list of dicts with info about detectors, if present
 
-    detectors = config.get("detectors", [])
-    detector_ids = [det["detector_id"] for det in detectors]
+    # TODO test the errors that get raised here
 
-    # Check for duplicate detector IDs
-    if len(detector_ids) != len(set(detector_ids)):
-        raise ValueError("Duplicate detector IDs found in the configuration. Each detector should only have one entry.")
+    # Build detector mapping and check for duplicates
+    detector_mapping = {}
+    for detector in detectors:
+        det_id = detector.get("detector_id", None)
+        if det_id is None:
+            raise ValueError("Invalid detector config - you must specify a detector ID.")
+        if det_id == "":
+            continue  # Skip if the detector ID is an empty string
 
-    config["detectors"] = {det["detector_id"]: det for det in detectors}
+        if det_id in detector_mapping:
+            raise ValueError(
+                f"Duplicate detector ID '{det_id}' found in the configuration. "
+                "Each detector should only have one entry."
+            )
+        detector_mapping[det_id] = detector
 
+    config["detectors"] = detector_mapping
     return RootEdgeConfig(**config)
-
-
-def get_inference_configs(
-    root_edge_config: RootEdgeConfig,
-) -> Dict[str, LocalInferenceConfig] | None:
-    edge_inference_templates: Dict[str, LocalInferenceConfig] = root_edge_config.local_inference_templates
-
-    # Filter out detectors whose ID's are empty strings
-    detectors = {det_id: detector for det_id, detector in root_edge_config.detectors.items() if det_id != ""}
-
-    inference_config = None
-    if detectors:
-        inference_config = {
-            detector_id: edge_inference_templates[detector_config.local_inference_template]
-            for detector_id, detector_config in detectors.items()
-        }
-
-    return inference_config
 
 
 @lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
@@ -108,10 +103,7 @@ def get_detector_metadata(detector_id: str, gl: Groundlight) -> Detector:
 class AppState:
     def __init__(self):
         self.edge_config = load_edge_config()
-        inference_config = get_inference_configs(root_edge_config=self.edge_config)
-        self.edge_inference_manager = EdgeInferenceManager(
-            inference_configs=inference_config, edge_config=self.edge_config
-        )
+        self.edge_inference_manager = EdgeInferenceManager(edge_config=self.edge_config)
         self.db_manager = DatabaseManager()
         self.is_ready = False
 
