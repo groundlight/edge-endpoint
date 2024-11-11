@@ -164,12 +164,14 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                     )
                     background_tasks.add_task(
                         safe_call_sdk,
-                        gl.ask_async,
+                        gl.submit_image_query,  # This has to be submit_image_query in order to specify image_query_id
                         detector=detector_id,
                         image=image_bytes,
+                        wait=0,
                         patience_time=patience_time,
                         confidence_threshold=confidence_threshold,
                         human_review=human_review,
+                        want_async=True,
                         image_query_id=image_query.id,
                     )
                 else:
