@@ -56,6 +56,6 @@ class RootEdgeConfig(BaseModel):
 
     refresh_rate: float = Field(
         default=60.0,
-        description=("The interval (in seconds) at which the inference server checks for a new model binary update."),
+        description="The interval (in seconds) at which the inference server checks for a new model binary update.",
     )
     detectors: dict[str, DetectorConfig]
