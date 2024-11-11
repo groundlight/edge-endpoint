@@ -1,4 +1,4 @@
-refresh_rate: 20 # How often to attempt to fetch a new ML model binary (in seconds). If not set, defaults to 60.
+refresh_rate: 60 # How often to attempt to fetch a new ML model binary (in seconds). If not set, defaults to 60.
 
 detectors:
   # Blank ID means that no detectors have been configured to use local edge inference.
