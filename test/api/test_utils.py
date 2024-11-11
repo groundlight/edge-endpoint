@@ -11,13 +11,13 @@ from model import (
 from app.core.utils import create_iq, prefixed_ksuid
 
 
-class TestCreateIQE:
+class TestCreateIQ:
     def setup_method(self):
         self.confidence_threshold = 0.75
 
-    def test_create_binary_iqe(self):
-        """Test creating a basic binary IQE."""
-        iqe = create_iq(
+    def test_create_binary_iq(self):
+        """Test creating a basic binary IQ."""
+        iq = create_iq(
             detector_id=prefixed_ksuid("det_"),
             mode=ModeEnum.BINARY,
             mode_configuration=None,
@@ -27,15 +27,16 @@ class TestCreateIQE:
             query="Test query",
         )
 
-        assert iqe.result_type == ResultTypeEnum.binary_classification
-        assert isinstance(iqe.result, BinaryClassificationResult)
-        assert iqe.result.source == Source.ALGORITHM
-        assert iqe.result.label == Label.YES
+        assert "iq_" in iq.id
+        assert iq.result_type == ResultTypeEnum.binary_classification
+        assert isinstance(iq.result, BinaryClassificationResult)
+        assert iq.result.source == Source.ALGORITHM
+        assert iq.result.label == Label.YES
 
-    def test_create_count_iqe(self):
-        """Test creating a basic count IQE."""
+    def test_create_count_iq(self):
+        """Test creating a basic count IQ."""
         count_value = 2
-        iqe = create_iq(
+        iq = create_iq(
             detector_id=prefixed_ksuid("det_"),
             mode=ModeEnum.COUNT,
             mode_configuration={"max_count": 5},
@@ -45,17 +46,18 @@ class TestCreateIQE:
             query="Test query",
         )
 
-        assert iqe.result_type == ResultTypeEnum.counting
-        assert isinstance(iqe.result, CountingResult)
-        assert iqe.result.source == Source.ALGORITHM
-        assert iqe.result.count == count_value
-        assert not iqe.result.greater_than_max
+        assert "iq_" in iq.id
+        assert iq.result_type == ResultTypeEnum.counting
+        assert isinstance(iq.result, CountingResult)
+        assert iq.result.source == Source.ALGORITHM
+        assert iq.result.count == count_value
+        assert not iq.result.greater_than_max
 
-    def test_create_count_iqe_greater_than_max(self):
-        """Test creating a count IQE with count greater than the max count."""
+    def test_create_count_iq_greater_than_max(self):
+        """Test creating a count IQ with count greater than the max count."""
         count_value = 6
         max_count_value = 5
-        iqe = create_iq(
+        iq = create_iq(
             detector_id=prefixed_ksuid("det_"),
             mode=ModeEnum.COUNT,
             mode_configuration={"max_count": max_count_value},
@@ -65,14 +67,14 @@ class TestCreateIQE:
             query="Test query",
         )
 
-        assert iqe.result_type == ResultTypeEnum.counting
-        assert isinstance(iqe.result, CountingResult)
-        assert iqe.result.source == Source.ALGORITHM
-        assert iqe.result.greater_than_max
-        assert iqe.result.count == max_count_value
+        assert iq.result_type == ResultTypeEnum.counting
+        assert isinstance(iq.result, CountingResult)
+        assert iq.result.source == Source.ALGORITHM
+        assert iq.result.greater_than_max
+        assert iq.result.count == max_count_value
 
-    def test_create_multiclass_iqe(self):
-        """Test creating a basic multiclass IQE."""
+    def test_create_multiclass_iq(self):
+        """Test creating a basic multiclass IQ."""
         # TODO this test should test the real functionality once multiclass is supported
         with pytest.raises(
             NotImplementedError, match="Multiclass functionality is not yet implemented for the edge endpoint."
@@ -87,8 +89,8 @@ class TestCreateIQE:
                 query="Test query",
             )
 
-    def test_create_count_iqe_without_configuration(self):
-        """Test creating a count IQE with no mode_configuration."""
+    def test_create_count_iq_without_configuration(self):
+        """Test creating a count IQ with no mode_configuration."""
         with pytest.raises(ValueError, match="mode_configuration for Counting detector shouldn't be None."):
             create_iq(
                 detector_id=prefixed_ksuid("det_"),
