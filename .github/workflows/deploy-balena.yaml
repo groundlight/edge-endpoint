@@ -42,4 +42,4 @@ jobs:
       - name: Login and Push to Fleet 
         run: |
           balena login --token ${{ secrets.BALENA_AUTH_TOKEN }}
-          balena push edge-endpoint-${{ inputs.FLEET_NAME }}
+          balena push edge-${{ inputs.FLEET_NAME }}
