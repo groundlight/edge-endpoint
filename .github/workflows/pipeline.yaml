@@ -251,9 +251,7 @@ jobs:
           kubectl describe pod edge-endpoint
   
   deploy-edge-preflight-balena:
-    needs: 
-      - test-general-edge-endpoint
-      - test-in-k3s
+    if: github.event_name == 'pull_request'
     uses: ./.github/workflows/deploy-balena.yaml
     with:
       FLEET_NAME: preflight
