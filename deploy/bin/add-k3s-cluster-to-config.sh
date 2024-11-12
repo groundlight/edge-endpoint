@@ -11,6 +11,14 @@ K=${KUBECTL_CMD:-kubectl}
 
 k3scfg="/etc/rancher/k3s/k3s.yaml"
 
+kubectl_is_k3s=$($K version --client | egrep "^Client Version.*+k3s")
+
+if [ -n "$kubectl_is_k3s" ]; then
+    echo "Using the kubectl supplied by k3s. Shared kubeconfig file is at ${k3scfg}"
+    echo "If you want to use a different kubeconfig, set the KUBECONFIG environment variable"
+    exit 0
+fi
+
 if [ -f $k3scfg ]; then
     # Get the cluster and user information from the k3s config file
     server=$($K config view --kubeconfig="${k3scfg}" --minify --flatten --output 'jsonpath={.clusters[?(@.name=="default")].cluster.server}')
