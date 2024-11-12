@@ -3,20 +3,17 @@ name: Setup and Deploy to Balena Fleet
 on:
   workflow_call:
     inputs:
-      environmentName:
+      FLEET_NAME:
         required: true
         type: string
     secrets:
       BALENA_AUTH_TOKEN:
         required: true
-      FLEET_NAME: 
-        required: true
-      
 
 jobs:
   setup-and-deploy:
     runs-on: ubuntu-22.04
-    environment: ${{ inputs.environmentName }}
+    environment: ${{ inputs.FLEET_NAME }}
     outputs:
       cli-path: ${{ steps.setup_cli.outputs.cli-path }}
     steps:
@@ -45,4 +42,4 @@ jobs:
       - name: Login and Push to Fleet 
         run: |
           balena login --token ${{ secrets.BALENA_AUTH_TOKEN }}
-          balena push ${{ secrets.FLEET_NAME }}
+          balena push edge-endpoint-${{ inputs.FLEET_NAME }}

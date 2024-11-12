@@ -256,7 +256,7 @@ jobs:
       - test-in-k3s
     uses: ./.github/workflows/deploy-balena.yaml
     with:
-      environmentName: preflight
+      FLEET_NAME: preflight
     secrets:
       BALENA_AUTH_TOKEN: ${{ secrets.BALENA_AUTH_TOKEN }}
       FLEET_NAME: ${{ secrets.FLEET_NAME }}
@@ -268,7 +268,6 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: ./.github/workflows/deploy-balena.yaml
     with:
-      environmentName: live
+      FLEET_NAME: live
     secrets:
       BALENA_AUTH_TOKEN: ${{ secrets.BALENA_AUTH_TOKEN }}
-      FLEET_NAME: ${{ secrets.FLEET_NAME }}
