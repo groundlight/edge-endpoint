@@ -251,7 +251,10 @@ jobs:
           kubectl describe pod edge-endpoint
   
   deploy-edge-preflight-balena:
-    if: github.event_name == 'push'
+    needs: 
+      - test-general-edge-endpoint
+      - test-in-k3s
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: ./.github/workflows/deploy-balena.yaml
     with:
       FLEET_NAME: preflight
@@ -262,7 +265,6 @@ jobs:
   deploy-edge-live-balena:
     needs: 
       - deploy-edge-preflight-balena
-    if: github.event_name == 'push'
     uses: ./.github/workflows/deploy-balena.yaml
     with:
       FLEET_NAME: live
