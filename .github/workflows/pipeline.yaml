@@ -251,7 +251,7 @@ jobs:
           kubectl describe pod edge-endpoint
   
   deploy-edge-preflight-balena:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'push'
     uses: ./.github/workflows/deploy-balena.yaml
     with:
       FLEET_NAME: preflight
