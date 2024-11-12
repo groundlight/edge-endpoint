@@ -257,7 +257,6 @@ jobs:
       FLEET_NAME: preflight
     secrets:
       BALENA_AUTH_TOKEN: ${{ secrets.BALENA_AUTH_TOKEN }}
-      FLEET_NAME: ${{ secrets.FLEET_NAME }}
 
 
   deploy-edge-live-balena:
