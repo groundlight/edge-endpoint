@@ -243,22 +243,57 @@ class EdgeInferenceManager:
         # fallback to env var if we dont have a token in the config
         api_token = api_token or os.environ.get("GROUNDLIGHT_API_TOKEN", None)
 
+        # TODO consider renaming model_urls to something more informative/accurate
         model_urls = fetch_model_urls(detector_id, api_token=api_token)
-        cloud_binary_ksuid = model_urls.get("model_binary_id", None)
-        if cloud_binary_ksuid is None:
-            logger.warning(f"No model binary ksuid returned for {detector_id}")
-
+        """
+        The response here will have different contents depending on if there's an ML binary associated with the edge pipeline
+        for the detector. If there is, the response will look like:
+        {
+            model_binary_id: ____,
+            model_binary_url: ____,
+            pipeline_config: ____,
+            predictor_metadata: ____,
+        }.
+        If there is no ML binary associated with the pipeline, the inference server will attempt to instantiate a pipeline
+        from just the config, which will succeed only if the config supports zero-shot. In that case, the response will
+        look like:
+        {
+            pipeline_config: ____,
+            predictor_metadata: ____,
+        }.
+        """
         model_dir = os.path.join(self.MODEL_REPOSITORY, detector_id)
+
+        # TODO put this into a pydantic object to simplify validation?
+
+        cloud_binary_ksuid = model_urls.get("model_binary_id", None)
+        model_binary_url = model_urls.get("model_binary_url", None)
+        if (cloud_binary_ksuid is None) != (model_binary_url is None):
+            # If one of model_binary_id or model_binary_url is specified, both must be present.
+            raise ValueError(
+                "Received invalid response from the model urls endpoint: "
+                f"cloud_binary_ksuid is {cloud_binary_ksuid} but model_binary_url is {model_binary_url}"
+            )
+
         edge_binary_ksuid = get_current_model_ksuid(model_dir)
         if edge_binary_ksuid and cloud_binary_ksuid is not None and cloud_binary_ksuid <= edge_binary_ksuid:
             logger.info(f"No new model available for {detector_id}")
             return False
 
-        logger.info(f"New model binary available ({cloud_binary_ksuid}), attemping to update model for {detector_id}")
+        if model_binary_url is None:
+            logger.info(f"Got a pipeline config but no model binary, attempting to update model for {detector_id}")
+            model_buffer = None
+            logger.warning(
+                f"No model binary ksuid returned for {detector_id}. The inference server will attempt to instantiate a pipeline from the pipeline_config."
+            )
+        else:
+            logger.info(
+                f"New model binary available ({cloud_binary_ksuid}), attemping to update model for {detector_id}"
+            )
+            model_buffer = get_object_using_presigned_url(model_binary_url)
 
         pipeline_config = model_urls["pipeline_config"]
         predictor_metadata = model_urls["predictor_metadata"]
-        model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
         save_model_to_repository(
             detector_id,
             model_buffer,
@@ -298,9 +333,10 @@ def fetch_model_urls(detector_id: str, api_token: Optional[str] = None) -> dict[
 
     logger.debug(f"Fetching model URLs for {detector_id}")
 
-    url = f"https://api.groundlight.ai/edge-api/v1/fetch-model-urls/{detector_id}/"
-    headers = {"x-api-token": api_token}
-    response = requests.get(url, headers=headers, timeout=10)
+    url = f"https://api.dev.groundlight.ai/edge-api/v1/fetch-model-urls/{detector_id}/"
+    # headers = {"x-api-token": api_token}
+    headers = {"x-api-token": "api_2oD4GUHsmDbctH482TFmN3Gvy86_qGTpuaN3zHeoSd3LxNBQouByeqRBtUUFrb"}
+    response = requests.get(url, headers=headers, timeout=15)
     logger.debug(f"fetch-model-urls response = {response}")
 
     if response.status_code == status.HTTP_200_OK:
@@ -324,7 +360,7 @@ def get_object_using_presigned_url(presigned_url: str) -> bytes:
 
 def save_model_to_repository(
     detector_id: str,
-    model_buffer: bytes,
+    model_buffer: Optional[bytes],
     pipeline_config: str,
     predictor_metadata: str,
     binary_ksuid: Optional[str],
@@ -349,17 +385,23 @@ def save_model_to_repository(
     model_version_dir = os.path.join(model_dir, str(new_model_version))
     os.makedirs(model_version_dir, exist_ok=True)
 
-    with open(os.path.join(model_version_dir, "model.buf"), "wb") as f:
-        f.write(model_buffer)
+    if model_buffer:
+        with open(os.path.join(model_version_dir, "model.buf"), "wb") as f:
+            f.write(model_buffer)
     with open(os.path.join(model_version_dir, "pipeline_config.yaml"), "w") as f:
         yaml.dump(yaml.safe_load(pipeline_config), f)
+    logger.info(f"{predictor_metadata=}")
     with open(os.path.join(model_version_dir, "predictor_metadata.json"), "w") as f:
         f.write(predictor_metadata)
     if binary_ksuid:
         with open(os.path.join(model_version_dir, "model_id.txt"), "w") as f:
             f.write(binary_ksuid)
 
-    logger.info(f"Wrote new model version {new_model_version} for {detector_id} with {binary_ksuid=}")
+    logger.info(
+        f"Wrote new model version {new_model_version} for {detector_id}"
+        f"{f' with {binary_ksuid=}' if binary_ksuid is not None else ''}"
+    )
+
     return old_model_version, new_model_version
 
 
