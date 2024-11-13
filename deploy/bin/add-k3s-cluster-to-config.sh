@@ -11,7 +11,7 @@ K=${KUBECTL_CMD:-kubectl}
 
 k3scfg="/etc/rancher/k3s/k3s.yaml"
 
-kubectl_is_k3s=$($K version --client --short | egrep "^Client Version.*+k3s" || true)
+kubectl_is_k3s=$($K version --client | egrep "^Client Version.*+k3s" || true)
 
 if [ -n "$kubectl_is_k3s" ]; then
     echo "Using the kubectl supplied by k3s. Shared kubeconfig file is at ${k3scfg}"
