@@ -302,13 +302,13 @@ def fetch_model_info(detector_id: str, api_token: Optional[str] = None) -> Model
 
     url = f"https://api.dev.groundlight.ai/edge-api/v1/fetch-model-urls/{detector_id}/"
     # headers = {"x-api-token": api_token}
+    # TODO remove this
     headers = {"x-api-token": "api_2oD4GUHsmDbctH482TFmN3Gvy86_qGTpuaN3zHeoSd3LxNBQouByeqRBtUUFrb"}
-    response = requests.get(url, headers=headers, timeout=15)
+    response = requests.get(url, headers=headers, timeout=10)
     logger.debug(f"fetch-model-urls response = {response}")
 
     if response.status_code == status.HTTP_200_OK:
-        response_json = response.json()
-        return parse_model_info(response_json)
+        return parse_model_info(response.json())
     else:
         response_json = response.json()
         exception_string = f"Failed to fetch model info for {detector_id=}."
