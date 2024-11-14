@@ -26,11 +26,12 @@ services:
       K3S_KUBECONFIG_MODE: "644"
       EXTRA_K3S_SERVER_ARGS: "--disable traefik"
     tmpfs:
-      - /run
-      - /var/run
+      - /run:rshared,exec
+      - /var/run:rshared,exec
     volumes:
       - k3s-server:/var/lib/rancher/k3s
       - shared:/shared
+      # - /lib/modules:/lib/modules:ro
     depends_on:
      - gpu
 

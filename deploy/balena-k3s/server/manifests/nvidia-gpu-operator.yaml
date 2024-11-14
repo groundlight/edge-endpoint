@@ -16,3 +16,34 @@ spec:
   targetNamespace: gpu-operator
   wait: true
   bootstrap: true  # Add this to ensure it's processed during bootstrap
+  # https://github.com/NVIDIA/gpu-operator/blob/main/deployments/gpu-operator/values.yaml
+  valuesContent: |-
+    driver:
+      enabled: false  # Disable NVIDIA driver installation since we have it pre-installed
+    toolkit:
+      enabled: false  # Disable NVIDIA Container Toolkit installation since we have it pre-installed
+    dcgm:
+      enabled: false  # Disable DCGM since we don't care
+    dcgmExporter:
+      enabled: false  # Disable DCGM exporter since we don't care
+    validator:  # Workaround for symlink creation error, see note below
+      driver:
+        env:
+        - name: DISABLE_DEV_CHAR_SYMLINK_CREATION
+          value: "true"
+  # NOTE: the above is a workaround for the following symlink creation error:
+  # Error: error validating driver installation: error creating symlink creator:
+  # failed to load NVIDIA kernel modules: failed to load module nvidia: exit status 1
+  # output=modprobe: FATAL: Module nvidia not found in directory /lib/modules/6.6.23
+  #
+  # Failed to create symlinks under /dev/char that point to all possible NVIDIA character devices.
+  # The existence of these symlinks is required to address the following bug:
+  #     https://github.com/NVIDIA/gpu-operator/issues/430
+  #
+  # This bug impacts container runtimes configured with systemda cgroup management enabled.
+  # To disable the symlink creation, set the following envvar in ClusterPolicy:
+  #     validator:
+  #       driver:
+  #         env:
+  #         - name: DISABLE_DEV_CHAR_SYMLINK_CREATION
+  #           value: "true"
