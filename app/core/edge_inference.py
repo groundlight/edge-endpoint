@@ -246,25 +246,12 @@ class EdgeInferenceManager:
         # TODO consider renaming model_urls to something more informative/accurate
         model_urls = fetch_model_urls(detector_id, api_token=api_token)
         """
-        The response here will have different contents depending on if there's an ML binary associated with the edge pipeline
-        for the detector. If there is, the response will look like:
-        {
-            model_binary_id: ____,
-            model_binary_url: ____,
-            pipeline_config: ____,
-            predictor_metadata: ____,
-        }.
-        If there is no ML binary associated with the pipeline, the inference server will attempt to instantiate a pipeline
-        from just the config, which will succeed only if the config supports zero-shot. In that case, the response will
-        look like:
-        {
-            pipeline_config: ____,
-            predictor_metadata: ____,
-        }.
+        The response here will have different contents depending on if there's an ML binary associated with the edge 
+        pipeline for the detector. If there is no ML binary, the response will have keys [pipeline_config, 
+        predictor_metadata]. If there is a ML binary, there will additionally be keys [model_binary_id, 
+        model_binary_url].
         """
         model_dir = os.path.join(self.MODEL_REPOSITORY, detector_id)
-
-        # TODO put this into a pydantic object to simplify validation?
 
         cloud_binary_ksuid = model_urls.get("model_binary_id", None)
         model_binary_url = model_urls.get("model_binary_url", None)
@@ -275,24 +262,26 @@ class EdgeInferenceManager:
                 f"cloud_binary_ksuid is {cloud_binary_ksuid} but model_binary_url is {model_binary_url}"
             )
 
-        edge_binary_ksuid = get_current_model_ksuid(model_dir)
-        if edge_binary_ksuid and cloud_binary_ksuid is not None and cloud_binary_ksuid <= edge_binary_ksuid:
+        pipeline_config = model_urls.get("pipeline_config", None)
+        if pipeline_config is None:
+            raise ValueError("Received invalid response from the model urls endpoint: pipeline_config cannot be None.")
+
+        v = get_current_model_version(model_dir)
+        if v is None:
+            logger.info(f"No current model version found in {model_dir}")
+        elif not should_update(cloud_binary_ksuid, pipeline_config, model_dir, v):
             logger.info(f"No new model available for {detector_id}")
             return False
 
         if model_binary_url is None:
             logger.info(f"Got a pipeline config but no model binary, attempting to update model for {detector_id}")
             model_buffer = None
-            logger.warning(
-                f"No model binary ksuid returned for {detector_id}. The inference server will attempt to instantiate a pipeline from the pipeline_config."
-            )
         else:
             logger.info(
                 f"New model binary available ({cloud_binary_ksuid}), attemping to update model for {detector_id}"
             )
             model_buffer = get_object_using_presigned_url(model_binary_url)
 
-        pipeline_config = model_urls["pipeline_config"]
         predictor_metadata = model_urls["predictor_metadata"]
         save_model_to_repository(
             detector_id,
@@ -390,7 +379,6 @@ def save_model_to_repository(
             f.write(model_buffer)
     with open(os.path.join(model_version_dir, "pipeline_config.yaml"), "w") as f:
         yaml.dump(yaml.safe_load(pipeline_config), f)
-    logger.info(f"{predictor_metadata=}")
     with open(os.path.join(model_version_dir, "predictor_metadata.json"), "w") as f:
         f.write(predictor_metadata)
     if binary_ksuid:
@@ -403,6 +391,23 @@ def save_model_to_repository(
     )
 
     return old_model_version, new_model_version
+
+
+def should_update(cloud_binary_ksuid: str | None, pipeline_config: str, model_dir: str, version: int) -> bool:
+    """Determines if the model needs to be updated based on the received cloud binary KSUID and pipeline_config."""
+    edge_binary_ksuid = get_current_model_ksuid(model_dir, version)
+    if edge_binary_ksuid and cloud_binary_ksuid is not None and cloud_binary_ksuid == edge_binary_ksuid:
+        # The edge binary is the same as the cloud binary, so we don't need to update the model.
+        return False
+
+    if not edge_binary_ksuid:
+        current_pipeline_config = get_current_pipeline_config(model_dir, version)
+        if current_pipeline_config and current_pipeline_config == yaml.safe_load(pipeline_config):
+            # There is no saved binary and the current pipeline_config is the same as the received
+            # pipeline_config, so we don't need to update the model.
+            return False
+
+    return True
 
 
 def get_current_model_version(model_dir: str) -> Optional[int]:
@@ -424,20 +429,27 @@ def get_all_model_versions(model_dir: str) -> list:
     return model_versions
 
 
-def get_current_model_ksuid(model_dir: str) -> Optional[str]:
+def get_current_model_ksuid(model_dir: str, model_version: int) -> Optional[str]:
     """Read the model_id.txt file in the current model version directory,
-    which contains the KSUID of the model binary.
+    which contains the KSUID of the model binary (if available).
     """
-    v = get_current_model_version(model_dir)
-    if v is None:
-        logger.info(f"No current model version found in {model_dir}")
-        return None
-    id_file = os.path.join(model_dir, str(v), "model_id.txt")
+    id_file = os.path.join(model_dir, str(model_version), "model_id.txt")
     if os.path.exists(id_file):
         with open(id_file, "r") as f:
             return f.read()
     else:
-        logger.warning(f"No existing model_id.txt file found in {os.path.join(model_dir, str(v))}")
+        logger.debug(f"No existing model_id.txt file found in {os.path.join(model_dir, str(model_version))}")
+        return None
+
+
+def get_current_pipeline_config(model_dir: str, model_version: int) -> dict | None:
+    """Read the pipeline_config.yaml file in the current model version directory."""
+    config_file = os.path.join(model_dir, str(model_version), "pipeline_config.yaml")
+    if os.path.exists(config_file):
+        with open(config_file, "r") as f:
+            return yaml.safe_load(f)
+    else:
+        logger.warning(f"No existing pipeline_config.yaml file found in {os.path.join(model_dir, str(model_version))}")
         return None
 
 
