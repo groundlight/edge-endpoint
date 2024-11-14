@@ -12,6 +12,7 @@ from jinja2 import Template
 
 from app.core.file_paths import MODEL_REPOSITORY_PATH
 from app.core.speedmon import SpeedMonitor
+from app.core.utils import ModelInfoBase, ModelInfoWithBinary, parse_model_info
 
 from .configs import LocalInferenceConfig, RootEdgeConfig
 
@@ -129,9 +130,10 @@ class EdgeInferenceManager:
         self.speedmon = SpeedMonitor()
 
         # Last time we escalated to cloud for each detector
-        self.last_escalation_times = (
+        self.last_escalation_times: dict[str, float | None] = (
             {detector_id: None for detector_id in edge_config.detectors.keys()} if edge_config else {}
         )
+
         # Minimum time between escalations for each detector
         self.min_times_between_escalations = (
             {
@@ -243,52 +245,29 @@ class EdgeInferenceManager:
         # fallback to env var if we dont have a token in the config
         api_token = api_token or os.environ.get("GROUNDLIGHT_API_TOKEN", None)
 
-        # TODO consider renaming model_urls to something more informative/accurate
-        model_urls = fetch_model_urls(detector_id, api_token=api_token)
-        """
-        The response here will have different contents depending on if there's an ML binary associated with the edge 
-        pipeline for the detector. If there is no ML binary, the response will have keys [pipeline_config, 
-        predictor_metadata]. If there is a ML binary, there will additionally be keys [model_binary_id, 
-        model_binary_url].
-        """
         model_dir = os.path.join(self.MODEL_REPOSITORY, detector_id)
-
-        cloud_binary_ksuid = model_urls.get("model_binary_id", None)
-        model_binary_url = model_urls.get("model_binary_url", None)
-        if (cloud_binary_ksuid is None) != (model_binary_url is None):
-            # If one of model_binary_id or model_binary_url is specified, both must be present.
-            raise ValueError(
-                "Received invalid response from the model urls endpoint: "
-                f"cloud_binary_ksuid is {cloud_binary_ksuid} but model_binary_url is {model_binary_url}"
-            )
-
-        pipeline_config = model_urls.get("pipeline_config", None)
-        if pipeline_config is None:
-            raise ValueError("Received invalid response from the model urls endpoint: pipeline_config cannot be None.")
+        model_info = fetch_model_info(detector_id, api_token=api_token)
 
         v = get_current_model_version(model_dir)
         if v is None:
             logger.info(f"No current model version found in {model_dir}")
-        elif not should_update(cloud_binary_ksuid, pipeline_config, model_dir, v):
+        elif not should_update(model_info, model_dir, v):
             logger.info(f"No new model available for {detector_id}")
             return False
 
-        if model_binary_url is None:
+        if isinstance(model_info, ModelInfoWithBinary):
+            logger.info(
+                f"New model binary available ({model_info.model_binary_id}), attemping to update model "
+                f"for {detector_id}"
+            )
+            model_buffer = get_object_using_presigned_url(model_info.model_binary_url)
+        else:
             logger.info(f"Got a pipeline config but no model binary, attempting to update model for {detector_id}")
             model_buffer = None
-        else:
-            logger.info(
-                f"New model binary available ({cloud_binary_ksuid}), attemping to update model for {detector_id}"
-            )
-            model_buffer = get_object_using_presigned_url(model_binary_url)
-
-        predictor_metadata = model_urls["predictor_metadata"]
         save_model_to_repository(
             detector_id,
             model_buffer,
-            pipeline_config,
-            predictor_metadata,
-            binary_ksuid=cloud_binary_ksuid,
+            model_info,
             repository_root=self.MODEL_REPOSITORY,
         )
         return True
@@ -302,25 +281,24 @@ class EdgeInferenceManager:
         Args:
             detector_id: ID of the detector to check
         Returns:
-            True if there hasn't been an escalation on this detector in the last `min_time_between_escalations` seconds, False otherwise.
+            True if there hasn't been an escalation on this detector in the last `min_time_between_escalations` seconds,
+              False otherwise.
         """
         min_time_between_escalations = self.min_times_between_escalations.get(detector_id, 2)
+        last_escalation_time = self.last_escalation_times[detector_id]
 
-        if (
-            self.last_escalation_times[detector_id] is None
-            or (time.time() - self.last_escalation_times[detector_id]) > min_time_between_escalations
-        ):
+        if last_escalation_time is None or (time.time() - last_escalation_time) > min_time_between_escalations:
             self.last_escalation_times[detector_id] = time.time()
             return True
 
         return False
 
 
-def fetch_model_urls(detector_id: str, api_token: Optional[str] = None) -> dict[str, str]:
+def fetch_model_info(detector_id: str, api_token: Optional[str] = None) -> ModelInfoBase:
     if not api_token:
         raise ValueError(f"No API token provided for {detector_id=}")
 
-    logger.debug(f"Fetching model URLs for {detector_id}")
+    logger.debug(f"Fetching model info for {detector_id}")
 
     url = f"https://api.dev.groundlight.ai/edge-api/v1/fetch-model-urls/{detector_id}/"
     # headers = {"x-api-token": api_token}
@@ -329,10 +307,11 @@ def fetch_model_urls(detector_id: str, api_token: Optional[str] = None) -> dict[
     logger.debug(f"fetch-model-urls response = {response}")
 
     if response.status_code == status.HTTP_200_OK:
-        return response.json()
+        response_json = response.json()
+        return parse_model_info(response_json)
     else:
         response_json = response.json()
-        exception_string = f"Failed to fetch model URLs for {detector_id=}."
+        exception_string = f"Failed to fetch model info for {detector_id=}."
         if "detail" in response_json:  # Include additional detail on the error if available
             exception_string = exception_string + f" Received error: {response_json['detail']}"
 
@@ -350,9 +329,7 @@ def get_object_using_presigned_url(presigned_url: str) -> bytes:
 def save_model_to_repository(
     detector_id: str,
     model_buffer: Optional[bytes],
-    pipeline_config: str,
-    predictor_metadata: str,
-    binary_ksuid: Optional[str],
+    model_info: ModelInfoBase,
     repository_root: str,
 ) -> tuple[Optional[int], int]:
     """
@@ -378,31 +355,31 @@ def save_model_to_repository(
         with open(os.path.join(model_version_dir, "model.buf"), "wb") as f:
             f.write(model_buffer)
     with open(os.path.join(model_version_dir, "pipeline_config.yaml"), "w") as f:
-        yaml.dump(yaml.safe_load(pipeline_config), f)
+        yaml.dump(yaml.safe_load(model_info.pipeline_config), f)
     with open(os.path.join(model_version_dir, "predictor_metadata.json"), "w") as f:
-        f.write(predictor_metadata)
-    if binary_ksuid:
+        f.write(model_info.predictor_metadata)
+    if isinstance(model_info, ModelInfoWithBinary):
         with open(os.path.join(model_version_dir, "model_id.txt"), "w") as f:
-            f.write(binary_ksuid)
+            f.write(model_info.model_binary_id)
 
     logger.info(
         f"Wrote new model version {new_model_version} for {detector_id}"
-        f"{f' with {binary_ksuid=}' if binary_ksuid is not None else ''}"
+        + (f" with model binary id {model_info.model_binary_id}" if isinstance(model_info, ModelInfoWithBinary) else "")
     )
 
     return old_model_version, new_model_version
 
 
-def should_update(cloud_binary_ksuid: str | None, pipeline_config: str, model_dir: str, version: int) -> bool:
-    """Determines if the model needs to be updated based on the received cloud binary KSUID and pipeline_config."""
-    edge_binary_ksuid = get_current_model_ksuid(model_dir, version)
-    if edge_binary_ksuid and cloud_binary_ksuid is not None and cloud_binary_ksuid == edge_binary_ksuid:
-        # The edge binary is the same as the cloud binary, so we don't need to update the model.
-        return False
-
-    if not edge_binary_ksuid:
+def should_update(model_info: ModelInfoBase, model_dir: str, version: int) -> bool:
+    """Determines if the model needs to be updated based on the received and current model info."""
+    if isinstance(model_info, ModelInfoWithBinary):
+        edge_binary_ksuid = get_current_model_ksuid(model_dir, version)
+        if edge_binary_ksuid and model_info.model_binary_id == edge_binary_ksuid:
+            # The edge binary is the same as the cloud binary, so we don't need to update the model.
+            return False
+    else:
         current_pipeline_config = get_current_pipeline_config(model_dir, version)
-        if current_pipeline_config and current_pipeline_config == yaml.safe_load(pipeline_config):
+        if current_pipeline_config and current_pipeline_config == yaml.safe_load(model_info.pipeline_config):
             # There is no saved binary and the current pipeline_config is the same as the received
             # pipeline_config, so we don't need to update the model.
             return False
