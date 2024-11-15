@@ -1,16 +1,14 @@
-import json
 import logging
 from logging.handlers import RotatingFileHandler
 from typing import Any, Dict, Sequence
 
-from model import ImageQuery
 from sqlalchemy import create_engine, select
 from sqlalchemy.engine.base import Engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from app.core.file_paths import DATABASE_FILEPATH, DATABASE_ORM_LOG_FILE, DATABASE_ORM_LOG_FILE_SIZE
-from app.core.models import Base, ImageQueryEdge, InferenceDeployment
+from app.core.models import Base, InferenceDeployment
 
 logger = logging.getLogger(__name__)
 
@@ -119,29 +117,6 @@ class DatabaseManager:
             query = select(InferenceDeployment).filter_by(**kwargs)
             query_results = session.execute(query)
             return query_results.scalars().all()
-
-    def create_iqe_record(self, iq: ImageQuery) -> None:
-        """
-        Creates a new record in the `image_queries_edge` table.
-        :param iq: A image query to create an iqe record for.
-        """
-        with self.session_maker() as session:
-            image_query_json = json.loads(iq.model_dump_json())
-            session.add(ImageQueryEdge(image_query_id=iq.id, image_query=image_query_json))
-            session.commit()
-
-    def get_iqe_record(self, image_query_id: str) -> ImageQuery | None:
-        """
-        Gets a record from the `image_queries_edge` table.
-        :param image_query_id: The ID of the image query.
-        """
-        with self.session_maker() as session:
-            query = select(ImageQueryEdge.image_query).filter_by(image_query_id=image_query_id)
-            result = session.execute(query)
-            result_row: dict | None = result.scalar_one_or_none()
-            if result_row is None:
-                return None
-            return ImageQuery(**result_row)
 
     def create_tables(self) -> None:
         """Create the database tables, if they don't already exist."""

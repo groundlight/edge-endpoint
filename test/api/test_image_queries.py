@@ -275,10 +275,3 @@ def test_post_image_query_with_invalid_field(test_client: TestClient, detector: 
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST, response.json()["detail"]
         assert "inspection_id" in response.json()["detail"]
-
-
-def test_get_image_query_not_found(test_client: TestClient):
-    """Test getting an *edge* image query that does not exist."""
-    response = test_client.get(url + "/iqe_123")
-    assert response.status_code == status.HTTP_404_NOT_FOUND, response.json()["detail"]
-    assert response.json() == {"detail": "Image query with ID iqe_123 not found"}

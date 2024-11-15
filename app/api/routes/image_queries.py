@@ -13,7 +13,7 @@ from app.core.app_state import (
     get_detector_metadata,
     get_groundlight_sdk_instance,
 )
-from app.core.utils import create_iqe, safe_call_sdk
+from app.core.utils import create_iq, safe_call_sdk
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,7 @@ async def validate_query_params_for_edge(request: Request):
     invalid_edge_params = {
         "inspection_id",  # inspection_id will not be supported on the edge
         "metadata",  # metadata is not supported on the edge currently, we need to set up persistent storage first
+        "image_query_id",  # specifying an image query ID will not be supported on the edge
     }
     query_params = set(request.query_params.keys())
     invalid_provided_params = query_params.intersection(invalid_edge_params)
@@ -142,7 +143,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             else:
                 logger.debug(f"Edge detector confidence sufficient. {detector_id=}")
 
-            image_query = create_iqe(
+            image_query = create_iq(
                 detector_id=detector_id,
                 mode=detector_metadata.mode,
                 mode_configuration=detector_metadata.mode_configuration,
@@ -154,7 +155,6 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 rois=results["rois"],
                 text=results["text"],
             )
-            app_state.db_manager.create_iqe_record(image_query)
 
             # Escalate after returning edge prediction if escalation is enabled and we have low confidence
             if not disable_cloud_escalation and not is_confident_enough:
@@ -165,12 +165,15 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                     )
                     background_tasks.add_task(
                         safe_call_sdk,
-                        gl.ask_async,
+                        gl.submit_image_query,  # This has to be submit_image_query in order to specify image_query_id
                         detector=detector_id,
                         image=image_bytes,
+                        wait=0,
                         patience_time=patience_time,
                         confidence_threshold=confidence_threshold,
                         human_review=human_review,
+                        want_async=True,
+                        image_query_id=image_query.id,  # Ensure the cloud IQ has the same ID as the returned edge IQ
                     )
                 else:
                     logger.debug(
@@ -210,15 +213,3 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         confidence_threshold=confidence_threshold,
         human_review=human_review,
     )
-
-
-@router.get("/{id}", response_model=ImageQuery)
-async def get_image_query(
-    id: str, gl: Groundlight = Depends(get_groundlight_sdk_instance), app_state: AppState = Depends(get_app_state)
-):
-    if id.startswith("iqe_"):
-        image_query = app_state.db_manager.get_iqe_record(image_query_id=id)
-        if not image_query:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Image query with ID {id} not found")
-        return image_query
-    return safe_call_sdk(gl.get_image_query, id=id)
