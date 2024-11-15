@@ -37,6 +37,7 @@ async def validate_query_params_for_edge(request: Request):
     invalid_edge_params = {
         "inspection_id",  # inspection_id will not be supported on the edge
         "metadata",  # metadata is not supported on the edge currently, we need to set up persistent storage first
+        "image_query_id",  # specifying an image query ID will not be supported on the edge
     }
     query_params = set(request.query_params.keys())
     invalid_provided_params = query_params.intersection(invalid_edge_params)
@@ -172,7 +173,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         confidence_threshold=confidence_threshold,
                         human_review=human_review,
                         want_async=True,
-                        image_query_id=image_query.id,
+                        image_query_id=image_query.id,  # Ensure the cloud IQ has the same ID as the returned edge IQ
                     )
                 else:
                     logger.debug(
