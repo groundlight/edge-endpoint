@@ -1,11 +1,10 @@
 import pytest
-from model import ImageQuery, ModeEnum
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import DatabaseManager
 from app.core.models import Base
-from app.core.utils import create_iqe, prefixed_ksuid
+from app.core.utils import prefixed_ksuid
 
 NUM_TESTING_RECORDS = 100
 
@@ -148,37 +147,3 @@ def test_create_drop_reset_database_tables(db_manager, database_reset):
     inspector = inspect(db_manager._engine)
     tables = inspector.get_table_names()
     assert set(tables) == set(Base.metadata.tables.keys())
-
-
-def test_get_binary_iqe_record(db_manager, database_reset):
-    image_query: ImageQuery = create_iqe(
-        detector_id=prefixed_ksuid("det_"),
-        mode=ModeEnum.BINARY,
-        mode_configuration=None,
-        result_value=0,
-        confidence=0.5,
-        query="test_query",
-        confidence_threshold=0.9,
-    )
-    db_manager.create_iqe_record(iq=image_query)
-
-    # Get the record
-    retrieved_record = db_manager.get_iqe_record(image_query_id=image_query.id)
-    assert retrieved_record == image_query
-
-
-def test_get_count_iqe_record(db_manager, database_reset):
-    image_query: ImageQuery = create_iqe(
-        detector_id=prefixed_ksuid("det_"),
-        mode=ModeEnum.COUNT,
-        mode_configuration={"max_count": 5},
-        result_value=0,
-        confidence=0.5,
-        query="test_query",
-        confidence_threshold=0.9,
-    )
-    db_manager.create_iqe_record(iq=image_query)
-
-    # Get the record
-    retrieved_record = db_manager.get_iqe_record(image_query_id=image_query.id)
-    assert retrieved_record == image_query

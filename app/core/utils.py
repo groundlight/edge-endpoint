@@ -22,7 +22,7 @@ from pydantic import BaseModel, ValidationError
 from app.core import constants
 
 
-def create_iqe(  # noqa: PLR0913
+def create_iq(  # noqa: PLR0913
     detector_id: str,
     mode: ModeEnum,
     mode_configuration: dict[str, Any] | None,
@@ -34,13 +34,28 @@ def create_iqe(  # noqa: PLR0913
     rois: list[ROI] | None = None,
     text: str | None = None,
 ) -> ImageQuery:
+    """
+    Creates an ImageQuery object for the appropriate detector with the given result.
+
+    :param mode: The mode of the detector.
+    :param mode_configuration: A dict version of the config for the mode. None for binary detectors.
+    :param result_value: The predicted value.
+    :param confidence: The confidence of the predicted value.
+    :param confidence_threshold: The confidence threshold for the query.
+    :param query: The query string.
+    :param patience_time: The acceptable time to wait for a result.
+    :param rois: The ROIs associated with the prediction, if applicable.
+    :param text: The text associated with the prediction, if applicable.
+
+    :return: The created ImageQuery.
+    """
     if patience_time is None:
         patience_time = constants.DEFAULT_PATIENCE_TIME
     result_type, result = _mode_to_result_and_type(mode, mode_configuration, confidence, result_value)
 
     return ImageQuery(
         metadata=None,
-        id=prefixed_ksuid(prefix="iqe_"),
+        id=prefixed_ksuid(prefix="iq_"),
         type=ImageQueryTypeEnum.image_query,
         created_at=datetime.now(timezone.utc),
         query=query,
@@ -62,8 +77,11 @@ def _mode_to_result_and_type(
     based on the provided mode, confidence, and result value.
 
     :param mode: The mode of the detector.
+    :param mode_configuration:
     :param confidence: The confidence of the predicted value.
     :param result_value: The predicted value.
+
+    :return: A tuple of the result type and the generated result object.
     """
     source = Source.ALGORITHM  # Results from edge model are always from algorithm
     if mode == ModeEnum.BINARY:
