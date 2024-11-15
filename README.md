@@ -70,14 +70,14 @@ detectors:
 ```
 In this example, `det_xyz` will have cloud escalation disabled because `disable_cloud_escalation` is set to `true` and `always_return_edge_prediction` is also `true`. `det_ijk` will have edge-only inference enabled because `always_return_edge_prediction` is set to `true` while `disable_cloud_escalation` is `false`. If neither `always_return_edge_prediction` nor `disable_cloud_escalation` are specified, they default to `false`, so `det_abc` will have both options disabled.
 
-With `always_return_edge_prediction` enabled for a detector, when you make requests to it, you will receive answers from the edge model regardless of the confidence level. However, if `disable_cloud_escalation` is not set to `true`, image queries with confidences below the threshold will be escalated to the cloud and used to train the model. This configuration is useful when you want fast edge answers but still want the model to improve. 
+With `always_return_edge_prediction` enabled for a detector, when you make requests to it, you will receive answers from the edge model regardless of the confidence level. However, if `disable_cloud_escalation` is not set to `true`, image queries with confidences below the threshold will be escalated to the cloud and used to train the model. This configuration is useful when you want fast edge answers but still want the model to improve. In this case, the image query ID returned from the edge endpoint will correspond to the escalated query, meaning you can keep track of the ID and attempt to fetch a more confident answer from the cloud at a later point. However, note that the image query in the cloud will NOT retain the prediction made by the edge model - it will be processed in the cloud as if it were an entirely new query.
 
 When `always_return_edge_prediction` is set to `true` and `disable_cloud_escalation` is set to `false`, the `min_time_between_escalations` field sets the minimum number of seconds that must pass between image query escalations to the cloud through background escalations. This is to prevent the edge endpoint from sending too many escalation requests in a short period of time to the cloud. The default time between escalations is 2 seconds if this config option is not set. 
 This config option is not valid if `always_return_edge_prediction` is `false` or `disable_cloud_escalation` is `true`.
 
 If `disable_cloud_escalation` is set to `true`, the edge endpoint will not send image queries to the cloud API, and you will only receive answers from the edge model. This option should be used if you don't need the model to improve and only want fast answers from the edge model. Note that no image queries submitted this way will show up in the web app or be used to train the model.
 
-If `always_return_edge_prediction=True` is set for a detector and the edge inference-server for that detector is not available, attempting to send image queries to that detector will return a 503 error response.
+If `always_return_edge_prediction` is set to `true` for a detector and the edge inference-server for that detector is not available, attempting to send image queries to that detector will return a 503 error response.
 
 This is an experimental feature and may be modified or removed in the future.
 
