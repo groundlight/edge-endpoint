@@ -1,9 +1,9 @@
 import os
 import tempfile
+from test.edge_inference.test_edge_inference_manager import validate_model_directory
 
 from app.core.edge_inference import delete_model_version, save_model_to_repository, should_update
 from app.core.utils import parse_model_info
-from test.edge_inference.test_edge_inference_manager import validate_model_directory
 
 
 def test_save_model_with_binary_to_repository():
