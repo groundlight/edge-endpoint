@@ -16,10 +16,6 @@ class LocalInferenceConfig(BaseModel):
     api_token: Optional[str] = Field(
         default=None, description="API token used to fetch the inference model for this detector."
     )
-    refresh_rate: float = Field(  # TODO: this field is not used on a per-detector basis, remove it
-        default=60,
-        description="The interval (in seconds) at which the inference server checks for a new model binary update.",
-    )
 
 
 class DetectorConfig(BaseModel):
@@ -66,6 +62,10 @@ class RootEdgeConfig(BaseModel):
     Root configuration for edge inference.
     """
 
+    refresh_rate: float = Field(
+        default=60,
+        description="The interval (in seconds) at which the inference server checks for a new model binary update.",
+    )
     local_inference_templates: Dict[str, LocalInferenceConfig]
     detectors: Dict[str, DetectorConfig]
 

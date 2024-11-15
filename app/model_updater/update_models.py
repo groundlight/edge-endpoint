@@ -23,17 +23,6 @@ def sleep_forever(message: str | None = None):
         time.sleep(TEN_MINUTES)
 
 
-def get_refresh_rate(root_edge_config: RootEdgeConfig) -> float:
-    """
-    Get the time interval (in seconds) between model update calls.
-    """
-    if not root_edge_config or not root_edge_config.local_inference_templates:
-        raise ValueError("Invalid root edge config")
-
-    default_inference_config = root_edge_config.local_inference_templates["default"]
-    return default_inference_config.refresh_rate
-
-
 def _check_new_models_and_inference_deployments(
     detector_id: str,
     edge_inference_manager: EdgeInferenceManager,
@@ -165,7 +154,7 @@ def update_models(
 
 if __name__ == "__main__":
     edge_config: RootEdgeConfig = load_edge_config()
-    refresh_rate = get_refresh_rate(root_edge_config=edge_config)
+    refresh_rate = edge_config.refresh_rate
     inference_config = get_inference_configs(root_edge_config=edge_config)
 
     edge_inference_manager = EdgeInferenceManager(
