@@ -174,13 +174,11 @@ def test_update_model_with_no_new_model_available():
 
         with mock.patch("app.core.edge_inference.fetch_model_info") as mock_fetch:
             with mock.patch("app.core.edge_inference.get_object_using_presigned_url") as mock_get_from_s3:
-                mock_fetch.return_value = parse_model_info(
-                    {
-                        "model_binary_id": test_ksuid,
-                        "predictor_metadata": test_predictor_metadata,
-                        "pipeline_config": "test_pipeline_config",
-                    }
-                )
+                mock_fetch.return_value = parse_model_info({
+                    "model_binary_id": test_ksuid,
+                    "predictor_metadata": test_predictor_metadata,
+                    "pipeline_config": "test_pipeline_config",
+                })
                 edge_manager = EdgeInferenceManager(inference_configs=None, edge_config=None)
                 edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
                 edge_manager.update_model("test_detector")
