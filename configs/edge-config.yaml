@@ -1,17 +1,27 @@
 refresh_rate: 60 # How often to attempt to fetch updated ML models (in seconds). If not set, defaults to 60.
 
-local_inference_templates:
-  default:
+edge_inference_configs:
+  default: # Return the edge model's prediction if sufficiently confident; otherwise, escalate to cloud.
     enabled: true
+    always_return_edge_prediction: false
+    disable_cloud_escalation: false
+
+  no-cloud: # Always return the edge model's prediction and never escalate to the cloud.
+    enabled: true
+    always_return_edge_prediction: true
+    disable_cloud_escalation: true
+  
+  edge-answers-with-escalation: # Always return the edge model's predictions, but still escalate to cloud if unconfident.
+    enabled: true
+    always_return_edge_prediction: true
+    disable_cloud_escalation: false
+    min_time_between_escalations: 2.0
 
   disabled:
     enabled: false
 
 detectors:
-  # Blank id implies that no detectors have been configured to use local edge inference
-  # The "default" templates are just examples of how one might configure inference.
-    - detector_id: ''
-      local_inference_template: "default"
-      always_return_edge_prediction: false
-      disable_cloud_escalation: false
-      min_time_between_escalations: 2.0
+  # To configure a detector, add an entry for it below with its detector ID and the name of the edge inference config
+  # you want to use. You can use or modify one of the existing edge inference configs listed above, or define your own.
+    - detector_id: ""
+      edge_inference_config: "default"
