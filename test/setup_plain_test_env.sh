@@ -21,7 +21,7 @@
 # The following detector IDs correspond to the "dog" and "cat" detectors.
 
 EDGE_CONFIG=$(cat <<- EOM
-local_inference_templates:
+edge_inference_configs:
   default:
     enabled: true
   disabled:
@@ -29,10 +29,10 @@ local_inference_templates:
 
 detectors:
   - detector_id: 'det_2UOxalD1gegjk4TnyLbtGggiJ8p'
-    local_inference_template: 'disabled'
+    edge_inference_config: 'disabled'
 
   - detector_id: 'det_2UOxao4HZyB9gv4ZVtwMOvdqgh9'
-    local_inference_template: 'disabled'
+    edge_inference_config: 'disabled'
 EOM
 )
 
