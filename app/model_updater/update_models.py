@@ -109,18 +109,21 @@ def update_models(
     while True:
         start = time.time()
         logger.info("Starting model update check for existing inference deployments.")
-        for detector_id in edge_inference_manager.detector_inference_configs.keys():
-            try:
-                logger.debug(f"Checking new models and inference deployments for detector_id: {detector_id}")
-                _check_new_models_and_inference_deployments(
-                    detector_id=detector_id,
-                    edge_inference_manager=edge_inference_manager,
-                    deployment_manager=deployment_manager,
-                    db_manager=db_manager,
-                )
-                logger.info(f"Successfully updated model for detector_id: {detector_id}")
-            except Exception as e:
-                logger.error(f"Failed to update model for detector_id: {detector_id}. Error: {e}", exc_info=True)
+        for detector_id, edge_inference_config in edge_inference_manager.detector_inference_configs.items():
+            if edge_inference_config.enabled:
+                try:
+                    logger.debug(f"Checking new models and inference deployments for detector_id: {detector_id}")
+                    _check_new_models_and_inference_deployments(
+                        detector_id=detector_id,
+                        edge_inference_manager=edge_inference_manager,
+                        deployment_manager=deployment_manager,
+                        db_manager=db_manager,
+                    )
+                    logger.info(f"Successfully updated model for detector_id: {detector_id}")
+                except Exception as e:
+                    logger.error(f"Failed to update model for detector_id: {detector_id}. Error: {e}", exc_info=True)
+            else:
+                logger.info(f"Detector {detector_id} is disabled. Skipping model update check for it.")
 
         elapsed_s = time.time() - start
         logger.info(f"Model update check completed in {elapsed_s:.2f} seconds.")
