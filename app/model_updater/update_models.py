@@ -154,7 +154,7 @@ def update_models(
 
 if __name__ == "__main__":
     edge_config: RootEdgeConfig = load_edge_config()
-    refresh_rate = edge_config.refresh_rate
+    refresh_rate = edge_config.global_config.refresh_rate
     detector_inference_configs = get_detector_inference_configs(root_edge_config=edge_config)
 
     edge_inference_manager = EdgeInferenceManager(detector_inference_configs=detector_inference_configs, verbose=True)

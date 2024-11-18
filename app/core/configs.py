@@ -1,10 +1,16 @@
 import logging
-from typing import Dict, Optional
 
 from pydantic import BaseModel, Field, model_validator
 from typing_extensions import Self
 
 logger = logging.getLogger(__name__)
+
+
+class GlobalConfig(BaseModel):
+    refresh_rate: float = Field(
+        default=60.0,
+        description="The interval (in seconds) at which the inference server checks for a new model binary update.",
+    )
 
 
 class EdgeInferenceConfig(BaseModel):
@@ -15,7 +21,7 @@ class EdgeInferenceConfig(BaseModel):
     enabled: bool = Field(  # TODO investigate and update the functionality of this option
         default=True, description="Whether the edge endpoint should accept image queries for this detector."
     )
-    api_token: Optional[str] = Field(
+    api_token: str | None = Field(
         default=None, description="API token used to fetch the inference model for this detector."
     )
     always_return_edge_prediction: bool = Field(
@@ -67,19 +73,18 @@ class RootEdgeConfig(BaseModel):
     Root configuration for edge inference.
     """
 
-    refresh_rate: float = Field(
-        default=60,
-        description="The interval (in seconds) at which the inference server checks for a new model binary update.",
-    )
-    edge_inference_configs: Dict[str, EdgeInferenceConfig]
-    detectors: Dict[str, DetectorConfig]
+    global_config: GlobalConfig
+    edge_inference_configs: dict[str, EdgeInferenceConfig]
+    detectors: dict[str, DetectorConfig]
 
     @model_validator(mode="after")
     def validate_inference_configs(self):
         """
         Validate the edge inference configs specified for the detectors. Example model structure:
             {
-                'refresh_rate': 60.0,
+                'global_config': {
+                    'refresh_rate': 60.0,
+                },
                 'edge_inference_configs': {
                     'default': EdgeInferenceConfig(
                                     enabled=True,
@@ -88,13 +93,13 @@ class RootEdgeConfig(BaseModel):
                                     disable_cloud_escalation=False,
                                     min_time_between_escalations=2.0
                                 )
-                }
+                },
                 'detectors': {
                     'detector_1': DetectorConfig(
                                     detector_id='det_123',
                                     edge_inference_config='default'
                                 )
-                },
+                }
             }
         """
         for detector_config in self.detectors.values():
