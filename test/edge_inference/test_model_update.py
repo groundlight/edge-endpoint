@@ -92,7 +92,7 @@ def test_update_model_with_no_new_model_available():
                     "model_binary_id": test_ksuid,
                     "predictor_metadata": test_predictor_metadata,
                 }
-                edge_manager = EdgeInferenceManager(inference_configs=None, edge_config=None)
+                edge_manager = EdgeInferenceManager(detector_inference_configs=None)
                 edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
                 edge_manager.update_model("test_detector")
                 # We shouldnt be pulling a model from s3 if we know there is nothing new available

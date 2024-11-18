@@ -7,24 +7,17 @@ from typing_extensions import Self
 logger = logging.getLogger(__name__)
 
 
-class LocalInferenceConfig(BaseModel):
+class EdgeInferenceConfig(BaseModel):
     """
-    Configuration for local edge inference on a specific detector.
+    Configuration for edge inference on a specific detector.
     """
 
-    enabled: bool = Field(default=False, description="True if edge-inference is enabled for a specific detector.")
+    enabled: bool = Field(  # TODO review the current functionality of this option and determine if it's desired. Update the description accordingly.
+        default=True, description="Whether the edge endpoint should accept image queries for this detector."
+    )
     api_token: Optional[str] = Field(
         default=None, description="API token used to fetch the inference model for this detector."
     )
-
-
-class DetectorConfig(BaseModel):
-    """
-    Configuration for a specific detector.
-    """
-
-    detector_id: str = Field(..., description="Detector ID")
-    local_inference_template: str = Field(..., description="Template for local edge inference.")
     always_return_edge_prediction: bool = Field(
         default=False,
         description=(
@@ -44,6 +37,7 @@ class DetectorConfig(BaseModel):
         default=2.0,
         description=(
             "The minimum time (in seconds) to wait between cloud escalations for a given detector. "
+            "Cannot be less than 0.0. "
             "Only applies when `always_return_edge_prediction=True` and `disable_cloud_escalation=False`."
         ),
     )
@@ -54,7 +48,18 @@ class DetectorConfig(BaseModel):
             raise ValueError(
                 "The `disable_cloud_escalation` flag is only valid when `always_return_edge_prediction` is set to True."
             )
+        if self.min_time_between_escalations < 0.0:
+            raise ValueError("`min_time_between_escalations` cannot be less than 0.0.")
         return self
+
+
+class DetectorConfig(BaseModel):
+    """
+    Configuration for a specific detector.
+    """
+
+    detector_id: str = Field(..., description="Detector ID")
+    edge_inference_config: str = Field(..., description="Template for local edge inference.")
 
 
 class RootEdgeConfig(BaseModel):
@@ -66,14 +71,14 @@ class RootEdgeConfig(BaseModel):
         default=60,
         description="The interval (in seconds) at which the inference server checks for a new model binary update.",
     )
-    local_inference_templates: Dict[str, LocalInferenceConfig]
+    edge_inference_configs: Dict[str, EdgeInferenceConfig]
     detectors: Dict[str, DetectorConfig]
 
     @model_validator(mode="after")
     def validate_templates(self):
         """
         Validate the templates referenced by the detectors.
-        :param values: The values passed to the validator. This is a dictionary of the form:
+        :param values: The values passed to the validator. This is a dictionary of the form: TODO update this
             {
                 'detectors': {
                     'detector_1': DetectorConfig(
@@ -91,6 +96,6 @@ class RootEdgeConfig(BaseModel):
             }
         """
         for detector in self.detectors.values():
-            if detector.local_inference_template not in self.local_inference_templates:
-                raise ValueError(f"Local Inference Template {detector.local_inference_template} not defined.")
+            if detector.edge_inference_config not in self.edge_inference_configs:
+                raise ValueError(f"Local inference template {detector.edge_inference_config} not defined.")
         return self
