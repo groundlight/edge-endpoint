@@ -12,7 +12,7 @@ class EdgeInferenceConfig(BaseModel):
     Configuration for edge inference on a specific detector.
     """
 
-    enabled: bool = Field(  # TODO investigate the current functionality of this option
+    enabled: bool = Field(  # TODO investigate and update the functionality of this option
         default=True, description="Whether the edge endpoint should accept image queries for this detector."
     )
     api_token: Optional[str] = Field(
@@ -75,27 +75,29 @@ class RootEdgeConfig(BaseModel):
     detectors: Dict[str, DetectorConfig]
 
     @model_validator(mode="after")
-    def validate_templates(self):
+    def validate_inference_configs(self):
         """
-        Validate the templates referenced by the detectors.
-        :param values: The values passed to the validator. This is a dictionary of the form: TODO update this
+        Validate the edge inference configs specified for the detectors. Example model structure:
             {
+                'refresh_rate': 60.0,
+                'edge_inference_configs': {
+                    'default': EdgeInferenceConfig(
+                                    enabled=True,
+                                    api_token=None,
+                                    always_return_edge_prediction=False,
+                                    disable_cloud_escalation=False,
+                                    min_time_between_escalations=2.0
+                                )
+                }
                 'detectors': {
                     'detector_1': DetectorConfig(
                                     detector_id='det_123',
-                                    local_inference_template='default',
-                                    always_return_edge_prediction=False
+                                    edge_inference_config='default'
                                 )
                 },
-                'local_inference_templates': {
-                    'default': LocalInferenceConfig(
-                                    enabled=True,
-                                    refresh_rate=120.0
-                                )
-                }
             }
         """
-        for detector in self.detectors.values():
-            if detector.edge_inference_config not in self.edge_inference_configs:
-                raise ValueError(f"Local inference template {detector.edge_inference_config} not defined.")
+        for detector_config in self.detectors.values():
+            if detector_config.edge_inference_config not in self.edge_inference_configs:
+                raise ValueError(f"Local inference template {detector_config.edge_inference_config} not defined.")
         return self

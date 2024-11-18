@@ -10,10 +10,9 @@ from cachetools import TTLCache, cached
 from fastapi import HTTPException, status
 from jinja2 import Template
 
+from app.core.configs import EdgeInferenceConfig
 from app.core.file_paths import MODEL_REPOSITORY_PATH
 from app.core.speedmon import SpeedMonitor
-
-from .configs import EdgeInferenceConfig
 
 logger = logging.getLogger(__name__)
 
