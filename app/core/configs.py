@@ -12,10 +12,8 @@ class EdgeInferenceConfig(BaseModel):
     Configuration for edge inference on a specific detector.
     """
 
-    enabled: bool = (
-        Field(  # TODO review the current functionality of this option and determine if it's desired. Update the description accordingly.
-            default=True, description="Whether the edge endpoint should accept image queries for this detector."
-        )
+    enabled: bool = Field(  # TODO investigate the current functionality of this option
+        default=True, description="Whether the edge endpoint should accept image queries for this detector."
     )
     api_token: Optional[str] = Field(
         default=None, description="API token used to fetch the inference model for this detector."

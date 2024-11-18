@@ -143,14 +143,6 @@ class EdgeInferenceManager:
             for detector_id, detector_inference_config in self.detector_inference_configs.items()
         }
 
-        if detector_inference_configs:
-            self.detector_inference_configs = detector_inference_configs
-            self.inference_client_urls = {
-                detector_id: get_edge_inference_service_name(detector_id) + ":8000"
-                for detector_id in self.detector_inference_configs.keys()
-                if self.detector_configured_for_edge_inference(detector_id)
-            }
-
     def update_inference_config(self, detector_id: str, api_token: str) -> None:
         """
         Adds a new detector to the inference config at runtime. This is useful when new
