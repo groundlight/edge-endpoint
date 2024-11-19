@@ -1,4 +1,4 @@
-# Configuring detectors for edge inference
+# Configuring Detectors for Edge Inference
 
 ## Do I need to configure my detectors?
 
