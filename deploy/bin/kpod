@@ -1,0 +1,141 @@
+#!/bin/bash
+
+# A script to make it easier to interact with the edge endpoint pods
+
+if [[ -z "$DEPLOYMENT_NAMESPACE" ]]; then
+    echo "Error: DEPLOYMENT_NAMESPACE is not set. Please set it to your desired namespace and try again."
+    exit 1
+fi
+
+namespace=$DEPLOYMENT_NAMESPACE
+container=""
+
+# Function to display usage
+usage() {
+    echo "Usage: kpod <kubectl-command> <pod-search-string> [options] [kubectl-flags]"
+    echo ""
+    echo "Options:"
+    echo "  -c, --container [<container-name>]  Specify container name (partial name allowed)."
+    echo "                                      If no name is provided, list and select."
+    exit 1
+}
+
+# Parse options for container
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -c|--container)
+            if [[ $# -gt 1 && ! "$2" =~ ^- ]]; then
+                container=$2
+                shift 2
+            else
+                container="__prompt__"
+                shift
+            fi
+            ;;
+        *)
+            if [[ -z "$command" ]]; then
+                command=$1
+            elif [[ -z "$prefix" ]]; then
+                prefix=$1
+            else
+                additional_args+=("$1")
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Ensure required arguments are provided
+if [[ -z "$command" || -z "$prefix" ]]; then
+    usage
+fi
+
+# Fetch pods matching the prefix
+matching_pods=$(kubectl get pods -n "$namespace" -o name | grep "$prefix")
+
+# Handle cases with no matches or multiple matches
+if [[ -z "$matching_pods" ]]; then
+    echo "No pods matching '$prefix' found in namespace $namespace."
+    exit 1
+fi
+
+pod_count=$(echo "$matching_pods" | wc -l)
+
+if [[ "$pod_count" -gt 1 ]]; then
+    echo "Multiple pods found matching '$prefix':"
+    echo "$matching_pods" | nl
+    echo -n "Select a pod by number: "
+    read -r selection
+
+    if ! [[ "$selection" =~ ^[0-9]+$ ]]; then
+        echo "Invalid selection."
+        exit 1
+    fi
+
+    pod=$(echo "$matching_pods" | sed -n "${selection}p")
+else
+    pod=$matching_pods
+fi
+
+# Match container or prompt for selection
+if [[ "$container" == "__prompt__" || -n "$container" ]]; then
+    # Get list of containers in the pod
+    containers=$(kubectl get "$pod" -n "$namespace" -o jsonpath='{.spec.containers[*].name}')
+    containers_list=$(echo "$containers" | tr ' ' '\n')
+
+    if [[ -z "$containers_list" ]]; then
+        echo "No containers found in pod $pod."
+        exit 1
+    fi
+
+    if [[ "$container" == "__prompt__" ]]; then
+        echo "Containers available in pod $pod:"
+        echo "$containers_list" | nl
+        echo -n "Select a container by number: "
+        read -r container_selection
+
+        if ! [[ "$container_selection" =~ ^[0-9]+$ ]]; then
+            echo "Invalid selection."
+            exit 1
+        fi
+
+        container=$(echo "$containers_list" | sed -n "${container_selection}p")
+    else
+        matching_containers=$(echo "$containers_list" | grep "$container")
+
+        if [[ -z "$matching_containers" ]]; then
+            echo "No containers matching '$container' found in pod $pod."
+            exit 1
+        fi
+
+        container_count=$(echo "$matching_containers" | wc -l)
+
+        if [[ "$container_count" -gt 1 ]]; then
+            echo "Multiple containers found matching '$container':"
+            echo "$matching_containers" | nl
+            echo -n "Select a container by number: "
+            read -r container_selection
+
+            if ! [[ "$container_selection" =~ ^[0-9]+$ ]]; then
+                echo "Invalid selection."
+                exit 1
+            fi
+
+            container=$(echo "$matching_containers" | sed -n "${container_selection}p")
+        else
+            container=$matching_containers
+        fi
+    fi
+fi
+
+# Build the kubectl command
+kubectl_cmd=(kubectl "$command" "$pod" -n "$namespace")
+
+if [[ -n "$container" ]]; then
+    kubectl_cmd+=("-c" "$container")
+fi
+
+kubectl_cmd+=("${additional_args[@]}")
+
+# Execute the kubectl command
+"${kubectl_cmd[@]}"
