@@ -28,6 +28,11 @@ check_nvidia_drivers_and_container_runtime() {
     # Get distribution information
     DISTRIBUTION=$(. /etc/os-release; echo "$ID$VERSION_ID")
 
+    if ! command -v curl &> /dev/null; then
+      echo "Installing curl to retrieve NVIDIA repository info"
+      sudo apt update -y && sudo apt install -y curl
+    fi
+  
     # Add NVIDIA Docker repository
     echo "Adding NVIDIA Docker repository..."
     curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
