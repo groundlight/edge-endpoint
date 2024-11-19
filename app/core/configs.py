@@ -65,7 +65,7 @@ class DetectorConfig(BaseModel):
     """
 
     detector_id: str = Field(..., description="Detector ID")
-    edge_inference_config: str = Field(..., description="Template for local edge inference.")
+    edge_inference_config: str = Field(..., description="Config for edge inference.")
 
 
 class RootEdgeConfig(BaseModel):
@@ -104,5 +104,5 @@ class RootEdgeConfig(BaseModel):
         """
         for detector_config in self.detectors.values():
             if detector_config.edge_inference_config not in self.edge_inference_configs:
-                raise ValueError(f"Local inference template {detector_config.edge_inference_config} not defined.")
+                raise ValueError(f"Edge inference config {detector_config.edge_inference_config} not defined.")
         return self
