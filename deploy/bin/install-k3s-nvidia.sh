@@ -44,13 +44,6 @@ check_nvidia_drivers_and_container_runtime() {
   fi
 }
 
-# Install Helm if it's not available since the Nvidia operator comes packaged as a Helm chart.
-if ! command -v helm &> /dev/null
-then
-  echo "Helm not found, installing Helm..."
-  curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-fi
-
 K="k3s kubectl"
 SCRIPT_DIR=$(dirname "$0")
 
@@ -59,22 +52,8 @@ check_nvidia_drivers_and_container_runtime
 # Install k3s using our standard script
 $SCRIPT_DIR/install-k3s.sh
 
-# Add the NVIDIA GPU Operator Helm repository
-helm repo add nvidia https://nvidia.github.io/gpu-operator
-helm repo update
+$K apply -f ${SCRIPT_DIR}/helm-nvidia-operator.yaml
 
-# Get the latest version of the GPU Operator (the second field on the second line of the search result)
-LATEST_VERSION=$(helm search repo nvidia/gpu-operator --devel --versions | awk 'NR == 2 {print $2}')
-
-# Install the GPU Operator using Helm
-echo "Installing NVIDIA GPU Operator version $LATEST_VERSION..."
-helm install \
-    --wait \
-    --generate-name \
-    -n gpu-operator \
-    --create-namespace \
-    --version "$LATEST_VERSION" \
-    nvidia/gpu-operator
 
 echo "NVIDIA GPU Operator installation completed."
 
