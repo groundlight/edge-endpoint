@@ -1,26 +1,29 @@
-refresh_rate: 60 # How often to attempt to fetch updated ML models (in seconds). If not set, defaults to 60.
+# For configuring detectors on the edge endpoint. See CONFIGURING-DETECTORS.md for more information.
 
-edge_inference_configs:
-  default: # Return the edge model's prediction if sufficiently confident; otherwise, escalate to cloud.
+global_config: # These settings affect the overall behavior of the edge endpoint.
+  refresh_rate: 60 # How often to attempt to fetch updated ML models (in seconds). If not set, defaults to 60.
+
+edge_inference_configs: # These configs define detector-specific behavior and can be applied to detectors below.
+  default: # Return the edge model's prediction if sufficiently confident; otherwise, escalate to the cloud.
     enabled: true
     always_return_edge_prediction: false
     disable_cloud_escalation: false
 
-  no-cloud: # Always return the edge model's prediction and never escalate to the cloud.
-    enabled: true
-    always_return_edge_prediction: true
-    disable_cloud_escalation: true
-  
   edge-answers-with-escalation: # Always return the edge model's predictions, but still escalate to cloud if unconfident.
     enabled: true
     always_return_edge_prediction: true
     disable_cloud_escalation: false
     min_time_between_escalations: 2.0
 
-  disabled:
+  no-cloud: # Always return the edge model's prediction and never escalate to the cloud.
+    enabled: true
+    always_return_edge_prediction: true
+    disable_cloud_escalation: true
+
+  disabled: # Don't accept image queries on the edge endpoint for the associated detector.
     enabled: false
 
-detectors:
+detectors: # Each entry here defines the edge configuration for a detector.
   # To configure a detector, add an entry for it below with its detector ID and the name of the edge inference config
   # you want to use. You can use or modify one of the existing edge inference configs listed above, or define your own.
     - detector_id: ""
