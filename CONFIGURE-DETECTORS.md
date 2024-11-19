@@ -22,15 +22,15 @@ The global config contains parameters that affect the overall behavior of the ed
 
 #### `refresh_rate`
 
-The `refresh_rate` parameter is a float that defines how often the edge endpoint will attempt to fetch updated ML models (in seconds). If you expect a detector to frequently have a better model available, such as if you are labeling many image queries for a new detector, you can set this to be lower to ensure that the improved models will be fetched quickly. In practice, you likely won't want this to be lower than ~30 seconds due to the time it takes to train new models. If not specified, the default is 60 seconds.
+`refresh_rate` is a float that defines how often the edge endpoint will attempt to fetch updated ML models (in seconds). If you expect a detector to frequently have a better model available, such as if you are labeling many image queries for a new detector, you can reduce this to ensure that the improved models will quickly be fetched and deployed. In practice, you likely won't want this to be lower than ~30 seconds due to the time it takes to train and fetch new models. If not specified, the default is 60 seconds.
 
 ### `edge_inference_configs`
 
 Edge inference configs are 'templates' that define the behavior of a detector on the edge. Each detector you configure will be assigned one of these templates. There are some pre-defined configs that represent the main ways you might want to configure a detector. However, you can edit these and also create your own as you wish.
 
-#### Structure of an `edge_inference_config`
+#### Structure of an edge_inference_config
 
-For each edge inference config, you can configure various parameters. For a complete description of each, see [Appendix: edge inference parameters](#appendix-edge-inference-parameters) below.
+For each edge inference config, you can configure various parameters. For a complete description of each, see [Appendix: Edge Inference Parameters](#appendix-edge-inference-parameters) below.
 
 #### Pre-defined edge inference configs
 
@@ -82,7 +82,7 @@ This section is where you define detectors to be configured, along with the edge
 ```
 You'll add a new entry for each detector that you want to configure. Remember that inference configs can be applied to as many detectors as you'd like, so if you want multiple detectors to have the same configuration, just associate them with the same edge inference config. Make sure you don't have multiple entries for the same detector - in this case, the edge endpoint will error when starting up.
 
-## Appendix: edge inference parameters
+## Appendix: Edge Inference Parameters
 
 ### `enabled` - default `true`
 Whether the edge endpoint should accept image queries for the associated detector. Generally you'll want this to be `true` for detectors that you're configuring.
