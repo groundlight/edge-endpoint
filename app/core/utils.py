@@ -200,6 +200,9 @@ class ModelInfoWithBinary(ModelInfoBase):
     model_binary_id: str
     model_binary_url: str
 
+    class Config:
+        protected_namespaces = ()  # Disables protection for all namespaces, since model_ is protected by default
+
 
 # Function to parse the response
 def parse_model_info(
