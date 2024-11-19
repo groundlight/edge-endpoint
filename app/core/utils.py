@@ -197,8 +197,8 @@ class ModelInfoWithBinary(ModelInfoBase):
     The inference server will load the model binary.
     """
 
-    trained_binary_id: str
-    trained_binary_url: str
+    model_binary_id: str
+    model_binary_url: str
 
 
 # Function to parse the response

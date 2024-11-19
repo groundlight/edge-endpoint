@@ -13,8 +13,8 @@ def test_save_model_with_binary_to_repository():
         model_info = {
             "pipeline_config": "test_pipeline_config",
             "predictor_metadata": test_predictor_metadata,
-            "trained_binary_id": "test_binary_id",
-            "trained_binary_url": "test_binary_url",
+            "model_binary_id": "test_binary_id",
+            "model_binary_url": "test_binary_url",
         }
         model_info = parse_model_info(model_info)
         save_model_to_repository(
@@ -30,8 +30,8 @@ def test_save_model_with_binary_to_repository():
         model_info = {
             "pipeline_config": "test_pipeline_config_2",
             "predictor_metadata": test_predictor_metadata,
-            "trained_binary_id": "test_binary_id_2",
-            "trained_binary_url": "test_binary_url_2",
+            "model_binary_id": "test_binary_id_2",
+            "model_binary_url": "test_binary_url_2",
         }
         model_info = parse_model_info(model_info)
         assert should_update(model_info, os.path.join(temp_dir, detector_id), 1)
@@ -61,8 +61,8 @@ def test_save_model_with_no_binary_to_repository():
         model_info = {
             "pipeline_config": "test_pipeline_config",
             "predictor_metadata": test_predictor_metadata,
-            "trained_binary_id": None,
-            "trained_binary_url": None,
+            "model_binary_id": None,
+            "model_binary_url": None,
         }
         model_info = parse_model_info(model_info)
         save_model_to_repository(
@@ -79,8 +79,8 @@ def test_save_model_with_no_binary_to_repository():
         model_info = {
             "pipeline_config": "test_pipeline_config_2",
             "predictor_metadata": test_predictor_metadata,
-            "trained_binary_id": None,
-            "trained_binary_url": None,
+            "model_binary_id": None,
+            "model_binary_url": None,
         }
         model_info = parse_model_info(model_info)
         detector_dir = os.path.join(temp_dir, detector_id)
@@ -98,8 +98,8 @@ def test_save_model_with_no_binary_to_repository():
         model_info = {
             "pipeline_config": "test_pipeline_config_2",
             "predictor_metadata": test_predictor_metadata,
-            "trained_binary_id": None,
-            "trained_binary_url": None,
+            "model_binary_id": None,
+            "model_binary_url": None,
         }
         model_info = parse_model_info(model_info)
         assert not should_update(model_info, detector_dir, 2)
