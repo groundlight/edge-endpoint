@@ -7,14 +7,16 @@ No detector-specific configuration is necessary for basic use of the edge endpoi
 ## Why would I want to configure detectors for the edge?
 
 Configuring detectors for the edge endpoint allows you to provide finer-grained control over their behavior on the edge. By configuring a detector, you can:
-* Have the edge endpoint automatically create an inference pod for a detector, making it ready to serve requests without having to first submit a query to it
+* Have the edge endpoint automatically create an inference pod for a detector, ensuring it's ready to serve requests without having to first submit a query to it
 * Configure a detector to always return the edge model's answer, regardless of the confidence
-* Make a detector never escalate queries to the cloud
+* Configure a detector to never escalate queries to the cloud
 * Specify a maximum frequency for cloud escalations
 
 ## How do I configure a detector?
 
-Detector configurations are specified in [edge-config.yaml](configs/edge-config.yaml). There are three sections: `global_config`, `edge_inference_configs`, and `detectors`.
+Detector configurations are specified in [edge-config.yaml](configs/edge-config.yaml). The file has three sections: `global_config`, `edge_inference_configs`, and `detectors`. 
+
+NOTE: After modifying the config file, you'll have to re-run [setup-ee.sh](deploy/bin/setup-ee.sh) for your changes to be reflected.
 
 ### `global_config`
 
@@ -73,14 +75,15 @@ Use this config if: you don't want the edge endpoint to accept image queries for
 
 ### `detectors`
 
-This section is where you define detectors to be configured, along with the edge inference config to use for each of them. The structure looks like:
+This section is where you define your detectors, along with the edge inference config to use for each of them. The structure looks like:
 ```
-- detector_id: "det_abc"
-    edge_inference_config: "default"
-- detector_id: "det_xyz"
-    edge_inference_config: "no-cloud"
+detectors:
+    - detector_id: "det_abc"
+        edge_inference_config: "default"
+    - detector_id: "det_xyz"
+        edge_inference_config: "no-cloud"
 ```
-You'll add a new entry for each detector that you want to configure. Remember that inference configs can be applied to as many detectors as you'd like, so if you want multiple detectors to have the same configuration, just associate them with the same edge inference config. Make sure you don't have multiple entries for the same detector - in this case, the edge endpoint will error when starting up.
+Add a new entry for each detector that you want to configure. Remember that inference configs can be applied to as many detectors as you'd like, so if you want multiple detectors to have the same configuration, just assign them the same edge inference config. Make sure you don't have multiple entries for the same detector - in this case, the edge endpoint will error when starting up.
 
 ## Appendix: Edge Inference Parameters
 
