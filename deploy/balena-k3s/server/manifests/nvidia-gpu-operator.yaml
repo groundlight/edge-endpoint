@@ -47,3 +47,20 @@ spec:
   #         env:
   #         - name: DISABLE_DEV_CHAR_SYMLINK_CREATION
   #           value: "true"
+---
+# pod to test gpu operator:
+# k logs -n gpu-operator test-cuda-vectoradd
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-cuda-vectoradd
+  namespace: gpu-operator
+spec:
+  runtimeClassName: nvidia  # Required for GPU use in k3s
+  restartPolicy: OnFailure
+  containers:
+  - name: cuda-vectoradd
+    image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubuntu22.04"
+    resources:
+      limits:
+        nvidia.com/gpu: 1

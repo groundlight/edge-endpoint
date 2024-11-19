@@ -1,9 +1,11 @@
+# References:
 # https://k3d.io/v5.7.4/usage/advanced/cuda/#building-a-customized-k3s-image
-# https://hub.docker.com/r/rancher/k3s/tags
 # https://github.com/k3s-io/k3s/blob/master/package/Dockerfile
 
 ARG K3S_TAG="v1.28.8+k3s1"
 
+# Use this instead of, for example, balenalib/genericx86-64-ext-ubuntu:focal, because
+# it is cross-platform and can be used on any architecture / type of device.
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND noninteractive
