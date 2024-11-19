@@ -257,10 +257,10 @@ class EdgeInferenceManager:
 
         if isinstance(model_info, ModelInfoWithBinary):
             logger.info(
-                f"New model binary available ({model_info.model_binary_id}), attemping to update model "
+                f"New model binary available ({model_info.trained_binary_id}), attemping to update model "
                 f"for {detector_id}"
             )
-            model_buffer = get_object_using_presigned_url(model_info.model_binary_url)
+            model_buffer = get_object_using_presigned_url(model_info.trained_binary_url)
         else:
             logger.info(f"Got a pipeline config but no model binary, attempting to update model for {detector_id}")
             model_buffer = None
@@ -358,11 +358,15 @@ def save_model_to_repository(
         f.write(model_info.predictor_metadata)
     if isinstance(model_info, ModelInfoWithBinary):
         with open(os.path.join(model_version_dir, "model_id.txt"), "w") as f:
-            f.write(model_info.model_binary_id)
+            f.write(model_info.trained_binary_id)
 
     logger.info(
         f"Wrote new model version {new_model_version} for {detector_id}"
-        + (f" with model binary id {model_info.model_binary_id}" if isinstance(model_info, ModelInfoWithBinary) else "")
+        + (
+            f" with model binary id {model_info.trained_binary_id}"
+            if isinstance(model_info, ModelInfoWithBinary)
+            else ""
+        )
     )
 
     return old_model_version, new_model_version
@@ -372,7 +376,7 @@ def should_update(model_info: ModelInfoBase, model_dir: str, version: int) -> bo
     """Determines if the model needs to be updated based on the received and current model info."""
     if isinstance(model_info, ModelInfoWithBinary):
         edge_binary_ksuid = get_current_model_ksuid(model_dir, version)
-        if edge_binary_ksuid and model_info.model_binary_id == edge_binary_ksuid:
+        if edge_binary_ksuid and model_info.trained_binary_id == edge_binary_ksuid:
             # The edge binary is the same as the cloud binary, so we don't need to update the model.
             return False
     else:

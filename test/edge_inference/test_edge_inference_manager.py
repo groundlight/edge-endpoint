@@ -32,7 +32,7 @@ def validate_model_directory(base_dir: str, detector_id: str, version: int, mode
         id_file = os.path.join(model_dir, "model_id.txt")
         assert os.path.exists(id_file)
         with open(id_file, "r") as f:
-            assert model_info.model_binary_id == f.read()
+            assert model_info.trained_binary_id == f.read()
 
 
 @pytest.fixture
@@ -41,8 +41,8 @@ def model_info_with_binary() -> ModelInfoWithBinary:
     model_info = {
         "pipeline_config": "test_pipeline_config",
         "predictor_metadata": test_predictor_metadata,
-        "model_binary_id": "test_binary_id",
-        "model_binary_url": "test_model_binary_url",
+        "trained_binary_id": "test_binary_id",
+        "trained_binary_url": "test_binary_url",
     }
     return ModelInfoWithBinary(**model_info)
 
@@ -53,8 +53,8 @@ def model_info_no_binary() -> ModelInfoNoBinary:
     model_info = {
         "pipeline_config": "test_pipeline_config",
         "predictor_metadata": test_predictor_metadata,
-        "model_binary_id": None,
-        "model_binary_url": None,
+        "trained_binary_id": None,
+        "trained_binary_url": None,
     }
     return ModelInfoNoBinary(**model_info)
 
@@ -78,8 +78,8 @@ class TestEdgeInferenceMangager:
                     # Should create a new version for new model info
                     mock_get_from_s3.return_value = b"test_model_2"
                     model_info_with_binary_2 = model_info_with_binary
-                    model_info_with_binary_2.model_binary_id = "test_binary_id_2"
-                    model_info_with_binary_2.model_binary_url = "test_model_binary_url_2"
+                    model_info_with_binary_2.trained_binary_id = "test_binary_id_2"
+                    model_info_with_binary_2.trained_binary_url = "test_binary_url_2"
                     mock_fetch.return_value = model_info_with_binary_2
                     edge_manager.update_model(detector_id)
 

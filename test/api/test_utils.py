@@ -115,8 +115,8 @@ class TestParseModelInfo:
         model_info = {
             "pipeline_config": "test_pipeline_config",
             "predictor_metadata": "test_metadata",
-            "model_binary_id": "test_binary_id",
-            "model_binary_url": "test_binary_url",
+            "trained_binary_id": "test_binary_id",
+            "trained_binary_url": "test_binary_url",
         }
         model_info = parse_model_info(model_info)
 
@@ -127,8 +127,8 @@ class TestParseModelInfo:
         model_info = {
             "pipeline_config": "test_pipeline_config",
             "predictor_metadata": "test_metadata",
-            "model_binary_id": None,
-            "model_binary_url": None,
+            "trained_binary_id": None,
+            "trained_binary_url": None,
         }
         model_info = parse_model_info(model_info)
         assert isinstance(model_info, ModelInfoBase)
