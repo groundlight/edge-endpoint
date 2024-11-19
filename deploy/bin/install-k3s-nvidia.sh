@@ -73,7 +73,7 @@ while [ "$elapsed" -lt "$timeout" ]; do
 
     # Wait for 1 second
     sleep 1
-    ((elapsed++))  # Increment elapsed time
+    ((elapsed++)) || true  # Increment elapsed time (returns a non-zero code??)
 done
 
 
