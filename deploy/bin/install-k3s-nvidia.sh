@@ -79,7 +79,25 @@ helm install \
 echo "NVIDIA GPU Operator installation completed."
 
 # Verify that we actually added GPU capacity to the node
-capacity=$($K get $($K get nodes -o name) -o=jsonpath='{.status.capacity.nvidia\.com/gpu}')
+capacity=0
+elapsed=0
+timeout=60
+
+while [ "$elapsed" -lt "$timeout" ]; do
+    # Run the command and capture its output
+    capacity=$($K get $($K get nodes -o name) -o=jsonpath='{.status.capacity.nvidia\.com/gpu}')
+
+    # Check if the command output is non-zero
+    if [ -n "$capacity" ] && [ "$capacity" -ne 0 ]; then
+        break
+    fi
+
+    # Wait for 1 second
+    sleep 1
+    ((elapsed++))  # Increment elapsed time
+done
+
+
 if [ "$capacity" = "1" ]; then
   echo "GPU capacity successfully added"
 else
