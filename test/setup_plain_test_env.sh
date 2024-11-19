@@ -21,6 +21,9 @@
 # The following detector IDs correspond to the "dog" and "cat" detectors.
 
 EDGE_CONFIG=$(cat <<- EOM
+global_config:
+  refresh_rate: 60
+
 edge_inference_configs:
   default:
     enabled: true
