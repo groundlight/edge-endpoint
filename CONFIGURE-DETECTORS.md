@@ -26,26 +26,11 @@ The `refresh_rate` parameter is a float that defines how often the edge endpoint
 
 ### `edge_inference_configs`
 
-This section contains 'templates' that define the behavior of a detector on the edge. Each detector you configure will be assigned one of these templates. There are some pre-defined configs that represent the main ways you might want to configure a detector. However, you can edit these and also create your own as you wish.
+Edge inference configs are 'templates' that define the behavior of a detector on the edge. Each detector you configure will be assigned one of these templates. There are some pre-defined configs that represent the main ways you might want to configure a detector. However, you can edit these and also create your own as you wish.
 
 #### Structure of an `edge_inference_config`
 
-For each edge inference config, you can configure the following parameters:
-
-##### `enabled` - default `true`
-Whether the edge endpoint should accept image queries for the associated detector. Generally you'll want this to be `true` for detectors that you're configuring.
-
-##### `api_token` - default `null`
-The API token to use for fetching the inference model for the associated detector. Most of the time this should be left blank, which will default to using the Groundlight API token set as an environment variable. If you are configuring detectors owned by multiple accounts, you could specify different API tokens to be used for each detector.  
-
-##### `always_return_edge_prediction` - default `false`
-Whether the edge model's answer should always be returned, regardless of the answer's confidence. When this is `false` (the default behavior), the edge model's answer will only be returned if it is above the confidence threshold. If the confidence is not sufficiently high, the query will be escalated to the cloud, which may result in a longer wait for the answer. If you always want to receive fast answers from a detector and don't want to enforce that answers will be above the confidence threshold, you should set this to `true`. 
-
-##### `disable_cloud_escalation` - default `false`
-Whether escalations to the cloud should be disabled. This can only be set to `true` if `always_return_edge_prediction` is also `true`. When `always_return_edge_prediction` is `true` and `disable_cloud_escalation` is `false`, fast answers from the edge model will be returned regardless of their confidence but insufficiently confident answers will still be escalated to the cloud in the background, allowing you to provide more labels and continue improving the model. You should set this to `true` if you don't need the model to improve and have a reason to not want any image queries to be escalated to the cloud.
-
-###### `min_time_between_escalations` - default `2.0`
-The minimum number of seconds to wait between escalating image queries to the cloud. This ensures that a large amount of unconfident (and likely visually-similar) queries are not escalated within a short timespan, such as when beginning to submit queries to a new detector. This can be configured to ensure a specific query rate-limit is not exceeded. Unless you have a reason to do so, reducing this below `2.0` is not recommended. 
+For each edge inference config, you can configure various parameters. For a complete description of each, see [Appendix: edge inference parameters](#appendix-edge-inference-parameters) below.
 
 #### Pre-defined edge inference configs
 
@@ -85,3 +70,31 @@ disabled:
     enabled: false
 ```
 Use this config if: you don't want the edge endpoint to accept image queries for this detector.
+
+### `detectors`
+
+This section is where you define detectors to be configured, along with the edge inference config to use for each of them. The structure looks like:
+```
+- detector_id: "det_abc"
+    edge_inference_config: "default"
+- detector_id: "det_xyz"
+    edge_inference_config: "no-cloud"
+```
+You'll add a new entry for each detector that you want to configure. Remember that inference configs can be applied to as many detectors as you'd like, so if you want multiple detectors to have the same configuration, just associate them with the same edge inference config. Make sure you don't have multiple entries for the same detector - in this case, the edge endpoint will error when starting up.
+
+## Appendix: edge inference parameters
+
+### `enabled` - default `true`
+Whether the edge endpoint should accept image queries for the associated detector. Generally you'll want this to be `true` for detectors that you're configuring.
+
+### `api_token` - default `null`
+The API token to use for fetching the inference model for the associated detector. Most of the time this should be left blank, which will default to using the Groundlight API token set as an environment variable. If you are configuring detectors owned by multiple accounts, you could specify different API tokens to be used for each detector.  
+
+### `always_return_edge_prediction` - default `false`
+Whether the edge model's answer should always be returned, regardless of the answer's confidence. When this is `false` (the default behavior), the edge model's answer will only be returned if it is above the confidence threshold. If the confidence is not sufficiently high, the query will be escalated to the cloud, which may result in a longer wait for the answer. If you always want to receive fast answers from a detector and don't want to enforce that answers will be above the confidence threshold, you should set this to `true`. 
+
+### `disable_cloud_escalation` - default `false`
+Whether escalations to the cloud should be disabled. This can only be set to `true` if `always_return_edge_prediction` is also `true`. When `always_return_edge_prediction` is `true` and `disable_cloud_escalation` is `false`, fast answers from the edge model will be returned regardless of their confidence but insufficiently confident answers will still be escalated to the cloud in the background, allowing you to provide more labels and continue improving the model. You should set this to `true` if you don't need the model to improve and have a reason to not want any image queries to be escalated to the cloud.
+
+### `min_time_between_escalations` - default `2.0`
+The minimum number of seconds to wait between escalating image queries to the cloud. This ensures that a large amount of unconfident (and likely visually-similar) queries are not escalated within a short timespan, such as when beginning to submit queries to a new detector. This can be configured to ensure a specific query rate-limit is not exceeded. Unless you have a reason to do so, reducing this below `2.0` is not recommended. 
