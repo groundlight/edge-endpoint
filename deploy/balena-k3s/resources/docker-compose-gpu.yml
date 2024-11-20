@@ -1,7 +1,7 @@
 version: "2.4"
 
 # Balena docker-compose.yml for standing up a k3s server (with NVIDIA GPU support) and bastion
-# Usage: balena push --dockerfile docker-compose-gpu.yml
+# Limitations: Currently only works on `generic-amd64` devices.
 
 services:
   gpu:

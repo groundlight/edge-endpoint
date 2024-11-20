@@ -1,3 +1,14 @@
+# Balena support for CUDA on an Nvidia GPU in an x86 device
+# Based on https://github.com/balena-io-examples/nvidia-x86
+#
+# This page gives a good overview of what is happening here:
+# https://blog.balena.io/how-to-use-nvidia-gpu-on-x86-device-balenaos/
+#
+# TLDR: This Dockerfile downloads the Nvidia driver and kernel source for the device
+# and compiles the Nvidia driver kernel module. `entry.sh` is then run to load the
+# kernel module (via insmod). This is necessary because the host device's BalenaOS is
+# read-only, so the Nvidia driver cannot be installed on the host OS.
+
 FROM balenalib/genericx86-64-ext:bullseye-run-20211030
 
 WORKDIR /usr/src
@@ -8,7 +19,8 @@ ENV DEBIAN_FRONTEND noninteractive
 # See https://github.com/balena-io-examples/nvidia-x86/tree/master?tab=readme-ov-file#gpu-container
 # for instructions on how to set these variables. THEY ARE IMPORTANT!
 ENV VERSION="6.0.24%2Brev1"
-# generic-aarch64
+
+# NOTE: this does not support generic-aarch64 devices
 ENV BALENA_MACHINE_NAME="generic-amd64"
 ENV YOCTO_VERSION=6.6.23
 ENV YOCTO_KERNEL=${YOCTO_VERSION}-yocto-standard

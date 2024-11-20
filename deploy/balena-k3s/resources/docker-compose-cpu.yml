@@ -1,7 +1,6 @@
 version: "2.1"
 
 # Balena docker-compose.yml for standing up a k3s server and bastion
-# Usage: balena push <fleetname>
 
 services:
   server:
