@@ -55,7 +55,7 @@ fi
 # https://docs.docker.com/engine/install/ubuntu/
 
 # Install QEMU, a generic and open-source machine emulator and virtualizer
-docker run --rm --privileged linuxkit/alpine:146f540f25cd92ec8ff0c5b0c98342a9a95e479e
+docker run --rm --privileged linuxkit/binfmt:af88a591f9cc896a52ce596b9cf7ca26a061ef97
 
 # Check if tempbuilder already exists
 if ! docker buildx ls | grep -q tempgroundlightedgebuilder; then
