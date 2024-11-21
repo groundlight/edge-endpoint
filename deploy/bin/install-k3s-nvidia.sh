@@ -17,7 +17,7 @@ check_nvidia_drivers_and_container_runtime() {
 
   if ! command -v nvidia-smi &> /dev/null; then
     echo "NVIDIA drivers are not installed (nvidia-smi not found). Installing..."
-    sudo apt update && sudo apt install -y "nvidia-headless-$NVIDIA_VERSION-server"
+    sudo apt update && sudo apt install -y "nvidia-headless-$NVIDIA_VERSION-server" "nvidia-utils-$NVIDIA_VERSION-server"
   else
     echo "NVIDIA drivers for version $NVIDIA_VERSION are installed."
   fi
