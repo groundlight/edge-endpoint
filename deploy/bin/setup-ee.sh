@@ -17,6 +17,12 @@
 
 set -ex
 
+# Ensure jq is installed
+if ! command -v jq &>/dev/null; then
+    echo "Error: jq is not installed. Please install jq to proceed."
+    exit 1
+fi
+
 # If we're in a container, sudo won't be available. But otherwise there are commands where we want sudo.
 if command -v sudo &>/dev/null; then
     MAYBE_SUDO=sudo
