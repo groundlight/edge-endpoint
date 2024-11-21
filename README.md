@@ -17,7 +17,7 @@ To set up the Edge Endpoint, please refer to the [deploy README](deploy/README.m
 
 ### Configuring detectors for the Edge Endpoint
 
-While not required, configuring detectors provides finer-grained control over the behavior of specific detectors on the edge. Please refer to [the guide to configuring detectors](/CONFIGURING-DETECTORS.md) for more information.
+While not required, configuring detectors provides fine-grained control over the behavior of specific detectors on the edge. Please refer to [the guide to configuring detectors](/CONFIGURING-DETECTORS.md) for more information.
 
 ### Using the Edge Endpoint with your Groundlight application.
 

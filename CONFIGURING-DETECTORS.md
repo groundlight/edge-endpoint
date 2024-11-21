@@ -2,14 +2,14 @@
 
 ## Do I need to configure my detectors?
 
-No detector-specific configuration is necessary for basic use of the edge endpoint. Once it's running, submitting an image query to the edge endpoint will automatically trigger the creation of an edge inference pod for the specified detector. This inference pod will be created with the default settings. Once the pod has loaded the model and is ready to serve requests, the edge model will begin attempting to answer image queries sent to it. If its confidence is above the confidence threshold for the detector, you'll receive the answer from the edge model. If the confidence is too low, it will escalate the query to the cloud. 
+Detector-specific configuration is NOT necessary for basic use of the edge endpoint. Once the edge endpoint is running, submitting an image query to it will create an edge inference pod for the specified detector. This inference pod will be created with the default settings. Once the inference pod has loaded the edge model and is ready to serve requests, it will begin attempting to answer image queries sent to that detector. If the answer from the edge model has confidence above the confidence threshold for the detector, you'll receive the answer from the edge model. If the confidence isn't high enough, it will escalate the query to the cloud. 
 
 ## Why would I want to configure detectors?
 
-Configuring detectors for the edge endpoint allows you to provide finer-grained control over their behavior on the edge. By configuring a detector, you can:
-* Have the edge endpoint automatically create an inference pod for a detector, ensuring it's ready to serve requests without having to first submit a query to it
-* Configure a detector to always return the edge model's answer, regardless of the confidence
-* Configure a detector to never escalate queries to the cloud
+Configuring detectors for the edge endpoint allows you to provide fine-grained control over their behavior on the edge. By configuring a detector, you can:
+* Automatically create an inference pod for the detector every time the edge endpoint starts up, ensuring it's ready to serve requests without having to first submit a query to it
+* Configure the detector to always return the edge model's answer, regardless of the confidence
+* Configure the detector to never escalate queries to the cloud
 * Specify a maximum frequency for cloud escalations
 
 ## How do I configure a detector?
@@ -24,19 +24,19 @@ The global config contains parameters that affect the overall behavior of the ed
 
 #### `refresh_rate`
 
-`refresh_rate` is a float that defines how often the edge endpoint will attempt to fetch updated ML models (in seconds). If you expect a detector to frequently have a better model available, such as if you are labeling many image queries for a new detector, you can reduce this to ensure that the improved models will quickly be fetched and deployed. In practice, you likely won't want this to be lower than ~30 seconds due to the time it takes to train and fetch new models. If not specified, the default is 60 seconds.
+`refresh_rate` is a float that defines how often the edge endpoint will attempt to fetch updated ML models (in seconds). If you expect a detector to frequently have a better model available, you can reduce this to ensure that the improved models will quickly be fetched and deployed. For example, you may want to label many image queries on a new detector. A higher refresh rate will ensure that the latest model improvements from these labels are promptly deployed to the edge. In practice, you likely won't want this to be lower than ~30 seconds due to the time it takes to train and fetch new models. If not specified, the default is 60 seconds.
 
 ### `edge_inference_configs`
 
-Edge inference configs are 'templates' that define the behavior of a detector on the edge. Each detector you configure will be assigned one of these templates. There are some pre-defined configs that represent the main ways you might want to configure a detector. However, you can edit these and also create your own as you wish.
+Edge inference configs are 'templates' that define the behavior of a detector on the edge. Each detector you configure will be assigned one of these templates. There are some predefined configs that represent the main ways you might want to configure a detector. However, you can edit these and also create your own as you wish.
 
 #### Structure of an edge_inference_config
 
-For each edge inference config, you can configure various parameters. For a complete description of each, see [Appendix: Edge Inference Parameters](#appendix-edge-inference-parameters) below.
+For each edge inference config, you can configure various parameters. For a complete description of each, see [Reference: Edge Inference Parameters](#reference-edge-inference-parameters) below.
 
-#### Pre-defined edge inference configs
+#### Predefined edge inference configs
 
-There are a few pre-defined configs that represent the main ways you might want to configure a detector. 
+There are a few predefined configs in the configuration file. These make use of the available edge inference parameters to achieve different kinds of behavior. If you're just getting started with setting up the edge endpoint, we recommend choosing from these based on which best fits your desired behavior!
 
 ##### `default`
 ```
@@ -55,7 +55,7 @@ edge-answers-with-escalation: # Always return the edge model's predictions, but 
     disable_cloud_escalation: false
     min_time_between_escalations: 2.0
 ```
-Use this config if: you want the fastest answers from the edge model (regardless of confidence), but also want unconfident queries to be escalated to the cloud at a reasonable rate so that you can provide labels and continue improving the models.
+Use this config if: you want all answers to come from the edge model to ensure quick response times. This will happen regardless of the answers' confidence. However, your unconfident queries will be escalated to the cloud. This allows Groundlight (or you!) to provide labels on your detector so your model can improve over time.
 
 ##### `no-cloud`
 ```
@@ -64,7 +64,7 @@ no-cloud: # Always return the edge model's prediction and never escalate to the 
     always_return_edge_prediction: true
     disable_cloud_escalation: true
 ```
-Use this config if: you always want the fastest answers from the edge model and don't want any image queries to get escalated to the cloud.
+Use this config if: you always want the fastest answers from the edge model and don't want any image queries to get escalated to the cloud. This might be useful under circumstances such as limited network bandwith. Be careful using this option: if unconfident queries aren't escalated to the cloud, the model won't be able to receive new labels and improve. 
 
 ##### `disabled`
 ```
@@ -85,7 +85,7 @@ detectors:
 ```
 Add a new entry for each detector that you want to configure. Remember that inference configs can be applied to as many detectors as you'd like, so if you want multiple detectors to have the same configuration, just assign them the same edge inference config. Make sure you don't have multiple entries for the same detector - in this case, the edge endpoint will error when starting up.
 
-## Appendix: Edge Inference Parameters
+## Reference: Edge Inference Parameters
 
 ### `enabled` - default `true`
 Whether the edge endpoint should accept image queries for the associated detector. Generally you'll want this to be `true` for detectors that you're configuring.
