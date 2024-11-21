@@ -60,7 +60,12 @@ echo "NVIDIA GPU Operator installation completed."
 # Verify that we actually added GPU capacity to the node
 capacity=0
 elapsed=0
-timeout=60
+timeout=120
+
+set +x # Don't echo us running around the loop
+
+echo
+echo "Waiting up to two minutes for the GPU capacity to come online:"
 
 while [ "$elapsed" -lt "$timeout" ]; do
     # Run the command and capture its output
@@ -71,12 +76,14 @@ while [ "$elapsed" -lt "$timeout" ]; do
         break
     fi
 
+    echo -n "."
+
     # Wait for 1 second
     sleep 1
     ((elapsed++)) || true  # Increment elapsed time (returns a non-zero code??)
 done
 
-
+echo
 if [ "$capacity" = "1" ]; then
   echo "GPU capacity successfully added"
 else
