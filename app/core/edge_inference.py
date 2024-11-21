@@ -13,6 +13,7 @@ from jinja2 import Template
 from app.core.configs import EdgeInferenceConfig
 from app.core.file_paths import MODEL_REPOSITORY_PATH
 from app.core.speedmon import SpeedMonitor
+from app.core.utils import ModelInfoBase, ModelInfoWithBinary, parse_model_info
 
 logger = logging.getLogger(__name__)
 
@@ -238,28 +239,29 @@ class EdgeInferenceManager:
         # fallback to env var if we dont have a token in the config
         api_token = api_token or os.environ.get("GROUNDLIGHT_API_TOKEN", None)
 
-        model_urls = fetch_model_urls(detector_id, api_token=api_token)
-        cloud_binary_ksuid = model_urls.get("model_binary_id", None)
-        if cloud_binary_ksuid is None:
-            logger.warning(f"No model binary ksuid returned for {detector_id}")
-
         model_dir = os.path.join(self.MODEL_REPOSITORY, detector_id)
-        edge_binary_ksuid = get_current_model_ksuid(model_dir)
-        if edge_binary_ksuid and cloud_binary_ksuid is not None and cloud_binary_ksuid <= edge_binary_ksuid:
+        model_info = fetch_model_info(detector_id, api_token=api_token)
+
+        v = get_current_model_version(model_dir)
+        if v is None:
+            logger.info(f"No current model version found in {model_dir}")
+        elif not should_update(model_info, model_dir, v):
             logger.info(f"No new model available for {detector_id}")
             return False
 
-        logger.info(f"New model binary available ({cloud_binary_ksuid}), attemping to update model for {detector_id}")
-
-        pipeline_config = model_urls["pipeline_config"]
-        predictor_metadata = model_urls["predictor_metadata"]
-        model_buffer = get_object_using_presigned_url(model_urls["model_binary_url"])
+        if isinstance(model_info, ModelInfoWithBinary):
+            logger.info(
+                f"New model binary available ({model_info.model_binary_id}), attemping to update model "
+                f"for {detector_id}"
+            )
+            model_buffer = get_object_using_presigned_url(model_info.model_binary_url)
+        else:
+            logger.info(f"Got a pipeline config but no model binary, attempting to update model for {detector_id}")
+            model_buffer = None
         save_model_to_repository(
             detector_id,
             model_buffer,
-            pipeline_config,
-            predictor_metadata,
-            binary_ksuid=cloud_binary_ksuid,
+            model_info,
             repository_root=self.MODEL_REPOSITORY,
         )
         return True
@@ -273,25 +275,24 @@ class EdgeInferenceManager:
         Args:
             detector_id: ID of the detector to check
         Returns:
-            True if there hasn't been an escalation on this detector in the last `min_time_between_escalations` seconds, False otherwise.
+            True if there hasn't been an escalation on this detector in the last `min_time_between_escalations` seconds,
+              False otherwise.
         """
         min_time_between_escalations = self.min_times_between_escalations.get(detector_id, 2)
+        last_escalation_time = self.last_escalation_times[detector_id]
 
-        if (
-            self.last_escalation_times[detector_id] is None
-            or (time.time() - self.last_escalation_times[detector_id]) > min_time_between_escalations
-        ):
+        if last_escalation_time is None or (time.time() - last_escalation_time) > min_time_between_escalations:
             self.last_escalation_times[detector_id] = time.time()
             return True
 
         return False
 
 
-def fetch_model_urls(detector_id: str, api_token: Optional[str] = None) -> dict[str, str]:
+def fetch_model_info(detector_id: str, api_token: Optional[str] = None) -> ModelInfoBase:
     if not api_token:
         raise ValueError(f"No API token provided for {detector_id=}")
 
-    logger.debug(f"Fetching model URLs for {detector_id}")
+    logger.debug(f"Fetching model info for {detector_id}")
 
     url = f"https://api.groundlight.ai/edge-api/v1/fetch-model-urls/{detector_id}/"
     headers = {"x-api-token": api_token}
@@ -299,10 +300,10 @@ def fetch_model_urls(detector_id: str, api_token: Optional[str] = None) -> dict[
     logger.debug(f"fetch-model-urls response = {response}")
 
     if response.status_code == status.HTTP_200_OK:
-        return response.json()
+        return parse_model_info(response.json())
     else:
         response_json = response.json()
-        exception_string = f"Failed to fetch model URLs for {detector_id=}."
+        exception_string = f"Failed to fetch model info for {detector_id=}."
         if "detail" in response_json:  # Include additional detail on the error if available
             exception_string = exception_string + f" Received error: {response_json['detail']}"
 
@@ -319,10 +320,8 @@ def get_object_using_presigned_url(presigned_url: str) -> bytes:
 
 def save_model_to_repository(
     detector_id: str,
-    model_buffer: bytes,
-    pipeline_config: str,
-    predictor_metadata: str,
-    binary_ksuid: Optional[str],
+    model_buffer: Optional[bytes],
+    model_info: ModelInfoBase,
     repository_root: str,
 ) -> tuple[Optional[int], int]:
     """
@@ -344,18 +343,40 @@ def save_model_to_repository(
     model_version_dir = os.path.join(model_dir, str(new_model_version))
     os.makedirs(model_version_dir, exist_ok=True)
 
-    with open(os.path.join(model_version_dir, "model.buf"), "wb") as f:
-        f.write(model_buffer)
+    if model_buffer:
+        with open(os.path.join(model_version_dir, "model.buf"), "wb") as f:
+            f.write(model_buffer)
     with open(os.path.join(model_version_dir, "pipeline_config.yaml"), "w") as f:
-        yaml.dump(yaml.safe_load(pipeline_config), f)
+        yaml.dump(yaml.safe_load(model_info.pipeline_config), f)
     with open(os.path.join(model_version_dir, "predictor_metadata.json"), "w") as f:
-        f.write(predictor_metadata)
-    if binary_ksuid:
+        f.write(model_info.predictor_metadata)
+    if isinstance(model_info, ModelInfoWithBinary):
         with open(os.path.join(model_version_dir, "model_id.txt"), "w") as f:
-            f.write(binary_ksuid)
+            f.write(model_info.model_binary_id)
 
-    logger.info(f"Wrote new model version {new_model_version} for {detector_id} with {binary_ksuid=}")
+    logger.info(
+        f"Wrote new model version {new_model_version} for {detector_id}"
+        + (f" with model binary id {model_info.model_binary_id}" if isinstance(model_info, ModelInfoWithBinary) else "")
+    )
+
     return old_model_version, new_model_version
+
+
+def should_update(model_info: ModelInfoBase, model_dir: str, version: int) -> bool:
+    """Determines if the model needs to be updated based on the received and current model info."""
+    if isinstance(model_info, ModelInfoWithBinary):
+        edge_binary_ksuid = get_current_model_ksuid(model_dir, version)
+        if edge_binary_ksuid and model_info.model_binary_id == edge_binary_ksuid:
+            # The edge binary is the same as the cloud binary, so we don't need to update the model.
+            return False
+    else:
+        current_pipeline_config = get_current_pipeline_config(model_dir, version)
+        if current_pipeline_config and current_pipeline_config == yaml.safe_load(model_info.pipeline_config):
+            # There is no saved binary and the current pipeline_config is the same as the received
+            # pipeline_config, so we don't need to update the model.
+            return False
+
+    return True
 
 
 def get_current_model_version(model_dir: str) -> Optional[int]:
@@ -377,20 +398,27 @@ def get_all_model_versions(model_dir: str) -> list:
     return model_versions
 
 
-def get_current_model_ksuid(model_dir: str) -> Optional[str]:
+def get_current_model_ksuid(model_dir: str, model_version: int) -> Optional[str]:
     """Read the model_id.txt file in the current model version directory,
-    which contains the KSUID of the model binary.
+    which contains the KSUID of the model binary (if available).
     """
-    v = get_current_model_version(model_dir)
-    if v is None:
-        logger.info(f"No current model version found in {model_dir}")
-        return None
-    id_file = os.path.join(model_dir, str(v), "model_id.txt")
+    id_file = os.path.join(model_dir, str(model_version), "model_id.txt")
     if os.path.exists(id_file):
         with open(id_file, "r") as f:
             return f.read()
     else:
-        logger.warning(f"No existing model_id.txt file found in {os.path.join(model_dir, str(v))}")
+        logger.debug(f"No existing model_id.txt file found in {os.path.join(model_dir, str(model_version))}")
+        return None
+
+
+def get_current_pipeline_config(model_dir: str, model_version: int) -> dict | None:
+    """Read the pipeline_config.yaml file in the current model version directory."""
+    config_file = os.path.join(model_dir, str(model_version), "pipeline_config.yaml")
+    if os.path.exists(config_file):
+        with open(config_file, "r") as f:
+            return yaml.safe_load(f)
+    else:
+        logger.warning(f"No existing pipeline_config.yaml file found in {os.path.join(model_dir, str(model_version))}")
         return None
 
 

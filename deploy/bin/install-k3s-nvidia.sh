@@ -17,7 +17,7 @@ check_nvidia_drivers_and_container_runtime() {
 
   if ! command -v nvidia-smi &> /dev/null; then
     echo "NVIDIA drivers are not installed (nvidia-smi not found). Installing..."
-    sudo apt update && sudo apt install -y "nvidia-headless-$NVIDIA_VERSION-server"
+    sudo apt update && sudo apt install -y "nvidia-headless-$NVIDIA_VERSION-server" "nvidia-utils-$NVIDIA_VERSION-server"
   else
     echo "NVIDIA drivers for version $NVIDIA_VERSION are installed."
   fi
@@ -28,6 +28,11 @@ check_nvidia_drivers_and_container_runtime() {
     # Get distribution information
     DISTRIBUTION=$(. /etc/os-release; echo "$ID$VERSION_ID")
 
+    if ! command -v curl &> /dev/null; then
+      echo "Installing curl to retrieve NVIDIA repository info"
+      sudo apt update -y && sudo apt install -y curl
+    fi
+  
     # Add NVIDIA Docker repository
     echo "Adding NVIDIA Docker repository..."
     curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
@@ -39,13 +44,6 @@ check_nvidia_drivers_and_container_runtime() {
   fi
 }
 
-# Install Helm if it's not available since the Nvidia operator comes packaged as a Helm chart.
-if ! command -v helm &> /dev/null
-then
-  echo "Helm not found, installing Helm..."
-  curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-fi
-
 K="k3s kubectl"
 SCRIPT_DIR=$(dirname "$0")
 
@@ -54,27 +52,38 @@ check_nvidia_drivers_and_container_runtime
 # Install k3s using our standard script
 $SCRIPT_DIR/install-k3s.sh
 
-# Add the NVIDIA GPU Operator Helm repository
-helm repo add nvidia https://nvidia.github.io/gpu-operator
-helm repo update
+$K apply -f ${SCRIPT_DIR}/helm-nvidia-operator.yaml
 
-# Get the latest version of the GPU Operator (the second field on the second line of the search result)
-LATEST_VERSION=$(helm search repo nvidia/gpu-operator --devel --versions | awk 'NR == 2 {print $2}')
-
-# Install the GPU Operator using Helm
-echo "Installing NVIDIA GPU Operator version $LATEST_VERSION..."
-helm install \
-    --wait \
-    --generate-name \
-    -n gpu-operator \
-    --create-namespace \
-    --version "$LATEST_VERSION" \
-    nvidia/gpu-operator
 
 echo "NVIDIA GPU Operator installation completed."
 
 # Verify that we actually added GPU capacity to the node
-capacity=$($K get $($K get nodes -o name) -o=jsonpath='{.status.capacity.nvidia\.com/gpu}')
+capacity=0
+elapsed=0
+timeout=120
+
+set +x # Don't echo us running around the loop
+
+echo
+echo "Waiting up to two minutes for the GPU capacity to come online:"
+
+while [ "$elapsed" -lt "$timeout" ]; do
+    # Run the command and capture its output
+    capacity=$($K get $($K get nodes -o name) -o=jsonpath='{.status.capacity.nvidia\.com/gpu}')
+
+    # Check if the command output is non-zero
+    if [ -n "$capacity" ] && [ "$capacity" -ne 0 ]; then
+        break
+    fi
+
+    echo -n "."
+
+    # Wait for 1 second
+    sleep 1
+    ((elapsed++)) || true  # Increment elapsed time (returns a non-zero code??)
+done
+
+echo
 if [ "$capacity" = "1" ]; then
   echo "GPU capacity successfully added"
 else
