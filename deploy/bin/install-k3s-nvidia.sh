@@ -63,6 +63,13 @@ LATEST_VERSION=$(helm search repo nvidia/gpu-operator --devel --versions | awk '
 
 # Install the GPU Operator using Helm
 echo "Installing NVIDIA GPU Operator version $LATEST_VERSION..."
+
+# Make sure Helm knows which kubeconfig to use
+kubectl_is_k3s=$($K version --client | egrep "^Client Version.*+k3s" || true)
+if [ -n "$kubectl_is_k3s" ]; then
+    echo "Using the kubectl supplied by k3s. Shared kubeconfig file is at /etc/rancher/k3s/k3s.yaml"
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+fi
 helm install \
     --wait \
     --generate-name \
