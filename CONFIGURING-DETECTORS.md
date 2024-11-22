@@ -47,9 +47,9 @@ default: # Return the edge model's prediction if sufficiently confident; otherwi
 ```
 This is the default behavior for a detector on the edge and is likely what you'll want to use most of the time, unless you have a specific reason to use a different configuration.
 
-##### `edge-answers-with-escalation`
+##### `edge_answers_with_escalation`
 ```
-edge-answers-with-escalation: # Always return the edge model's predictions, but still escalate to cloud if unconfident.
+edge_answers_with_escalation: # Always return the edge model's predictions, but still escalate to cloud if unconfident.
     enabled: true
     always_return_edge_prediction: true
     disable_cloud_escalation: false
@@ -57,9 +57,9 @@ edge-answers-with-escalation: # Always return the edge model's predictions, but 
 ```
 Use this config if: you want all answers to come from the edge model to ensure quick response times. This will happen regardless of the answers' confidence. However, your unconfident queries will be escalated to the cloud. This allows Groundlight (or you!) to provide labels on your detector so your model can improve over time.
 
-##### `no-cloud`
+##### `no_cloud`
 ```
-no-cloud: # Always return the edge model's prediction and never escalate to the cloud.
+no_cloud: # Always return the edge model's prediction and never escalate to the cloud.
     enabled: true
     always_return_edge_prediction: true
     disable_cloud_escalation: true
@@ -81,7 +81,7 @@ detectors:
     - detector_id: "det_abc"
         edge_inference_config: "default"
     - detector_id: "det_xyz"
-        edge_inference_config: "my-custom-config"
+        edge_inference_config: "my_custom_config"
 ```
 Add a new entry for each detector that you want to configure. Each entry must include the detector ID and the edge inference config you want the detector to use. You can select one of the predefined edge inference configs or define a new one to achieve your desired behavior. 
 

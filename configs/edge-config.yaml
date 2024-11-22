@@ -9,13 +9,13 @@ edge_inference_configs: # These configs define detector-specific behavior and ca
     always_return_edge_prediction: false
     disable_cloud_escalation: false
 
-  edge-answers-with-escalation: # Always return the edge model's predictions, but still escalate to cloud if unconfident.
+  edge_answers_with_escalation: # Always return the edge model's predictions, but still escalate to cloud if unconfident.
     enabled: true
     always_return_edge_prediction: true
     disable_cloud_escalation: false
     min_time_between_escalations: 2.0
 
-  no-cloud: # Always return the edge model's prediction and never escalate to the cloud.
+  no_cloud: # Always return the edge model's prediction and never escalate to the cloud.
     enabled: true
     always_return_edge_prediction: true
     disable_cloud_escalation: true
