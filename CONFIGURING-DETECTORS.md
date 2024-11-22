@@ -10,7 +10,7 @@ Configuring detectors for the edge endpoint allows you to provide fine-grained c
 * Automatically create an inference pod for the detector every time the edge endpoint starts up, ensuring it's ready to serve requests without having to first submit a query to it
 * Configure the detector to always return the edge model's answer, regardless of the confidence
 * Configure the detector to never escalate queries to the cloud
-* Specify a maximum frequency for cloud escalations
+* Specify a maximum frequency for cloud escalations from the detector
 
 ## How do I configure a detector?
 
@@ -81,9 +81,11 @@ detectors:
     - detector_id: "det_abc"
         edge_inference_config: "default"
     - detector_id: "det_xyz"
-        edge_inference_config: "no-cloud"
+        edge_inference_config: "my-custom-config"
 ```
-Add a new entry for each detector that you want to configure. Remember that inference configs can be applied to as many detectors as you'd like, so if you want multiple detectors to have the same configuration, just assign them the same edge inference config. Make sure you don't have multiple entries for the same detector - in this case, the edge endpoint will error when starting up.
+Add a new entry for each detector that you want to configure. Each entry must include the detector ID and the edge inference config you want the detector to use. You can select one of the predefined edge inference configs or define a new one to achieve your desired behavior. 
+
+Edge inference configs can be applied to as many detectors as you'd like, so if you want multiple detectors to have the same configuration, just assign them the same inference config. Make sure you don't have multiple entries for the same detector - in this case, the edge endpoint will error when starting up.
 
 ## Reference: Edge Inference Parameters
 
