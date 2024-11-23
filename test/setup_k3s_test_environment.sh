@@ -45,6 +45,8 @@ echo "Waiting for 1 minute to ensure all services are up and running..."
 sleep 60
 
 
+kubectl get pods -n $DEPLOYMENT_NAMESPACE
+
 # Describe the edge-endpoint pod
 echo "Describing the edge-endpoint pod: $EDGE_ENDPOINT_POD_NAME"
-kubectl describe pods -n $DEPLOYMENT_NAMESPACE -l app=edge-endpoint
+kubectl describe pods -n $DEPLOYMENT_NAMESPACE
