@@ -237,7 +237,6 @@ jobs:
   deploy-edge-preflight-balena:
     needs: 
       - test-general-edge-endpoint
-      - test-in-k3s
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: ./.github/workflows/deploy-balena.yaml
     with:
