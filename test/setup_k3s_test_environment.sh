@@ -5,12 +5,6 @@
 # Altogether, you can run everything with:
 # > make test-with-k3s
 
-# The following detector IDs correspond to the "dog" and "cat" detectors.
-
-
-cd "$(dirname "$0")"
-ls
-
 if [ -z "$GROUNDLIGHT_API_TOKEN" ]; then
     echo "Error: GROUNDLIGHT_API_TOKEN environment variable is not set."
     exit 1
@@ -43,6 +37,6 @@ fi
 
 
 export INFERENCE_FLAVOR="CPU"
-./../deploy/bin/setup-ee.sh
+./deploy/bin/setup-ee.sh
 
 export LIVE_TEST_ENDPOINT="http://localhost:$EDGE_ENDPOINT_PORT"

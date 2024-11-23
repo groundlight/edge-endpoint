@@ -98,7 +98,7 @@ jobs:
         # the previous steps
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
-        
+
   test-with-k3s:
     runs-on: ubuntu-22.04
     steps:
@@ -114,10 +114,6 @@ jobs:
         run: |
           curl -sfL https://get.k3s.io | sh -
 
-      - name: Set up k3s test environment
-        run: |
-          source test/setup_k3s_test_environment.sh
-
       - name: Install poetry
         uses: snok/install-poetry@v1
         with:
@@ -126,33 +122,11 @@ jobs:
           virtualenvs-in-project: true
           installer-parallel: true
 
-      - name: Load Cached venv
-        id: cached-poetry-dependencies
-        uses: actions/cache@v3
-        with:
-          path: .venv
-          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-poetry-
-
-      - name: Install dependencies
-        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-        run: poetry install --no-root
-
       - name: Run tests with k3s
-        run: |
-          source test/setup_k3s_test_environment.sh
-          poetry run pytest -k "_live"
+        env:
+          GROUNDLIGHT_API_TOKEN: ${{ secrets.GROUNDLIGHT_API_TOKEN_PROD_BIGGIES }}
+        run: make test-with-k3s
 
-      - name: Dump Logs from k3s
-        if: always()
-        run: kubectl logs -n test-with-k3s
-
-      - name: Clean up k3s
-        if: always()
-        run: |
-          kubectl delete namespace test-with-k3s
-          kubectl delete pv test-with-k3s-pv
 
   # Run Groundlight SDK tests against the edge proxy endpoint
   test-sdk:
@@ -262,49 +236,6 @@ jobs:
         run:
           ./deploy/bin/build-push-edge-endpoint-image.sh
 
-  test-in-k3s:
-    needs:
-      # In order to test in k3s, we pull the latest edge-endpoint image from ECR. Which means that
-      # we need to build and push the image first or, we're just testing against a stale image.
-      - build-push-edge-endpoint-multiplatform
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v3
-
-      - name: Install k3s
-        run: |
-          curl -sfL https://get.k3s.io | sh -
-          sudo chmod 644 /etc/rancher/k3s/k3s.yaml
-          sudo chown $USER /etc/rancher/k3s/k3s.yaml
-          # symlink to kubeconfig
-          mkdir -p ~/.kube
-          ln -s /etc/rancher/k3s/k3s.yaml ~/.kube/config
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-
-      - name: Deploy the edge-endpoint yaml
-        run: |
-          set -ex
-          # Once there's a fix for disk-pressure issues on GHA's runner, we can uncomment the
-          # following command in order to set up the environment to test out edge inference
-          # source test/setup_inference_test_env.sh
-          export INFERENCE_FLAVOR="CPU"
-          export DEPLOYMENT_NAMESPACE="default"
-          bash deploy/bin/setup-ee.sh
-          kubectl describe deployment
-
-      - name: Wait for edge-endpoint pod to be ready
-        run: |
-          set -ex
-          kubectl rollout status deployment edge-endpoint --timeout=5m
-          kubectl describe pod edge-endpoint
-  
   deploy-edge-preflight-balena:
     needs: 
       - test-general-edge-endpoint
