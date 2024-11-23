@@ -41,6 +41,14 @@ export INFERENCE_FLAVOR="CPU"
 
 export LIVE_TEST_ENDPOINT="http://localhost:$EDGE_ENDPOINT_PORT"
 
-echo "Watching the edge-endpoint deployment rollout in k3s..."
-kubectl rollout status deployment/edge-endpoint -n $DEPLOYMENT_NAMESPACE
+echo "Waiting for 1 minute to ensure all services are up and running..."
+sleep 60
+
+# Get the edge-endpoint pod name
+EDGE_ENDPOINT_POD_NAME=$(kubectl get pods -n $DEPLOYMENT_NAMESPACE -l app=edge-endpoint -o jsonpath="{.items[0].metadata.name}")
+
+# Describe the edge-endpoint pod
+echo "Describing the edge-endpoint pod: $EDGE_ENDPOINT_POD_NAME"
+kubectl describe pod $EDGE_ENDPOINT_POD_NAME -n $DEPLOYMENT_NAMESPACE
+
 echo "Rollout complete."
