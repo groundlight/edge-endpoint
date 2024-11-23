@@ -42,7 +42,7 @@ export INFERENCE_FLAVOR="CPU"
 export LIVE_TEST_ENDPOINT="http://localhost:$EDGE_ENDPOINT_PORT"
 
 echo "Waiting for 1 minute to ensure all services are up and running..."
-sleep 60
+sleep 120
 
 
 kubectl get pods -n $DEPLOYMENT_NAMESPACE
