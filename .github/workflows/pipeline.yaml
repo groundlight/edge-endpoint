@@ -100,7 +100,7 @@ jobs:
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
   test-with-k3s:
-        runs-on: ubuntu-22.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -113,6 +113,7 @@ jobs:
           # symlink to kubeconfig
           mkdir -p ~/.kube
           ln -s /etc/rancher/k3s/k3s.yaml ~/.kube/config
+          
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
