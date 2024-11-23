@@ -40,3 +40,7 @@ export INFERENCE_FLAVOR="CPU"
 ./deploy/bin/setup-ee.sh
 
 export LIVE_TEST_ENDPOINT="http://localhost:$EDGE_ENDPOINT_PORT"
+
+echo "Watching the edge-endpoint deployment rollout in k3s..."
+kubectl rollout status deployment/edge-endpoint -n $DEPLOYMENT_NAMESPACE
+echo "Rollout complete."
