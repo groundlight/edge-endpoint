@@ -1,4 +1,5 @@
 .PHONY: install install-lint install-pre-commit test test-with-docker test-all lint format
+SHELL := /bin/bash
 
 install:
 	poetry install --no-root
@@ -17,6 +18,9 @@ test-with-docker: install  ## Run tests that require a live edge-endpoint server
 
 test-all: test test-with-docker  ## Run all tests in one make command
 	@echo "All tests completed."
+
+test-with-k3s:
+	. test/setup_k3s_test_environment.sh && poetry run pytest -k
 
 
 # Adjust which paths we lint

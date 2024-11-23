@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: edge-endpoint-pv
+  name: ${PERSISTENT_VOLUME_NAME}
 spec:
   capacity:
     storage: 2Gi
@@ -17,7 +17,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: edge-endpoint-pvc
+  name: ${PERSISTENT_VOLUME_CLAIM_NAME}
 spec:
   accessModes:
     - ReadWriteOnce
