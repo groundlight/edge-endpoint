@@ -153,6 +153,7 @@ if [[ "${DEPLOY_LOCAL_VERSION}" == "1" ]]; then
     envsubst < deploy/k3s/local_persistent_volume.yaml > deploy/k3s/local_persistentvolume.yaml
     $K apply -f deploy/k3s/local_persistentvolume.yaml
     rm deploy/k3s/local_persistentvolume.yaml
+
 else
     # If environment variable EFS_VOLUME_ID is not set, exit
     if [[ -z "${EFS_VOLUME_ID}" ]]; then
@@ -171,7 +172,7 @@ else
 fi
 
 # Check if the persistent volume claim exists. If not, create it
-if ! $K get pvc "$PERSISTENT_VOLUME_CLAIM_NAME"; then
+if ! $K get pvc edge-endpoint-pvc; then
     # If environment variable EFS_VOLUME_ID is not set, exit
     if [[ -z "${EFS_VOLUME_ID}" ]]; then
         fail "EFS_VOLUME_ID environment variable not set"
