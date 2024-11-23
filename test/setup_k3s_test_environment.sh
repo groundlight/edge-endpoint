@@ -39,13 +39,11 @@ export INFERENCE_FLAVOR="CPU"
 ./deploy/bin/setup-ee.sh
 
 export LIVE_TEST_ENDPOINT="http://localhost:$EDGE_ENDPOINT_PORT"
+echo "Waiting for edge-endpoint pods to rollout..."
 
-echo "Waiting for 1 minute to ensure all services are up and running..."
-sleep 120
+if ! kubectl rollout status deployment/edge-endpoint -n $DEPLOYMENT_NAMESPACE --timeout=5m; then
+    echo "Error: edge-endpoint pods failed to rollout within the timeout period."
+    exit 1
+fi
 
-
-kubectl get pods -n $DEPLOYMENT_NAMESPACE
-
-# Describe the edge-endpoint pod
-echo "Describing the edge-endpoint pod: $EDGE_ENDPOINT_POD_NAME"
-kubectl describe pods -n $DEPLOYMENT_NAMESPACE
+echo "Edge-endpoint pods have successfully rolled out."
