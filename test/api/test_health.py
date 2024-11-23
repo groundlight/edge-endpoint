@@ -3,7 +3,6 @@ from fastapi.testclient import TestClient
 
 from app.api.api import HEALTH
 from app.api.naming import path_prefix
-import pdb
 
 
 def test_readiness_endpoint(test_client: TestClient):
