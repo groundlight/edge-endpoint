@@ -128,6 +128,10 @@ jobs:
           virtualenvs-create: true
           virtualenvs-in-project: true
           installer-parallel: true
+      
+      - name: Install edge-endpoint's python dependencies
+        run: |
+          poetry install --no-interaction --no-root
 
       - name: Run tests with k3s
         run: make test-with-k3s
