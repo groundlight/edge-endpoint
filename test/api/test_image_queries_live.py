@@ -1,6 +1,6 @@
-import time
 import os
-import pdb
+import time
+
 import pytest
 import requests
 from fastapi import status
@@ -21,7 +21,7 @@ MAX_WAIT_TIME_S = 60
 # - confidence_threshold=0.9
 DETECTOR_ID = "det_2SagpFUrs83cbMZsap5hZzRjZw4"
 
-import pdb
+
 @pytest.mark.live
 @pytest.fixture(scope="module", autouse=True)
 def ensure_edge_endpoint_is_live_and_ready():
@@ -41,15 +41,18 @@ def ensure_edge_endpoint_is_live_and_ready():
             time.sleep(1)  # wait for 1 second before retrying
     pytest.fail(f"Edge endpoint is not live and ready after polling for {MAX_WAIT_TIME_S} seconds. {final_exception=}")
 
+
 @pytest.fixture(name="gl")
 def fixture_gl() -> Groundlight:
     """Create a Groundlight client object."""
     return Groundlight(endpoint=TEST_ENDPOINT)
 
+
 @pytest.fixture
 def detector(gl: Groundlight) -> Detector:
     """Retrieve the detector using the Groundlight client."""
     return gl.get_detector(id=DETECTOR_ID)
+
 
 @pytest.mark.live
 def test_post_image_query_via_sdk(gl: Groundlight, detector: Detector):
@@ -57,6 +60,7 @@ def test_post_image_query_via_sdk(gl: Groundlight, detector: Detector):
     image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
     iq = gl.submit_image_query(detector=detector.id, image=image_bytes, wait=10.0)
     assert iq is not None, "ImageQuery should not be None."
+
 
 @pytest.mark.live
 def test_post_image_query_via_sdk_want_async(gl: Groundlight, detector: Detector):
@@ -66,6 +70,7 @@ def test_post_image_query_via_sdk_want_async(gl: Groundlight, detector: Detector
     assert iq is not None, "ImageQuery should not be None."
     assert iq.id.startswith("iq_"), "ImageQuery id should start with 'iq_' because it was created on the cloud."
     assert iq.result is None, "Result should be None because the query is still being processed."
+
 
 @pytest.mark.live
 def test_post_image_query_via_sdk_with_metadata_throws_400(gl: Groundlight, detector: Detector):
