@@ -123,8 +123,6 @@ jobs:
           installer-parallel: true
 
       - name: Run tests with k3s
-        env:
-          GROUNDLIGHT_API_TOKEN: ${{ secrets.GROUNDLIGHT_API_TOKEN_PROD_BIGGIES }}
         run: make test-with-k3s
 
 
