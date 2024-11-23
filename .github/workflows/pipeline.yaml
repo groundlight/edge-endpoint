@@ -98,6 +98,61 @@ jobs:
         # the previous steps
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
+        
+  test-with-k3s:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Set up python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install k3s
+        run: |
+          curl -sfL https://get.k3s.io | sh -
+
+      - name: Set up k3s test environment
+        run: |
+          source test/setup_k3s_test_environment.sh
+
+      - name: Install poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: ${{ env.POETRY_VERSION }}
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: true
+
+      - name: Load Cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v3
+        with:
+          path: .venv
+          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+
+      - name: Install dependencies
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        run: poetry install --no-root
+
+      - name: Run tests with k3s
+        run: |
+          source test/setup_k3s_test_environment.sh
+          poetry run pytest -k "_live"
+
+      - name: Dump Logs from k3s
+        if: always()
+        run: kubectl logs -n test-with-k3s
+
+      - name: Clean up k3s
+        if: always()
+        run: |
+          kubectl delete namespace test-with-k3s
+          kubectl delete pv test-with-k3s-pv
 
   # Run Groundlight SDK tests against the edge proxy endpoint
   test-sdk:

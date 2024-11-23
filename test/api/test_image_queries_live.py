@@ -30,7 +30,6 @@ def ensure_edge_endpoint_is_live_and_ready():
     final_exception = None
     while time.time() - start_time < MAX_WAIT_TIME_S:
         try:
-            pdb.set_trace()
             live_response = requests.get(TEST_ENDPOINT + "/health/live")
             live_response.raise_for_status()
             ready_response = requests.get(TEST_ENDPOINT + "/health/ready")

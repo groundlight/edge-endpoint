@@ -9,6 +9,7 @@
 
 
 cd "$(dirname "$0")"
+ls
 
 if [ -z "$GROUNDLIGHT_API_TOKEN" ]; then
     echo "Error: GROUNDLIGHT_API_TOKEN environment variable is not set."
@@ -28,7 +29,7 @@ export EDGE_ENDPOINT_PORT="30107"
 # Check if the persistent volume exists
 if kubectl get pv "$PERSISTENT_VOLUME_NAME" &> /dev/null; then
     echo "Persistent volume $PERSISTENT_VOLUME_NAME exists. Deleting it..."
-    kubectl delete pv "$PERSISTENT_VOLUME_NAME"
+    kubectl delete pv "$PERSISTENT_VOLUME_NAME" &
     echo "Persistent volume $PERSISTENT_VOLUME_NAME deleted."
 else
     echo "Persistent volume $PERSISTENT_VOLUME_NAME does not exist. No action needed."
@@ -39,6 +40,7 @@ export DEPLOYMENT_NAMESPACE="test-with-k3s"
 if ! kubectl get namespace $DEPLOYMENT_NAMESPACE &> /dev/null; then
     kubectl create namespace $DEPLOYMENT_NAMESPACE
 fi
+
 
 export INFERENCE_FLAVOR="CPU"
 ./../deploy/bin/setup-ee.sh
