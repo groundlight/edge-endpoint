@@ -80,7 +80,6 @@ cd "$(dirname "$0")"/../..
 # Most users do not need to think about these.
 
 PERSISTENT_VOLUME_NAME=${PERSISTENT_VOLUME_NAME:-"edge-endpoint-pv"}
-PERSISTENT_VOLUME_CLAIM_NAME=${PERSISTENT_VOLUME_CLAIM_NAME:-"edge-endpoint-pvc"}
 EDGE_ENDPOINT_PORT=${EDGE_ENDPOINT_PORT:-30101}
 
 # Create Secrets

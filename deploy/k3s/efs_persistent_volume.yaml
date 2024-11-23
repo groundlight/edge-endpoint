@@ -17,7 +17,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: ${PERSISTENT_VOLUME_CLAIM_NAME}
+  name: edge-endpoint-pvc
 spec:
   accessModes:
     - ReadWriteOnce

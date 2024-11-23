@@ -16,7 +16,6 @@ then
     exit 1
 fi
 export PERSISTENT_VOLUME_NAME="test-with-k3s-pv"
-export PERSISTENT_VOLUME_CLAIM_NAME="test-with-k3s-pvc"
 export EDGE_ENDPOINT_PORT="30107"
 
 # # now we should delete the persistant volume before, in case it's in a bad state
