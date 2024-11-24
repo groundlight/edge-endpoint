@@ -1,0 +1,22 @@
+name: Update edge endpoint submodule in the glhub repo
+# The edge endpoint is a submodule in the glhub repo. On any PR commit,
+# we want to update that submodule.
+on:
+  pull_request:
+    branches:
+      - main
+jobs:
+  update-edge-endpoint-submodule-in-glhub:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout glhub
+        uses: actions/checkout@v3
+        with:
+          repository: groundlight/glhub
+          path: /glhub
+
+      - name: list directory
+        run: |
+          cd /glhub
+          ls
