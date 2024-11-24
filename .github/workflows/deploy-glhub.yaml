@@ -14,9 +14,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: groundlight/glhub
-          path: /glhub
+          path: glhub
 
       - name: list directory
         run: |
-          cd /glhub
+          cd glhub
           ls
