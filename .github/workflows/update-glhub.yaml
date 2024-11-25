@@ -16,6 +16,11 @@ jobs:
           token: ${{ secrets.GH_PAT }}
           path: glhub
 
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.5.4
+        with:
+          ssh-private-key: ${{ secrets.GLHUB_DEPLOY_KEY }}
+          
       - name: Update GLHub
         run: |
           cd glhub
