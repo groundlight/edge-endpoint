@@ -19,6 +19,8 @@ jobs:
       - name: Update GLHub
         run: |
           cd glhub
+          git config --global user.email "roxanne@groundlight.ai"
+          git config --global user.name "roxanne-o"
           git submodule update --init --recursive
           git submodule update --remote
           git add .
