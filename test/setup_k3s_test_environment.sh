@@ -18,7 +18,7 @@ fi
 export PERSISTENT_VOLUME_NAME="test-with-k3s-pv"
 export EDGE_ENDPOINT_PORT="30107"
 
-# # now we should delete the persistant volume before, in case it's in a bad state
+# # now we should delete the persistent volume before, in case it's in a bad state
 # Check if the persistent volume exists
 if kubectl get pv "$PERSISTENT_VOLUME_NAME" &> /dev/null; then
     echo "Persistent volume $PERSISTENT_VOLUME_NAME exists. Deleting it..."
