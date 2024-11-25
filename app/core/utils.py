@@ -17,6 +17,7 @@ from model import (
     Source,
 )
 from PIL import Image
+from pydantic import BaseModel, ValidationError
 
 from app.core import constants
 
@@ -171,3 +172,45 @@ def pil_image_to_bytes(img: Image.Image, format: str = "JPEG") -> bytes:
     with BytesIO() as buffer:
         img.save(buffer, format=format)
         return buffer.getvalue()
+
+
+# Utilities for parsing the fetch models response
+class ModelInfoBase(BaseModel):
+    """Both types of model info responses will contain this information."""
+
+    pipeline_config: str
+    predictor_metadata: str
+
+
+class ModelInfoNoBinary(ModelInfoBase):
+    """
+    If the detector's edge pipeline has no trained model binary, this will be the response.
+    The inference server will create a zero-shot pipeline from the pipeline config.
+    """
+
+    pass
+
+
+class ModelInfoWithBinary(ModelInfoBase):
+    """
+    If the detector's edge pipeline has a trained model binary, this will be the response.
+    The inference server will load the model binary.
+    """
+
+    model_binary_id: str
+    model_binary_url: str
+
+    class Config:
+        protected_namespaces = ()  # Disables protection for all namespaces, since model_ is protected by default
+
+
+# Function to parse the response
+def parse_model_info(
+    fetch_model_response: dict[str, str],
+) -> ModelInfoNoBinary | ModelInfoWithBinary:
+    try:
+        # Attempt to parse as FetchModelResponseWithMLBinary
+        return ModelInfoWithBinary(**fetch_model_response)
+    except ValidationError:
+        # Fall back to FetchModelResponseNoMLBinary
+        return ModelInfoNoBinary(**fetch_model_response)

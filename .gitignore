@@ -1,6 +1,3 @@
-# Don't check in the exact python library versions.
-poetry.lock
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
