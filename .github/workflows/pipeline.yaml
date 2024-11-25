@@ -205,7 +205,7 @@ jobs:
       - name: Build and Push Multiplatform edge-endpoint Image to ECR
         timeout-minutes: 45
         run:
-          ./deploy/bin/build-push-edge-endpoint-image.sh
+          ./deploy/bin/build-push-edge-endpoint-image.sh push-latest
 
   test-in-k3s:
     needs:

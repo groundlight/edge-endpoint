@@ -1,17 +1,16 @@
 #!/bin/bash
 
-#!/bin/bash
-
 # This script builds and pushes the edge-endpoint Docker image to ECR.
 #
 # Usage:
-#   ./build-push-edge-endpoint-image.sh [dev]
+#   ./build-push-edge-endpoint-image.sh <dev|push-latest>
 #
 # Arguments:
-#   dev: Optional. If provided, builds only for the current platform, and pushes
-#        the image to ECR *without* the :latest tag. Useful for local development.
-#        Otherwise, builds for both amd64 and arm64 architectures and pushes the
-#        image to ECR with both the :latest and :<git-tag> tags.
+#   dev:         Builds only for the current platform, and pushes the image
+#                to ECR with just the :<git-tag> tag. Useful for local development.
+#   push-latest: Builds for both amd64 and arm64 architectures and pushes the
+#                image to ECR with both the :latest and :<git-tag> tags. 
+#                Most of the time you should not do this manually.
 #
 # The script does the following:
 # 1. Sets the image tag based on the current git commit.
@@ -27,6 +26,20 @@ set -ex
 # Ensure that you're in the same directory as this script before running it
 cd "$(dirname "$0")"
 
+# Check if exactly one argument is provided
+if [ $# -ne 1 ]; then
+    echo "Error: Either 'dev' or 'push-latest' argument required."
+    echo "Usage: $0 [dev|push-latest]"
+    exit 1
+fi
+
+# Validate the argument
+if [ "$1" != "dev" ] && [ "$1" != "push-latest" ]; then
+    echo "Error: Argument must be either 'dev' or 'push-latest'. Received '$1'."
+    echo "Usage: $0 [dev|push-latest]"
+    exit 1
+fi
+
 TAG=$(./git-tag-name.sh)
 # EDGE_ENDPOINT_IMAGE="edge-endpoint-test"  # v0.1.0 (triton inference server) compatible images
 EDGE_ENDPOINT_IMAGE="edge-endpoint"  # v0.2.0 (fastapi inference server) compatible images
@@ -37,8 +50,10 @@ aws ecr get-login-password --region us-west-2 | docker login \
                   --username AWS \
                   --password-stdin  ${ECR_URL}
 
-# Check if the first argument is "dev". If it is, only build the image for the current platform
+# Check if the first argument is "dev". If it is, only build the image for the current platform and don't push the
+# :latest tag.
 if [ "$1" == "dev" ]; then
+  echo "Received argument 'dev'. Building for current platform only. Latest tag will not be pushed."
   docker build --tag ${EDGE_ENDPOINT_IMAGE} ../..
   docker tag ${EDGE_ENDPOINT_IMAGE}:latest ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG}
   docker push ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG}
@@ -53,6 +68,10 @@ fi
 # on a Linux machine with an old version of Docker Engine, you may need to
 # install buildx manually. Follow these instructions to install docker-buildx-plugin:
 # https://docs.docker.com/engine/install/ubuntu/
+
+echo "Received argument 'push-latest'. Building for both amd64 and arm64" \
+     "architectures and pushing the image to ECR with both the :latest" \
+     "and :<git-tag> tags."
 
 # Install QEMU, a generic and open-source machine emulator and virtualizer
 docker run --rm --privileged linuxkit/binfmt:af88a591f9cc896a52ce596b9cf7ca26a061ef97
