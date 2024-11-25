@@ -4,9 +4,10 @@ on:
   push:
 
 jobs:
-  build:
+  update-glhub:
     runs-on: ubuntu-latest
-
+    environment: live
+    
     steps:
       - name: Checkout glhub
         uses: actions/checkout@v4
