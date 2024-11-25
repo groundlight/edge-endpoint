@@ -1,0 +1,27 @@
+name: Update GLHub
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  update-glhub:
+    runs-on: ubuntu-latest
+    environment:
+      name: live
+    needs: build
+    if: github.event_name == 'pull_request' # Trigger for every PR commit
+
+    steps:
+      - name: Checkout glhub
+        uses: actions/checkout@v4
+        with:
+          repository: groundlight/glhub
+          token: ${{ secrets.GH_PAT }}
+          path: glhub
+
+      - name: Update GLHub
+        run: |
+        cd glhub
+        ls
