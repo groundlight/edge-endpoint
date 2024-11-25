@@ -23,5 +23,5 @@ jobs:
 
       - name: Update GLHub
         run: |
-        cd glhub
-        ls
+          cd glhub
+          ls
