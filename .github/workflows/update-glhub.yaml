@@ -2,8 +2,6 @@ name: Update GLHub
 
 on:
   push:
-    branches:
-      - main
 
 jobs:
   update-glhub:
