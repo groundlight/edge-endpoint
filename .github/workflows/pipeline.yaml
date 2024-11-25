@@ -2,6 +2,7 @@ name: cicd
 on:
   push:
     # All pushes
+    # test
   workflow_dispatch:
     # This allows it to be triggered manually in the github console
     # You could put inputs here, but we don't need them.
