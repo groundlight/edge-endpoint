@@ -144,12 +144,16 @@ This should resolve the DNS issue and allow the inference pods to launch.
 
 We currently have a hard-coded docker image in our k3s deployment, which is not ideal.
 If you're testing things locally and want to use a different docker image, you can do so
-by first creating a docker image locally, pushing it to ECR, retrieving the image ID and
-then using that ID in the [edge_deployment](k3s/edge_deployment/edge_deployment.yaml) file.
+by creating a docker image locally, pushing it to ECR, retrieving the image ID, and
+then using that ID in the [edge_deployment](k3s/edge_deployment/edge_deployment.yaml) file. After you update the image ID, you'll have to re-deploy for the changes to take effect.
 
-Follow the following steps:
+Use the [build-push-edge-endpoint-image.sh](deploy/bin/build-push-edge-endpoint-image.sh) script to build and push the image to ECR. You'll need to have the correct AWS credentials to do this.
 
 ```shell
 # Build and push image to ECR
-> ./deploy/bin/build-push-edge-endpoint-image.sh
+> ./deploy/bin/build-push-edge-endpoint-image.sh <dev|push-latest>
+
+# With the 'dev' argument, the image will be built for the current platform and pushed to ECR with just the :<git-tag> tag.
+
+# With the 'push-latest' argument, the image will be built for both amd64 and arm64 architectures and pushed to ECR with both the :latest and :<git-tag> tags. Beware that this will overwrite the current :latest tagged image, thereby impacting other users.
 ```
