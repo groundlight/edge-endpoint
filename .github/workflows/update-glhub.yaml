@@ -4,12 +4,8 @@ on:
   push:
 
 jobs:
-  update-glhub:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: live
-    needs: build
-    if: github.event_name == 'pull_request' # Trigger for every PR commit
 
     steps:
       - name: Checkout glhub
