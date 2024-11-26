@@ -5,13 +5,6 @@ The edge endpoint runs under kubernetes, typically on a single-node cluster, whi
 
 The instructions below are fairly opinionated, optimized for single-node cluster setup, using k3s, on an Ubuntu/Debian-based system.  If you want to set it up with a different flavor of kubernetes, that should work, but you'll have to figure out how to do that yourself.
 
-## Dependencies
-Edge Endpoint requires `curl` and `jq` which are likely already on your system, but if you have a minimal Linux distribution, they might not be. To make sure you have them, run:
-
-```shell
-sudo apt update && sudo apt install -y jq curl
-```
-
 ## Setting up Single-Node Kubernetes with k3s
 
 If you don't have [k3s](https://docs.k3s.io/) installed, there are two scripts which can install it depending on whether you have a CUDA GPU or not.  If you don't set up a GPU, the models will run more slowly on CPU.
@@ -25,6 +18,8 @@ If you don't have [k3s](https://docs.k3s.io/) installed, there are two scripts w
 # For GPU inference
 ./deploy/bin/install-k3s-nvidia.sh
 ```
+
+(Note: these scripts depend on the Linux utilities `curl` and `jq`. If these aren't on your system, the scripts will install them for you.)
 
 You might want to customize the [edge config file](../configs/edge-config.yaml) to include the detector ID's you want to run.  Adding detector ID's to the config file will cause inference pods to be initialized automatically for each detector. Even if they aren't configured in the config file,
 edge inference will be set up for each detector ID for which the Groundlight service receives requests (note that it
