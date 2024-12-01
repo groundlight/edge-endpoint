@@ -28,5 +28,5 @@ jobs:
           git commit -m "Update submodule"
           git push https://edge-glhub-bot:${{ secrets.BOT_GITHUB_TOKEN }}@github.com/groundlight/glhub.git main
         env:
-          GIT_AUTHOR_NAME: "roxanne-o"
+          GIT_AUTHOR_NAME: "edge-glhub-bot"
           GIT_AUTHOR_EMAIL: "roxanne+gh_bot@groundlight.ai"
