@@ -26,7 +26,7 @@ export GROUNDLIGHT_ENDPOINT=http://localhost:30101
 To find the correct port, run `kubectl get services` and you should see an entry like this:
 ```
 NAME                                                        TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)                         AGE
-service/edge-endpoint-service                               NodePort   10.43.141.253   <none>        6717:30101/TCP                  23m
+service/edge-endpoint-service                               NodePort   10.43.141.253   <none>        30101:30101/TCP                 23m
 ```
 
 The port is the second number listed under ports for the `edge-endpoint-service` (in this case, 30101).

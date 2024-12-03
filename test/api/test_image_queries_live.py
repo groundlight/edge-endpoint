@@ -12,7 +12,7 @@ from app.core.utils import pil_image_to_bytes
 
 # Tests in this file require a live edge-endpoint server and GL Api token in order to run.
 # Not ideal for unit-testing.
-TEST_ENDPOINT = os.getenv("LIVE_TEST_ENDPOINT", "http://localhost:6717")
+TEST_ENDPOINT = os.getenv("LIVE_TEST_ENDPOINT", "http://localhost:30101")
 MAX_WAIT_TIME_S = 60
 
 # Detector ID associated with the detector with parameters
