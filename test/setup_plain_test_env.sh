@@ -13,7 +13,7 @@
 # > docker run --name groundlight-edge \
 #      -e LOG_LEVEL=DEBUG \
 #      -e EDGE_CONFIG \
-#      --rm -it -p 6717:6717 edge-endpoint
+#      --rm -it -p 30101:30101 edge-endpoint
 
 # Then in another terminal, run the tests:
 # > make test-with-docker
