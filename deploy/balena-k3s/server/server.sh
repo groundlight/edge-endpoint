@@ -27,7 +27,7 @@ if [ "${INFERENCE_FLAVOR}" = "GPU" ]; then
 fi
 
 # NOTE: this script is only intended to support a single-node "cluster".
-# Multi-node clusters require using ectd as a datastore, instead of the k8s default mysql.
+# Multi-node clusters require using etcd as a datastore, instead of the k8s default mysql.
 # Etcd doesnt work well when the underlying storage is an sd card, like on raspberry pi.
 # If we ever do want multi-node we'd have to pass `--server` or `--cluster-init` args to k3s.
 # https://docs.k3s.io/cli/server

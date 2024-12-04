@@ -63,4 +63,4 @@ RUN echo "source /app/edge-endpoint/deploy/balena-k3s/bastion/src/kube-bash.sh" 
 RUN chmod +x ./edge-endpoint/deploy/bin/setup-ee.sh
 
 ENTRYPOINT []
-CMD ["/bin/sh", "-c", "RUN_EDGE_ENDPOINT=1 ./edge-endpoint/deploy/bin/setup-ee.sh && tail -f /dev/null"]
+CMD ["/bin/sh", "-c", "./edge-endpoint/deploy/bin/setup-ee.sh && tail -f /dev/null"]

@@ -42,7 +42,7 @@ Now, we have our k3s single-node cluster built and running, but we have not star
 see the [Configuration](#Configuration) section below (specifically, you will need to set the `RUN_EDGE_ENDPOINT` variable).
 
 ### Configuration
-Configure the following variables via the `<fleet>/Variables` or (less preferably) `<device>/Device Variables` interfaces on the BalenaCloud dashboard:
+Configure the following variables via the `<fleet>/Variables` or `<device>/Device Variables` interfaces on the BalenaCloud dashboard:
 ```
 GROUNDLIGHT_API_TOKEN - so that we can authorize the fetching of edge model binaries
 AWS_ACCESS_KEY_ID - so we can pull the edge-endpoint and gl-edge-inference images from ECR

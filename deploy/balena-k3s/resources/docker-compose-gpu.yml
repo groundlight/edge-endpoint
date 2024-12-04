@@ -8,6 +8,7 @@ services:
     build:
       context: deploy/balena-k3s/gpu
     privileged: true
+    restart: no  # Only run once, end after exiting, as it's a one-time setup
 
   server:
     # https://docs.k3s.io/advanced#running-k3s-in-docker
@@ -33,7 +34,8 @@ services:
       - k3s-server:/var/lib/rancher/k3s
       - shared:/shared
     depends_on:
-     - gpu
+      gpu:
+        condition: service_completed_successfully
 
   bastion:
     build:
