@@ -8,7 +8,14 @@ from model import (
     Source,
 )
 
-from app.core.utils import create_iq, prefixed_ksuid
+from app.core.utils import (
+    ModelInfoBase,
+    ModelInfoNoBinary,
+    ModelInfoWithBinary,
+    create_iq,
+    parse_model_info,
+    prefixed_ksuid,
+)
 
 
 class TestCreateIQ:
@@ -101,3 +108,36 @@ class TestCreateIQ:
                 confidence_threshold=self.confidence_threshold,
                 query="Test query",
             )
+
+
+class TestParseModelInfo:
+    def test_parse_with_binary(self):
+        model_info = {
+            "pipeline_config": "test_pipeline_config",
+            "predictor_metadata": "test_metadata",
+            "model_binary_id": "test_binary_id",
+            "model_binary_url": "test_binary_url",
+        }
+        model_info = parse_model_info(model_info)
+
+        assert isinstance(model_info, ModelInfoBase)
+        assert isinstance(model_info, ModelInfoWithBinary)
+
+    def test_parse_no_binary(self):
+        model_info = {
+            "pipeline_config": "test_pipeline_config",
+            "predictor_metadata": "test_metadata",
+            "model_binary_id": None,
+            "model_binary_url": None,
+        }
+        model_info = parse_model_info(model_info)
+        assert isinstance(model_info, ModelInfoBase)
+        assert isinstance(model_info, ModelInfoNoBinary)
+
+        model_info = {
+            "pipeline_config": "test_pipeline_config",
+            "predictor_metadata": "test_metadata",
+        }
+        model_info = parse_model_info(model_info)
+        assert isinstance(model_info, ModelInfoBase)
+        assert isinstance(model_info, ModelInfoNoBinary)

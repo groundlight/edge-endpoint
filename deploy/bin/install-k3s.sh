@@ -6,7 +6,7 @@ set -ex
 K="k3s kubectl"
 
 # Update system
-sudo apt update && sudo apt upgrade -y
+sudo apt update && sudo apt upgrade -y && sudo apt install -y jq curl
 
 # Check cgroup setup
 ./check_cgroup.sh

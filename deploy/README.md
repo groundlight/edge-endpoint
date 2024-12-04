@@ -10,10 +10,16 @@ The instructions below are fairly opinionated, optimized for single-node cluster
 If you don't have [k3s](https://docs.k3s.io/) installed, there are two scripts which can install it depending on whether you have a CUDA GPU or not.  If you don't set up a GPU, the models will run more slowly on CPU.
 
 ```shell
+# For CPU inference
 ./deploy/bin/install-k3s.sh
-# or to install on a GPU system
+```
+
+```shell
+# For GPU inference
 ./deploy/bin/install-k3s-nvidia.sh
 ```
+
+(Note: these scripts depend on the Linux utilities `curl` and `jq`. If these aren't on your system, the scripts will install them for you.)
 
 You might want to customize the [edge config file](../configs/edge-config.yaml) to include the detector ID's you want to run.  Adding detector ID's to the config file will cause inference pods to be initialized automatically for each detector. Even if they aren't configured in the config file,
 edge inference will be set up for each detector ID for which the Groundlight service receives requests (note that it

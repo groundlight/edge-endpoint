@@ -16,7 +16,7 @@ spec:
   ports:
   - protocol: TCP
     # Service port for NGINX
-    port: 6717
+    port: 30101
     nodePort: 30101
   type: NodePort
 ---
@@ -55,7 +55,7 @@ spec:
         image: *edgeEndpointImage
         imagePullPolicy: Always
         ports:
-        - containerPort: 6717
+        - containerPort: 30101
         env:
         - name: LOG_LEVEL
           value: "INFO"
@@ -76,14 +76,14 @@ spec:
         startupProbe:
           httpGet:
             path: /health/live  # Checks if the server is up
-            port: 6717
+            port: 30101
           initialDelaySeconds: 10
           periodSeconds: 10
           failureThreshold: 6  # Wait for up to 1 min
         readinessProbe:
           httpGet:
             path: /health/ready  # Checks if the server is ready to serve requests
-            port: 6717
+            port: 30101
           initialDelaySeconds: 10
           periodSeconds: 10
           failureThreshold: 6  # Wait for up to 1 min

@@ -1,5 +1,6 @@
 # Build args
-ARG NGINX_PORT=6717
+ARG NGINX_PORT=30101
+ARG NGINX_PORT_OLD=6717
 ARG UVICORN_PORT=6718
 ARG APP_ROOT="/groundlight-edge"
 ARG POETRY_HOME="/opt/poetry"
@@ -23,12 +24,12 @@ ARG POETRY_VERSION
 # since they are required by OpenCV
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       bash \
-       curl \
-       nginx \
-       libglib2.0-0 \
-       libgl1-mesa-glx \
-       sqlite3 \
+    bash \
+    curl \
+    nginx \
+    libglib2.0-0 \
+    libgl1-mesa-glx \
+    sqlite3 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && curl -sSL https://install.python-poetry.org | python -
@@ -95,4 +96,4 @@ RUN ln -sf /dev/stdout /var/log/nginx/access.log && \
 CMD nginx && poetry run uvicorn --workers 8 --host 0.0.0.0 --port ${APP_PORT} --proxy-headers app.main:app
 
 # Document the exposed port, which is configured in nginx.conf
-EXPOSE ${NGINX_PORT}
+EXPOSE ${NGINX_PORT} ${NGINX_PORT_OLD}
