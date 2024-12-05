@@ -13,7 +13,13 @@ from jinja2 import Template
 from app.core.configs import EdgeInferenceConfig
 from app.core.file_paths import MODEL_REPOSITORY_PATH
 from app.core.speedmon import SpeedMonitor
-from app.core.utils import ModelInfoBase, ModelInfoWithBinary, parse_model_info
+from app.core.utils import (
+    ModelInfoBase,
+    ModelInfoWithBinary,
+    _get_groundlight_sdk_instance_internal,
+    get_detector_metadata,
+    parse_model_info,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -238,6 +244,11 @@ class EdgeInferenceManager:
 
         # fallback to env var if we dont have a token in the config
         api_token = api_token or os.environ.get("GROUNDLIGHT_API_TOKEN", None)
+
+        # Refresh the detector metadata to ensure we have the latest confidence threshold
+        get_detector_metadata.cache.pop(detector_id, None)
+        gl = _get_groundlight_sdk_instance_internal(api_token)
+        get_detector_metadata(detector_id, gl)
 
         model_dir = os.path.join(self.MODEL_REPOSITORY, detector_id)
         model_info = fetch_model_info(detector_id, api_token=api_token)

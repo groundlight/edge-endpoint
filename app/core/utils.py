@@ -1,14 +1,18 @@
 from datetime import datetime, timezone
+from functools import lru_cache
 from io import BytesIO
 from typing import Any, Callable
 
+import cachetools
 import ksuid
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
+from groundlight import Groundlight
 from model import (
     ROI,
     BinaryClassificationResult,
     CountingResult,
     CountModeConfiguration,
+    Detector,
     ImageQuery,
     ImageQueryTypeEnum,
     Label,
@@ -20,6 +24,38 @@ from PIL import Image
 from pydantic import BaseModel, ValidationError
 
 from app.core import constants
+
+MAX_SDK_INSTANCES_CACHE_SIZE = 1000
+MAX_DETECTOR_IDS_TTL_CACHE_SIZE = 1000
+TTL_TIME = 3600  # 1 hour
+
+
+@lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
+def _get_groundlight_sdk_instance_internal(api_token: str):
+    return Groundlight(api_token=api_token)
+
+
+def get_groundlight_sdk_instance(request: Request):
+    """
+    Returns a (cached) Groundlight SDK instance given an API token.
+    The SDK handles validation of the API token token itself, so there's no
+    need to do that here.
+    """
+    api_token = request.headers.get("x-api-token")
+    return _get_groundlight_sdk_instance_internal(api_token)
+
+
+@cachetools.cached(
+    cache=cachetools.TTLCache(maxsize=MAX_DETECTOR_IDS_TTL_CACHE_SIZE, ttl=TTL_TIME),
+    key=lambda detector_id, gl: detector_id,
+)
+def get_detector_metadata(detector_id: str, gl: Groundlight) -> Detector:
+    """
+    Returns detector metadata from the Groundlight API.
+    Caches the result so that we don't have to make an expensive API call every time.
+    """
+    detector = safe_call_sdk(gl.get_detector, id=detector_id)
+    return detector
 
 
 def create_iq(  # noqa: PLR0913
