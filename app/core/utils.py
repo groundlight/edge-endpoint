@@ -27,7 +27,7 @@ from app.core import constants
 
 MAX_SDK_INSTANCES_CACHE_SIZE = 1000
 MAX_DETECTOR_IDS_TTL_CACHE_SIZE = 1000
-TTL_TIME = 3600  # 1 hour
+TTL_TIME = 600  # 10 minutes
 
 
 @lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
