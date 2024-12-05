@@ -10,10 +10,8 @@ from model import (
 from app.core.app_state import (
     AppState,
     get_app_state,
-    get_detector_metadata,
-    get_groundlight_sdk_instance,
 )
-from app.core.utils import create_iq, safe_call_sdk
+from app.core.utils import create_iq, get_detector_metadata, get_groundlight_sdk_instance, safe_call_sdk
 
 logger = logging.getLogger(__name__)
 
