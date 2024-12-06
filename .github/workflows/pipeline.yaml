@@ -101,10 +101,10 @@ jobs:
 
 
   test-with-k3s:
-    if: (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+    if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
       # We only run this action if all the prior test actions succeed
-      needs:
-        - test-general-edge-endpoint
+    needs:
+      - test-general-edge-endpoint
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
@@ -223,7 +223,7 @@ jobs:
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
   build-push-edge-endpoint-multiplatform:
-    if: (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+    if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     # We only run this action if all the prior test actions succeed
     needs:
       - test-general-edge-endpoint
@@ -246,11 +246,10 @@ jobs:
         uses: actions/checkout@v4
       - name: Build and Push Multiplatform edge-endpoint Image to ECR
         timeout-minutes: 45
-        run:
-          ./deploy/bin/build-push-edge-endpoint-image.sh
+        run: ./deploy/bin/build-push-edge-endpoint-image.sh
 
   update-glhub:
-    needs: test-in-k3s
+    needs: test-with-k3s
     runs-on: ubuntu-latest
     environment: live
 
