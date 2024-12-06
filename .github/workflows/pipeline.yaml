@@ -104,7 +104,7 @@ jobs:
     if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
       # We only run this action if all the prior test actions succeed
     needs:
-      - test-sdk
+      - test-general-edge-endpoint
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
