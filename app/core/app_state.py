@@ -4,7 +4,7 @@ from functools import lru_cache
 
 import cachetools
 import yaml
-from fastapi import BackgroundTasks, Request
+from fastapi import Request
 from groundlight import Groundlight
 from model import (
     Detector,
@@ -121,12 +121,13 @@ class TimestampedTTLCache(cachetools.TTLCache):
         return self.__timestamps.get(key)
 
 
-def refresh_detector_metadata_if_needed(detector_id: str, gl: Groundlight, background_tasks: BackgroundTasks) -> None:
-    """Check if detector metadata needs refreshing and schedule a background task if metadata is too old."""
+def refresh_detector_metadata_if_needed(detector_id: str, gl: Groundlight) -> None:
+    """Check if detector metadata needs refreshing and refresh it if it's too old."""
     cached_value_age = get_detector_metadata.cache.timer() - get_detector_metadata.cache.get_timestamp(detector_id)
     if cached_value_age > REFRESH_METADATA_INTERVAL:
         get_detector_metadata.cache.pop(detector_id, None)
-        background_tasks.add_task(get_detector_metadata, detector_id=detector_id, gl=gl)
+        # Repopulate the cache with the fresh metadata
+        get_detector_metadata(detector_id=detector_id, gl=gl)
 
 
 @cachetools.cached(
