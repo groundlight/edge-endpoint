@@ -5,7 +5,7 @@ from typing import Any, Callable
 
 import cachetools
 import ksuid
-from fastapi import HTTPException, Request
+from fastapi import BackgroundTasks, HTTPException, Request
 from groundlight import Groundlight
 from model import (
     ROI,
@@ -28,6 +28,7 @@ from app.core import constants
 MAX_SDK_INSTANCES_CACHE_SIZE = 1000
 MAX_DETECTOR_IDS_TTL_CACHE_SIZE = 1000
 TTL_TIME = 600  # 10 minutes
+REFRESH_METADATA_INTERVAL = 30  # in seconds
 
 
 @lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
@@ -45,8 +46,37 @@ def get_groundlight_sdk_instance(request: Request):
     return _get_groundlight_sdk_instance_internal(api_token)
 
 
+class TimestampedTTLCache(cachetools.TTLCache):
+    """TTLCache subclass that tracks when items were added to the cache."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__timestamps = {}  # Store timestamps for each key
+
+    def __setitem__(self, key, value, cache_setitem=cachetools.Cache.__setitem__):
+        # Track the current time when setting an item
+        self.__timestamps[key] = self.timer()
+        super().__setitem__(key, value, cache_setitem)
+
+    def __delitem__(self, key, cache_delitem=cachetools.Cache.__delitem__):
+        super().__delitem__(key, cache_delitem)
+        self.__timestamps.pop(key, None)
+
+    def get_timestamp(self, key):
+        """Get the timestamp when an item was added to the cache."""
+        return self.__timestamps.get(key)
+
+
+def refresh_detector_metadata_if_needed(detector_id: str, gl: Groundlight, background_tasks: BackgroundTasks) -> None:
+    """Check if detector metadata needs refreshing and schedule a background task if metadata is too old."""
+    cached_value_age = get_detector_metadata.cache.timer() - get_detector_metadata.cache.get_timestamp(detector_id)
+    if cached_value_age > REFRESH_METADATA_INTERVAL:
+        get_detector_metadata.cache.pop(detector_id, None)
+        background_tasks.add_task(get_detector_metadata, detector_id=detector_id, gl=gl)
+
+
 @cachetools.cached(
-    cache=cachetools.TTLCache(maxsize=MAX_DETECTOR_IDS_TTL_CACHE_SIZE, ttl=TTL_TIME),
+    cache=TimestampedTTLCache(maxsize=MAX_DETECTOR_IDS_TTL_CACHE_SIZE, ttl=TTL_TIME),
     key=lambda detector_id, gl: detector_id,
 )
 def get_detector_metadata(detector_id: str, gl: Groundlight) -> Detector:

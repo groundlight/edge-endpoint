@@ -11,7 +11,13 @@ from app.core.app_state import (
     AppState,
     get_app_state,
 )
-from app.core.utils import create_iq, get_detector_metadata, get_groundlight_sdk_instance, safe_call_sdk
+from app.core.utils import (
+    create_iq,
+    get_detector_metadata,
+    get_groundlight_sdk_instance,
+    refresh_detector_metadata_if_needed,
+    safe_call_sdk,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +134,8 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
     # Confirm the existence of the detector in GL, get relevant metadata
     detector_metadata = get_detector_metadata(detector_id=detector_id, gl=gl)  # NOTE: API call (once, then cached)
+    refresh_detector_metadata_if_needed(detector_id, gl, background_tasks)
+
     confidence_threshold = confidence_threshold or detector_metadata.confidence_threshold
 
     # -- Edge-model Inference --
