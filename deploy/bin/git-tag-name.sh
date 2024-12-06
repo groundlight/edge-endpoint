@@ -5,6 +5,8 @@
 #     including the branch name, and a consistent hash of the uncommitted changes
 
 set -e
+cd "$(dirname "$0")"
+
 
 fail() {
     echo $1

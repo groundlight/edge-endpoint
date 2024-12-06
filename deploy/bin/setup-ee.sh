@@ -14,7 +14,6 @@
 # - DEPLOYMENT_NAMESPACE: The namespace for deployment. Defaults to the current namespace.
 # - RUN_EDGE_ENDPOINT: Controls the launch of edge endpoint pods.
 #   - If set, the edge-endpoint pods will be launched. If not set, pods will not be launched.
-
 set -ex
 
 # If we're in a container, sudo won't be available. But otherwise there are commands where we want sudo.
@@ -67,12 +66,22 @@ K=${KUBECTL_CMD:-"kubectl"}
 INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"GPU"}
 DEPLOY_LOCAL_VERSION=${DEPLOY_LOCAL_VERSION:-1}
 DEPLOYMENT_NAMESPACE=${DEPLOYMENT_NAMESPACE:-$($K config view -o json | jq -r '.contexts[] | select(.name == "'$($K config current-context)'") | .context.namespace // "default"')}
+IMAGE_TAG=${IMAGE_TAG:-"latest"}
 
 # Update K to include the deployment namespace
 K="$K -n $DEPLOYMENT_NAMESPACE"
 
 # move to the root directory of the repo
 cd "$(dirname "$0")"/../..
+
+
+# Replace some configurable values in our deployment manifests,
+# if they are provided in environment variables.
+
+# Most users do not need to think about these.
+
+PERSISTENT_VOLUME_NAME=${PERSISTENT_VOLUME_NAME:-"edge-endpoint-pv"}
+EDGE_ENDPOINT_PORT=${EDGE_ENDPOINT_PORT:-30101}
 
 # Create Secrets
 if ! ./deploy/bin/make-aws-secret.sh; then
@@ -137,28 +146,33 @@ $K get service -o custom-columns=":metadata.name" --no-headers=true | \
 
 # Check if DEPLOY_LOCAL_VERSION is set. If so, use a local volume instead of an EFS volume
 if [[ "${DEPLOY_LOCAL_VERSION}" == "1" ]]; then
-    if ! check_pv_conflict "edge-endpoint-pv" "local-sc"; then
-        fail "PersistentVolume edge-endpoint-pv conflicts with the existing resource."
+    if ! check_pv_conflict "$PERSISTENT_VOLUME_NAME" "local-sc"; then
+        fail "PersistentVolume $PERSISTENT_VOLUME_NAME conflicts with the existing resource."
     fi
 
-    $K apply -f deploy/k3s/local_persistent_volume.yaml
+    # Use envsubst to replace the PERSISTENT_VOLUME_NAME, PERSISTENT_VOLUME_NAME in the local_persistent_volume.yaml template
+    envsubst < deploy/k3s/local_persistent_volume.yaml > deploy/k3s/local_persistentvolume.yaml
+    $K apply -f deploy/k3s/local_persistentvolume.yaml
+    rm deploy/k3s/local_persistentvolume.yaml
+
 else
     # If environment variable EFS_VOLUME_ID is not set, exit
     if [[ -z "${EFS_VOLUME_ID}" ]]; then
         fail "EFS_VOLUME_ID environment variable not set"
     fi
 
-    if ! check_pv_conflict "edge-endpoint-pv" "efs-sc"; then
-        fail "PersistentVolume edge-endpoint-pv conflicts with the existing resource."
+    if ! check_pv_conflict "$PERSISTENT_VOLUME_NAME" "efs-sc"; then
+        fail "PersistentVolume $PERSISTENT_VOLUME_NAME conflicts with the existing resource."
     fi
 
-    # Use envsubst to replace the EFS_VOLUME_ID in the persistentvolumeclaim.yaml template
+    # Use envsubst to replace the EFS_VOLUME_ID, PERSISTENT_VOLUME_NAME, PERSISTENT_PERSISTENT_VOLUME_NAMEVOLUME_CLAIM_NAME
+    # in the persistentvolumeclaim.yaml template
     envsubst < deploy/k3s/efs_persistent_volume.yaml > deploy/k3s/persistentvolume.yaml
     $K apply -f deploy/k3s/persistentvolume.yaml
     rm deploy/k3s/persistentvolume.yaml
 fi
 
-# Check if the edge-endpoint-pvc exists. If not, create it
+# Check if the persistent volume claim exists. If not, create it
 if ! $K get pvc edge-endpoint-pvc; then
     # If environment variable EFS_VOLUME_ID is not set, exit
     if [[ -z "${EFS_VOLUME_ID}" ]]; then
@@ -179,6 +193,10 @@ $K apply -f deploy/k3s/service_account.yaml.tmp
 rm deploy/k3s/service_account.yaml.tmp
 
 $K apply -f deploy/k3s/inference_deployment/warmup_inference_model.yaml
-$K apply -f deploy/k3s/edge_deployment/edge_deployment.yaml
+
+# Substitutes the EDGE_ENDPOINT_PORT
+envsubst < deploy/k3s/edge_deployment/edge_deployment.yaml > deploy/k3s/edge_deployment/edge_deployment.yaml.tmp
+$K apply -f deploy/k3s/edge_deployment/edge_deployment.yaml.tmp
+rm deploy/k3s/edge_deployment/edge_deployment.yaml.tmp
 
 $K describe deployment edge-endpoint

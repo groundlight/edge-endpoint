@@ -1,7 +1,7 @@
 apiVersion: v1 
 kind: PersistentVolume 
 metadata:
-  name: edge-endpoint-pv
+  name: ${PERSISTENT_VOLUME_NAME}
 spec:
   capacity: 
     storage: 2Gi
