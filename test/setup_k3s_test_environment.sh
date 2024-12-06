@@ -37,15 +37,12 @@ fi
 
 # Build the Docker image and import it into k3s
 echo "Building the Docker image..."
-cd ..
 ls
 ../deploy/bin/build-push-edge-endpoint-image.sh dev
 export IMAGE_TAG=$(../deploy/bin/git-tag-name.sh)
-echo sfnfsjkdfnsjdf
-echo $IMAGE_TAG
 
 export INFERENCE_FLAVOR="CPU"
-./deploy/bin/setup-ee.sh
+../deploy/bin/setup-ee.sh
 
 export LIVE_TEST_ENDPOINT="http://localhost:$EDGE_ENDPOINT_PORT"
 echo "Waiting for edge-endpoint pods to rollout..."

@@ -197,6 +197,6 @@ $K apply -f deploy/k3s/inference_deployment/warmup_inference_model.yaml
 # Substitutes the EDGE_ENDPOINT_PORT
 envsubst < deploy/k3s/edge_deployment/edge_deployment.yaml > deploy/k3s/edge_deployment/edge_deployment.yaml.tmp
 $K apply -f deploy/k3s/edge_deployment/edge_deployment.yaml.tmp
-# rm deploy/k3s/edge_deployment/edge_deployment.yaml.tmp
+rm deploy/k3s/edge_deployment/edge_deployment.yaml.tmp
 
 $K describe deployment edge-endpoint
