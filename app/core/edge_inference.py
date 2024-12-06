@@ -2,7 +2,7 @@ import logging
 import os
 import shutil
 import time
-from typing import Dict, Optional
+from typing import Optional
 
 import requests
 import yaml
@@ -10,11 +10,10 @@ from cachetools import TTLCache, cached
 from fastapi import HTTPException, status
 from jinja2 import Template
 
+from app.core.configs import EdgeInferenceConfig
 from app.core.file_paths import MODEL_REPOSITORY_PATH
 from app.core.speedmon import SpeedMonitor
 from app.core.utils import ModelInfoBase, ModelInfoWithBinary, parse_model_info
-
-from .configs import LocalInferenceConfig, RootEdgeConfig
 
 logger = logging.getLogger(__name__)
 
@@ -114,43 +113,35 @@ class EdgeInferenceManager:
 
     def __init__(
         self,
-        inference_configs: Dict[str, LocalInferenceConfig] | None,
-        edge_config: RootEdgeConfig,
+        detector_inference_configs: dict[str, EdgeInferenceConfig] | None,
         verbose: bool = False,
     ) -> None:
         """
         Initializes the edge inference manager.
         Args:
-            inference_configs: Dictionary of detector IDs to LocalInferenceConfig objects
+            detector_inference_configs: Dictionary of detector IDs to EdgeInferenceConfig objects
             edge_config: RootEdgeConfig object
             verbose: Whether to print verbose logs from the inference server client
         """
         self.verbose = verbose
-        self.inference_configs, self.inference_client_urls = {}, {}
+        self.detector_inference_configs, self.inference_client_urls = {}, {}
         self.speedmon = SpeedMonitor()
 
-        # Last time we escalated to cloud for each detector
-        self.last_escalation_times: dict[str, float | None] = (
-            {detector_id: None for detector_id in edge_config.detectors.keys()} if edge_config else {}
-        )
-
-        # Minimum time between escalations for each detector
-        self.min_times_between_escalations = (
-            {
-                detector_id: detector_config.min_time_between_escalations
-                for detector_id, detector_config in edge_config.detectors.items()
-            }
-            if edge_config
-            else {}
-        )
-
-        if inference_configs:
-            self.inference_configs = inference_configs
+        if detector_inference_configs:
+            self.detector_inference_configs = detector_inference_configs
             self.inference_client_urls = {
                 detector_id: get_edge_inference_service_name(detector_id) + ":8000"
-                for detector_id in self.inference_configs.keys()
-                if self.detector_configured_for_local_inference(detector_id)
+                for detector_id in self.detector_inference_configs.keys()
+                if self.detector_configured_for_edge_inference(detector_id)
             }
+
+        # Last time we escalated to cloud for each detector
+        self.last_escalation_times = {detector_id: None for detector_id in self.detector_inference_configs.keys()}
+        # Minimum time between escalations for each detector
+        self.min_times_between_escalations = {
+            detector_id: detector_inference_config.min_time_between_escalations
+            for detector_id, detector_inference_config in self.detector_inference_configs.items()
+        }
 
     def update_inference_config(self, detector_id: str, api_token: str) -> None:
         """
@@ -161,12 +152,12 @@ class EdgeInferenceManager:
             api_token: API token required to fetch inference models
 
         """
-        if detector_id not in self.inference_configs.keys():
-            self.inference_configs[detector_id] = LocalInferenceConfig(enabled=True, api_token=api_token)
+        if detector_id not in self.detector_inference_configs.keys():
+            self.detector_inference_configs[detector_id] = EdgeInferenceConfig(enabled=True, api_token=api_token)
             self.inference_client_urls[detector_id] = get_edge_inference_service_name(detector_id) + ":8000"
             logger.info(f"Set up edge inference for {detector_id}")
 
-    def detector_configured_for_local_inference(self, detector_id: str) -> bool:
+    def detector_configured_for_edge_inference(self, detector_id: str) -> bool:
         """
         Checks if the detector is configured to run local inference.
         Args:
@@ -174,10 +165,13 @@ class EdgeInferenceManager:
         Returns:
             True if the detector is configured to run local inference, False otherwise
         """
-        if not self.inference_configs:
+        if not self.detector_inference_configs:
             return False
 
-        return detector_id in self.inference_configs.keys() and self.inference_configs[detector_id].enabled
+        return (
+            detector_id in self.detector_inference_configs.keys()
+            and self.detector_inference_configs[detector_id].enabled
+        )
 
     def inference_is_available(self, detector_id: str) -> bool:
         """
@@ -237,8 +231,8 @@ class EdgeInferenceManager:
         logger.info(f"Checking if there is a new model available for {detector_id}")
 
         api_token = (
-            self.inference_configs[detector_id].api_token
-            if self.detector_configured_for_local_inference(detector_id)
+            self.detector_inference_configs[detector_id].api_token
+            if self.detector_configured_for_edge_inference(detector_id)
             else None
         )
 

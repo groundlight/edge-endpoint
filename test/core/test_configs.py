@@ -1,49 +1,46 @@
 import pytest
 
-from app.core.configs import DetectorConfig
+from app.core.configs import EdgeInferenceConfig
 
 
-def test_detector_config_validation():
-    DetectorConfig(
-        detector_id="det_xyz",
-        local_inference_template="default",
+def test_edge_inference_config_validation():
+    EdgeInferenceConfig(
+        enabled=True,
+        api_token="test_api_token",
         always_return_edge_prediction=False,
         disable_cloud_escalation=False,
+        min_time_between_escalations=2.0,
     )
 
-    DetectorConfig(
-        detector_id="det_xyz",
-        local_inference_template="default",
+    EdgeInferenceConfig(
         always_return_edge_prediction=True,
         disable_cloud_escalation=False,
     )
 
-    DetectorConfig(
-        detector_id="det_xyz",
-        local_inference_template="default",
+    EdgeInferenceConfig(
         always_return_edge_prediction=True,
         disable_cloud_escalation=True,
     )
 
-    DetectorConfig(
-        detector_id="det_xyz",
-        local_inference_template="default",
+    EdgeInferenceConfig(
+        enabled=False,
+        api_token="test_api_token",
         always_return_edge_prediction=True,
         disable_cloud_escalation=False,
         min_time_between_escalations=10,
     )
 
-    DetectorConfig(
-        detector_id="det_xyz",
-        local_inference_template="default",
+    EdgeInferenceConfig(
+        enabled=False,
+        api_token="test_api_token",
         always_return_edge_prediction=True,
         disable_cloud_escalation=False,
         min_time_between_escalations=0.5,
     )
 
-    DetectorConfig(
-        detector_id="det_xyz",
-        local_inference_template="default",
+    EdgeInferenceConfig(
+        enabled=True,
+        api_token="test_api_token",
         always_return_edge_prediction=True,
         disable_cloud_escalation=True,
         min_time_between_escalations=0.0,
@@ -51,9 +48,20 @@ def test_detector_config_validation():
 
     # disable_cloud_escalation cannot be True if always_return_edge_prediction is False
     with pytest.raises(ValueError):
-        DetectorConfig(
-            detector_id="det_xyz",
-            local_inference_template="default",
+        EdgeInferenceConfig(
+            enabled=True,
+            api_token="test_api_token",
             always_return_edge_prediction=False,
             disable_cloud_escalation=True,
+            min_time_between_escalations=2.0,
+        )
+
+    # min_time_between_escalations cannot be less than 0.0
+    with pytest.raises(ValueError):
+        EdgeInferenceConfig(
+            enabled=True,
+            api_token="test_api_token",
+            always_return_edge_prediction=False,
+            disable_cloud_escalation=True,
+            min_time_between_escalations=-0.5,
         )

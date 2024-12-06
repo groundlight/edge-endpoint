@@ -47,7 +47,7 @@ async def startup_event():
         scheduler.start()
 
     app.state.app_state.is_ready = True
-    logging.info("Application is ready to server requests.")
+    logging.info("Application is ready to serve requests.")
 
 
 @app.on_event("shutdown")
