@@ -4,6 +4,7 @@
 # live tests, which will hit the API service that got setup
 # Altogether, you can run everything with:
 # > make test-with-k3s
+cd "$(dirname "$0")"
 
 if [ -z "$GROUNDLIGHT_API_TOKEN" ]; then
     echo "Error: GROUNDLIGHT_API_TOKEN environment variable is not set."
@@ -34,6 +35,14 @@ if ! kubectl get namespace $DEPLOYMENT_NAMESPACE &> /dev/null; then
     kubectl create namespace $DEPLOYMENT_NAMESPACE
 fi
 
+# Build the Docker image and import it into k3s
+echo "Building the Docker image..."
+cd ..
+ls
+../deploy/bin/build-push-edge-endpoint-image.sh dev
+export IMAGE_TAG=$(../deploy/bin/git-tag-name.sh)
+echo sfnfsjkdfnsjdf
+echo $IMAGE_TAG
 
 export INFERENCE_FLAVOR="CPU"
 ./deploy/bin/setup-ee.sh
