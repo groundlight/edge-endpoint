@@ -14,10 +14,7 @@ from app.core.app_state import (
     get_groundlight_sdk_instance,
     refresh_detector_metadata_if_needed,
 )
-from app.core.utils import (
-    create_iq,
-    safe_call_sdk,
-)
+from app.core.utils import create_iq, safe_call_sdk
 
 logger = logging.getLogger(__name__)
 
