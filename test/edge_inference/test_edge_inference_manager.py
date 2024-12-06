@@ -68,7 +68,10 @@ class TestEdgeInferenceMangager:
                     edge_manager = EdgeInferenceManager(detector_inference_configs=None)
                     edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
                     detector_id = "test_detector"
-                    edge_manager.update_model(detector_id)
+                    with mock.patch(
+                        "app.core.utils.get_detector_metadata"
+                    ):  # Avoid API call for a detector that doesn't exist
+                        edge_manager.update_model(detector_id)
 
                     validate_model_directory(temp_dir, detector_id, 1, model_info_with_binary)
 
@@ -96,7 +99,10 @@ class TestEdgeInferenceMangager:
                 edge_manager = EdgeInferenceManager(detector_inference_configs=None)
                 edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
                 detector_id = "test_detector"
-                edge_manager.update_model(detector_id)
+                with mock.patch(
+                    "app.core.utils.get_detector_metadata"
+                ):  # Avoid API call for a detector that doesn't exist
+                    edge_manager.update_model(detector_id)
 
                 validate_model_directory(temp_dir, detector_id, 1, model_info_no_binary)
 
