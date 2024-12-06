@@ -13,11 +13,7 @@ from jinja2 import Template
 from app.core.configs import EdgeInferenceConfig
 from app.core.file_paths import MODEL_REPOSITORY_PATH
 from app.core.speedmon import SpeedMonitor
-from app.core.utils import (
-    ModelInfoBase,
-    ModelInfoWithBinary,
-    parse_model_info,
-)
+from app.core.utils import ModelInfoBase, ModelInfoWithBinary, parse_model_info
 
 logger = logging.getLogger(__name__)
 

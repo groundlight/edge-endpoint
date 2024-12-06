@@ -6,9 +6,7 @@ import cachetools
 import yaml
 from fastapi import Request
 from groundlight import Groundlight
-from model import (
-    Detector,
-)
+from model import Detector
 
 from .configs import EdgeInferenceConfig, RootEdgeConfig
 from .database import DatabaseManager
@@ -18,11 +16,10 @@ from .utils import safe_call_sdk
 
 logger = logging.getLogger(__name__)
 
-
 MAX_SDK_INSTANCES_CACHE_SIZE = 1000
 MAX_DETECTOR_IDS_TTL_CACHE_SIZE = 1000
 TTL_TIME = 600  # 10 minutes
-REFRESH_METADATA_INTERVAL = 30  # in seconds
+STALE_METADATA_THRESHOLD = 30  # 30 seconds
 
 
 def load_edge_config() -> RootEdgeConfig:
@@ -124,7 +121,7 @@ class TimestampedTTLCache(cachetools.TTLCache):
 def refresh_detector_metadata_if_needed(detector_id: str, gl: Groundlight) -> None:
     """Check if detector metadata needs refreshing and refresh it if it's too old."""
     cached_value_age = get_detector_metadata.cache.timer() - get_detector_metadata.cache.get_timestamp(detector_id)
-    if cached_value_age > REFRESH_METADATA_INTERVAL:
+    if cached_value_age > STALE_METADATA_THRESHOLD:
         get_detector_metadata.cache.pop(detector_id, None)
         # Repopulate the cache with the fresh metadata
         get_detector_metadata(detector_id=detector_id, gl=gl)
