@@ -249,3 +249,30 @@ jobs:
           set -ex
           kubectl rollout status deployment edge-endpoint --timeout=5m
           kubectl describe pod edge-endpoint
+
+  update-glhub:
+    needs: test-in-k3s
+    runs-on: ubuntu-latest
+    environment: live
+
+    steps:
+      - name: Checkout glhub
+        uses: actions/checkout@v4
+        with:
+          repository: groundlight/glhub
+          token: ${{ secrets.BOT_GITHUB_TOKEN }}
+          path: glhub
+
+      - name: Update GLHub
+        run: |
+          cd glhub
+          git config --global user.email "roxanne+gh_bot@groundlight.ai"
+          git config --global user.name "edge-glhub-bot"
+          git submodule update --init --recursive
+          git submodule update --remote edge-endpoint
+          git add .
+          git commit -m "Update edge endpoint submodule"
+          git push https://edge-glhub-bot:${{ secrets.BOT_GITHUB_TOKEN }}@github.com/groundlight/glhub.git main
+        env:
+          GIT_AUTHOR_NAME: "edge-glhub-bot"
+          GIT_AUTHOR_EMAIL: "roxanne+gh_bot@groundlight.ai"
