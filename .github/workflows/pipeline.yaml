@@ -249,24 +249,3 @@ jobs:
           set -ex
           kubectl rollout status deployment edge-endpoint --timeout=5m
           kubectl describe pod edge-endpoint
-  
-  deploy-edge-preflight-balena:
-    needs: 
-      - test-general-edge-endpoint
-      - test-in-k3s
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/deploy-balena.yaml
-    with:
-      FLEET_NAME: preflight
-    secrets:
-      BALENA_AUTH_TOKEN: ${{ secrets.BALENA_AUTH_TOKEN }}
-
-
-  deploy-edge-live-balena:
-    needs: 
-      - deploy-edge-preflight-balena
-    uses: ./.github/workflows/deploy-balena.yaml
-    with:
-      FLEET_NAME: live
-    secrets:
-      BALENA_AUTH_TOKEN: ${{ secrets.BALENA_AUTH_TOKEN }}
