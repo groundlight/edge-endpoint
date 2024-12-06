@@ -4,7 +4,6 @@
 # live tests, which will hit the API service that got setup
 # Altogether, you can run everything with:
 # > make test-with-k3s
-cd "$(dirname "$0")"
 
 if [ -z "$GROUNDLIGHT_API_TOKEN" ]; then
     echo "Error: GROUNDLIGHT_API_TOKEN environment variable is not set."
@@ -53,3 +52,4 @@ if ! kubectl rollout status deployment/edge-endpoint -n $DEPLOYMENT_NAMESPACE --
 fi
 
 echo "Edge-endpoint pods have successfully rolled out."
+
