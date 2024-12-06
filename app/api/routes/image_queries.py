@@ -10,12 +10,12 @@ from model import (
 from app.core.app_state import (
     AppState,
     get_app_state,
-)
-from app.core.utils import (
-    create_iq,
     get_detector_metadata,
     get_groundlight_sdk_instance,
     refresh_detector_metadata_if_needed,
+)
+from app.core.utils import (
+    create_iq,
     safe_call_sdk,
 )
 
