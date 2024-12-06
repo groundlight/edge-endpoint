@@ -99,7 +99,12 @@ jobs:
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
+
   test-with-k3s:
+    if: (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+      # We only run this action if all the prior test actions succeed
+      needs:
+        - test-general-edge-endpoint
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
@@ -135,7 +140,6 @@ jobs:
 
       - name: Run tests with k3s
         run: make test-with-k3s
-
 
   # Run Groundlight SDK tests against the edge proxy endpoint
   test-sdk:
@@ -218,13 +222,13 @@ jobs:
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
-
   build-push-edge-endpoint-multiplatform:
     if: (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
     # We only run this action if all the prior test actions succeed
     needs:
       - test-general-edge-endpoint
       - test-sdk
+      - test-with-k3s
     runs-on: ubuntu-22.04
     steps:
       - name: Configure AWS credentials
@@ -244,49 +248,6 @@ jobs:
         timeout-minutes: 45
         run:
           ./deploy/bin/build-push-edge-endpoint-image.sh
-
-  test-in-k3s:
-    needs:
-      # In order to test in k3s, we pull the latest edge-endpoint image from ECR. Which means that
-      # we need to build and push the image first or, we're just testing against a stale image.
-      - build-push-edge-endpoint-multiplatform
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v3
-
-      - name: Install k3s
-        run: |
-          curl -sfL https://get.k3s.io | sh -
-          sudo chmod 644 /etc/rancher/k3s/k3s.yaml
-          sudo chown $USER /etc/rancher/k3s/k3s.yaml
-          # symlink to kubeconfig
-          mkdir -p ~/.kube
-          ln -s /etc/rancher/k3s/k3s.yaml ~/.kube/config
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-
-      - name: Deploy the edge-endpoint yaml
-        run: |
-          set -ex
-          # Once there's a fix for disk-pressure issues on GHA's runner, we can uncomment the
-          # following command in order to set up the environment to test out edge inference
-          # source test/setup_inference_test_env.sh
-          export INFERENCE_FLAVOR="CPU"
-          export DEPLOYMENT_NAMESPACE="default"
-          bash deploy/bin/setup-ee.sh
-          kubectl describe deployment
-
-      - name: Wait for edge-endpoint pod to be ready
-        run: |
-          set -ex
-          kubectl rollout status deployment edge-endpoint --timeout=5m
-          kubectl describe pod edge-endpoint
 
   update-glhub:
     needs: test-in-k3s
