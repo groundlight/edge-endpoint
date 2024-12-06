@@ -11,10 +11,10 @@ pkill -f k3s || true
 rm -rf /var/lib/rancher/k3s/*
 sleep 2
 
-# Inference flavor can be either "CPU" or "GPU". If not set, default to "GPU".
-INFERENCE_FLAVOR="${INFERENCE_FLAVOR:-GPU}"
+# Whether to enable GPU support on K3s. Defaults to false.
+ENABLE_GPU="${ENABLE_GPU:-false}"
 
-if [ "${INFERENCE_FLAVOR}" = "GPU" ]; then
+if [ "${ENABLE_GPU}" = "true" ]; then
     # Make the root filesystem shared to allow NVIDIA driver modules to be loaded properly
     mount --make-rshared /
 

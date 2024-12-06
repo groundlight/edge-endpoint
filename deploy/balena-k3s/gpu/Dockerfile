@@ -9,6 +9,8 @@
 # kernel module (via insmod). This is necessary because the host device's BalenaOS is
 # read-only, so the Nvidia driver cannot be installed on the host OS.
 
+ARG NVIDIA_DRIVER_VERSION="550.127.05"
+
 FROM balenalib/genericx86-64-ext:bullseye-run-20211030
 
 WORKDIR /usr/src
@@ -24,7 +26,7 @@ ENV VERSION="6.0.24%2Brev1"
 ENV BALENA_MACHINE_NAME="generic-amd64"
 ENV YOCTO_VERSION=6.6.23
 ENV YOCTO_KERNEL=${YOCTO_VERSION}-yocto-standard
-ENV NVIDIA_DRIVER_VERSION=550.127.05
+ENV NVIDIA_DRIVER_VERSION=${NVIDIA_DRIVER_VERSION}
 ENV NVIDIA_DRIVER=NVIDIA-Linux-x86_64-${NVIDIA_DRIVER_VERSION}
 
 # Install some prereqs

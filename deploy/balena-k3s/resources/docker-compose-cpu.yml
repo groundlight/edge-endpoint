@@ -7,6 +7,9 @@ services:
     # https://docs.k3s.io/advanced#running-k3s-in-docker
     build:
       context: deploy/balena-k3s/server
+      args:
+        # Setting ENABLE_GPU to false avoids installing nvidia drivers, nvidia container runtime, etc.
+        ENABLE_GPU: "false"
     ulimits:
       nproc: 65535
       nofile:
