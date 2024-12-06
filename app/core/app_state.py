@@ -18,7 +18,8 @@ logger = logging.getLogger(__name__)
 
 MAX_SDK_INSTANCES_CACHE_SIZE = 1000
 MAX_DETECTOR_IDS_TTL_CACHE_SIZE = 1000
-TTL_TIME = 3600  # 1 hour
+TTL_TIME = 600  # 10 minutes
+STALE_METADATA_THRESHOLD = 30  # 30 seconds
 
 
 def load_edge_config() -> RootEdgeConfig:
@@ -96,8 +97,41 @@ def get_groundlight_sdk_instance(request: Request):
     return _get_groundlight_sdk_instance_internal(api_token)
 
 
+class TimestampedTTLCache(cachetools.TTLCache):
+    """TTLCache subclass that tracks when items were added to the cache."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__timestamps = {}  # Store timestamps for each key
+
+    def __setitem__(self, key, value, cache_setitem=cachetools.Cache.__setitem__):
+        # Track the current time when setting an item
+        self.__timestamps[key] = self.timer()
+        super().__setitem__(key, value, cache_setitem)
+
+    def __delitem__(self, key, cache_delitem=cachetools.Cache.__delitem__):
+        super().__delitem__(key, cache_delitem)
+        self.__timestamps.pop(key, None)
+
+    def get_timestamp(self, key):
+        """Get the timestamp when an item was added to the cache."""
+        return self.__timestamps.get(key)
+
+
+def refresh_detector_metadata_if_needed(detector_id: str, gl: Groundlight) -> None:
+    """Check if detector metadata needs refreshing based on age of cached value and refresh it if it's too old."""
+    cached_value_timestamp = get_detector_metadata.cache.get_timestamp(detector_id)
+    if cached_value_timestamp is not None:
+        cached_value_age = get_detector_metadata.cache.timer() - cached_value_timestamp
+        if cached_value_age > STALE_METADATA_THRESHOLD:
+            logger.info(f"Detector metadata for {detector_id=} is stale. Refreshing...")
+            get_detector_metadata.cache.pop(detector_id, None)
+            # Repopulate the cache with fresh metadata
+            get_detector_metadata(detector_id=detector_id, gl=gl)
+
+
 @cachetools.cached(
-    cache=cachetools.TTLCache(maxsize=MAX_DETECTOR_IDS_TTL_CACHE_SIZE, ttl=TTL_TIME),
+    cache=TimestampedTTLCache(maxsize=MAX_DETECTOR_IDS_TTL_CACHE_SIZE, ttl=TTL_TIME),
     key=lambda detector_id, gl: detector_id,
 )
 def get_detector_metadata(detector_id: str, gl: Groundlight) -> Detector:
