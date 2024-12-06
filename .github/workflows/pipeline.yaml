@@ -245,22 +245,72 @@ jobs:
         run:
           ./deploy/bin/build-push-edge-endpoint-image.sh
 
-  deploy-edge-preflight-balena:
-    needs: 
-      - test-general-edge-endpoint
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/deploy-balena.yaml
-    with:
-      FLEET_NAME: preflight
-    secrets:
-      BALENA_AUTH_TOKEN: ${{ secrets.BALENA_AUTH_TOKEN }}
+  test-in-k3s:
+    needs:
+      # In order to test in k3s, we pull the latest edge-endpoint image from ECR. Which means that
+      # we need to build and push the image first or, we're just testing against a stale image.
+      - build-push-edge-endpoint-multiplatform
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
 
+      - name: Install k3s
+        run: |
+          curl -sfL https://get.k3s.io | sh -
+          sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+          sudo chown $USER /etc/rancher/k3s/k3s.yaml
+          # symlink to kubeconfig
+          mkdir -p ~/.kube
+          ln -s /etc/rancher/k3s/k3s.yaml ~/.kube/config
 
-  deploy-edge-live-balena:
-    needs: 
-      - deploy-edge-preflight-balena
-    uses: ./.github/workflows/deploy-balena.yaml
-    with:
-      FLEET_NAME: live
-    secrets:
-      BALENA_AUTH_TOKEN: ${{ secrets.BALENA_AUTH_TOKEN }}
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Deploy the edge-endpoint yaml
+        run: |
+          set -ex
+          # Once there's a fix for disk-pressure issues on GHA's runner, we can uncomment the
+          # following command in order to set up the environment to test out edge inference
+          # source test/setup_inference_test_env.sh
+          export INFERENCE_FLAVOR="CPU"
+          export DEPLOYMENT_NAMESPACE="default"
+          bash deploy/bin/setup-ee.sh
+          kubectl describe deployment
+
+      - name: Wait for edge-endpoint pod to be ready
+        run: |
+          set -ex
+          kubectl rollout status deployment edge-endpoint --timeout=5m
+          kubectl describe pod edge-endpoint
+
+  update-glhub:
+    needs: test-in-k3s
+    runs-on: ubuntu-latest
+    environment: live
+
+    steps:
+      - name: Checkout glhub
+        uses: actions/checkout@v4
+        with:
+          repository: groundlight/glhub
+          token: ${{ secrets.BOT_GITHUB_TOKEN }}
+          path: glhub
+
+      - name: Update GLHub
+        run: |
+          cd glhub
+          git config --global user.email "roxanne+gh_bot@groundlight.ai"
+          git config --global user.name "edge-glhub-bot"
+          git submodule update --init --recursive
+          git submodule update --remote edge-endpoint
+          git add .
+          git commit -m "Update edge endpoint submodule"
+          git push https://edge-glhub-bot:${{ secrets.BOT_GITHUB_TOKEN }}@github.com/groundlight/glhub.git main
+        env:
+          GIT_AUTHOR_NAME: "edge-glhub-bot"
+          GIT_AUTHOR_EMAIL: "roxanne+gh_bot@groundlight.ai"

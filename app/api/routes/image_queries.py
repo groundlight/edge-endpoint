@@ -98,9 +98,13 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     await validate_query_params_for_edge(request)
 
     require_human_review = human_review == "ALWAYS"
-    detector_config = app_state.edge_config.detectors.get(detector_id)
-    return_edge_prediction = detector_config.always_return_edge_prediction if detector_config is not None else False
-    disable_cloud_escalation = detector_config.disable_cloud_escalation if detector_config is not None else False
+    detector_inference_config = app_state.edge_inference_manager.detector_inference_configs.get(detector_id)
+    return_edge_prediction = (
+        detector_inference_config.always_return_edge_prediction if detector_inference_config is not None else False
+    )
+    disable_cloud_escalation = (
+        detector_inference_config.disable_cloud_escalation if detector_inference_config is not None else False
+    )
 
     if require_human_review and return_edge_prediction:
         raise HTTPException(

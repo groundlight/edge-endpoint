@@ -4,7 +4,6 @@ from unittest import mock
 
 import pytest
 
-from app.core.configs import RootEdgeConfig
 from app.core.edge_inference import EdgeInferenceManager
 from app.core.utils import ModelInfoBase, ModelInfoNoBinary, ModelInfoWithBinary
 
@@ -66,9 +65,7 @@ class TestEdgeInferenceMangager:
                 with mock.patch("app.core.edge_inference.get_object_using_presigned_url") as mock_get_from_s3:
                     mock_get_from_s3.return_value = b"test_model"
                     mock_fetch.return_value = model_info_with_binary
-                    edge_manager = EdgeInferenceManager(
-                        inference_configs=None, edge_config=RootEdgeConfig(local_inference_templates={}, detectors={})
-                    )
+                    edge_manager = EdgeInferenceManager(detector_inference_configs=None)
                     edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
                     detector_id = "test_detector"
                     edge_manager.update_model(detector_id)
@@ -96,9 +93,7 @@ class TestEdgeInferenceMangager:
         with tempfile.TemporaryDirectory() as temp_dir:
             with mock.patch("app.core.edge_inference.fetch_model_info") as mock_fetch:
                 mock_fetch.return_value = model_info_no_binary
-                edge_manager = EdgeInferenceManager(
-                    inference_configs=None, edge_config=RootEdgeConfig(local_inference_templates={}, detectors={})
-                )
+                edge_manager = EdgeInferenceManager(detector_inference_configs=None)
                 edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
                 detector_id = "test_detector"
                 edge_manager.update_model(detector_id)
