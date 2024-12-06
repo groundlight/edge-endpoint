@@ -119,12 +119,15 @@ class TimestampedTTLCache(cachetools.TTLCache):
 
 
 def refresh_detector_metadata_if_needed(detector_id: str, gl: Groundlight) -> None:
-    """Check if detector metadata needs refreshing and refresh it if it's too old."""
-    cached_value_age = get_detector_metadata.cache.timer() - get_detector_metadata.cache.get_timestamp(detector_id)
-    if cached_value_age > STALE_METADATA_THRESHOLD:
-        get_detector_metadata.cache.pop(detector_id, None)
-        # Repopulate the cache with the fresh metadata
-        get_detector_metadata(detector_id=detector_id, gl=gl)
+    """Check if detector metadata needs refreshing based on age of cached value and refresh it if it's too old."""
+    cached_value_timestamp = get_detector_metadata.cache.get_timestamp(detector_id)
+    if cached_value_timestamp is not None:
+        cached_value_age = get_detector_metadata.cache.timer() - cached_value_timestamp
+        if cached_value_age > STALE_METADATA_THRESHOLD:
+            logger.info(f"Detector metadata for {detector_id=} is stale. Refreshing...")
+            get_detector_metadata.cache.pop(detector_id, None)
+            # Repopulate the cache with fresh metadata
+            get_detector_metadata(detector_id=detector_id, gl=gl)
 
 
 @cachetools.cached(
