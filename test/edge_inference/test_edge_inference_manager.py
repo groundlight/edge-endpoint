@@ -69,7 +69,7 @@ class TestEdgeInferenceMangager:
                     edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
                     detector_id = "test_detector"
                     with mock.patch(
-                        "app.core.utils.get_detector_metadata"
+                        "app.core.app_state.get_detector_metadata"
                     ):  # Avoid API call for a detector that doesn't exist
                         edge_manager.update_model(detector_id)
 
@@ -100,7 +100,7 @@ class TestEdgeInferenceMangager:
                 edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
                 detector_id = "test_detector"
                 with mock.patch(
-                    "app.core.utils.get_detector_metadata"
+                    "app.core.app_state.get_detector_metadata"
                 ):  # Avoid API call for a detector that doesn't exist
                     edge_manager.update_model(detector_id)
 
