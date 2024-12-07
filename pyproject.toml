@@ -36,7 +36,7 @@ matplotlib = "^3.9.2"
 
 [tool.poetry.group.lint.dependencies]
 autoflake = "^2.3.1"
-black = "^23.3.0"
+black = "^24.3.0"
 flake8 = "^6.0.0"
 isort = "^5.11.3"
 mypy = "^1.2.0"
