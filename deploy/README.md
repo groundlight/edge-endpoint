@@ -75,6 +75,11 @@ image to ECR see [Pushing/Pulling Images from ECR](#pushingpulling-images-from-e
 
 
 ## Troubleshooting Deployments
+
+### Pods with `ImagePullBackOff` Status
+
+If you run `kubectl get pods -n <YOUR-NAMESPACE>` and see pods with a `ImagePullBackOff` status, you may need to re-run [deploy/bin/make-aws-secret.sh](/deploy/bin/make-aws-secret.sh) to update the AWS credentials.  There is a known issue with expiration of the  AWS credentials used by docker/k3s to pull images from ECR.
+
 ### DNS Issues Inside Containers
 If your edge-endpoint pod comes online, but none of your inference pods come online, you may be experiencing DNS issues inside the containers.
 ```bash
