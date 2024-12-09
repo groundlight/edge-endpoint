@@ -9,7 +9,7 @@ from model import Detector
 from PIL import Image
 
 from app.core.utils import pil_image_to_bytes
-import pdb
+
 # Tests in this file require a live edge-endpoint server and GL Api token in order to run.
 # Not ideal for unit-testing.
 TEST_ENDPOINT = os.getenv("LIVE_TEST_ENDPOINT", "http://localhost:30101")
