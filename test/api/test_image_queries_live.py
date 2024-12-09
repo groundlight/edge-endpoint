@@ -9,7 +9,7 @@ from model import Detector
 from PIL import Image
 
 from app.core.utils import pil_image_to_bytes
-
+import pdb
 # Tests in this file require a live edge-endpoint server and GL Api token in order to run.
 # Not ideal for unit-testing.
 TEST_ENDPOINT = os.getenv("LIVE_TEST_ENDPOINT", "http://localhost:30101")
@@ -19,7 +19,7 @@ MAX_WAIT_TIME_S = 60
 # - name="edge_testing_det",
 # - query="Is there a dog in the image?",
 # - confidence_threshold=0.9
-DETECTOR_ID = "det_2SagpFUrs83cbMZsap5hZzRjZw4"
+DETECTOR_ID = os.getenv("DETECTOR_ID", "det_2SagpFUrs83cbMZsap5hZzRjZw4")
 
 
 @pytest.mark.live
