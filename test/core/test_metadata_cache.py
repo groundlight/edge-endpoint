@@ -66,11 +66,9 @@ def test_timestamped_ttl_cache():
 
 def test_refresh_detector_metadata_if_needed():
     """Test that refresh_detector_metadata_if_needed correctly refreshes the cache if the metadata is stale."""
-    # Mock the Groundlight SDK
     mock_gl = MagicMock()
     mock_timer = MockTimer()
 
-    # Patch both the cache timer and the safe_call_sdk function
     with (
         patch("app.core.utils.TimestampedTTLCache.timer", new=mock_timer),  # Enable control over the cache's timer
         patch("app.core.app_state.safe_call_sdk", return_value=MagicMock()) as mock_sdk_call,
