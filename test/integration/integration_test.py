@@ -1,4 +1,5 @@
 import argparse
+import random
 
 from groundlight import Groundlight, GroundlightClientError
 from model import Detector
@@ -30,13 +31,13 @@ def main():
     if args.detector_id:
         detector = gl.get_detector(args.detector_id)
 
-    if detector is None and args.mode != 'create_detector':
+    if detector is None and args.mode != "create_detector":
         raise ValueError("You must provide detector id unless mode is create detector")
 
-    if args.mode == 'create_detector':
+    if args.mode == "create_detector":
         detector_id = create_cat_detector()
-        print(detector_id) # print so that the shell script can save the value
-    elif args.mode == 'initial':
+        print(detector_id)  # print so that the shell script can save the value
+    elif args.mode == "initial":
         submit_initial(detector)
     elif args.mode == 'improve_model':
         improve_model(detector)
@@ -49,6 +50,7 @@ def create_cat_detector() -> str:
     detector = gl.create_detector(name=f"cat_{random_number}", query="Is this a cat?")
     detector_id = detector.id
     return detector_id
+
 
 def submit_initial(detector) -> str:
     # 0.5 threshold to ensure we get a edge answer
@@ -70,6 +72,7 @@ def improve_model(detector):
         iq_no = submit_dog(detector, confidence_threshold=1, wait=0)
         gl.add_label(image_query=iq_no, label='NO')
 
+
 def submit_final(detector_id: str):
     pass
 
@@ -89,6 +92,7 @@ def submit_dog(detector: Detector, confidence_threshold: float, wait: int = None
         img_file="./test/integration/dog.jpg",
         wait=wait
     )
+
 
 def read_image(img_file):
     with open(img_file, "rb") as img_file:
