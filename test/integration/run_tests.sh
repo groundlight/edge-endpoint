@@ -7,15 +7,29 @@ fi
 
 echo "Submitting image queries from the edge"
 
+echo "Submitting initial iqs, ensuring we get low confidence at first"
+# submit initial tests that we get low confidence answers at first
 poetry run python test/integration/integration_test.py -m initial -d $DETECTOR_ID
 
-# echo "Sleeping for 1 minute to allow deployment to get created..."
-# sleep 60
-# echo "Waiting for the deployment to rollout (inferencemodel-$detector_id)"
+echo "Training detector in the cloud"
+# now we improve the model by submitting many iqs and labels
+poetry run python test/integration/integration_test.py -m improve_model -d $DETECTOR_ID
 
-# if ! kubectl wait --for=condition=ready pod -l app=inferencemodel-$detector_id -n $DEPLOYMENT_NAMESPACE --timeout=2m; then
-#     echo "Error: inference model for detector $detector_id pods failed to become ready within the timeout period."
-#     exit 1
-# fi
+echo "Now we sleep for $REFRESH_RATE seconds to get a newer model" 
+sleep $REFRESH_RATE
+echo "Ensuring a new pod for the deployment $DETECTOR_ID_WITH_DASHES has been created in the last $REFRESH_RATE seconds..."
 
-# echo "Inference model for detector $detector_id has successfully rolled out"
+# Ensure our most recent pod is brand new
+most_recent_pod=$(kubectl get pods -n $DEPLOYMENT_NAMESPACE -l app=inference-server -o jsonpath='{.items[-1].metadata.name}')
+current_time=$(date +%s)
+pod_creation_time=$(kubectl get pod $most_recent_pod -n $DEPLOYMENT_NAMESPACE -o jsonpath='{.metadata.creationTimestamp}')
+pod_creation_time_seconds=$(date -d "$pod_creation_time" +%s)
+time_difference=$((current_time - pod_creation_time_seconds))
+
+# Check if the pod was created within 1.1 times the refresh rate
+if [ $time_difference -le $(echo "$REFRESH_RATE * 1.1" | bc) ]; then
+    echo "A new pod for the deployment $DETECTOR_ID_WITH_DASHES has been created within 1.1 times the refresh rate."
+else
+    echo "Error: No new pod for the deployment $DETECTOR_ID_WITH_DASHES has been created within 1.1 times the refresh rate."
+    exit 1
+fi
