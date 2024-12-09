@@ -58,7 +58,7 @@ def model_info_no_binary() -> ModelInfoNoBinary:
     return ModelInfoNoBinary(**model_info)
 
 
-class TestEdgeInferenceMangager:
+class TestEdgeInferenceManager:
     def test_update_model_with_binary(self, model_info_with_binary):
         with tempfile.TemporaryDirectory() as temp_dir:
             with mock.patch("app.core.edge_inference.fetch_model_info") as mock_fetch:
@@ -68,10 +68,7 @@ class TestEdgeInferenceMangager:
                     edge_manager = EdgeInferenceManager(detector_inference_configs=None)
                     edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
                     detector_id = "test_detector"
-                    with mock.patch(
-                        "app.core.app_state.get_detector_metadata"
-                    ):  # Avoid API call for a detector that doesn't exist
-                        edge_manager.update_model(detector_id)
+                    edge_manager.update_model(detector_id)
 
                     validate_model_directory(temp_dir, detector_id, 1, model_info_with_binary)
 
@@ -99,10 +96,7 @@ class TestEdgeInferenceMangager:
                 edge_manager = EdgeInferenceManager(detector_inference_configs=None)
                 edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
                 detector_id = "test_detector"
-                with mock.patch(
-                    "app.core.app_state.get_detector_metadata"
-                ):  # Avoid API call for a detector that doesn't exist
-                    edge_manager.update_model(detector_id)
+                edge_manager.update_model(detector_id)
 
                 validate_model_directory(temp_dir, detector_id, 1, model_info_no_binary)
 
