@@ -180,20 +180,20 @@ class TimestampedTTLCache(cachetools.TTLCache):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.__timestamps = {}  # Store timestamps for each key
+        self.timestamps = {}  # Store timestamps for each key
 
     def __setitem__(self, key, value, cache_setitem=cachetools.Cache.__setitem__):
         # Track the current time when setting an item
-        self.__timestamps[key] = self.timer()
+        self.timestamps[key] = self.timer()
         super().__setitem__(key, value, cache_setitem)
 
     def __delitem__(self, key, cache_delitem=cachetools.Cache.__delitem__):
         super().__delitem__(key, cache_delitem)
-        self.__timestamps.pop(key, None)
+        self.timestamps.pop(key, None)
 
     def get_timestamp(self, key) -> float | None:
         """Get the timestamp when an item was added to the cache."""
-        return self.__timestamps.get(key)
+        return self.timestamps.get(key)
 
 
 # Utilities for parsing the fetch models response
