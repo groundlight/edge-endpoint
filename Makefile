@@ -20,8 +20,8 @@ test-all: test test-with-docker  ## Run all tests in one make command
 	@echo "All tests completed."
 
 test-with-k3s:
-	. test/setup_k3s_test_environment.sh && poetry run pytest -m live
-
+	. test/integration/setup_and_run_tests.sh
+	
 # Adjust which paths we lint
 LINT_PATHS="app test"
 
