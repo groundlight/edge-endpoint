@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 from app.core.app_state import (
-    STALE_METADATA_THRESHOLD,
+    STALE_METADATA_THRESHOLD_SEC,
     get_detector_metadata,
     refresh_detector_metadata_if_needed,
 )
@@ -83,7 +83,7 @@ def test_refresh_detector_metadata_if_needed():
         assert mock_sdk_call.call_count == 1  # Should not have called again
 
         # Move time forward past the stale threshold
-        mock_timer.advance(STALE_METADATA_THRESHOLD + 1)
+        mock_timer.advance(STALE_METADATA_THRESHOLD_SEC + 1)
 
         # Now refresh should trigger a new API call
         refresh_detector_metadata_if_needed(detector_id, mock_gl)
