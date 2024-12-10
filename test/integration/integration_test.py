@@ -3,7 +3,6 @@ import random
 
 from groundlight import Groundlight, GroundlightClientError
 from model import Detector
-import pdb
 
 NUM_IQS_TO_IMPROVE_MODEL = 20
 ACCETABLE_TRAINED_CONFIDENCE = 0.7
@@ -90,10 +89,10 @@ def submit_final(detector: Detector):
     iq_no = submit_dog(detector, confidence_threshold=0.5)
 
     assert iq_yes.result.confidence > ACCETABLE_TRAINED_CONFIDENCE
-    assert iq_yes.result.label.value == 'YES'
+    assert iq_yes.result.label.value == "YES"
 
     assert iq_no.result.confidence > ACCETABLE_TRAINED_CONFIDENCE
-    assert iq_no.result.label.value == 'NO'
+    assert iq_no.result.label.value == "NO"
 
 
 def submit_cat(detector: Detector, confidence_threshold: float, wait: int = None):
