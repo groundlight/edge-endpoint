@@ -3,8 +3,10 @@ import random
 
 from groundlight import Groundlight, GroundlightClientError
 from model import Detector
+import pdb
 
 NUM_IQS_TO_IMPROVE_MODEL = 20
+ACCETABLE_TRAINED_CONFIDENCE = 0.7
 
 
 def get_groundlight():
@@ -82,8 +84,16 @@ def improve_model(detector):
         gl.add_label(image_query=iq_no, label="NO")
 
 
-def submit_final(detector_id: str):
-    pass
+def submit_final(detector: Detector):
+    # 0.5 threshold to ensure we get a edge answer
+    iq_yes = submit_cat(detector, confidence_threshold=0.5)
+    iq_no = submit_dog(detector, confidence_threshold=0.5)
+
+    assert iq_yes.result.confidence > ACCETABLE_TRAINED_CONFIDENCE
+    assert iq_yes.result.label.value == 'YES'
+
+    assert iq_no.result.confidence > ACCETABLE_TRAINED_CONFIDENCE
+    assert iq_no.result.label.value == 'NO'
 
 
 def submit_cat(detector: Detector, confidence_threshold: float, wait: int = None):
