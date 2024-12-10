@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any, Callable
 
+import cachetools
 import ksuid
 from fastapi import HTTPException
 from model import (
@@ -172,6 +173,27 @@ def pil_image_to_bytes(img: Image.Image, format: str = "JPEG") -> bytes:
     with BytesIO() as buffer:
         img.save(buffer, format=format)
         return buffer.getvalue()
+
+
+class TimestampedTTLCache(cachetools.TTLCache):
+    """TTLCache subclass that tracks when items were added to the cache."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.timestamps = {}  # Store timestamps for each key
+
+    def __setitem__(self, key, value, cache_setitem=cachetools.Cache.__setitem__):
+        # Track the current time when setting an item
+        self.timestamps[key] = self.timer()
+        super().__setitem__(key, value, cache_setitem)
+
+    def __delitem__(self, key, cache_delitem=cachetools.Cache.__delitem__):
+        super().__delitem__(key, cache_delitem)
+        self.timestamps.pop(key, None)
+
+    def get_timestamp(self, key) -> float | None:
+        """Get the timestamp when an item was added to the cache."""
+        return self.timestamps.get(key)
 
 
 # Utilities for parsing the fetch models response
