@@ -3,8 +3,7 @@
 # https://github.com/k3s-io/k3s/blob/master/package/Dockerfile
 
 ARG K3S_TAG="v1.28.8+k3s1"
-ARG NVIDIA_DRIVER_VERSION="550.127.05"
-ARG NVIDIA_DRIVER_MAJOR_VERSION="${NVIDIA_DRIVER_VERSION%%.*}"
+ARG NVIDIA_DRIVER_MAJOR_VERSION="550"
 ARG ENABLE_GPU=false
 
 # Use this instead of, for example, balenalib/genericx86-64-ext-ubuntu:focal, because
@@ -15,8 +14,7 @@ ENV DEBIAN_FRONTEND noninteractive
 ENV ENABLE_GPU=${ENABLE_GPU}
 
 # Install base dependencies
-RUN \
-    apt-get update && \
+RUN apt-get update && \
     apt install -y curl runc software-properties-common && \
     rm -rf /var/lib/apt/lists/*
 
@@ -25,7 +23,7 @@ RUN if [ "$ENABLE_GPU" = "true" ]; then \
         add-apt-repository ppa:graphics-drivers/ppa && \
         apt update && \
         apt install -y nvidia-driver-${NVIDIA_DRIVER_MAJOR_VERSION} && \
-        rm -rf /var/lib/apt/lists/* ; \
+        rm -rf /var/lib/apt/lists/*; \
     fi
 
 # Install K3s binary (also installs containerd)
@@ -40,13 +38,13 @@ RUN if [ "$ENABLE_GPU" = "true" ]; then \
         apt-get update && \
         apt-get install -y nvidia-container-toolkit && \
         rm -rf /var/lib/apt/lists/* && \
-        nvidia-ctk runtime configure --runtime=containerd ; \
+        nvidia-ctk runtime configure --runtime=containerd; \
     fi
 
 # Add nvidia-gpu-operator manifest only if GPU is enabled
 RUN if [ "$ENABLE_GPU" = "true" ]; then \
         mkdir -p /opt/k3s/manifests/ && \
-        cp manifests/nvidia-gpu-operator.yaml /opt/k3s/manifests/ ; \
+        cp manifests/nvidia-gpu-operator.yaml /opt/k3s/manifests/; \
     fi
 
 # Make pinamod-public directory for hostmapped volume

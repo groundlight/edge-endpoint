@@ -14,3 +14,5 @@ insmod /nvidia/driver/nvidia-uvm.ko
 
 /usr/bin/nvidia-smi
 nvidia-modprobe
+
+sleep infinity

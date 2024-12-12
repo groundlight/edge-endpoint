@@ -8,16 +8,15 @@ services:
     build:
       context: deploy/balena-k3s/gpu
       args:
-        NVIDIA_DRIVER_VERSION: &nvidia_version "535.154.05"
+        NVIDIA_DRIVER_VERSION: "550.127.05"
     privileged: true
-    restart: no  # Only run once, end after exiting, as it's a one-time setup
 
   server:
     # https://docs.k3s.io/advanced#running-k3s-in-docker
     build:
       context: deploy/balena-k3s/server
       args:
-        NVIDIA_DRIVER_VERSION: *nvidia_version
+        NVIDIA_DRIVER_MAJOR_VERSION: "550"
         # Setting ENABLE_GPU to true causes nvidia drivers, nvidia container toolkit, and nvidia-gpu-operator to be installed.
         # But it does not mandate that the server will use the GPU. The server will use the GPU only if the INFERENCE_FLAVOR is set to "GPU".
         ENABLE_GPU: "true"
@@ -42,8 +41,7 @@ services:
       - k3s-server:/var/lib/rancher/k3s
       - shared:/shared
     depends_on:
-      gpu:
-        condition: service_completed_successfully
+     - gpu
 
   bastion:
     build:
