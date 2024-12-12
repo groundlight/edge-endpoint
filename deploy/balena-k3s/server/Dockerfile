@@ -2,16 +2,15 @@
 # https://k3d.io/v5.7.4/usage/advanced/cuda/#building-a-customized-k3s-image
 # https://github.com/k3s-io/k3s/blob/master/package/Dockerfile
 
-ARG K3S_TAG="v1.28.8+k3s1"
-ARG NVIDIA_DRIVER_MAJOR_VERSION="550"
-ARG ENABLE_GPU=false
-
 # Use this instead of, for example, balenalib/genericx86-64-ext-ubuntu:focal, because
 # it is cross-platform and can be used on any architecture / type of device.
 FROM ubuntu:22.04
 
+ARG K3S_TAG="v1.28.8+k3s1"
+ARG NVIDIA_DRIVER_MAJOR_VERSION="550"
+ARG ENABLE_GPU="false"
+
 ENV DEBIAN_FRONTEND noninteractive
-ENV ENABLE_GPU=${ENABLE_GPU}
 
 # Install base dependencies
 RUN apt-get update && \
@@ -26,7 +25,7 @@ RUN if [ "$ENABLE_GPU" = "true" ]; then \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
-# Install K3s binary (also installs containerd)
+# Install K3s binary (also installs containerd - must be done before installing nvidia-container-toolkit)
 RUN curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_START=true INSTALL_K3S_SKIP_ENABLE=true INSTALL_K3S_VERSION=${K3S_TAG} sh
 
 # Install the NVIDIA container toolkit only if GPU is enabled
@@ -41,11 +40,8 @@ RUN if [ "$ENABLE_GPU" = "true" ]; then \
         nvidia-ctk runtime configure --runtime=containerd; \
     fi
 
-# Add nvidia-gpu-operator manifest only if GPU is enabled
-RUN if [ "$ENABLE_GPU" = "true" ]; then \
-        mkdir -p /opt/k3s/manifests/ && \
-        cp manifests/nvidia-gpu-operator.yaml /opt/k3s/manifests/; \
-    fi
+# Add nvidia-gpu-operator manifest
+COPY manifests/nvidia-gpu-operator.yaml /opt/k3s/manifests/
 
 # Make pinamod-public directory for hostmapped volume
 RUN mkdir -p /opt/groundlight/edge/pinamod-public
