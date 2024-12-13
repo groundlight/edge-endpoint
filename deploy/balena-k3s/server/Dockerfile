@@ -11,18 +11,45 @@ ARG NVIDIA_DRIVER_MAJOR_VERSION="550"
 ARG ENABLE_GPU="false"
 
 ENV DEBIAN_FRONTEND noninteractive
+ENV K3S_TAG=${K3S_TAG}
+ENV NVIDIA_DRIVER_MAJOR_VERSION=${NVIDIA_DRIVER_MAJOR_VERSION}
+ENV ENABLE_GPU=${ENABLE_GPU}
+ENV NVIDIA_DRIVER_VERSION="550.127.05"
 
 # Install base dependencies
 RUN apt-get update && \
-    apt install -y curl runc software-properties-common && \
+    apt install -y curl runc software-properties-common kmod && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Nvidia driver only if GPU is enabled. Must match version in gpu container exactly
+# NOTE: sometimes this reposotory bumps the driver version accessed here and then things
+# stop working (no nvidia-smi in the server). If that happens, you can find the latest
+# driver version at https://www.nvidia.com/en-us/drivers/unix/ and update the version
+# in the gpu Dockerfile.
 RUN if [ "$ENABLE_GPU" = "true" ]; then \
-        add-apt-repository ppa:graphics-drivers/ppa && \
-        apt update && \
-        apt install -y nvidia-driver-${NVIDIA_DRIVER_MAJOR_VERSION} && \
-        rm -rf /var/lib/apt/lists/*; \
+        # add-apt-repository ppa:graphics-drivers/ppa && \
+        # apt update && \
+        # apt install -y nvidia-driver-${NVIDIA_DRIVER_MAJOR_VERSION} && \
+        # rm -rf /var/lib/apt/lists/*; \
+        # Download the specific driver from NVIDIA (replace with actual URL)
+        curl -O https://us.download.nvidia.com/XFree86/Linux-x86_64/${NVIDIA_DRIVER_VERSION}/NVIDIA-Linux-x86_64-${NVIDIA_DRIVER_VERSION}.run && \
+        chmod +x NVIDIA-Linux-x86_64-${NVIDIA_DRIVER_VERSION}.run && \
+        # Install the driver with minimal options
+        ./NVIDIA-Linux-x86_64-${NVIDIA_DRIVER_VERSION}.run \
+          --ui=none \
+          --no-questions \
+          --no-drm \
+          --no-x-check \
+          --no-systemd \
+          --no-kernel-module \
+          --no-distro-scripts \
+          --no-nouveau-check \
+          --no-rpms \
+          --no-backup \
+          --no-abi-note \
+          --no-check-for-alternate-installs \
+          --no-libglx-indirect && \
+        rm NVIDIA-Linux-x86_64-${NVIDIA_DRIVER_VERSION}.run; \
     fi
 
 # Install K3s binary (also installs containerd - must be done before installing nvidia-container-toolkit)

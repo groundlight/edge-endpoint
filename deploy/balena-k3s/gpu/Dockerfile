@@ -10,7 +10,9 @@
 # read-only, so the Nvidia driver cannot be installed on the host OS.
 FROM balenalib/genericx86-64-ext:bullseye-run-20211030
 
-ARG NVIDIA_DRIVER_VERSION="550.127.05"
+# NOTE: see https://www.nvidia.com/en-us/drivers/unix/ for
+# the latest driver version
+ARG NVIDIA_DRIVER_VERSION="550.135.05"
 
 WORKDIR /usr/src
 
