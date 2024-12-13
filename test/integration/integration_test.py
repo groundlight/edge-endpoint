@@ -3,10 +3,10 @@ import random
 
 from groundlight import Groundlight, GroundlightClientError
 from model import Detector
-import pdb
+import time
 
-NUM_IQS_TO_IMPROVE_MODEL = 20
-ACCETABLE_TRAINED_CONFIDENCE = 0.7
+NUM_IQS_TO_IMPROVE_MODEL = 10
+ACCETABLE_TRAINED_CONFIDENCE = 0.8
 
 
 def get_groundlight():
@@ -63,9 +63,12 @@ def create_cat_detector() -> str:
 
 
 def submit_initial(detector) -> str:
+    start_time = time.time()
     # 0.5 threshold to ensure we get a edge answer
     iq_yes = submit_cat(detector, confidence_threshold=0.5)
     iq_no = submit_dog(detector, confidence_threshold=0.5)
+    end_time = time.time()
+    print(f"Time taken to get low confidence response from edge: {end_time - start_time} seconds")
 
     # a bit dependent on the current default model,
     # but that one always defaults to 0.5 confidence at first.
@@ -86,14 +89,20 @@ def improve_model(detector):
 
 def submit_final(detector: Detector):
     # 0.5 threshold to ensure we get a edge answer
+    start_time = time.time()
     iq_yes = submit_cat(detector, confidence_threshold=0.5)
     iq_no = submit_dog(detector, confidence_threshold=0.5)
+    end_time = time.time()
+    print(f"Time taken to get high confidence response from edge: {end_time - start_time} seconds")
+
 
     assert iq_yes.result.confidence > ACCETABLE_TRAINED_CONFIDENCE
     assert iq_yes.result.label.value == 'YES'
+    print(f"Final confidence for yes result: {iq_yes.result.confidence}")
 
     assert iq_no.result.confidence > ACCETABLE_TRAINED_CONFIDENCE
     assert iq_no.result.label.value == 'NO'
+    print(f"Final confidence for no result: {iq_no.result.confidence}")
 
 
 def submit_cat(detector: Detector, confidence_threshold: float, wait: int = None):

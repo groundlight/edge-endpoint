@@ -15,25 +15,27 @@ echo "Training detector in the cloud"
 # now we improve the model by submitting many iqs and labels
 poetry run python test/integration/integration_test.py -m improve_model -d $DETECTOR_ID
 
-echo "Now we sleep for $((4 * REFRESH_RATE)) seconds to get a newer model" 
-sleep $((4 * REFRESH_RATE))
+# Give the new model time to be pulled. We're a bit generous here.
+echo "Now we sleep for $((3 * REFRESH_RATE)) seconds to get a newer model" 
+sleep $((3 * REFRESH_RATE))
 echo "Ensuring a new pod for the deployment $DETECTOR_ID_WITH_DASHES has been created in the last $REFRESH_RATE seconds..."
 
-# Ensure our most recent pod is brand new
+# Ensure our most recent pod is brand new.
 most_recent_pod=$(kubectl get pods -n $DEPLOYMENT_NAMESPACE -l app=inference-server -o jsonpath='{.items[-1].metadata.name}')
 current_time=$(date +%s)
 pod_creation_time=$(kubectl get pod $most_recent_pod -n $DEPLOYMENT_NAMESPACE -o jsonpath='{.metadata.creationTimestamp}')
 pod_creation_time_seconds=$(date -d "$pod_creation_time" +%s)
 time_difference=$((current_time - pod_creation_time_seconds))
 
-echo $time_difference
 
 # Check if the pod was created within 1.1 times the refresh rate
-if [ $(echo "$time_difference <= $REFRESH_RATE * 4" | bc) -eq 1 ]; then
-    echo "A new pod for the deployment $DETECTOR_ID_WITH_DASHES has been created within 2 times the refresh rate."
+if [ $(echo "$time_difference <= $REFRESH_RATE * 3" | bc) -eq 1 ]; then
+    echo "A new pod for the deployment $DETECTOR_ID_WITH_DASHES has been created within 3 times the refresh rate."
 else
-    echo "Error: No new pod for the deployment $DETECTOR_ID_WITH_DASHES has been created within 1.1 times the refresh rate."
+    echo "Error: No new pod for the deployment $DETECTOR_ID_WITH_DASHES has been created within 3 times the refresh rate."
     exit 1
 fi
 
+echo now we check if the edge model performs well...
 poetry run python test/integration/integration_test.py -m final -d $DETECTOR_ID
+echo All tests pass :D
