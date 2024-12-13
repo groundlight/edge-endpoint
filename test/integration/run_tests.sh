@@ -1,11 +1,18 @@
+# This script runs integration tests, assuming k3s and detector setup via setup_and_run_tests.sh.
+# Run all tests with: > make test-with-k3s
+# It combines Python (for image submission) and Bash (for k3s checks).
+# The test includes:
+# 1) Running pytest live tests for health, readiness, and image submission to the edge.
+# 2) Submitting an image to the edge using a cat/dog detector, 
+#   checking for low confidence, training the edge detector via cloud escalation, and 
+#   verifying model improvement in a new edge pod.
+
 # first do basic pytest integration style tests
 # we skip the async test because we're setup for edge answers
 if ! poetry run pytest -m live -k "not test_post_image_query_via_sdk_want_async"; then
     echo "Error: pytest integration tests failed."
     exit 1
 fi
-
-echo "Submitting image queries from the edge"
 
 echo "Submitting initial iqs, ensuring we get low confidence at first"
 # submit initial tests that we get low confidence answers at first
