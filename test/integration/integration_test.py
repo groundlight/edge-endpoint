@@ -1,9 +1,9 @@
 import argparse
 import random
+import time
 
 from groundlight import Groundlight, GroundlightClientError
 from model import Detector
-import time
 
 NUM_IQS_TO_IMPROVE_MODEL = 10
 ACCETABLE_TRAINED_CONFIDENCE = 0.8
@@ -95,13 +95,12 @@ def submit_final(detector: Detector):
     end_time = time.time()
     print(f"Time taken to get high confidence response from edge: {end_time - start_time} seconds")
 
-
     assert iq_yes.result.confidence > ACCETABLE_TRAINED_CONFIDENCE
-    assert iq_yes.result.label.value == 'YES'
+    assert iq_yes.result.label.value == "YES"
     print(f"Final confidence for yes result: {iq_yes.result.confidence}")
 
     assert iq_no.result.confidence > ACCETABLE_TRAINED_CONFIDENCE
-    assert iq_no.result.label.value == 'NO'
+    assert iq_no.result.label.value == "NO"
     print(f"Final confidence for no result: {iq_no.result.confidence}")
 
 
