@@ -8,7 +8,7 @@ services:
     build:
       context: deploy/balena-k3s/gpu
       args:
-        NVIDIA_DRIVER_VERSION: "550.127.05"
+        NVIDIA_DRIVER_VERSION: &nvidia-driver "550.127.05"
     privileged: true
 
   server:
@@ -16,7 +16,7 @@ services:
     build:
       context: deploy/balena-k3s/server
       args:
-        NVIDIA_DRIVER_MAJOR_VERSION: "550"
+        NVIDIA_DRIVER_VERSION: *nvidia-driver
         # Setting ENABLE_GPU to true causes nvidia drivers, nvidia container toolkit, and nvidia-gpu-operator to be installed.
         # But it does not mandate that the server will use the GPU. The server will use the GPU only if the INFERENCE_FLAVOR is set to "GPU".
         ENABLE_GPU: &enable_gpu true
