@@ -58,7 +58,7 @@ def model_info_no_binary() -> ModelInfoNoBinary:
     return ModelInfoNoBinary(**model_info)
 
 
-class TestEdgeInferenceMangager:
+class TestEdgeInferenceManager:
     def test_update_model_with_binary(self, model_info_with_binary):
         with tempfile.TemporaryDirectory() as temp_dir:
             with mock.patch("app.core.edge_inference.fetch_model_info") as mock_fetch:

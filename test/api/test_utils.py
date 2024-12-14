@@ -46,7 +46,7 @@ class TestCreateIQ:
         iq = create_iq(
             detector_id=prefixed_ksuid("det_"),
             mode=ModeEnum.COUNT,
-            mode_configuration={"max_count": 5},
+            mode_configuration={"max_count": 5, "class_name": "test_class"},
             result_value=count_value,
             confidence=0.8,
             confidence_threshold=self.confidence_threshold,
@@ -67,7 +67,7 @@ class TestCreateIQ:
         iq = create_iq(
             detector_id=prefixed_ksuid("det_"),
             mode=ModeEnum.COUNT,
-            mode_configuration={"max_count": max_count_value},
+            mode_configuration={"max_count": max_count_value, "class_name": "test_class"},
             result_value=count_value,
             confidence=0.8,
             confidence_threshold=self.confidence_threshold,
