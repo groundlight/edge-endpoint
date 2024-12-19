@@ -55,7 +55,7 @@ def create_iq(  # noqa: PLR0913
     result_type, result = _mode_to_result_and_type(mode, mode_configuration, confidence, result_value)
 
     return ImageQuery(
-        metadata=None,
+        metadata={"is_from_edge": True},
         id=prefixed_ksuid(prefix="iq_"),
         type=ImageQueryTypeEnum.image_query,
         created_at=datetime.now(timezone.utc),
