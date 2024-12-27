@@ -282,7 +282,6 @@ jobs:
         run: ./deploy/bin/build-push-edge-endpoint-image.sh
 
   update-glhub:
-    if: github.ref == 'refs/heads/main'
     needs: test-with-k3s
     runs-on: ubuntu-latest
     environment: live
