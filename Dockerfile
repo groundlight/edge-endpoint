@@ -22,17 +22,17 @@ ARG POETRY_VERSION
 # This is useful for exec'ing into the container for debugging purposes.
 # We need to install libGL dependencies (`libglib2.0-0` and `libgl1-mesa-lgx`)
 # since they are required by OpenCV
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
     bash \
     curl \
     nginx \
     libglib2.0-0 \
     libgl1-mesa-glx \
-    sqlite3 \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* \
-    && curl -sSL https://install.python-poetry.org | python -
+    sqlite3 && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    curl -sSL https://install.python-poetry.org | python -
 
 # Set Python and Poetry ENV vars
 ENV PYTHONUNBUFFERED=1 \
@@ -42,7 +42,7 @@ ENV PYTHONUNBUFFERED=1 \
     PATH=${POETRY_HOME}/bin:$PATH
 
 # Copy only required files first to leverage Docker caching
-COPY ./pyproject.toml ${APP_ROOT}/
+COPY ./pyproject.toml ./poetry.lock ${APP_ROOT}/
 
 WORKDIR ${APP_ROOT}
 
@@ -51,13 +51,11 @@ RUN poetry install --no-interaction --no-root --without dev --without lint && \
     poetry cache clear --all pypi
 
 # Create /etc/groundlight directory where edge-config.yaml and inference_deployment.yaml will be mounted
-RUN mkdir /etc/groundlight
-
-RUN mkdir /etc/groundlight/edge-config && \
-    mkdir /etc/groundlight/inference-deployment
+RUN mkdir -p /etc/groundlight/edge-config && \
+    mkdir -p /etc/groundlight/inference-deployment
 
 # Adding this here for testing purposes. In production, this will be mounted as persistent
-# volume in kubernetes 
+# volume in kubernetes
 RUN mkdir -p /opt/groundlight/edge/sqlite
 
 # Copy configs

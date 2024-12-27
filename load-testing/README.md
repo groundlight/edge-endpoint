@@ -1,22 +1,20 @@
 # Load Testing the Edge Endpoint
 
-This directory contains scripts to 'load test' an edge endpoint, i.e., simulate a number of processes submitting requests to the endpoint and measuring the throughput. The tools here are actively under development and may be changed at any time. 
+This directory contains scripts to 'load test' an edge endpoint, i.e., simulate a number of processes submitting requests to the endpoint and measure the throughput. The tools here are actively under development and may be changed at any time. 
 
-## How to load test
+## How to run a load test
 
 ### Setting up an edge endpoint
 
 An edge endpoint should be set up on the machine you want to do load testing for. Follow the steps in the [main README](/README.md). Additionally, you'll want to make the following modifications:
-* When load testing, queries should always be answered by the edge model and never escalated to the cloud. To achieve this, in `edge_config.yaml` your entry for the detector that you'll be submitting images to should look like:
+* When load testing, queries should always be answered by the edge model and never escalated to the cloud. To achieve this, in `edge_config.yaml` your detector that you'll be submitting images to should have the `no_cloud` edge inference config:
 ```
 detectors:
-  - detector_id: 'det_xyz'
-    local_inference_template: "default"
-    always_return_edge_prediction: true
-    disable_cloud_escalation: true
+  - detector_id: "det_xyz"
+    edge_inference_config: "no_cloud"
 ```
 
-* You'll want to configure the edge-endpoint proxy and the inference server to have as many workers as possible without running out of CPU/GPU space. 
+* You'll want to configure the edge-endpoint proxy and the inference server to have the optimal number of workers. A general guideline is that your number of edge-endpoint proxy workers shouldn't exceed the number of CPU cores on your machine. Try to set your number of inference workers to maximize GPU utilization (if using a GPU).
     * To increase the number of edge-endpoint proxy workers, change the `--workers` param in the CMD line of the [Dockerfile](/Dockerfile). 
     * To increase the number of inference server workers, in the [inference_deployment_template](/deploy/k3s/inference_deployment/inference_deployment_template.yaml) locate the below command and change the argument for `--workers`.
 ```
@@ -29,7 +27,7 @@ command:
     ]
 ```
 
-Some trial and error will be necessary to figure out the ideal configuration. For reference: on a machine with 32 CPU cores and 126 G of RAM, and a RTX 3090 GPU with 24 Gi of RAM, setting edge-endpoint proxy workers to 128 and inference server workers to 61 was able to run successfully. 
+Some trial and error will likely be necessary to figure out the ideal configuration.
 
 After setting these config options, you should run/re-run the [setup edge endpoint script](/deploy/bin/setup-ee.sh) to deploy with your new configuration. You can monitor the inference pod's logs to see when all of the workers have finished starting up (if the number of workers is high, this will likely be after the pod reports being ready). 
 
@@ -37,9 +35,9 @@ After setting these config options, you should run/re-run the [setup edge endpoi
 
 Most configuration of the load testing scripts is done in [config.py](./config.py).
 * `ENDPOINT_URL` is the url of the edge endpoint that you've set up. This will follow the format `http://<ip of host machine>:<exposed edge-endpoint-service port>`. 
-* `DETECTOR_NAME` is the name of the detector that you've configured.
-* `DETECTOR_QUERY` is the query of the detector that you've configured.
-* `IMAGE_PATH` is the path to the image that the client processes will submit to the endpoint as part of load testing. To avoid resizing by the inference server, this should ideally be a 256x256 image. By default, this points to `dog_resized_256x256.jpeg`.
+* `DETECTOR_IDS` is a list of the detector ids that you'll be submitting images to.
+* `NUM_OBJECTS_EXPECTED` is the number of objects expected to be detected in each image. If using a binary detector, this should be `None`. If this is set to a number, the load testing script will check that the number of objects detected in each image matches this value. If it doesn't, the client process will print an error message. This is useful for making sure that the object detection model is working as expected.
+* `IMAGE_PATH` is the path to the image that the client processes will submit to the endpoint as part of load testing. Image size may affect processing times. By default, this points to `dog_resized_256x256.jpeg`.
 * `LOG_FILE` is the path to the file where logs from the client processes will be written and read from. If it doesn't exist, the file will be created. Each time the load test script runs, it will overwrite the contents of the file.
 * `TIME_BETWEEN_RAMP` is the amount of seconds the load testing script will wait before each subsequent ramp step. 
 * `REQUESTS-PER-SECOND` is the rate of requests that each client process will attempt to send. 
@@ -75,9 +73,9 @@ poetry run python monitor_cpu_gpu_usage.py <duration>
 ```
 
 #### Positional Arguments
-* `\<duration>` (required)
+* `<duration>` (required)
     * Specifies the number of seconds to monitor the system utilization for. 
 
-To monitor system utilization during the load test, you'll want to begin the load testing and then separately run the monitoring script on the host machine. The duration should be set to the duration of the load test (which is determined by `TIME_BETWEEN_RAMP * <number of steps>` and printed to the console right after running `load_test.py`). 
+To monitor system utilization during the load test, you'll want to separately run the monitoring script on the host machine before beginning the load testing. The duration should be set to the duration of the load test (which is determined by `TIME_BETWEEN_RAMP * <number of steps>` and printed to the console right after running `load_test.py`). 
 
 Once the scripts have finished running, you can review the generated plots to assess the results.
