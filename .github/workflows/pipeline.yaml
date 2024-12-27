@@ -1,7 +1,8 @@
 name: cicd
 on:
   push:
-    # All pushes
+    branches:
+      - main
   workflow_dispatch:
     # This allows it to be triggered manually in the github console
     # You could put inputs here, but we don't need them.
@@ -281,6 +282,7 @@ jobs:
         run: ./deploy/bin/build-push-edge-endpoint-image.sh
 
   update-glhub:
+    if: github.ref == 'refs/heads/main'
     needs: test-with-k3s
     runs-on: ubuntu-latest
     environment: live
