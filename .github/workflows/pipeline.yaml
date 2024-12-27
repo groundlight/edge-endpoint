@@ -99,7 +99,7 @@ jobs:
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
-  check-setup-ee:
+  validate-setup-ee:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
