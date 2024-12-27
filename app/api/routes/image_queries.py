@@ -1,4 +1,5 @@
 import logging
+import random
 from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
@@ -15,6 +16,8 @@ from app.core.app_state import (
     refresh_detector_metadata_if_needed,
 )
 from app.core.utils import create_iq, safe_call_sdk
+
+CONFIDENT_AUDIT_RATE = 0.1  # TODO move to edge-config.yaml
 
 logger = logging.getLogger(__name__)
 
@@ -164,8 +167,27 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 text=results["text"],
             )
 
-            # Escalate after returning edge prediction if escalation is enabled and we have low confidence
-            if not disable_cloud_escalation and not is_confident_enough:
+            if is_confident_enough:  # Audit confident edge predictions at a low rate
+                if random.random() < CONFIDENT_AUDIT_RATE:
+                    logger.info(f"Auditing confident edge prediction: {image_query=}")  # TODO change to debug
+                    background_tasks.add_task(
+                        safe_call_sdk,
+                        gl.submit_image_query,  # This has to be submit_image_query in order to specify image_query_id
+                        detector=detector_id,
+                        image=image_bytes,
+                        wait=0,
+                        patience_time=patience_time,
+                        confidence_threshold=confidence_threshold,
+                        human_review="ALWAYS",  # TODO do we want humans to always review it?
+                        want_async=True,
+                        image_query_id=image_query.id,  # TODO do we want the IDs to match?
+                        metadata=None,  # TODO maybe we want metadata that it was an audited query?
+                    )
+                else:
+                    logger.info("Not auditing confident edge prediction")
+            elif (
+                not disable_cloud_escalation
+            ):  # Escalate after returning edge prediction if escalation is enabled and we have low confidence
                 # Only escalate if we haven't escalated on this detector too recently
                 if app_state.edge_inference_manager.escalation_cooldown_complete(detector_id=detector_id):
                     logger.debug(
