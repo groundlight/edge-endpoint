@@ -26,6 +26,10 @@ The global config contains parameters that affect the overall behavior of the ed
 
 `refresh_rate` is a float that defines how often the edge endpoint will attempt to fetch updated ML models (in seconds). If you expect a detector to frequently have a better model available, you can reduce this to ensure that the improved models will quickly be fetched and deployed. For example, you may want to label many image queries on a new detector. A higher refresh rate will ensure that the latest model improvements from these labels are promptly deployed to the edge. In practice, you likely won't want this to be lower than ~30 seconds due to the time it takes to train and fetch new models. If not specified, the default is 60 seconds.
 
+#### `confident_audit_rate`
+
+`confident_audit_rate` is a float that defines the rate at which confident predictions are escalated to the cloud for auditing. This enables the accuracy of the edge model to be evaluated in the cloud even when it answers queries confidently. If a detector is configured to have cloud escalation disabled, this parameter will be ignored. If not specified, the default value is 0.01 (meaning there is a 1% chance that a confident prediction will be audited).
+
 ### `edge_inference_configs`
 
 Edge inference configs are 'templates' that define the behavior of a detector on the edge. Each detector you configure will be assigned one of these templates. There are some predefined configs that represent the main ways you might want to configure a detector. However, you can edit these and also create your own as you wish.
