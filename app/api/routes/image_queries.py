@@ -17,8 +17,6 @@ from app.core.app_state import (
 )
 from app.core.utils import create_iq, safe_call_sdk
 
-CONFIDENT_AUDIT_RATE = 0.1  # TODO move to edge-config.yaml
-
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -148,7 +146,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         ml_confidence = results["confidence"]
 
         is_confident_enough = ml_confidence >= confidence_threshold
-        if return_edge_prediction or is_confident_enough:  # return the edge prediction
+        if return_edge_prediction or is_confident_enough:  # Return the edge prediction
             if return_edge_prediction:
                 logger.debug(f"Returning edge prediction without cloud escalation. {detector_id=}")
             else:
@@ -167,28 +165,34 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 text=results["text"],
             )
 
-            if is_confident_enough:  # Audit confident edge predictions at a low rate
-                if random.random() < CONFIDENT_AUDIT_RATE:
-                    logger.info(f"Auditing confident edge prediction: {image_query=}")  # TODO change to debug
+            # Skip cloud operations if escalation is disabled
+            if disable_cloud_escalation:
+                return image_query
+
+            if is_confident_enough:  # Audit confident edge predictions at the specified rate
+                if random.random() < app_state.edge_config.global_config.confident_audit_rate:
+                    logger.debug(
+                        f"Auditing confident edge prediction with confidence {ml_confidence} for detector {detector_id=}."
+                    )
                     background_tasks.add_task(
                         safe_call_sdk,
-                        gl.submit_image_query,  # This has to be submit_image_query in order to specify image_query_id
+                        gl.submit_image_query,
                         detector=detector_id,
                         image=image_bytes,
                         wait=0,
                         patience_time=patience_time,
                         confidence_threshold=confidence_threshold,
-                        human_review="ALWAYS",  # TODO do we want humans to always review it?
+                        human_review=human_review,  # TODO do we want humans to always review it?
                         want_async=True,
-                        image_query_id=image_query.id,  # TODO do we want the IDs to match?
                         metadata=None,  # TODO maybe we want metadata that it was an audited query?
                     )
-                else:
-                    logger.info("Not auditing confident edge prediction")
-            elif (
-                not disable_cloud_escalation
-            ):  # Escalate after returning edge prediction if escalation is enabled and we have low confidence
-                # Only escalate if we haven't escalated on this detector too recently
+
+                    # Don't want to escalate to cloud if we've already audited
+                    return image_query
+
+            # Escalate after returning edge prediction if escalation is enabled and we have low confidence.
+            if not is_confident_enough:
+                # Only escalate if we haven't escalated on this detector too recently.
                 if app_state.edge_inference_manager.escalation_cooldown_complete(detector_id=detector_id):
                     logger.debug(
                         f"Escalating to cloud due to low confidence: {ml_confidence} < thresh={confidence_threshold}"
@@ -211,7 +215,6 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                     )
 
             return image_query
-
     # -- Edge-inference is not available --
     else:
         # Create an edge-inference deployment record, which may be used to spin up an edge-inference server.

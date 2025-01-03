@@ -11,6 +11,10 @@ class GlobalConfig(BaseModel):
         default=60.0,
         description="The interval (in seconds) at which the inference server checks for a new model binary update.",
     )
+    confident_audit_rate: float = Field(
+        default=0.01,
+        description="The rate at which confident predictions are audited.",
+    )
 
 
 class EdgeInferenceConfig(BaseModel):
@@ -84,6 +88,7 @@ class RootEdgeConfig(BaseModel):
             {
                 'global_config': {
                     'refresh_rate': 60.0,
+                    'confident_audit_rate': 0.01,
                 },
                 'edge_inference_configs': {
                     'default': EdgeInferenceConfig(

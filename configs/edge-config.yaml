@@ -2,6 +2,7 @@
 
 global_config: # These settings affect the overall behavior of the edge endpoint.
   refresh_rate: 60 # How often to attempt to fetch updated ML models (in seconds). If not set, defaults to 60.
+  confident_audit_rate: 0.01 # Rate at which to audit confident predictions. If not set, defaults to 0.01.
 
 edge_inference_configs: # These configs define detector-specific behavior and can be applied to detectors below.
   default: # Return the edge model's prediction if sufficiently confident; otherwise, escalate to the cloud.
