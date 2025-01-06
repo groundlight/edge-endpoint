@@ -129,6 +129,9 @@ jobs:
 
       - name: Validate setup edge endpoint
         run: make validate-setup-ee
+      
+      - name: Run tests with k3s
+        run: make test-with-k3s
 
   test-with-k3s:
     runs-on: ubuntu-22.04
