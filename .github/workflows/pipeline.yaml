@@ -98,7 +98,7 @@ jobs:
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
-  validate-setup-ee:
+  validate-setup-ee-and-test-with-k3s:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
@@ -129,41 +129,7 @@ jobs:
 
       - name: Validate setup edge endpoint
         run: make validate-setup-ee
-
-  test-with-k3s:
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v3
       
-      - name: Install k3s
-        run: |
-          curl -sfL https://get.k3s.io | sh -
-          sudo chmod 644 /etc/rancher/k3s/k3s.yaml
-          sudo chown $USER /etc/rancher/k3s/k3s.yaml
-          # symlink to kubeconfig
-          mkdir -p ~/.kube
-          ln -s /etc/rancher/k3s/k3s.yaml ~/.kube/config
-          
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-
-      - name: Install poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          installer-parallel: true
-      
-      - name: Install edge-endpoint's python dependencies
-        run: |
-          poetry install --no-interaction --no-root
-
       - name: Run tests with k3s
         run: make test-with-k3s
 
