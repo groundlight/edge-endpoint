@@ -154,7 +154,7 @@ if [[ "${DEPLOY_LOCAL_VERSION}" == "1" ]]; then
     envsubst < deploy/k3s/local_persistent_volume.yaml > deploy/k3s/local_persistentvolume.yaml
     echo $PERSISTENT_VOLUME_NAME
     $K apply -f deploy/k3s/local_persistentvolume.yaml
-    # rm deploy/k3s/local_persistentvolume.yaml
+    rm deploy/k3s/local_persistentvolume.yaml
 
 else
     # If environment variable EFS_VOLUME_ID is not set, exit
@@ -170,7 +170,7 @@ else
     # in the persistentvolumeclaim.yaml template
     envsubst < deploy/k3s/efs_persistent_volume.yaml > deploy/k3s/persistentvolume.yaml
     $K apply -f deploy/k3s/persistentvolume.yaml
-    # rm deploy/k3s/persistentvolume.yaml
+    rm deploy/k3s/persistentvolume.yaml
 fi
 
 # Check if the persistent volume claim exists. If not, create it
@@ -182,7 +182,7 @@ if ! $K get pvc edge-endpoint-pvc; then
     # Use envsubst to replace the EFS_VOLUME_ID in the persistentvolumeclaim.yaml template
     envsubst < deploy/k3s/persistentvolume.yaml > deploy/k3s/persistentvolume.yaml.tmp
     $K apply -f deploy/k3s/persistentvolume.yaml.tmp
-    # rm deploy/k3s/persistentvolume.yaml.tmp
+    rm deploy/k3s/persistentvolume.yaml.tmp
 fi
 
 # Make pinamod directory for hostmapped volume
