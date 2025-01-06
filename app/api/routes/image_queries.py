@@ -182,12 +182,12 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         wait=0,
                         patience_time=patience_time,
                         confidence_threshold=confidence_threshold,
-                        human_review=human_review,  # TODO do we want humans to always review it?
+                        human_review="ALWAYS",  # Require human review for audited queries so we can evaluate accuracy
                         want_async=True,
-                        metadata=None,  # TODO maybe we want metadata that it was an audited query?
+                        metadata={"is_edge_audit": True},  # Provide metadata to identify edge audits in the cloud
                     )
 
-                    # Don't want to escalate to cloud if we've already audited
+                    # Don't want to escalate to cloud again if we're already auditing the query
                     return image_query
 
             # Escalate after returning edge prediction if escalation is enabled and we have low confidence.

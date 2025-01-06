@@ -28,7 +28,7 @@ The global config contains parameters that affect the overall behavior of the ed
 
 #### `confident_audit_rate`
 
-`confident_audit_rate` is a float that defines the rate at which confident predictions are escalated to the cloud for auditing. This enables the accuracy of the edge model to be evaluated in the cloud even when it answers queries confidently. If a detector is configured to have cloud escalation disabled, this parameter will be ignored. If not specified, the default value is 0.01 (meaning there is a 1% chance that a confident prediction will be audited).
+`confident_audit_rate` is a float that defines the probability that any given confident prediction will be escalated to the cloud for auditing. This enables the accuracy of the edge model to be evaluated in the cloud even when it answers queries confidently. If a detector is configured to have cloud escalation disabled, this parameter will be ignored. If not specified, the default value is 0.01 (meaning there is a 1% chance that a confident prediction will be audited).
 
 ### `edge_inference_configs`
 

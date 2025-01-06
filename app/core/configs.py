@@ -13,7 +13,7 @@ class GlobalConfig(BaseModel):
     )
     confident_audit_rate: float = Field(
         default=0.01,
-        description="The rate at which confident predictions are audited.",
+        description="The probability that any given confident prediction will be sent to the cloud for auditing.",
     )
 
 
