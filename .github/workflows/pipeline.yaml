@@ -220,7 +220,7 @@ jobs:
     needs:
       - test-general-edge-endpoint
       - test-sdk
-      - test-with-k3s
+      - validate-setup-ee-and-test-with-k3s
     runs-on: ubuntu-22.04
     steps:
       - name: Configure AWS credentials
@@ -242,7 +242,7 @@ jobs:
 
   update-glhub:
     if: github.ref == 'refs/heads/main'
-    needs: test-with-k3s
+    needs: validate-setup-ee-and-test-with-k3s
     runs-on: ubuntu-latest
     environment: live
 
