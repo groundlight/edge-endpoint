@@ -106,13 +106,7 @@ jobs:
       
       - name: Install k3s
         run: |
-          curl -sfL https://get.k3s.io | sh -
-          sudo chmod 644 /etc/rancher/k3s/k3s.yaml
-          sudo chown $USER /etc/rancher/k3s/k3s.yaml
-          # symlink to kubeconfig
-          mkdir -p ~/.kube
-          ln -s /etc/rancher/k3s/k3s.yaml ~/.kube/config
-          
+          ./deploy/bin/install-k3s.sh
           
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
