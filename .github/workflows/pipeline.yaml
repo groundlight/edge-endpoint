@@ -135,8 +135,8 @@ jobs:
           
       - name: Run tests with k3s
         run: |
-        docker image prune -f
-        make test-with-k3s
+          docker image prune -f
+          make test-with-k3s
 
   # Run Groundlight SDK tests against the edge proxy endpoint
   test-sdk:
