@@ -42,14 +42,6 @@ export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
 export INFERENCE_FLAVOR="CPU"
 ./deploy/bin/setup-ee.sh
 
-# Sleep for 30 seconds to allow the pods to initialize
-echo "Sleeping for 30 seconds to allow the pods to initialize..."
-sleep 30
-
-# Describe the pods in the deployment namespace
-echo "Describing the pods in the deployment namespace..."
-kubectl describe pods -n $DEPLOYMENT_NAMESPACE
-
 
 export LIVE_TEST_ENDPOINT="http://localhost:$EDGE_ENDPOINT_PORT"
 echo "Waiting for edge-endpoint pods to rollout..."
