@@ -98,7 +98,7 @@ jobs:
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
-  validate-setup-ee-and-test-with-k3s:
+  validate-setup-ee:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
@@ -128,15 +128,44 @@ jobs:
           poetry install --no-interaction --no-root
 
       - name: Validate setup edge endpoint
-        # this takes up a lot of disk space for the little gh action runner so we have to image
-        # prune after
         run: |
           make validate-setup-ee
-          docker image prune -f
+
+  # we run this seperately from validate-setup-ee since we run out of disk space doing
+  # both of them on the same runner and they can be slow so its best to do them in parallel
+  test-with-k3s:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+      
+      - name: Install k3s
+        run: |
+          ./deploy/bin/install-k3s.sh
           
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Install poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: ${{ env.POETRY_VERSION }}
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: true
+      
+      - name: Install edge-endpoint's python dependencies
+        run: |
+          poetry install --no-interaction --no-root
+
       - name: Run tests with k3s
         run: |
           make test-with-k3s
+
 
   # Run Groundlight SDK tests against the edge proxy endpoint
   test-sdk:
@@ -225,7 +254,7 @@ jobs:
     needs:
       - test-general-edge-endpoint
       - test-sdk
-      - validate-setup-ee-and-test-with-k3s
+      - validate-setup-ee
     runs-on: ubuntu-22.04
     steps:
       - name: Configure AWS credentials
@@ -247,7 +276,7 @@ jobs:
 
   update-glhub:
     if: github.ref == 'refs/heads/main'
-    needs: validate-setup-ee-and-test-with-k3s
+    needs: validate-setup-ee
     runs-on: ubuntu-latest
     environment: live
 
