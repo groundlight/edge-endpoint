@@ -54,11 +54,6 @@ echo "Describing the pods in the deployment namespace..."
 kubectl describe pods -n $DEPLOYMENT_NAMESPACE
 
 
-
-echo "Figure out what's taking up so much disk space"
-sudo find / -type f -size +100M -exec ls -lh {} \; | awk '{ print $NF ": " $5 }'
-
-
 if ! kubectl rollout status deployment/edge-endpoint -n $DEPLOYMENT_NAMESPACE --timeout=5m; then
     echo "Error: edge-endpoint pods failed to rollout within the timeout period."
     exit 1
