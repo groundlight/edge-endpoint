@@ -128,7 +128,11 @@ jobs:
           poetry install --no-interaction --no-root
 
       - name: Validate setup edge endpoint
-        run: make validate-setup-ee
+        # this takes up a lot of disk space for the little gh action runner so we have to image
+        # prune after
+        run: |
+          make validate-setup-ee
+          docker image prune -f
       
       - name: Run tests with k3s
         run: make test-with-k3s
