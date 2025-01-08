@@ -1,0 +1,8 @@
+name: ee-cicd
+runtime:
+  name: python
+  options:
+    virtualenv: .venv
+description: CI/CD for Edge Endpoint
+config:
+  ee-cicd:instanceType: g4dn.xlarge
