@@ -81,7 +81,7 @@ cd "$(dirname "$0")"/../..
 # Most users do not need to think about these.
 
 export PERSISTENT_VOLUME_NAME=${PERSISTENT_VOLUME_NAME:-"edge-endpoint-pv"}
-export EDGE_ENDPOINT_PORT=${EDGE_ENDPOINT_PORT:-30102}
+export EDGE_ENDPOINT_PORT=${EDGE_ENDPOINT_PORT:-30101}
 
 # Create Secrets
 if ! ./deploy/bin/make-aws-secret.sh; then
