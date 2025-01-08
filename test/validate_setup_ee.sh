@@ -17,4 +17,3 @@ echo "Edge-endpoint pods have successfully rolled out in namespace $DEPLOYMENT_N
 
 echo "Deleting persistant volume and persistant volume claim..."
 kubectl delete pv edge-endpoint-pv
-kubectl delete pv edge-endpoint-pvc -n $DEPLOYMENT_NAMESPACE
