@@ -1,3 +1,4 @@
+import os
 import time
 
 import pytest
@@ -11,7 +12,7 @@ from app.core.utils import pil_image_to_bytes
 
 # Tests in this file require a live edge-endpoint server and GL Api token in order to run.
 # Not ideal for unit-testing.
-TEST_ENDPOINT = "http://localhost:30101"
+TEST_ENDPOINT = os.getenv("LIVE_TEST_ENDPOINT", "http://localhost:30101")
 MAX_WAIT_TIME_S = 60
 
 # Detector ID associated with the detector with parameters
@@ -21,6 +22,7 @@ MAX_WAIT_TIME_S = 60
 DETECTOR_ID = "det_2SagpFUrs83cbMZsap5hZzRjZw4"
 
 
+@pytest.mark.live
 @pytest.fixture(scope="module", autouse=True)
 def ensure_edge_endpoint_is_live_and_ready():
     """Ensure that the edge-endpoint server is live and ready before running tests."""
@@ -52,6 +54,7 @@ def detector(gl: Groundlight) -> Detector:
     return gl.get_detector(id=DETECTOR_ID)
 
 
+@pytest.mark.live
 def test_post_image_query_via_sdk(gl: Groundlight, detector: Detector):
     """Test that submitting an image query using the edge server proceeds without failure."""
     image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
@@ -59,6 +62,7 @@ def test_post_image_query_via_sdk(gl: Groundlight, detector: Detector):
     assert iq is not None, "ImageQuery should not be None."
 
 
+@pytest.mark.live
 def test_post_image_query_via_sdk_want_async(gl: Groundlight, detector: Detector):
     """Test that submitting an image query with want_async=True forwards directly to the cloud."""
     image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
@@ -68,6 +72,7 @@ def test_post_image_query_via_sdk_want_async(gl: Groundlight, detector: Detector
     assert iq.result is None, "Result should be None because the query is still being processed."
 
 
+@pytest.mark.live
 def test_post_image_query_via_sdk_with_metadata_throws_400(gl: Groundlight, detector: Detector):
     """Test that submitting an image query with metadata raises a 400 error."""
     image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
