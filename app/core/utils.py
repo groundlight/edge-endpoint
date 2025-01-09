@@ -1,5 +1,8 @@
+import json
+import os
 from datetime import datetime, timezone
 from io import BytesIO
+from pathlib import Path
 from typing import Any, Callable
 
 import cachetools
@@ -21,6 +24,58 @@ from PIL import Image
 from pydantic import BaseModel, ValidationError
 
 from app.core import constants
+
+
+def log_image_query_for_retry(
+    detector_id: str,
+    image_bytes: bytes,
+    patience_time: float | None,
+    confidence_threshold: float | None,
+    human_review: str | None,
+    image_query_id: str | None = None,
+    log_file: str = "pending_image_queries.log",
+    image_dir: str = "pending_images",
+) -> None:
+    """
+    Logs an image query to a file for potential future resubmission.
+    Saves the image separately and records its path in the JSON entry.
+
+    Args:
+        detector_id: The detector ID to query
+        image_bytes: Raw image bytes
+        patience_time: Maximum time to wait for confident answer
+        confidence_threshold: Minimum confidence threshold
+        human_review: Human review setting ("DEFAULT", "ALWAYS", "NEVER")
+        image_query_id: Optional ID to maintain consistency with original query
+        log_file: Path to the log file
+        image_dir: Directory to store image files
+    """
+    # Create image directory if it doesn't exist
+    os.makedirs(image_dir, exist_ok=True)
+
+    # Generate unique filename for the image using timestamp and query ID
+    timestamp = datetime.now(timezone.utc).isoformat().replace(":", "-")
+    image_filename = f"{timestamp}_{detector_id}"
+    image_path = Path(image_dir) / image_filename
+
+    # Save the image
+    with open(image_path, "wb") as f:
+        f.write(image_bytes)
+
+    # Create the log entry
+    entry = {
+        "timestamp": timestamp,
+        "detector_id": detector_id,
+        "image_path": str(image_path),
+        "patience_time": patience_time,
+        "confidence_threshold": confidence_threshold,
+        "human_review": human_review,
+        "image_query_id": image_query_id,
+    }
+
+    # Append the entry to the log file
+    with open(log_file, "a") as f:
+        f.write(json.dumps(entry) + "\n")
 
 
 def create_iq(  # noqa: PLR0913
@@ -140,7 +195,7 @@ def prefixed_ksuid(prefix: str | None = None) -> str:
     They're sortable by time, approximately, assuming your clocks are sync'd properly.
     They are a single text token, without any hyphens, so you can double-click to select them
     and not worry about your log-search engine (ElasticSearch etc) tokenizing them into parts.
-    They can include a semantic prefix such as "chk_" to help identify them.
+    They can include a semantic prefix such as "iq_" to help identify them.
     They're base62 encoded, so no funny characters, but denser than hex coding of UUID.
 
     This is just a prefixed KSUID, which is cool.

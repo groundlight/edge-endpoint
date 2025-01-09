@@ -14,7 +14,7 @@ from app.core.app_state import (
     get_groundlight_sdk_instance,
     refresh_detector_metadata_if_needed,
 )
-from app.core.utils import create_iq, safe_call_sdk
+from app.core.utils import create_iq, log_image_query_for_retry, safe_call_sdk
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +165,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             )
 
             # Escalate after returning edge prediction if escalation is enabled and we have low confidence
-            if not disable_cloud_escalation and not is_confident_enough:
+            if True or not disable_cloud_escalation and not is_confident_enough:  # TODO remove
                 # Only escalate if we haven't escalated on this detector too recently
                 if app_state.edge_inference_manager.escalation_cooldown_complete(detector_id=detector_id):
                     logger.debug(
@@ -182,6 +182,14 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         human_review=human_review,
                         want_async=True,
                         image_query_id=image_query.id,  # Ensure the cloud IQ has the same ID as the returned edge IQ
+                    )
+                    log_image_query_for_retry(
+                        detector_id=detector_id,
+                        image_bytes=image_bytes,
+                        patience_time=patience_time,
+                        confidence_threshold=confidence_threshold,
+                        human_review=human_review,
+                        image_query_id=image_query.id,  # TODO figure out how to handle this properly
                     )
                 else:
                     logger.debug(
