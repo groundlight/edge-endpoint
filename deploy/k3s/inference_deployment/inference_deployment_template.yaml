@@ -97,14 +97,24 @@ spec:
             port: 8000
           initialDelaySeconds: 10
           periodSeconds: 10
-          failureThreshold: 30  # Wait for up to 5 min
+          failureThreshold: 60  # Wait for up to 10 min
         readinessProbe:
           httpGet:
             path: /health/ready  # Checks if the server is ready to serve requests
             port: 8000
-          initialDelaySeconds: 10
+          initialDelaySeconds: 60
           periodSeconds: 10
-          failureThreshold: 30  # Wait for up to 5 min
+          failureThreshold: 3  # after 30 seconds of failure, stop sending traffic to the pod
+        livenessProbe:
+          httpGet:
+            # We use "ready" here because the current liveness probe is too simple and
+            # doesn't check if the model is loaded.  If the models fail because of GPU memory
+            # issues, we need this to fail and restart the pod.
+            path: /health/ready
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          failureThreshold: 6  # after 60 seconds of failure, restart the pod
 
       volumes:
       - name: edge-endpoint-persistent-volume
