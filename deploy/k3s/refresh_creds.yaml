@@ -1,0 +1,22 @@
+# Cron job to refresh our local credentials
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: refresh_creds
+spec:
+  schedule: "0 */2 * * *"  # Every 2 hours
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: edge-endpoint-service-account
+          containers:
+          - name: ecr
+            image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${IMAGE_TAG}
+            command: [
+              "/bin/sh",
+              "-c",
+              "/deploy/bin/refresh-ecr-login.sh"
+              #TODO: Need to update Dockerfile to get this script into the image.
+              ]
+          restartPolicy: OnFailure
