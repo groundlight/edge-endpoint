@@ -53,4 +53,3 @@ if ! kubectl rollout status deployment/edge-endpoint -n $DEPLOYMENT_NAMESPACE --
 fi
 
 echo "Edge-endpoint pods have successfully rolled out."
-
