@@ -2,7 +2,7 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: refresh_creds
+  name: refresh-creds
 spec:
   schedule: "0 */2 * * *"  # Every 2 hours
   jobTemplate:
