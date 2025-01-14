@@ -146,7 +146,7 @@ $K get service -o custom-columns=":metadata.name" --no-headers=true | \
 
 # Check if DEPLOY_LOCAL_VERSION is set. If so, use a local volume instead of an EFS volume
 if [[ "${DEPLOY_LOCAL_VERSION}" == "1" ]]; then
-    if ! check_pv_conflict "$PERSISTENT_VOLUME_NAME" "local-sc"; then
+    if ! check_pv_conflict "$PERSISTENT_VOLUME_NAME" "null"; then
         fail "PersistentVolume $PERSISTENT_VOLUME_NAME conflicts with the existing resource."
     fi
 
