@@ -7,12 +7,9 @@ spec:
   schedule: "0 */2 * * *"  # Every 2 hours
   jobTemplate:
     spec:
+      backoffLimit: 3
       template:
         spec:
-          # TODO: REmove before PR
-          imagePullSecrets:
-          - name: temp-dev-ecr-creds
-
           serviceAccountName: edge-endpoint-service-account
           containers:
           - name: ecr
@@ -35,4 +32,3 @@ spec:
                   key: aws_secret_access_key
             
           restartPolicy: OnFailure
-      backoffLimit: 3
