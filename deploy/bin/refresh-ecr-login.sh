@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 K=${KUBECTL_CMD:-"kubectl"}
 # No need to explicitly pick the namespace - this normally runs in its own namespace
 
@@ -12,6 +14,8 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+echo "Fetched short-lived ECR credentials from AWS"
+
 if command -v docker >/dev/null 2>&1; then
     echo $ECR_PASSWORD | docker login \
         --username AWS \
@@ -22,9 +26,10 @@ else
 fi
 
 $K delete --ignore-not-found secret registry-credentials
-$K delete --ignore-not-found secret aws-credentials
 
 $K create secret docker-registry registry-credentials \
     --docker-server=$ECR_REGISTRY \
     --docker-username=AWS \
     --docker-password=$ECR_PASSWORD
+
+echo "Stored ECR credentials in secret registry-credentials"

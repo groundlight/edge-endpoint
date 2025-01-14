@@ -1,7 +1,5 @@
 #!/bin/bash
 
-#!/bin/bash
-
 # This script builds and pushes the edge-endpoint Docker image to ECR.
 #
 # Usage:
@@ -21,6 +19,8 @@
 #
 # Note: Ensure you have the necessary AWS credentials and Docker installed.
 
+ECR_ACCOUNT=${ECR_ACCOUNT:-767397850842}
+ECR_REGION=${ECR_REGION:-us-west-2}
 
 set -ex
 
@@ -29,11 +29,11 @@ cd "$(dirname "$0")"
 
 TAG=$(./git-tag-name.sh)
 # EDGE_ENDPOINT_IMAGE="edge-endpoint-test"  # v0.1.0 (triton inference server) compatible images
-EDGE_ENDPOINT_IMAGE="edge-endpoint"  # v0.2.0 (fastapi inference server) compatible images
-ECR_URL="767397850842.dkr.ecr.us-west-2.amazonaws.com"
+EDGE_ENDPOINT_IMAGE=${EDGE_ENDPOINT_IMAGE:-edge-endpoint}  # v0.2.0 (fastapi inference server) compatible images
+ECR_URL="${ECR_ACCOUNT}.dkr.ecr.${ECR_REGION}.amazonaws.com"
 
 # Authenticate docker to ECR
-aws ecr get-login-password --region us-west-2 | docker login \
+aws ecr get-login-password --region ${ECR_REGION} | docker login \
                   --username AWS \
                   --password-stdin  ${ECR_URL}
 
