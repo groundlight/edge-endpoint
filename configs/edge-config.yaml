@@ -26,5 +26,5 @@ edge_inference_configs: # These configs define detector-specific behavior and ca
 detectors: # Each entry here defines the edge configuration for a detector.
   # To configure a detector, add an entry for it below with its detector ID and the name of the edge inference config
   # you want to use. You can use or modify one of the existing edge inference configs listed above, or define your own.
-    - detector_id: ""
-      edge_inference_config: "default"
+    - detector_id: "det_2r8pwEIt1yn5SHb23kscLIg3hu2"
+      edge_inference_config: "no_cloud"
