@@ -86,7 +86,14 @@ spec:
             port: 30101
           initialDelaySeconds: 10
           periodSeconds: 10
-          failureThreshold: 6  # Wait for up to 1 min
+          failureThreshold: 2  # after 20 seconds of failure, stop sending traffic to the pod
+        livenessProbe:
+          httpGet:
+            path: /health/ready
+            port: 30101
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 4  # after 40 seconds of failure, restart the pod
 
       - name: inference-model-updater
         image: *edgeEndpointImage
