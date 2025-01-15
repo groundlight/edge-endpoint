@@ -9,6 +9,9 @@ spec:
     spec:
       backoffLimit: 3
       template:
+        metadata:
+          labels:
+            app: refresh_creds
         spec:
           serviceAccountName: edge-endpoint-service-account
           containers:
