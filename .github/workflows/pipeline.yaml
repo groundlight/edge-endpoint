@@ -248,6 +248,55 @@ jobs:
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
+  test-install-g4:
+    #if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+    # TODO: Remove this before merging into main
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/e2e-cicd' }}
+    needs:
+      - validate-setup-ee
+      - test-with-k3s
+      - test-sdk
+    runs-on: ubuntu-22.04
+    env:
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
+      STACK_NAME: ee-cicd-${{ github.run_id }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: us-west-2
+          aws-access-key-id: ${{ secrets.GLPUBLIC_CICD_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.GLPUBLIC_CICD_AWS_SECRET_ACCESS_KEY }}
+
+      - name: Install Pulumi
+        run: |
+          curl -fsSL https://get.pulumi.com | sh
+          export PATH=$PATH:$HOME/.pulumi/bin
+
+      - name: Create the stack and the instance
+        run: |
+          set -ex
+          pulumi stack init ${STACK_NAME}
+          pulumi config
+          pulumi preview
+          pulumi up --yes
+
+      - name: Check that the EE started properly
+        run: |
+          # TODO: Check that the EE started properly.
+          # This will be difficult unless the runner is in a privileged network environment
+          # relative to the created instance, which is probably what we need to do.
+          echo "TODO: Check that the EE started properly."
+
+      - name: Delete Pulumi stack
+        if: always()
+        run: |
+          pulumi stack destroy ${STACK_NAME} --yes
+          pulumi stack rm ${STACK_NAME} --yes
+
   build-push-edge-endpoint-multiplatform:
     if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     # We only run this action if all the prior test actions succeed
@@ -255,6 +304,7 @@ jobs:
       - test-general-edge-endpoint
       - test-sdk
       - validate-setup-ee
+      - test-install-g4
     runs-on: ubuntu-22.04
     steps:
       - name: Configure AWS credentials
