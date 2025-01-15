@@ -1,0 +1,4 @@
+# This file defines the github usernames (or group names) who are
+# allowed to approve PR's for the code.
+
+* @groundlight/employees
