@@ -249,6 +249,9 @@ jobs:
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
   test-install-g4:
+    # Note this job can run multiple times in parallel because the stack name is unique
+    # for the run.  How much we want to do this is TBD.
+
     #if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     # TODO: Remove this before merging into main
     if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/e2e-cicd' }}
@@ -294,8 +297,8 @@ jobs:
       - name: Delete Pulumi stack
         if: always()
         run: |
-          pulumi stack destroy ${STACK_NAME} --yes
-          pulumi stack rm ${STACK_NAME} --yes
+          pulumi destroy ${STACK_NAME} --yes
+          pulumi rm ${STACK_NAME} --yes
 
   build-push-edge-endpoint-multiplatform:
     if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
