@@ -216,17 +216,81 @@ class TestSubmittingToLocalInferenceConfigs:
 
 
 @pytest.mark.live
-class TestEdgeAnswerRequirements:
-    """Tests for edge-answer requirements and error conditions."""
+class TestEdgeQueryParams:
+    """Testing behavior of submit_image_query parameters on edge."""
 
     @pytest.mark.parametrize("detector_fixture", ["detector_edge_answers", "detector_no_cloud"])
-    def test_human_review_not_allowed(self, gl, request, detector_fixture, image_bytes): ...
+    def test_human_review_not_allowed(
+        self, gl: Groundlight, request: pytest.FixtureRequest, detector_fixture: str, image_bytes: bytes
+    ):
+        """Test that human_review cannot be specified when edge answers are required."""
+        detector = request.getfixturevalue(detector_fixture)
+        with pytest.raises(ApiException) as exc_info:
+            gl.submit_image_query(detector=detector.id, image=image_bytes, human_review="ALWAYS")
+        assert exc_info.value.status == status.HTTP_400_BAD_REQUEST
 
     @pytest.mark.parametrize("detector_fixture", ["detector_edge_answers", "detector_no_cloud"])
-    def test_want_async_not_allowed(self, gl, request, detector_fixture, image_bytes): ...
+    def test_want_async_not_allowed(
+        self, gl: Groundlight, request: pytest.FixtureRequest, detector_fixture: str, image_bytes: bytes
+    ):
+        """Test that want_async cannot be specified when edge answers are required."""
+        detector = request.getfixturevalue(detector_fixture)
+        with pytest.raises(ApiException) as exc_info:
+            gl.submit_image_query(detector=detector.id, image=image_bytes, want_async=True, wait=0)
+        assert exc_info.value.status == status.HTTP_400_BAD_REQUEST
 
-    @pytest.mark.parametrize("detector_fixture", ["detector_edge_answers", "detector_no_cloud"])
-    def test_edge_inference_unavailable_errors(self, gl, request, detector_fixture, image_bytes): ...
+    def test_always_human_review_goes_to_cloud(self, gl: Groundlight, detector_default: Detector, image_bytes: bytes):
+        """Test that human_review=ALWAYS goes to the cloud even if the edge answer is sufficiently confident."""
+        iq = gl.submit_image_query(
+            detector=detector_default.id, image=image_bytes, human_review="ALWAYS", confidence_threshold=0.5, wait=0
+        )
+        assert iq is not None
+        assert answer_is_from_cloud(iq), "Answer should be from the cloud."
+
+    def test_want_async_goes_to_cloud(self, gl: Groundlight, detector_default: Detector, image_bytes: bytes):
+        """Test that want_async=True goes to the cloud even if the edge answer is sufficiently confident."""
+        iq = gl.submit_image_query(
+            detector=detector_default.id, image=image_bytes, want_async=True, confidence_threshold=0.5, wait=0
+        )
+        assert iq is not None
+        assert answer_is_from_cloud(iq), "Answer should be from the cloud."
+
+    def test_supported_params_dont_error(self, gl: Groundlight, detector_default: Detector, image_bytes: bytes):
+        """Test that supported parameters work without errors."""
+        iq = gl.submit_image_query(detector=detector_default.id, image=image_bytes, wait=1.0)
+        assert iq is not None
+
+        iq = gl.submit_image_query(detector=detector_default.id, image=image_bytes, patience_time=1.0)
+        assert iq is not None
+
+        iq = gl.submit_image_query(detector=detector_default.id, image=image_bytes, confidence_threshold=0.8)
+        assert iq is not None
+
+        iq = gl.submit_image_query(detector=detector_default.id, image=image_bytes, human_review="NEVER")
+        assert iq is not None
+
+        iq = gl.submit_image_query(detector=detector_default.id, image=image_bytes, want_async=False)
+        assert iq is not None
+
+    @pytest.mark.parametrize(
+        "unsupported_param",
+        [
+            {"inspection_id": "insp_123"},
+            {"metadata": {"test": "value"}},
+            {"image_query_id": "iq_123"},
+        ],
+    )
+    def test_unsupported_params_raise_error(
+        self,
+        gl: Groundlight,
+        detector_default: Detector,
+        image_bytes: bytes,
+        unsupported_param: dict,
+    ):
+        """Test that unsupported parameters raise a 400 error."""
+        with pytest.raises(ApiException) as exc_info:
+            gl.submit_image_query(detector=detector_default.id, image=image_bytes, **unsupported_param)
+        assert exc_info.value.status == status.HTTP_400_BAD_REQUEST
 
 
 # @pytest.mark.live
