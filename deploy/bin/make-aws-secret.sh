@@ -14,12 +14,14 @@ AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID_CMD:-$AWS_ACCESS_KEY_ID}
 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY_CMD:-$AWS_SECRET_ACCESS_KEY}
 
 # Create the secret with either retrieved or environment values
+$K delete --ignore-not-found secret aws-credentials
 $K create secret generic aws-credentials \
     --from-literal=aws_access_key_id=$AWS_ACCESS_KEY_ID \
     --from-literal=aws_secret_access_key=$AWS_SECRET_ACCESS_KEY
 
 # Verify secrets have been properly created
 if ! $K get secret registry-credentials; then
+    # These should have been created in refresh-ecr-login.sh
     fail "registry-credentials secret not found"
 fi
 
