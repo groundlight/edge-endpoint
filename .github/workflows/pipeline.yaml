@@ -293,7 +293,7 @@ jobs:
           pulumi stack init ${STACK_NAME}
           pulumi config
           pulumi preview
-          pulumi up --yes
+          #pulumi up --yes 
 
       - name: Check that the EE started properly
         run: |
