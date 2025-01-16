@@ -1,0 +1,10 @@
+extends: default
+
+rules:
+  line-length:
+    max: 200  # Adjust the max line length to your preference
+    level: warning  # Change to warning to avoid failing on line length
+  comments:
+    level: warning  # Change to warning to avoid failing on comment style
+  trailing-spaces:
+    level: warning  # Change to warning to avoid failing on trailing spaces

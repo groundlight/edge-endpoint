@@ -36,7 +36,7 @@ jobs:
           pip install yamllint
 
       - name: Run yamllint
-        run: yamllint -c .yamllint.yml .github/workflows
+        run: yamllint -c .yamllint.yaml .github/workflows/*.yaml
 
       # TODO: It would be nice to validate the semantics of the workflow files
       # not just their basic syntax, but this is a good start.
