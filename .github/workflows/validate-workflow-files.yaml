@@ -21,6 +21,10 @@ jobs:
   check-workflow-files:
     runs-on: ubuntu-22.04
 
+    defaults:
+      run:
+        working-directory: .github/workflows
+
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -36,7 +40,7 @@ jobs:
           pip install yamllint
 
       - name: Run yamllint
-        run: yamllint -c .yamllint.yaml .github/workflows/*.yaml
+        run: yamllint -c .yamllint.yaml *.yaml
 
       # TODO: It would be nice to validate the semantics of the workflow files
       # not just their basic syntax, but this is a good start.

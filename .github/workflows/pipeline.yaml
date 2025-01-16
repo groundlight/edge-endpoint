@@ -255,7 +255,6 @@ jobs:
     # Note this job can run multiple times in parallel because the stack name is unique
     # for the run.  How much we want to do this is TBD.
     runs-on: self-hosted
-    runs-on: todo-remove-this
 
     #if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     # TODO: Remove this before merging into main
