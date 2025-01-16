@@ -251,6 +251,7 @@ jobs:
   test-install-g4:
     # Note this job can run multiple times in parallel because the stack name is unique
     # for the run.  How much we want to do this is TBD.
+    runs-on: self-hosted
 
     #if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     # TODO: Remove this before merging into main
@@ -267,12 +268,16 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v3
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-region: us-west-2
-          aws-access-key-id: ${{ secrets.GLPUBLIC_CICD_AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.GLPUBLIC_CICD_AWS_SECRET_ACCESS_KEY }}
+      # No need to configure AWS credentials - they are set as an IAM role on the runner
+      #- name: Configure AWS Credentials
+      #  uses: aws-actions/configure-aws-credentials@v1
+      #  with:
+      #    aws-region: us-west-2
+      #    aws-access-key-id: ${{ secrets.GLPUBLIC_CICD_AWS_ACCESS_KEY_ID }}
+      #    aws-secret-access-key: ${{ secrets.GLPUBLIC_CICD_AWS_SECRET_ACCESS_KEY }}
+      - name: Check that aws credentials are set
+        run: |
+          aws sts get-caller-identity
 
       - name: Install Pulumi
         run: |
