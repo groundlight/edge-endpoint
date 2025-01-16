@@ -292,11 +292,15 @@ jobs:
       #    curl -fsSL https://get.pulumi.com | sh
       #    echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
 
-      - name: Check that pulumi is installed and authenticated
+      - name: Get pulumi on the path
         run: |
           set -ex
           export HOME=$(eval echo ~$(whoami))
           echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
+
+      - name: Check that pulumi is installed and authenticated
+        run: |
+          set -ex
           pulumi whoami
 
       - name: Create the stack and the instance
