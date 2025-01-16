@@ -1,0 +1,42 @@
+name: Validate workflow YAML Files
+# Note that without this, a single minor mistake in a workflow YAML
+# will cause github to SILENTLY FAIL.  It will:
+# - Not run any part of the workflow
+# - Not even report that there was an error in the file
+# This could cause a key set of checks to not run, and thus an important
+# error to slip by unnoticed.
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/*.yaml'
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/*.yaml'
+
+jobs:
+  check-workflow-files:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install yamllint
+        run: |
+          python -m pip install --upgrade pip
+          pip install yamllint
+
+      - name: Run yamllint
+        run: yamllint -c .yamllint.yml .github/workflows
+
+      # TODO: It would be nice to validate the semantics of the workflow files
+      # not just their basic syntax, but this is a good start.
