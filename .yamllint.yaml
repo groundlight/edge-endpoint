@@ -1,15 +1,12 @@
 extends: default
 
 rules:
-  document-start:
-    level: ignore
+  document-start: disable
   indentation:
     spaces: consistent
     level: error
   line-length:
     max: 150
     level: warning
-  comments:
-    level: ignore
-  trailing-spaces:
-    level: ignore
+  comments: disable
+  trailing-spaces: disable

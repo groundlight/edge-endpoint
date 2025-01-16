@@ -1,4 +1,4 @@
-name: Validate workflow YAML Files
+name: Workflow YAML check
 # Note that without this, a single minor mistake in a workflow YAML
 # will cause github to SILENTLY FAIL.  It will:
 # - Not run any part of the workflow
