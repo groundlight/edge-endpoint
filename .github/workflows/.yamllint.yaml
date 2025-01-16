@@ -11,3 +11,4 @@ rules:
     level: warning
   comments: disable
   trailing-spaces: disable
+  empty-lines: disable

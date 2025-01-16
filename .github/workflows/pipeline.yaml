@@ -251,6 +251,25 @@ jobs:
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
+  check-self-hosted-runner:
+    runs-on: self-hosted
+    steps:
+      - name: Look around inside the runner
+        run: |
+          set -x
+          echo "I am inside the runner."
+          ls -l
+          pwd
+          uname -a
+          cat /etc/os-release
+          cat /proc/cpuinfo
+          cat /proc/meminfo
+          df -h
+          # Print IP address
+          ip addr show
+          # Print hostname
+          hostname
+
   test-install-g4:
     # Note this job can run multiple times in parallel because the stack name is unique
     # for the run.  How much we want to do this is TBD.

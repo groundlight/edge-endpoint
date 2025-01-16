@@ -6,6 +6,9 @@ name: Workflow YAML check
 # This could cause a key set of checks to not run, and thus an important
 # error to slip by unnoticed.
 
+# TODO: It would be nice to validate the semantics of the workflow files
+# not just their basic syntax, but this is a good start.
+
 on:
   pull_request:
     paths:
@@ -41,6 +44,3 @@ jobs:
 
       - name: Run yamllint
         run: yamllint -c .yamllint.yaml *.yaml
-
-      # TODO: It would be nice to validate the semantics of the workflow files
-      # not just their basic syntax, but this is a good start.
