@@ -303,6 +303,12 @@ jobs:
           set -ex
           pulumi whoami
 
+      - name: Install uv
+        run: |
+          set -ex
+          curl -fsSL https://get.astral.sh | bash
+          echo "$HOME/.astral/bin" >> $GITHUB_PATH
+
       - name: Create the stack and the instance
         run: |
           set -ex
