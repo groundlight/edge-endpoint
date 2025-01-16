@@ -286,10 +286,16 @@ jobs:
         run: |
           aws sts get-caller-identity
 
-      - name: Install Pulumi
+      # We assume/require pulumi is already installed on the runner.
+      #- name: Install Pulumi
+      #  run: |
+      #    curl -fsSL https://get.pulumi.com | sh
+      #    echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
+
+      - name: Check that pulumi is installed and authenticated
         run: |
-          curl -fsSL https://get.pulumi.com | sh
-          echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
+          set -ex
+          pulumi whoami
 
       - name: Create the stack and the instance
         run: |
@@ -309,8 +315,9 @@ jobs:
       - name: Delete Pulumi stack
         if: always()
         run: |
-          pulumi destroy ${STACK_NAME} --yes
-          pulumi rm ${STACK_NAME} --yes
+          pulumi stack select ${STACK_NAME}
+          pulumi destroy --yes
+          pulumi stack rm ${STACK_NAME} --yes
 
   build-push-edge-endpoint-multiplatform:
     if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
