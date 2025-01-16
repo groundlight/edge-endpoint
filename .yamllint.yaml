@@ -1,10 +1,15 @@
 extends: default
 
 rules:
+  document-start:
+    level: ignore
+  indentation:
+    spaces: consistent
+    level: error
   line-length:
-    max: 200  # Adjust the max line length to your preference
-    level: warning  # Change to warning to avoid failing on line length
+    max: 150
+    level: warning
   comments:
-    level: warning  # Change to warning to avoid failing on comment style
+    level: ignore
   trailing-spaces:
-    level: warning  # Change to warning to avoid failing on trailing spaces
+    level: ignore
