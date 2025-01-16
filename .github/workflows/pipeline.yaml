@@ -263,7 +263,7 @@ jobs:
       - validate-setup-ee
       - test-with-k3s
       - test-sdk
-    runs-on: ubuntu-22.04
+
     env:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
       STACK_NAME: ee-cicd-${{ github.run_id }}
