@@ -295,6 +295,7 @@ jobs:
       - name: Check that pulumi is installed and authenticated
         run: |
           set -ex
+          echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
           pulumi whoami
 
       - name: Create the stack and the instance
