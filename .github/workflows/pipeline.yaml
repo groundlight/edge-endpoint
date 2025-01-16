@@ -277,7 +277,7 @@ jobs:
 
     #if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     # TODO: Remove this before merging into main
-    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/e2e-cicd' }}
+    if: ${{ github.ref == 'refs/heads/main' || github.event.pull_request.number == 157 }}
     needs:
       - validate-setup-ee
       - test-with-k3s
