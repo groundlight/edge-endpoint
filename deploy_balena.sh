@@ -19,10 +19,11 @@
 # Examples:
 #   ./deploy_balena.sh my-fleet cpu    # Deploy to a fleet of CPU-only devices
 #   ./deploy_balena.sh my-fleet gpu    # Deploy to a fleet of GPU devices w/ NVIDIA drivers and GPU operator
+#   ./deploy_balena.sh my-fleet jetson    # Deploy to a fleet of Jetson devices w/ Jetpack and GPU operator
 
 
 if [ "$#" -lt 2 ]; then
-    echo "Usage: $0 <fleet_name> <cpu|gpu>"
+    echo "Usage: $0 <fleet_name> <cpu|gpu|jetson>"
     exit 1
 fi
 

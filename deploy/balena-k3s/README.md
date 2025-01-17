@@ -41,6 +41,21 @@ This will build and push three services to the edge devices in your chosen fleet
 Now, we have our k3s single-node cluster built and running, but we have not started our edge deployment. To do this,
 see the [Configuration](#Configuration) section below (specifically, you will need to set the `RUN_EDGE_ENDPOINT` variable).
 
+### Deploying to a Jetson device
+Not yet tested
+
+From the root of `edge-endpoint`, run:
+```bash
+./deploy_balena.sh <my-fleet> jetson
+```
+
+This will build and push three services to the edge devices in your chosen fleet:
+1. A `server-jetson` service running a [k3s server](https://docs.k3s.io/architecture) that acts as the k3s cluster node and installs the NVIDIA GPU operator for Kubernetes GPU support
+2. A `bastion` service that provides access to the k3s cluster via kubectl commands and contains a copy of this repo at `/app/edge-endpoint`
+
+Now, we have our k3s single-node cluster built and running, but we have not started our edge deployment. To do this,
+see the [Configuration](#Configuration) section below (specifically, you will need to set the `RUN_EDGE_ENDPOINT` variable).
+
 ### Configuration
 Configure the following variables via the `<fleet>/Variables` or `<device>/Device Variables` interfaces on the BalenaCloud dashboard:
 ```
