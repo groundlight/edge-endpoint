@@ -8,7 +8,10 @@ stackname = pulumi.get_stack()
 # We're creating an "edge endpoint under test" (eeut)
 
 # Find network resources we need.
-eeut_sg = aws.ec2.get_security_group(name="eeut-sg")
+eeut_sg = aws.ec2.get_security_group(filters=[{
+    "name": "tag:Name",
+    "values": ["eeut-sg"]
+}])
 subnet = aws.ec2.get_subnet(filters=[{
     "name": "tag:Name",
     "values": ["cicd-subnet"]
