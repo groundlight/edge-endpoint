@@ -37,11 +37,21 @@ if [ "$FLAVOR" != "cpu" ] && [ "$FLAVOR" != "gpu" ]; then
 fi
 
 # Copy the appropriate compose file
-if [ "$FLAVOR" == "cpu" ]; then
-    cp deploy/balena-k3s/resources/docker-compose-cpu.yml docker-compose.yml
-else
-    cp deploy/balena-k3s/resources/docker-compose-gpu.yml docker-compose.yml
-fi
+case "$FLAVOR" in
+    "cpu")
+        cp deploy/balena-k3s/resources/docker-compose-cpu.yml docker-compose.yml
+        ;;
+    "gpu")
+        cp deploy/balena-k3s/resources/docker-compose-gpu.yml docker-compose.yml
+        ;;
+    "jetson")
+        cp deploy/balena-k3s/resources/docker-compose-jetson.yml docker-compose.yml
+        ;;
+    *)
+        echo "Error: Second argument must be 'cpu', 'gpu', or 'jetson'"
+        exit 1
+        ;;
+esac
 
 cleanup() {
     echo "Cleaning up..."
