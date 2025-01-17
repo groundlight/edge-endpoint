@@ -3,19 +3,20 @@ Fabric tools to connect to the EEUT and see how it's doing.
 """
 from functools import lru_cache
 import os
+import time
 
 from fabric import task, Connection, Config
+from invoke import run as local
 import boto3
 import paramiko
-import pulumi
 
 
 def connect_server() -> Connection:
     """Connects to the EEUT looking up its IP address from Pulumi.
     It's saved as an output called "eeut_private_ip" in Pulumi.
     """
-    stack = pulumi.automation.select_stack()
-    ip = stack.outputs["eeut_private_ip"].value
+    result = local("pulumi stack output eeut_private_ip")
+    ip = result.stdout.strip()
     interactive_shell = Config(overrides={'run': {'shell': '/bin/bash -i'}})
     try:
         conn = Connection(ip, user='ubuntu', config=interactive_shell)
