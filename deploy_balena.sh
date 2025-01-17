@@ -32,8 +32,8 @@ cd "$(dirname "$0")"
 FLEET_NAME=$1
 FLAVOR=$(echo "$2" | tr '[:upper:]' '[:lower:]')
 
-if [ "$FLAVOR" != "cpu" ] && [ "$FLAVOR" != "gpu" ]; then
-    echo "Error: Second argument must be 'cpu' or 'gpu'"
+if [ "$FLAVOR" != "cpu" ] && [ "$FLAVOR" != "gpu" ] && [ "$FLAVOR" != "jetson" ]; then
+    echo "Error: Second argument must be 'cpu', 'gpu', or 'jetson'"
     exit 1
 fi
 
