@@ -317,7 +317,7 @@ jobs:
       - name: Check that the EE started properly
         run: |
           source venv/bin/activate
-          fab connect
+          fab connect --patience=150
           fab wait_for_ee_setup
           # fab check_k8_deployment  # Not ready yet.
 
