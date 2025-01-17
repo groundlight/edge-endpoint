@@ -34,3 +34,4 @@ eeut_instance = aws.ec2.Instance("ee-cicd-instance",
 )
 
 pulumi.export("eeut_instance_id", eeut_instance.id)
+pulumi.export("eeut_private_ip", eeut_instance.private_ip)

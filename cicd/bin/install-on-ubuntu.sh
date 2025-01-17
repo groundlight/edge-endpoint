@@ -11,16 +11,17 @@ mkdir -p /opt/groundlight/ee-install-status
 touch /opt/groundlight/ee-install-status/installing
 SETUP_COMPLETE=0
 record_result() {
-    rm -f /opt/groundlight/ee-install-status/installing
     if [ "$SETUP_COMPLETE" -eq 0 ]; then
         echo "Setup failed at $(date)"
         touch /opt/groundlight/ee-install-status/failed
-        echo "Groundlight Edge Endpoint setup failed.  See /var/log/cloud-init-output.log for details." > /etc/motd
+        echo "Groundlight Edge Endpoint setup FAILED.  See /var/log/cloud-init-output.log for details." > /etc/motd
     else
         echo "Setup complete at $(date)"
         echo "Groundlight Edge Endpoint setup complete.  See /var/log/cloud-init-output.log for details." > /etc/motd
         touch /opt/groundlight/ee-install-status/success
     fi
+    # Remove "installing" at the end to avoid a race where there is no status
+    rm -f /opt/groundlight/ee-install-status/installing
 }
 trap record_result EXIT
 
