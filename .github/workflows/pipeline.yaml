@@ -302,13 +302,17 @@ jobs:
           set -ex
           pulumi whoami
 
-      - name: Create the stack and the instance
+      - name: Preview pulumi stack
         run: |
           set -ex
           pulumi stack init ${STACK_NAME}
           pulumi config
           pulumi preview
-          #pulumi up --yes 
+
+      - name: Create the EEUT
+        run: |
+          set -ex
+          pulumi up --yes 
 
       - name: Check that the EE started properly
         run: |
