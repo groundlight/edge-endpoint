@@ -296,6 +296,11 @@ jobs:
       #    curl -fsSL https://get.pulumi.com | sh
       #    echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
 
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
       - name: Get pulumi on the path
         run: |
           set -ex
