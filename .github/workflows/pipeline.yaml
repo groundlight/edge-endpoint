@@ -316,10 +316,9 @@ jobs:
 
       - name: Check that the EE started properly
         run: |
-          # TODO: Check that the EE started properly.
-          # This will be difficult unless the runner is in a privileged network environment
-          # relative to the created instance, which is probably what we need to do.
-          echo "TODO: Check that the EE started properly."
+          fab connect
+          fab wait_for_ee_setup
+          # fab check_k8_deployment  # Not ready yet.
 
       - name: Delete Pulumi stack
         if: always()
