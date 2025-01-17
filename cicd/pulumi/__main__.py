@@ -24,7 +24,7 @@ with open('../bin/install-on-ubuntu.sh', 'r') as file:
 eeut_instance = aws.ec2.Instance("ee-cicd-instance",
     instance_type=instance_type,
     ami="ami-0d2047d61ff42e139",  # Deep Learning OSS Nvidia Driver AMI GPU PyTorch 2.5 (Ubuntu 22.04) x86/64
-    key_name=None,  # can we leave this out?
+    key_name="ghar2eeut",
     vpc_security_group_ids=[eeut_sg.id],
     subnet_id=subnet.id,
     user_data=user_data_script,

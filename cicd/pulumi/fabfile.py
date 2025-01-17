@@ -4,22 +4,34 @@ Fabric tools to connect to the EEUT and see how it's doing.
 from functools import lru_cache
 import os
 import time
+import io
 
 from fabric import task, Connection, Config
 from invoke import run as local
 import boto3
 import paramiko
 
+def fetch_secret(secret_id: str) -> str:
+    """Fetches a secret from AWS Secrets Manager."""
+    client = boto3.client("secretsmanager", region_name="us-west-2")
+    response = client.get_secret_value(SecretId=secret_id)
+    return response['SecretString']
 
 def connect_server() -> Connection:
     """Connects to the EEUT looking up its IP address from Pulumi.
     It's saved as an output called "eeut_private_ip" in Pulumi.
     """
-    result = local("pulumi stack output eeut_private_ip")
-    ip = result.stdout.strip()
-    interactive_shell = Config(overrides={'run': {'shell': '/bin/bash -i'}})
+    ip_lookup_result = local("pulumi stack output eeut_private_ip")
+    ip = ip_lookup_result.stdout.strip()
     try:
-        conn = Connection(ip, user='ubuntu', config=interactive_shell)
+        private_key = fetch_secret("ghar2eeut-private-key")
+        private_key_file = io.StringIO(private_key)
+        key = paramiko.Ed25519Key.from_private_key(private_key_file)
+        conn = Connection(
+            ip,
+            user='ubuntu',
+            connect_kwargs={"pkey": key},
+        )
         conn.run(f"echo 'Successfully logged in to {ip}'")
         return conn
     except paramiko.ssh_exception.SSHException as e:
@@ -28,11 +40,25 @@ def connect_server() -> Connection:
 
 
 @task
-def connect(c):
-    """Just connect to a server to validate connection is working."""
+def connect(c, patience: int = 30):
+    """Just connect to a server to validate connection is working.
+
+    Args:
+        patience (int): Number of seconds to keep retrying for.
+    """
     print("Fab/fabric is working.  Connecting to server...")
-    connect_server()
-    print("Successfully connected to server.")
+    start_time = time.time()
+    attempt = 1
+    while time.time() - start_time < patience:
+        try:
+            connect_server()
+            print(f"Successfully connected to server on attempt {attempt}.")
+            return
+        except Exception as e:
+            print(f"Attempt {attempt} failed to connect to server: {e}")
+            time.sleep(3)
+            attempt += 1
+    raise RuntimeError(f"Failed to connect to server after {patience} seconds.")
 
 
 def check_for_file(conn: Connection, name: str) -> bool:
