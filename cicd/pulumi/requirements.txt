@@ -1,3 +1,5 @@
 pulumi>=3
 pulumi_aws>=6.13.3
 boto3==1.36.1
+# Fabric is used to automate testing if the EEUT is working.
+fabric==3.2.2
