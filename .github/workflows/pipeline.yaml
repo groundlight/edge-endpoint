@@ -318,8 +318,8 @@ jobs:
         run: |
           source venv/bin/activate
           fab connect --patience=150
-          fab wait_for_ee_setup
-          # fab check_k8_deployment  # Not ready yet.
+          fab wait-for-ee-setup
+          # fab check-k8-deployment  # Not ready yet.
 
       - name: Delete Pulumi stack
         if: always()
