@@ -67,12 +67,41 @@ def check_for_file(conn: Connection, name: str) -> bool:
         result = conn.run(f"test -f {name}", warn=True)
         return result.ok
 
+def which_status_file(conn: Connection) -> str:
+    """Returns the name of the status file if it exists, or None if it doesn't."""
+    with conn.cd("/opt/groundlight/ee-install-status"):
+        if check_for_file(conn, "installing"):
+            return "installing"
+        if check_for_file(conn, "success"):
+            return "success"
+        if check_for_file(conn, "failed"):
+            return "failed"
+        return None
+
+def wait_for_any_status(conn: Connection, wait_minutes: int = 10) -> str:
+    """Waits for the EEUT to begin setup.  This is a brand new sleepy server
+    rubbing its eyes and waking up.  Give it a bit to start doing something.
+    """
+    start_time = time.time()
+    while time.time() - start_time < 60 * wait_minutes:
+        try:
+            status_file = which_status_file(conn)
+            if status_file:
+                return status_file
+            else:
+                print("No status file found yet.")
+        except Exception as e:
+            print(f"Failed to check status file: {e}")
+            time.sleep(10)
+    raise RuntimeError(f"No status file found after {wait_minutes} minutes.")
+
 @task
 def wait_for_ee_setup(c, wait_minutes: int = 10):
     """Waits for the EEUT to finish setup.  If it fails, prints the log."""
     conn = connect_server()
+    status_file = wait_for_any_status(conn, wait_minutes=3)
     with conn.cd(f"/opt/groundlight/ee-install-status"):
-        conn.run(f"ls -alh")
+        conn.run(f"ls -alh")  # just to see what's in there
         # There are three possible files here:
         # - installing:  still installing
         # - success:  installed successfully
