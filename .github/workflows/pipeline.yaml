@@ -290,22 +290,23 @@ jobs:
         run: |
           aws sts get-caller-identity
 
-      # We assume/require pulumi is already installed on the runner.
-      #- name: Install Pulumi
-      #  run: |
-      #    curl -fsSL https://get.pulumi.com | sh
-      #    echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
-
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.12'
 
-      - name: Get pulumi on the path
+      # Don't assume/require pulumi is already installed on the runner.
+      - name: Install Pulumi
         run: |
-          set -ex
+          curl -fsSL https://get.pulumi.com | sh
           export HOME=$(eval echo ~$(whoami))
           echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
+
+      #- name: Get pulumi on the path
+      #  run: |
+      #    set -ex
+      #    export HOME=$(eval echo ~$(whoami))
+      #    echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
 
       - name: Check that pulumi is installed and authenticated
         run: |
