@@ -313,10 +313,9 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.astral/bin" >> $GITHUB_PATH
 
-      - name: Install uv 
+      - name: Install uv dependencies
         run: |
           set -ex
-          cd cicd/pulumi
           uv --version
           uv install
 
