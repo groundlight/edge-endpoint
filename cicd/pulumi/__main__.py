@@ -17,15 +17,15 @@ subnet = aws.ec2.get_subnet(filters=[{
     "values": ["cicd-subnet"]
 }])
 
-# Read the local bash script
-with open('../scripts/firstrun-ubuntu.sh', 'r') as file:
+with open('../bin/firstrun-ubuntu.sh', 'r') as file:
+    # Load the script that installs everything on the instance
     user_data_script = file.read()
 
-instance = aws.ec2.Instance("ee-cicd-instance",
+eeut_instance = aws.ec2.Instance("ee-cicd-instance",
     instance_type=instance_type,
     ami="ami-0d2047d61ff42e139",  # Deep Learning OSS Nvidia Driver AMI GPU PyTorch 2.5 (Ubuntu 22.04) x86/64
     key_name=None,  # can we leave this out?
-    vpc_security_group_ids=[security_group.id],
+    vpc_security_group_ids=[eeut_sg.id],
     subnet_id=subnet.id,
     user_data=user_data_script,
     tags={
@@ -33,6 +33,4 @@ instance = aws.ec2.Instance("ee-cicd-instance",
     }
 )
 
-pulumi.export("instance_id", instance.id)
-pulumi.export("public_ip", instance.public_ip)
-pulumi.export("public_dns", instance.public_dns)
+pulumi.export("eeut_instance_id", eeut_instance.id)

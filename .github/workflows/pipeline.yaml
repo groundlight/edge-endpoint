@@ -289,8 +289,9 @@ jobs:
         with:
           python-version: '3.12'
 
-      # Don't assume/require pulumi is already installed on the runner.
       - name: Install Pulumi
+        # Pulumi might be (probably is) already installed on the runner.
+        # But the path stuff is annoying, and this is working.
         run: |
           curl -fsSL https://get.pulumi.com | sh
           export HOME=$(eval echo ~$(whoami))
