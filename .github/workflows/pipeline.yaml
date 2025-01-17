@@ -279,14 +279,8 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v3
 
-      # No need to configure AWS credentials - they are set as an IAM role on the runner
-      #- name: Configure AWS Credentials
-      #  uses: aws-actions/configure-aws-credentials@v1
-      #  with:
-      #    aws-region: us-west-2
-      #    aws-access-key-id: ${{ secrets.GLPUBLIC_CICD_AWS_ACCESS_KEY_ID }}
-      #    aws-secret-access-key: ${{ secrets.GLPUBLIC_CICD_AWS_SECRET_ACCESS_KEY }}
       - name: Check that aws credentials are set
+        # Credentials come from an IAM profile on the runner instance
         run: |
           aws sts get-caller-identity
 
@@ -302,28 +296,10 @@ jobs:
           export HOME=$(eval echo ~$(whoami))
           echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
 
-      #- name: Get pulumi on the path
-      #  run: |
-      #    set -ex
-      #    export HOME=$(eval echo ~$(whoami))
-      #    echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
-
       - name: Check that pulumi is installed and authenticated
         run: |
           set -ex
           pulumi whoami
-
-      - name: Install uv
-        run: |
-          set -ex
-          set -o pipefail
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.astral/bin" >> $GITHUB_PATH
-
-      - name: Check that uv is installed
-        run: |
-          set -ex
-          uv --version
 
       - name: Create the stack and the instance
         run: |
