@@ -5,11 +5,13 @@ config = pulumi.Config("ee-cicd")
 instance_type = config.require("instanceType")
 stackname = pulumi.get_stack()
 
-# Import an existing resources to place the instance in
-security_group = aws.ec2.get_security_group(name="cicd-isolated")
+# We're creating an "edge endpoint under test" (eeut)
+
+# Find network resources we need.
+eeut_sg = aws.ec2.get_security_group(name="eeut-sg")
 subnet = aws.ec2.get_subnet(filters=[{
     "name": "tag:Name",
-    "values": ["cicd-isolated"]
+    "values": ["cicd-subnet"]
 }])
 
 # Read the local bash script
