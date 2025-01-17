@@ -317,6 +317,7 @@ jobs:
       - name: Check that the EE started properly
         run: |
           source venv/bin/activate
+          export PYTHONUNBUFFERED=1
           fab connect --patience=150
           fab wait-for-ee-setup
           # fab check-k8-deployment  # Not ready yet.

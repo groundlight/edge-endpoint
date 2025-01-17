@@ -6,6 +6,8 @@
 # /var/lib/cloud/instance/user-data.txt
 echo "Setting up Groundlight Edge Endpoint.  Follow along at /var/log/cloud-init-output.log" > /etc/motd
 
+echo "Starting cloud init.  Uptime: $(uptime)"
+
 # Set up signals about the status of the installation
 mkdir -p /opt/groundlight/ee-install-status
 touch /opt/groundlight/ee-install-status/installing

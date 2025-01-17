@@ -91,8 +91,8 @@ def wait_for_any_status(conn: Connection, wait_minutes: int = 10) -> str:
             else:
                 print("No status file found yet.")
         except Exception as e:
-            print(f"Failed to check status file: {e}")
-            time.sleep(10)
+            print(f"Still unable to check status file: {e}")
+        time.sleep(2)
     raise RuntimeError(f"No status file found after {wait_minutes} minutes.")
 
 @task
@@ -112,12 +112,14 @@ def wait_for_ee_setup(c, wait_minutes: int = 10):
                 print("EEUT installed successfully.")
                 return
             if check_for_file(conn, "failed"):
-                print("EEUT installation failed.")
+                print("EEUT installation failed.  Printing complete log...")
                 conn.run("cat /var/log/cloud-init-output.log")
                 raise RuntimeError("EEUT installation failed.")
             if not check_for_file(conn, "installing"):
                 print(f"No 'installing' status - maybe cloud-init never ran?")
                 raise RuntimeError("EEUT installation never started.")
+            else:
+                print(f"EEUT still installing after {time.time() - start_time} seconds.")
             time.sleep(10)
         raise RuntimeError(f"EEUT still installing after {wait_minutes} minutes.")
 
