@@ -17,7 +17,7 @@ subnet = aws.ec2.get_subnet(filters=[{
     "values": ["cicd-subnet"]
 }])
 
-with open('../bin/firstrun-ubuntu.sh', 'r') as file:
+with open('../bin/install-on-ubuntu.sh', 'r') as file:
     # Load the script that installs everything on the instance
     user_data_script = file.read()
 

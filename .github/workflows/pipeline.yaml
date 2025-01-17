@@ -325,7 +325,10 @@ jobs:
         if: always()
         run: |
           pulumi stack select ${STACK_NAME}
-          pulumi destroy --yes
+          # Try 3 times to destroy the stack
+          pulumi destroy --yes || echo "Failed to destroy stack"
+          pulumi destroy --yes || echo "Failed to destroy stack"
+          pulumi destroy --yes || echo "Failed to destroy stack"
           pulumi stack rm ${STACK_NAME} --yes
 
   build-push-edge-endpoint-multiplatform:
