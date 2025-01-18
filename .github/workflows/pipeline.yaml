@@ -314,7 +314,7 @@ jobs:
           set -ex
           pulumi up --yes 
 
-      - name: Check that the EE started properly
+      - name: Check that EE install succeeded
         run: |
           source venv/bin/activate
           export PYTHONUNBUFFERED=1

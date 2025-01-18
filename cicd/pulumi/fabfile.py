@@ -109,19 +109,19 @@ def wait_for_ee_setup(c, wait_minutes: int = 10):
         start_time = time.time()
         while time.time() - start_time < 60 * wait_minutes:
             if check_for_file(conn, "success"):
-                print("EEUT installed successfully.")
+                print("EE installed successfully.")
                 return
             if check_for_file(conn, "failed"):
-                print("EEUT installation failed.  Printing complete log...")
+                print("EE installation failed.  Printing complete log...")
                 conn.run("cat /var/log/cloud-init-output.log")
-                raise RuntimeError("EEUT installation failed.")
+                raise RuntimeError("EE installation failed.")
             if not check_for_file(conn, "installing"):
                 print(f"No 'installing' status - maybe cloud-init never ran?")
-                raise RuntimeError("EEUT installation never started.")
+                raise RuntimeError("EE installation never started.")
             else:
-                print(f"EEUT still installing after {time.time() - start_time} seconds.")
+                print(f"EE still installing after {int(time.time() - start_time)} seconds.")
             time.sleep(10)
-        raise RuntimeError(f"EEUT still installing after {wait_minutes} minutes.")
+        raise RuntimeError(f"EE installation check timed out after {wait_minutes} minutes.")
 
 @task
 def check_k8_deployment(c, deployment_name: str):

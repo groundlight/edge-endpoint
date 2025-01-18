@@ -28,6 +28,7 @@ eeut_instance = aws.ec2.Instance("ee-cicd-instance",
     vpc_security_group_ids=[eeut_sg.id],
     subnet_id=subnet.id,
     user_data=user_data_script,
+    associate_public_ip_address=True,
     tags={
         "Name": f"ee-cicd-{stackname}",
     }
