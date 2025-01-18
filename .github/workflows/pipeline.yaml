@@ -264,11 +264,20 @@ jobs:
 
     env:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
-      STACK_NAME: ee-cicd-${{ github.run_id }}
     defaults:
       run:
         working-directory: cicd/pulumi
     steps:
+      - name: Name the stack
+        run: |
+          # Set to expire in 60 minutes
+          EXPIRATION_TIME=$(($(date +%s) + 60 * 60))
+          STACK_NAME=ee-cicd-${{ github.run_id }}-expires-${EXPIRATION_TIME}
+          echo "STACK_NAME=${STACK_NAME}" >> $GITHUB_ENV
+          # We give the stack a name including its expiration time so that the sweeper
+          # (in sweeper-eeut.yaml) knows when to get rid of it.
+          # This saves us having to clean up here, which can be quite slow (~7 minutes for a g4)
+
       - name: Check out code
         uses: actions/checkout@v3
 
@@ -280,7 +289,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.12'
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install Pulumi
         # Pulumi might be (probably is) already installed on the runner.
@@ -314,16 +323,6 @@ jobs:
           fab connect --patience=150
           fab wait-for-ee-setup
           # fab check-k8-deployment  # Not ready yet.
-
-      - name: Delete Pulumi stack
-        if: always()
-        run: |
-          pulumi stack select ${STACK_NAME}
-          # Try 3 times to destroy the stack
-          pulumi destroy --yes || echo "Failed to destroy stack"
-          pulumi destroy --yes || echo "Failed to destroy stack"
-          pulumi destroy --yes || echo "Failed to destroy stack"
-          pulumi stack rm ${STACK_NAME} --yes
 
   build-push-edge-endpoint-multiplatform:
     if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
