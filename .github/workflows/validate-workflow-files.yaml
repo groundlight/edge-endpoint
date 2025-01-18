@@ -8,17 +8,22 @@ name: Workflow YAML check
 
 # TODO: It would be nice to validate the semantics of the workflow files
 # not just their basic syntax, but this is a good start.
+# e.g. if a job has a "needs:" field but nothing listed under it,
+# that will pass linting, but fail at GH.  I believe there's a GH API
+# we can post to that will validate the workflow files.
 
 on:
   pull_request:
     paths:
       - '.github/workflows/*.yaml'
+      - '.github/.yamllint.yaml'
     types: [opened, synchronize, reopened]
   push:
     branches:
       - main
     paths:
       - '.github/workflows/*.yaml'
+      - '.github/.yamllint.yaml'
 
 jobs:
   check-workflow-files:
@@ -43,4 +48,4 @@ jobs:
           pip install yamllint
 
       - name: Run yamllint
-        run: yamllint -c .yamllint.yaml *.yaml
+        run: yamllint -c ../.yamllint.yaml *.yaml
