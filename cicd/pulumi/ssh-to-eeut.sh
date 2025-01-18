@@ -1,4 +1,8 @@
 #!/bin/bash
+# This is an odd script.  It will only work from the GHA runner.
+# and it expects to have access to the pulumi stack here.  Which means
+# to use it you'd have to log into the runner and clone the EE repo.
+# But if that's what you need to do, this will help.
 
 set -x
 
