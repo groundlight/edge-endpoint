@@ -1,6 +1,8 @@
 #! /bin/bash
 # This script is intended to run on a new ubuntu instance to set it up 
 # Sets up an edge-endpoint environment.
+# It is tested in the CICD pipeline to install the edge-endpoint on a new 
+# g4dn.xlarge EC2 instance with Ubuntu 22.04LTS.
 
 # As a user-data script on ubuntu, this file probably lands at
 # /var/lib/cloud/instance/user-data.txt
@@ -30,10 +32,10 @@ trap record_result EXIT
 set -e  # Exit on error of any command.
 
 # Disable IPv6 to ensure apt uses IPv4
-echo "Disabling IPv6..."
-sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
-sudo sysctl -w net.ipv6.conf.default.disable_ipv6=1
-sudo sysctl -w net.ipv6.conf.lo.disable_ipv6=1
+#echo "Disabling IPv6..."
+#sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
+#sudo sysctl -w net.ipv6.conf.default.disable_ipv6=1
+#sudo sysctl -w net.ipv6.conf.lo.disable_ipv6=1
 
 # Install the basic tools
 sudo apt update

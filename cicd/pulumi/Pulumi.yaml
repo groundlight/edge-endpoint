@@ -6,7 +6,5 @@ runtime:
     virtualenv: venv
 description: CI/CD for Edge Endpoint
 config:
-  #ee-cicd:instanceType: g4dn.xlarge
-  # TODO: change back to g4 when this is working better.
-  # (I think t3's will turn on/off much faster.)
-  ee-cicd:instanceType: t3.xlarge
+  ee-cicd:instanceType: g4dn.xlarge
+
