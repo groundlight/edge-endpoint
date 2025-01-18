@@ -21,7 +21,6 @@ env:
 
 jobs:
   test-general-edge-endpoint:
-    if: ${{ github.event.pull_request.number != 157 }}  # TODO: remove.
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
@@ -103,7 +102,6 @@ jobs:
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
   validate-setup-ee:
-    if: ${{ github.event.pull_request.number != 157 }}  # TODO: remove.
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
@@ -139,7 +137,6 @@ jobs:
   # we run this seperately from validate-setup-ee since we run out of disk space doing
   # both of them on the same runner and they can be slow so its best to do them in parallel
   test-with-k3s:
-    if: ${{ github.event.pull_request.number != 157 }}  # TODO: remove.
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
@@ -175,7 +172,6 @@ jobs:
 
   # Run Groundlight SDK tests against the edge proxy endpoint
   test-sdk:
-    if: ${{ github.event.pull_request.number != 157 }}  # TODO: remove.
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
@@ -260,14 +256,11 @@ jobs:
     # for the run.  How much we want to do this is TBD.
     runs-on: self-hosted
 
-    #if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
-    # TODO: Remove this before merging into main
-    if: ${{ github.ref == 'refs/heads/main' || github.event.pull_request.number == 157 }}
-    #needs:
-      #TODO: put these requirements back in when this is working.
-      #- validate-setup-ee
-      #- test-with-k3s
-      #- test-sdk
+    if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+    needs:
+      - validate-setup-ee
+      - test-with-k3s
+      - test-sdk
 
     env:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
