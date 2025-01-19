@@ -31,8 +31,19 @@ trap record_result EXIT
 
 set -e  # Exit on error of any command.
 
-# Install the basic tools
+wait_for_apt_lock() {
+    # We wait for any apt or dpkg processes to finish to avoid lock collisions
+    # Unattended-upgrades can hold the lock and cause the install to fail
+    while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+        echo "Another apt/dpkg process is running. Waiting for it to finish..."
+        sleep 5
+    done
+}
+
+# Install basic tools
+wait_for_apt_lock
 sudo apt update
+wait_for_apt_lock
 sudo apt install -y \
     git \
     vim \
