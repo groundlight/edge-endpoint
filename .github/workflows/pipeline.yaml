@@ -332,6 +332,14 @@ jobs:
           fab check-k8-deployments
           fab check-server-port
 
+      - name: Use groundlight sdk through EE
+        run: |
+          source venv/bin/activate
+          EEUT_IP=$(pulumi stack output eeut_private_ip)
+          export GROUNDLIGHT_ENDPOINT=http://${EEUT_IP}:30101
+          groundlight whoami
+          groundlight list-detectors
+
       - name: Expire stack
         run: |
           # If it succeeded, rename the stack for immediate expiration
