@@ -55,4 +55,4 @@ jobs:
       - name: Destroy old EEUT stacks
         working-directory: cicd/pulumi
         run: |
-          ./destroy-old-stacks.sh 60
+          ./sweep-destroy-eeut-stacks.sh
