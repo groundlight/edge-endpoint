@@ -4,14 +4,11 @@
 
 set -e
 
-# This function attempts to destroy a stack multiple times, and then removes it
-# from Pulumi.  It's used to ensure that we can reliably destroy stacks that are
-# marked to expire.
-reliably_destroy_stack() {
+destroy_stack() {
+  # We don't need to make this super robust (retrying a lot) because if it fails,
+  # we'll try again next cron time.
   STACK_NAME=$1
   pulumi stack select $STACK_NAME
-  pulumi destroy --yes || echo "Failed to destroy stack $STACK_NAME on attempt 1"
-  pulumi destroy --yes || echo "Failed to destroy stack $STACK_NAME on attempt 2"
   pulumi destroy --yes
   pulumi stack rm $STACK_NAME --yes
   echo -e "Stack $STACK_NAME destroyed\n\n"
@@ -31,15 +28,22 @@ STACKS_JSON=$(pulumi stack ls --json)
 #  }
 #]
 STACK_NAMES=$(echo "$STACKS_JSON" | jq -r '.[].name')
-echo "Found $(echo "$STACK_NAMES" | wc -l) stacks"
+echo "Found $(echo "$STACK_NAMES" | wc -l) total stacks"
+# We will filter out stacks that are currently being updated
+# Because otherwise pulumi will just hang waiting its turn.
+UPDATE_IN_PROGRESS_STACKS=$(echo "$STACKS_JSON" | jq -r '.[] | select(.updateInProgress == true) | .name')
+echo "Found $(echo "$UPDATE_IN_PROGRESS_STACKS" | wc -l) stacks with updateInProgress: $UPDATE_IN_PROGRESS_STACKS"
+NOT_IN_PROGRESS_STACKS=$(echo "$STACKS_JSON" | jq -r '.[] | select(.updateInProgress == false) | .name')
+echo "Will process remaining $(echo "$NOT_IN_PROGRESS_STACKS" | wc -l) stacks"
 
-for STACK_NAME in $STACK_NAMES; do
+set +e  # Plow ahead even if some stacks fail to destroy
+for STACK_NAME in $NOT_IN_PROGRESS_STACKS; do
   if [[ $STACK_NAME == *"expires-"* ]]; then
     # This stack is marked to expire.  Check if the time has passed.
     EXPIRATION_TIME=$(echo "$STACK_NAME" | grep -oP 'expires-\K\d+')
     if [[ $(date +%s) -gt $EXPIRATION_TIME ]]; then
       echo "Stack ${STACK_NAME} has expired.  Destroying..."
-      reliably_destroy_stack $STACK_NAME
+      destroy_stack $STACK_NAME
     else
       echo "Stack ${STACK_NAME} has not expired yet"
     fi

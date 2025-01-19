@@ -331,6 +331,14 @@ jobs:
           export PYTHONUNBUFFERED=1
           fab check-k8-deployments
 
+      - name: Expire stack
+        run: |
+          # Rename the stack for immediate expiration
+          NOW=$(($(date +%s) + 60 * 60))
+          NEW_STACK_NAME=ee-cicd-${{ github.run_id }}-expires-${NOW}
+          pulumi stack select ${STACK_NAME}
+          pulumi stack rename ${NEW_STACK_NAME}
+
   build-push-edge-endpoint-multiplatform:
     if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     # We only run this action if all the prior test actions succeed
