@@ -257,12 +257,12 @@ jobs:
     # for the run.  How much we want to do this is TBD.
     runs-on: self-hosted
 
-    # Run this on merges to main, workflow_dispatch, or branches that start with e2e
-    if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/e2e') }}
-    needs:
-      - validate-setup-ee
-      - test-with-k3s
-      - test-sdk
+    # Run this on any PR.
+    # Question: Should we wait until the other tests pass before running this?
+    #needs:
+    #  - validate-setup-ee
+    #  - test-with-k3s
+    #  - test-sdk
 
     env:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
