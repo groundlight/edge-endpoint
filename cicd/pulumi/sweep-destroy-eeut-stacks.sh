@@ -9,12 +9,11 @@ destroy_stack() {
   # we'll try again next cron time.
   STACK_NAME=$1
   pulumi stack select $STACK_NAME
-  pulumi destroy --yes
-  pulumi stack rm $STACK_NAME --yes
+  pulumi destroy --yes  || echo "Failed to destroy stack $STACK_NAME"
+  pulumi stack rm $STACK_NAME --yes || echo "Failed to remove stack $STACK_NAME"
   echo -e "Stack $STACK_NAME destroyed\n\n"
 }
 
-STACKS_JSON=$(pulumi stack ls --json)
 # Stack output JSON looks like:
 #[
 #  {
@@ -25,24 +24,31 @@ STACKS_JSON=$(pulumi stack ls --json)
 #    "updateInProgress": false,
 #    "resourceCount": 0,
 #    "url": "https://app.pulumi.com/something/ee-cicd/tmpdel"
-#  }
+#  }, {...}
 #]
-STACK_NAMES=$(echo "$STACKS_JSON" | jq -r '.[].name')
-echo "Found $(echo "$STACK_NAMES" | wc -l) total stacks"
-# We will filter out stacks that are currently being updated
-# Because otherwise pulumi will just hang waiting its turn.
-UPDATE_IN_PROGRESS_STACKS=$(echo "$STACKS_JSON" | jq -r '.[] | select(.updateInProgress == true) | .name')
-echo "Found $(echo "$UPDATE_IN_PROGRESS_STACKS" | wc -l) stacks with updateInProgress: $UPDATE_IN_PROGRESS_STACKS"
-NOT_IN_PROGRESS_STACKS=$(echo "$STACKS_JSON" | jq -r '.[] | select(.updateInProgress == false) | .name')
-echo "Will process remaining $(echo "$NOT_IN_PROGRESS_STACKS" | wc -l) stacks"
 
-set +e  # Plow ahead even if some stacks fail to destroy
-for STACK_NAME in $NOT_IN_PROGRESS_STACKS; do
+STACKS_JSON=$(pulumi stack ls --json)
+NUM_STACKS=$(echo "$STACKS_JSON" | jq -r '. | length')
+echo "Found $NUM_STACKS total stacks"
+
+for ((i=0; i<NUM_STACKS; i++)); do
+  THIS_STACK=$(echo "$STACKS_JSON" | jq -r ".[$i]")
+  STACK_NAME=$(echo "$THIS_STACK" | jq -r ".name")
+  UPDATE_IN_PROGRESS=$(echo "$THIS_STACK" | jq -r ".updateInProgress")
+
+  if [[ $UPDATE_IN_PROGRESS == "true" ]]; then
+    # Pulumi will just hang waiting its turn if we try to work on this stack.
+    echo "Stack ${STACK_NAME} is currently being updated. Skipping..."
+    continue
+  fi
+
   if [[ $STACK_NAME == *"expires-"* ]]; then
-    # This stack is marked to expire.  Check if the time has passed.
+    # This stack is marked to expire. Check if the time has passed.
     EXPIRATION_TIME=$(echo "$STACK_NAME" | grep -oP 'expires-\K\d+')
     if [[ $(date +%s) -gt $EXPIRATION_TIME ]]; then
-      echo "Stack ${STACK_NAME} has expired.  Destroying..."
+      echo "Stack ${STACK_NAME} has expired. Destroying..."
+      echo "Stack has $(echo "$THIS_STACK" | jq -r ".resourceCount") resources"
+      echo "Follow along online at $(echo "$THIS_STACK" | jq -r ".url")"
       destroy_stack $STACK_NAME
     else
       echo "Stack ${STACK_NAME} has not expired yet"
