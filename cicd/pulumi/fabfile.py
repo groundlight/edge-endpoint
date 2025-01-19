@@ -95,10 +95,30 @@ def wait_for_any_status(conn: Connection, wait_minutes: int = 10) -> str:
         time.sleep(2)
     raise RuntimeError(f"No status file found after {wait_minutes} minutes.")
 
+def wait_for_condition(conn: Connection, success: Callable[[Connection], bool], wait_minutes: int = 10):
+    """Waits for a condition to be true."""
+    start_time = time.time()
+    while time.time() - start_time < 60 * wait_minutes:
+        if condition(conn):
+            return
+        time.sleep(2)
+    raise RuntimeError(f"Timeout waiting for {success.__name__} to be true after {wait_minutes} minutes.")
+
+def eesetup_installing(conn: Connection) -> bool:
+    """Checks if the EEUT is still installing."""
+    if check_for_file(conn, "installing"):
+        return True
+
+def eesetup_success(conn: Connection) -> bool:
+    """Checks if the EEUT installation succeeded."""
+    return check_for_file(conn, "success")
+
 @task
 def wait_for_ee_setup(c, wait_minutes: int = 10):
     """Waits for the EEUT to finish setup.  If it fails, prints the log."""
     conn = connect_server()
+    #wait_for_condition(conn, eesetup_installing, max_minutes=3)
+    #wait_for_condition(conn, eesetup_success, max_minutes=wait_minutes)
     status_file = wait_for_any_status(conn, wait_minutes=3)
     with conn.cd(f"/opt/groundlight/ee-install-status"):
         conn.run(f"ls -alh")  # just to see what's in there
@@ -124,7 +144,22 @@ def wait_for_ee_setup(c, wait_minutes: int = 10):
         raise RuntimeError(f"EE installation check timed out after {wait_minutes} minutes.")
 
 @task
-def check_k8_deployment(c, deployment_name: str):
-    """Checks if a k8 deployment is running. (Not implemented yet.)"""
-    # TODO: implement this
-    raise NotImplementedError("Not implemented yet.")
+def check_k8_deployments(c):
+    """Checks that the edge-endpoint deployment goes online.
+    """
+    conn = connect_server()
+    def can_run_kubectl(conn: Connection) -> bool:  
+        conn.run("kubectl get pods")  # If this works at all, we're happy
+        return True
+    wait_for_condition(conn, can_run_kubectl)
+    def see_deployments(conn: Connection) -> bool:
+        out = conn.run("kubectl get deployments")
+        # Need to see the edge-endpoint deployment  
+        return "edge-endpoint" in out.stdout
+    wait_for_condition(conn, see_deployments)
+    def see_edge_endpoint_ready(conn: Connection) -> bool:
+        out = conn.run("kubectl get deployments edge-endpoint")
+        return "1/1" in out.stdout
+    wait_for_condition(conn, see_edge_endpoint_ready)
+
+
