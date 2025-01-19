@@ -2,6 +2,7 @@
 Fabric tools to connect to the EEUT and see how it's doing.
 """
 from functools import lru_cache
+from typing import Callable
 import os
 import time
 import io
@@ -95,15 +96,6 @@ def wait_for_any_status(conn: Connection, wait_minutes: int = 10) -> str:
         time.sleep(2)
     raise RuntimeError(f"No status file found after {wait_minutes} minutes.")
 
-def wait_for_condition(conn: Connection, success: Callable[[Connection], bool], wait_minutes: int = 10):
-    """Waits for a condition to be true."""
-    start_time = time.time()
-    while time.time() - start_time < 60 * wait_minutes:
-        if condition(conn):
-            return
-        time.sleep(2)
-    raise RuntimeError(f"Timeout waiting for {success.__name__} to be true after {wait_minutes} minutes.")
-
 def eesetup_installing(conn: Connection) -> bool:
     """Checks if the EEUT is still installing."""
     if check_for_file(conn, "installing"):
@@ -116,9 +108,8 @@ def eesetup_success(conn: Connection) -> bool:
 @task
 def wait_for_ee_setup(c, wait_minutes: int = 10):
     """Waits for the EEUT to finish setup.  If it fails, prints the log."""
+    # TODO: Consider refactoring this to use wait_for_condition.
     conn = connect_server()
-    #wait_for_condition(conn, eesetup_installing, max_minutes=3)
-    #wait_for_condition(conn, eesetup_success, max_minutes=wait_minutes)
     status_file = wait_for_any_status(conn, wait_minutes=3)
     with conn.cd(f"/opt/groundlight/ee-install-status"):
         conn.run(f"ls -alh")  # just to see what's in there
@@ -143,6 +134,25 @@ def wait_for_ee_setup(c, wait_minutes: int = 10):
             time.sleep(10)
         raise RuntimeError(f"EE installation check timed out after {wait_minutes} minutes.")
 
+
+def wait_for_condition(conn: Connection, condition: Callable[[Connection], bool], wait_minutes: int = 10) -> bool:
+    """Waits for a condition to be true.  Returns True if the condition is true, False otherwise."""
+    start_time = time.time()
+    name = condition.__name__
+    while time.time() - start_time < 60 * wait_minutes:
+        try:
+            if condition(conn):
+                print(f"Condition {name} is true.")
+                return True
+            else:
+                print(f"Condition {name} is false.")
+        except Exception as e:
+            print(f"Condition {name} failed: {e}")
+        time.sleep(2)
+    print(f"Condition {name} timed out after {wait_minutes} minutes.")
+    return False
+
+
 @task
 def check_k8_deployments(c):
     """Checks that the edge-endpoint deployment goes online.
@@ -151,15 +161,22 @@ def check_k8_deployments(c):
     def can_run_kubectl(conn: Connection) -> bool:  
         conn.run("kubectl get pods")  # If this works at all, we're happy
         return True
-    wait_for_condition(conn, can_run_kubectl)
+    if not wait_for_condition(conn, can_run_kubectl):
+        raise RuntimeError("Failed to run kubectl.")
     def see_deployments(conn: Connection) -> bool:
         out = conn.run("kubectl get deployments")
         # Need to see the edge-endpoint deployment  
         return "edge-endpoint" in out.stdout
-    wait_for_condition(conn, see_deployments)
-    def see_edge_endpoint_ready(conn: Connection) -> bool:
+    if not wait_for_condition(conn, see_deployments):
+        conn.run("kubectl get all -A")
+        raise RuntimeError("Failed to see edge-endpoint deployment.")
+    def edge_endpoint_ready(conn: Connection) -> bool:
         out = conn.run("kubectl get deployments edge-endpoint")
         return "1/1" in out.stdout
-    wait_for_condition(conn, see_edge_endpoint_ready)
+    if not wait_for_condition(conn, edge_endpoint_ready):
+        conn.run("kubectl get deployments edge-endpoint -o yaml")
+        conn.run("kubectl describe deployments edge-endpoint")
+        conn.run("kubectl logs deployment/edge-endpoint")
+        raise RuntimeError("Failed to see edge-endpoint deployment ready.")
 
 
