@@ -53,5 +53,6 @@ jobs:
           pulumi whoami
 
       - name: Destroy old EEUT stacks
+        working-directory: cicd/pulumi
         run: |
           ./destroy-old-stacks.sh 60
