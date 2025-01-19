@@ -324,7 +324,12 @@ jobs:
           export PYTHONUNBUFFERED=1
           fab connect --patience=150
           fab wait-for-ee-setup
-          # fab check-k8-deployment  # Not ready yet.
+
+      - name: Check that the k8 deployments come up
+        run: |
+          source venv/bin/activate
+          export PYTHONUNBUFFERED=1
+          fab check-k8-deployments
 
   build-push-edge-endpoint-multiplatform:
     if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
