@@ -196,7 +196,7 @@ def check_k8_deployments(c):
         raise RuntimeError("Failed to see edge-endpoint deployment ready.")
 
 @task 
-def server_port(c):
+def check_server_port(c):
     """Checks that the server is listening on the service port."""
     # First check that it's visible from the EEUT's localhost
     conn = connect_server()

@@ -325,15 +325,16 @@ jobs:
           fab connect --patience=150
           fab wait-for-ee-setup
 
-      - name: Check that the k8 deployments come up
+      - name: Wait for k8 and check functionality
         run: |
           source venv/bin/activate
           export PYTHONUNBUFFERED=1
           fab check-k8-deployments
+          fab check-server-port
 
       - name: Expire stack
         run: |
-          # Rename the stack for immediate expiration
+          # If it succeeded, rename the stack for immediate expiration
           NOW=$(($(date +%s) + 60 * 60))
           NEW_STACK_NAME=ee-cicd-${{ github.run_id }}-expires-${NOW}
           pulumi stack select ${STACK_NAME}

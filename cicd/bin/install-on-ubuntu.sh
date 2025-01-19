@@ -47,6 +47,7 @@ sudo apt install -y \
     curl \
     wget \
     tree \
+    bash-completion \
     ffmpeg
 
 TARGET_USER="ubuntu"
@@ -68,6 +69,8 @@ kubectl create namespace gl-edge
 kubectl config set-context edge --namespace=gl-edge --cluster=default --user=default
 kubectl config use-context edge
 echo "alias k='kubectl'" >> /home/${TARGET_USER}/.bashrc
+echo "source <(kubectl completion bash)" >> /home/${TARGET_USER}/.bashrc
+echo "complete -F __start_kubectl k" >> /home/${TARGET_USER}/.bashrc
 echo "set -o vi" >> /home/${TARGET_USER}/.bashrc
 
 # Configure the edge-endpoint with environment variables
