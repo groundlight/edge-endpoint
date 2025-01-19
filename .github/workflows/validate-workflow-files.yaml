@@ -56,7 +56,14 @@ jobs:
           go install github.com/rhysd/actionlint/cmd/actionlint@latest
           echo "${HOME}/go/bin" >> $GITHUB_PATH
 
-      - name: Run actionlint
-        # Actionlint gets confused about config file if it's not in the root
+      - name: Run actionlint looking for serious errors
+        # Actionlint can't find the config file if it's not run from the root
         working-directory: .
         run: actionlint -oneline
+
+      - name: Run actionlint loosely for warnings
+        working-directory: .
+        run: |
+          # Delete all the "ignore" lines in the actionlint.yaml file
+          sed -i '/^paths:/,$d' .github/actionlint.yaml
+          actionlint -oneline || echo "actionlint has non-critical warnings"

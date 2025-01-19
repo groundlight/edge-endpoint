@@ -11,10 +11,10 @@ config-variables: null
 # paths relative to the repository root. The values are the configurations for
 # the file paths. Note that the path separator is always '/'.
 # The following configurations are available.
-#
-# "ignore" is an array of regular expression patterns. Matched error messages
-# are ignored. This is similar to the "-ignore" command line option.
+# NOTE: Everything from here down is removed in the "Warnings" run of actionlint in the workflow.
 paths:
+  # "ignore" is an array of regular expression patterns. Matched error messages
+  # are ignored. This is similar to the "-ignore" command line option.
   .github/workflows/**/*.{yml,yaml}:
     ignore:
       - '.*action is too old to run on GitHub Actions.*'
