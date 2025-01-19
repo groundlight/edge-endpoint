@@ -16,6 +16,11 @@ subnet = aws.ec2.get_subnet(filters=[{
     "name": "tag:Name",
     "values": ["cicd-subnet"]
 }])
+# Find the instance profile.
+instance_profile = aws.iam.get_instance_profile(filters=[{
+    "name": "tag:Name",
+    "values": ["edge-device-instance-profile"]
+}])
 
 with open('../bin/install-on-ubuntu.sh', 'r') as file:
     # Load the script that installs everything on the instance
@@ -29,9 +34,10 @@ eeut_instance = aws.ec2.Instance("ee-cicd-instance",
     subnet_id=subnet.id,
     user_data=user_data_script,
     associate_public_ip_address=True,
+    iam_instance_profile=instance_profile.name,
     tags={
         "Name": f"ee-cicd-{stackname}",
-    }
+    },
 )
 
 pulumi.export("eeut_instance_id", eeut_instance.id)
