@@ -252,7 +252,7 @@ jobs:
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
-  test-install-g4:
+  G4-end-to-end:
     # Note this job can run multiple times in parallel because the stack name is unique
     # for the run.  How much we want to do this is TBD.
     runs-on: self-hosted
@@ -325,7 +325,7 @@ jobs:
           fab connect --patience=150
           fab wait-for-ee-setup
 
-      - name: Wait for k8 and check functionality
+      - name: Wait for K8 to load everything
         run: |
           source venv/bin/activate
           export PYTHONUNBUFFERED=1

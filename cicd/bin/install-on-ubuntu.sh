@@ -31,12 +31,6 @@ trap record_result EXIT
 
 set -e  # Exit on error of any command.
 
-# Disable IPv6 to ensure apt uses IPv4
-#echo "Disabling IPv6..."
-#sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
-#sudo sysctl -w net.ipv6.conf.default.disable_ipv6=1
-#sudo sysctl -w net.ipv6.conf.lo.disable_ipv6=1
-
 # Install the basic tools
 sudo apt update
 sudo apt install -y \

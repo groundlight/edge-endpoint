@@ -23,9 +23,7 @@ def get_eeut_ip() -> str:
     return local("pulumi stack output eeut_private_ip", hide=True).stdout.strip()
 
 def connect_server() -> Connection:
-    """Connects to the EEUT looking up its IP address from Pulumi.
-    It's saved as an output called "eeut_private_ip" in Pulumi.
-    """
+    """Connects to the EEUT, using the private key stored in AWS Secrets Manager."""
     ip = get_eeut_ip()
     try:
         private_key = fetch_secret("ghar2eeut-private-key")
@@ -42,27 +40,6 @@ def connect_server() -> Connection:
         print(f"Failed to connect to {ip}")
         raise
 
-
-@task
-def connect(c, patience: int = 30):
-    """Just connect to a server to validate connection is working.
-
-    Args:
-        patience (int): Number of seconds to keep retrying for.
-    """
-    print("Fab/fabric is working.  Connecting to server...")
-    start_time = time.time()
-    attempt = 1
-    while time.time() - start_time < patience:
-        try:
-            connect_server()
-            print(f"Successfully connected to server on attempt {attempt}.")
-            return
-        except Exception as e:
-            print(f"Attempt {attempt} failed to connect to server: {e}")
-            time.sleep(3)
-            attempt += 1
-    raise RuntimeError(f"Failed to connect to server after {patience} seconds.")
 
 class InfrequentUpdater:
     """Displays messages as they happen, but don't repeat the same message too often."""
@@ -81,6 +58,26 @@ class InfrequentUpdater:
         print(msg)
         self.last_msg = msg
         self.last_update = time.time()
+
+@task
+def connect(c, patience: int = 30):
+    """Just connect to a server to validate connection is working.
+
+    Args:
+        patience (int): Number of seconds to keep retrying for.
+    """
+    print("Fab/fabric is working.  Connecting to server...")
+    updater = InfrequentUpdater()
+    start_time = time.time()
+    while time.time() - start_time < patience:
+        try:
+            connect_server()
+            print("Successfully connected to server.")
+            return
+        except Exception as e:
+            updater.maybe_update(f"Failed to connect to server: {e}")
+            time.sleep(3)
+    raise RuntimeError(f"Failed to connect to server after {patience} seconds.")
 
 
 class StatusFileChecker(InfrequentUpdater):
@@ -202,8 +199,18 @@ def check_server_port(c):
     conn = connect_server()
     print(f"Checking that the server is listening on port 30101 from the EEUT's localhost...")
     conn.run("nc -zv localhost 30101")
-    # Now check that it's visible from the outside world
-    print(f"Checking that the server is listening on port 30101 from the outside world...")
+
+    print(f"Checking that the server is reachable from here...")
     eeut_ip = get_eeut_ip()
-    conn.run(f"nc -zv {eeut_ip} 30101")
+    local(f"nc -zv {eeut_ip} 30101")
+
     print("Server port check complete.")
+
+
+@task
+def full_check(c):
+    """Runs all the checks in order."""
+    connect(c)
+    wait_for_ee_setup(c)
+    check_k8_deployments(c)
+    check_server_port(c)
