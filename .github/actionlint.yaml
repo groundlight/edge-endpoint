@@ -19,3 +19,5 @@ paths:
     ignore:
       - '.*action is too old to run on GitHub Actions.*'
       - '.*was deprecated.*'
+      - '.*shellcheck.*:warning:.*'
+      - '.*shellcheck.*:info:.*'
