@@ -270,6 +270,9 @@ jobs:
       run:
         working-directory: cicd/pulumi
     steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
       - name: Name the stack
         run: |
           # Set to expire in 60 minutes
@@ -279,9 +282,6 @@ jobs:
           # We give the stack a name including its expiration time so that the sweeper
           # (in sweeper-eeut.yaml) knows when to get rid of it.
           # This saves us having to clean up here, which can be quite slow (~7 minutes for a g4)
-
-      - name: Check out code
-        uses: actions/checkout@v3
 
       - name: Check that aws credentials are set
         # Credentials come from an IAM profile on the runner instance
