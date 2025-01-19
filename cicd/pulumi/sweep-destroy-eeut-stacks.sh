@@ -8,12 +8,13 @@ set -e
 # from Pulumi.  It's used to ensure that we can reliably destroy stacks that are
 # marked to expire.
 reliably_destroy_stack() {
-  pulumi stack select $1
-  pulumi destroy --yes || echo "Failed to destroy stack $1 on attempt 1"
-  pulumi destroy --yes || echo "Failed to destroy stack $1 on attempt 2"
+  STACK_NAME=$1
+  pulumi stack select $STACK_NAME
+  pulumi destroy --yes || echo "Failed to destroy stack $STACK_NAME on attempt 1"
+  pulumi destroy --yes || echo "Failed to destroy stack $STACK_NAME on attempt 2"
   pulumi destroy --yes
-  pulumi stack rm $1 --yes
-  echo "Stack $1 destroyed"
+  pulumi stack rm $STACK_NAME --yes
+  echo -e "Stack $STACK_NAME destroyed\n\n"
 }
 
 STACKS_JSON=$(pulumi stack ls --json)
@@ -36,7 +37,6 @@ for STACK_NAME in $STACK_NAMES; do
   if [[ $STACK_NAME == *"expires-"* ]]; then
     # This stack is marked to expire.  Check if the time has passed.
     EXPIRATION_TIME=$(echo "$STACK_NAME" | grep -oP 'expires-\K\d+')
-    echo "EXPIRATION_TIME=${EXPIRATION_TIME}"
     if [[ $(date +%s) -gt $EXPIRATION_TIME ]]; then
       echo "Stack ${STACK_NAME} has expired.  Destroying..."
       reliably_destroy_stack $STACK_NAME
