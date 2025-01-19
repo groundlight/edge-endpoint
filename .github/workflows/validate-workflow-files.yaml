@@ -16,14 +16,14 @@ on:
   pull_request:
     paths:
       - '.github/workflows/*.yaml'
-      - '.github/.yamllint.yaml'
+      - '.github/*.yaml'
     types: [opened, synchronize, reopened]
   push:
     branches:
       - main
     paths:
       - '.github/workflows/*.yaml'
-      - '.github/.yamllint.yaml'
+      - '.github/*.yaml'
 
 jobs:
   check-workflow-files:
@@ -49,3 +49,18 @@ jobs:
 
       - name: Run yamllint
         run: yamllint -c ../.yamllint.yaml *.yaml
+
+      - name: Set up Golang
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.21"
+
+      - name: Install actionlint
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@latest
+          echo "${HOME}/go/bin" >> $GITHUB_PATH
+
+      - name: Run actionlint
+        # Actionlint gets confused about config file if it's not in the root
+        working-directory: .
+        run: actionlint -oneline
