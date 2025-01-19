@@ -17,6 +17,7 @@ env:
 
 jobs:
   destroy-expired-eeut-stacks:
+    runs-on: ubuntu-22.04
     env:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
     defaults:
