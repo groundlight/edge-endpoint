@@ -18,12 +18,15 @@ def fetch_secret(secret_id: str) -> str:
     response = client.get_secret_value(SecretId=secret_id)
     return response['SecretString']
 
+def get_eeut_ip() -> str:
+    """Gets the EEUT's IP address from Pulumi."""
+    return local("pulumi stack output eeut_private_ip", hide=True).stdout.strip()
+
 def connect_server() -> Connection:
     """Connects to the EEUT looking up its IP address from Pulumi.
     It's saved as an output called "eeut_private_ip" in Pulumi.
     """
-    ip_lookup_result = local("pulumi stack output eeut_private_ip")
-    ip = ip_lookup_result.stdout.strip()
+    ip = get_eeut_ip()
     try:
         private_key = fetch_secret("ghar2eeut-private-key")
         private_key_file = io.StringIO(private_key)
@@ -61,13 +64,33 @@ def connect(c, patience: int = 30):
             attempt += 1
     raise RuntimeError(f"Failed to connect to server after {patience} seconds.")
 
+class InfrequentUpdater:
+    """Displays messages as they happen, but don't repeat the same message too often."""
 
-class StatusFileChecker:
+    def __init__(self, how_often: float = 30):
+        self.how_often = how_often
+        self.last_update = 0
+        self.last_msg = ""
+
+    def maybe_update(self, msg: str):
+        """Displays a message if it's been long enough since the last message, and the same.
+        New messages are always displayed."""
+        if msg == self.last_msg:
+            if time.time() - self.last_update < self.how_often:
+                return
+        print(msg)
+        self.last_msg = msg
+        self.last_update = time.time()
+
+
+class StatusFileChecker(InfrequentUpdater):
     """Encapsulates all the logic for checking status files."""
 
     def __init__(self, conn: Connection, path: str):
         self.conn = conn
         self.path = path
+        self.last_update = 0
+        self.last_msg = ""
 
     def check_for_file(self, name: str) -> bool:
         """Checks if a file is present in the EEUT's install status directory."""
@@ -81,9 +104,9 @@ class StatusFileChecker:
             if self.check_for_file("installing"):
                 return "installing"
             if self.check_for_file("success"):
-            return "success"
-        if self.check_for_file("failed"):
-            return "failed"
+                return "success"
+            if self.check_for_file("failed"):
+                return "failed"
         return None
 
     def wait_for_any_status(self, wait_minutes: int = 10) -> str:
@@ -94,12 +117,11 @@ class StatusFileChecker:
         while time.time() - start_time < 60 * wait_minutes:
             try:
                 status_file = self.which_status_file()
+                self.maybe_update(f"Found status file: {status_file}")
                 if status_file:
-                return status_file
-            else:
-                print("No status file found yet.")
+                    return status_file
             except Exception as e:
-                print(f"Still unable to check status file: {e}")
+                self.maybe_update(f"Unable to check status file: {e}")
             time.sleep(2)
         raise RuntimeError(f"No status file found after {wait_minutes} minutes.")
 
@@ -113,6 +135,7 @@ class StatusFileChecker:
                 print("EE installation failed.  Printing complete log...")
                 self.conn.run("cat /var/log/cloud-init-output.log")
                 raise RuntimeError("EE installation failed.")
+            self.maybe_update(f"Waiting for success or failed status file to appear...")
             time.sleep(2)
         raise RuntimeError(f"EE installation check timed out after {wait_minutes} minutes.")
 
@@ -121,12 +144,16 @@ def wait_for_ee_setup(c, wait_minutes: int = 10):
     """Waits for the EEUT to finish setup.  If it fails, prints the log."""
     conn = connect_server()
     checker = StatusFileChecker(conn, "/opt/groundlight/ee-install-status")
+    print("Waiting for any status file to appear...")
     checker.wait_for_any_status(wait_minutes=wait_minutes/2)
+    print("Waiting for success status file to appear...")
     checker.wait_for_success(wait_minutes=wait_minutes)
+    print("EE installation complete.")
 
 
 def wait_for_condition(conn: Connection, condition: Callable[[Connection], bool], wait_minutes: int = 10) -> bool:
     """Waits for a condition to be true.  Returns True if the condition is true, False otherwise."""
+    updater = InfrequentUpdater()
     start_time = time.time()
     name = condition.__name__
     while time.time() - start_time < 60 * wait_minutes:
@@ -135,9 +162,9 @@ def wait_for_condition(conn: Connection, condition: Callable[[Connection], bool]
                 print(f"Condition {name} is true.  Moving on.")
                 return True
             else:
-                print(f"Condition {name} is false.  Still waiting...")
+                updater.maybe_update(f"Condition {name} is false.  Still waiting...")
         except Exception as e:
-            print(f"Condition {name} failed: {e}.  Will retry...")
+            updater.maybe_update(f"Condition {name} failed: {e}.  Will retry...")
         time.sleep(2)
     print(f"Condition {name} timed out after {wait_minutes} minutes.")
     return False
@@ -168,6 +195,15 @@ def check_k8_deployments(c):
         conn.run("kubectl logs deployment/edge-endpoint")
         raise RuntimeError("Failed to see edge-endpoint deployment ready.")
 
-
-
-
+@task 
+def server_port(c):
+    """Checks that the server is listening on the service port."""
+    # First check that it's visible from the EEUT's localhost
+    conn = connect_server()
+    print(f"Checking that the server is listening on port 30101 from the EEUT's localhost...")
+    conn.run("nc -zv localhost 30101")
+    # Now check that it's visible from the outside world
+    print(f"Checking that the server is listening on port 30101 from the outside world...")
+    eeut_ip = get_eeut_ip()
+    conn.run(f"nc -zv {eeut_ip} 30101")
+    print("Server port check complete.")
