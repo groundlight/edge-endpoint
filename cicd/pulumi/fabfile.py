@@ -84,6 +84,7 @@ class StatusFileChecker(InfrequentUpdater):
     """Encapsulates all the logic for checking status files."""
 
     def __init__(self, conn: Connection, path: str):
+        super().__init__()
         self.conn = conn
         self.path = path
         self.last_update = 0
