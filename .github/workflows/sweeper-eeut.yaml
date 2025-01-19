@@ -5,13 +5,18 @@ name: sweeper-eeut
 on:
   schedule:
     - cron: '*/15 * * * *'  # Every 15 minutes
+      # Note cron workflows only run from the main branch.
+  push:
+    branches:
+      # If you're working on this stuff, name your branch e2e-something and this will run.
+      - e2e*
 concurrency:
   group: sweeper-eeut
 env:
   PYTHON_VERSION: "3.11"
 
 jobs:
-  test-install-g4:
+  destroy-expired-eeut-stacks:
     env:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
     defaults:
@@ -28,11 +33,6 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-
-      - name: Check that aws credentials are set
-        # Credentials come from an IAM profile on the runner instance
-        run: |
-          aws sts get-caller-identity
 
       - name: Set up Python
         uses: actions/setup-python@v4

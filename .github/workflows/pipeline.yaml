@@ -256,7 +256,11 @@ jobs:
     # for the run.  How much we want to do this is TBD.
     runs-on: self-hosted
 
-    if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+    # Run this on merges to main, workflow_dispatch, or branches that start with e2e
+    if: >
+      ${{ github.ref == 'refs/heads/main' ||
+          github.event_name == 'workflow_dispatch' ||
+          startsWith(github.ref, 'refs/heads/e2e') }}
     needs:
       - validate-setup-ee
       - test-with-k3s
@@ -325,7 +329,10 @@ jobs:
           # fab check-k8-deployment  # Not ready yet.
 
   build-push-edge-endpoint-multiplatform:
-    if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+    if: >
+      ${{ github.ref == 'refs/heads/main' ||
+          github.event_name == 'workflow_dispatch' ||
+          startsWith(github.ref, 'refs/heads/e2e') }}
     # We only run this action if all the prior test actions succeed
     needs:
       - test-general-edge-endpoint
