@@ -1,0 +1,15 @@
+extends: default
+
+rules:
+  document-start: disable  # GH doesn't care.
+  truthy: disable  # Otherwise every `on:` triggers a warning.  Stupid.
+  indentation:
+    spaces: consistent
+    level: error
+  line-length:
+    max: 150
+    level: warning
+  comments: disable
+  trailing-spaces: disable
+  empty-lines: disable
+  new-line-at-end-of-file: disable

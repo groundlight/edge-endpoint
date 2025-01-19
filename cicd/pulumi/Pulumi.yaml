@@ -1,0 +1,12 @@
+name: ee-cicd
+runtime:
+  name: python
+  options:
+    toolchain: pip
+    virtualenv: venv
+description: CI/CD for Edge Endpoint
+config:
+  ee-cicd:instanceType: g4dn.xlarge
+  # Note the g4 consistently takes 5+ minutes to turn OFF.
+  # We should consider using a t3 in some cases, which turns off in ~1 minute.
+  #ee-cicd:instanceType: t3.xlarge

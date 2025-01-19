@@ -1,6 +1,9 @@
 name: cicd
 on:
-  push:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
     # This allows it to be triggered manually in the github console
     # You could put inputs here, but we don't need them.
@@ -10,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 env:
   PYTHON_VERSION: "3.11"
-  POETRY_VERSION: "1.5.1"
+  POETRY_VERSION: "1.8.3"
   # This is the token associated with "prod-biggies" (with shared credentials on 1password)
   GROUNDLIGHT_API_TOKEN: ${{ secrets.GROUNDLIGHT_API_TOKEN }}
   # This is the NGINX proxy endpoint
@@ -24,6 +27,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up python
+        id: setup_python
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -41,7 +45,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: .venv
-          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
+          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Install edge-endpoint's python dependencies
         run: |
@@ -217,7 +221,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: .venv
-          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
+          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/poetry.lock') }}
 
       # Note that we're pulling the latest main from the SDK repo
       # This might be ahead of what's published to pypi, but it's useful to test things before they're released.
@@ -248,6 +252,102 @@ jobs:
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
+  G4-end-to-end:
+    # Note this job can run multiple times in parallel because the stack name is unique
+    # for the run.  How much we want to do this is TBD.
+    runs-on: self-hosted
+
+    # Run this on any PR.
+    # Question: Should we wait until the other tests pass before running this?
+    #needs:
+    #  - validate-setup-ee
+    #  - test-with-k3s
+    #  - test-sdk
+
+    env:
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
+    defaults:
+      run:
+        working-directory: cicd/pulumi
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Name the stack
+        run: |
+          # Set to expire in 60 minutes
+          EXPIRATION_TIME=$(($(date +%s) + 60 * 60))
+          STACK_NAME=ee-cicd-${{ github.run_id }}-expires-${EXPIRATION_TIME}
+          echo "STACK_NAME=${STACK_NAME}" >> $GITHUB_ENV
+          # We give the stack a name including its expiration time so that the sweeper
+          # (in sweeper-eeut.yaml) knows when to get rid of it.
+          # This saves us having to clean up here, which can be quite slow (~7 minutes for a g4)
+
+      - name: Check that aws credentials are set
+        # Credentials come from an IAM profile on the runner instance
+        run: |
+          aws sts get-caller-identity
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Pulumi
+        # Pulumi might be (probably is) already installed on the runner.
+        # But the path stuff is annoying, and this is working.
+        run: |
+          curl -fsSL https://get.pulumi.com | sh
+          export HOME=$(eval echo ~$(whoami))
+          echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
+
+      - name: Check that pulumi is installed and authenticated
+        run: |
+          set -ex
+          pulumi whoami
+
+      - name: Preview pulumi stack
+        run: |
+          set -ex
+          pulumi stack init ${STACK_NAME}
+          pulumi config
+          pulumi preview
+
+      - name: Create the EEUT
+        run: |
+          set -ex
+          pulumi up --yes 
+
+      - name: Check that EE install succeeded
+        run: |
+          source venv/bin/activate
+          export PYTHONUNBUFFERED=1
+          fab connect --patience=150
+          fab wait-for-ee-setup
+
+      - name: Wait for K8 to load everything
+        run: |
+          source venv/bin/activate
+          export PYTHONUNBUFFERED=1
+          fab check-k8-deployments
+          fab check-server-port
+
+      - name: Use groundlight sdk through EE
+        run: |
+          source venv/bin/activate
+          EEUT_IP=$(pulumi stack output eeut_private_ip)
+          export GROUNDLIGHT_ENDPOINT=http://${EEUT_IP}:30101
+          groundlight whoami
+          groundlight list-detectors
+
+      - name: Expire stack
+        run: |
+          # If it succeeded, rename the stack for immediate expiration
+          NOW=$(($(date +%s) + 60 * 60))
+          NEW_STACK_NAME=ee-cicd-${{ github.run_id }}-expires-${NOW}
+          pulumi stack select ${STACK_NAME}
+          pulumi stack rename ${NEW_STACK_NAME}
+
   build-push-edge-endpoint-multiplatform:
     if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     # We only run this action if all the prior test actions succeed
@@ -255,6 +355,7 @@ jobs:
       - test-general-edge-endpoint
       - test-sdk
       - validate-setup-ee
+      - G4-end-to-end
     runs-on: ubuntu-22.04
     steps:
       - name: Configure AWS credentials
