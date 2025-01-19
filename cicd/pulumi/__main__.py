@@ -49,8 +49,12 @@ eeut_instance = aws.ec2.Instance("ee-cicd-instance",
     user_data=user_data_script,
     associate_public_ip_address=True,
     iam_instance_profile=instance_profile_name,
+    root_block_device={
+        "volume_size": 100,
+        "volume_type": "gp3",
+    },
     tags={
-        "Name": f"ee-cicd-{stackname}",
+        "Name": f"eeut-{stackname}",
     },
 )
 
