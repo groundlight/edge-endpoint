@@ -355,7 +355,7 @@ jobs:
       - test-general-edge-endpoint
       - test-sdk
       - validate-setup-ee
-      - test-install-g4
+      - G4-end-to-end
     runs-on: ubuntu-22.04
     steps:
       - name: Configure AWS credentials
