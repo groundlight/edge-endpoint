@@ -1,3 +1,4 @@
+import boto3
 import pulumi
 import pulumi_aws as aws
 
@@ -16,11 +17,24 @@ subnet = aws.ec2.get_subnet(filters=[{
     "name": "tag:Name",
     "values": ["cicd-subnet"]
 }])
-# Find the instance profile.
-instance_profile = aws.iam.get_instance_profile(filters=[{
-    "name": "tag:Name",
-    "values": ["edge-device-instance-profile"]
-}])
+
+def get_instance_profile_by_tag(tag_key: str, tag_value: str) -> str:
+    """Fetches the instance profile name by tag.
+    Pulumi should do this, but their get_instance_profile doesn't support filtering.
+    """
+    iam_client = boto3.client("iam")
+    paginator = iam_client.get_paginator("list_instance_profiles")
+    
+    for page in paginator.paginate():
+        for profile in page["InstanceProfiles"]:
+            # Check if the profile has the desired tag
+            tags = iam_client.list_instance_profile_tags(InstanceProfileName=profile["InstanceProfileName"])
+            for tag in tags["Tags"]:
+                if tag["Key"] == tag_key and tag["Value"] == tag_value:
+                    return profile["InstanceProfileName"]
+    raise ValueError(f"No instance profile found with tag {tag_key}: {tag_value}")
+
+instance_profile_name = get_instance_profile_by_tag("Name", "edge-device-instance-profile")
 
 with open('../bin/install-on-ubuntu.sh', 'r') as file:
     # Load the script that installs everything on the instance
@@ -34,7 +48,7 @@ eeut_instance = aws.ec2.Instance("ee-cicd-instance",
     subnet_id=subnet.id,
     user_data=user_data_script,
     associate_public_ip_address=True,
-    iam_instance_profile=instance_profile.name,
+    iam_instance_profile=instance_profile_name,
     tags={
         "Name": f"ee-cicd-{stackname}",
     },
