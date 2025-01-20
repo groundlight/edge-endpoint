@@ -26,7 +26,7 @@ metadata:
   name: edge-endpoint
   labels:
     app: edge-endpoint
-shrek:
+spec:
   replicas: 1
   selector:
     matchLabels:
