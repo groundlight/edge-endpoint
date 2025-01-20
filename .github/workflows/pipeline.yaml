@@ -294,11 +294,11 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install Pulumi
-        run: |
-          curl -fsSL https://get.pulumi.com | sh
-          export HOME=$(eval echo ~$(whoami))
-          echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
+      #- name: Install Pulumi
+      #  run: |
+      #    curl -fsSL https://get.pulumi.com | sh
+      #    export HOME=$(eval echo ~$(whoami))
+      #    echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -310,54 +310,54 @@ jobs:
         run: |
           uv --version
           uv run python --version
-          uv venv
-          source .venv/bin/activate
-          python --version
+          #uv venv
+          #source .venv/bin/activate
+          #python --version
 
       - name: Check that pulumi is installed and authenticated
         run: |
-          source .venv/bin/activate
-          pulumi whoami
+          #source .venv/bin/activate
+          uv run pulumi whoami
 
       - name: Preview pulumi stack
         run: |
-          source .venv/bin/activate
-          pulumi stack init ${STACK_NAME}
-          pulumi config
-          pulumi preview
+          #source .venv/bin/activate
+          uv run pulumi stack init ${STACK_NAME}
+          uv run pulumi config
+          uv run pulumi preview
 
       - name: Create the EEUT
         run: |
-          source .venv/bin/activate
-          pulumi up --yes 
+          #source .venv/bin/activate
+          uv run pulumi up --yes 
 
       - name: Check that EE install succeeded
         run: |
-          source .venv/bin/activate
-          fab connect --patience=150
-          fab wait-for-ee-setup
+          #source .venv/bin/activate
+          uv run fab connect --patience=150
+          uv run fab wait-for-ee-setup
 
       - name: Wait for K8 to load everything
         run: |
-          source .venv/bin/activate
-          fab check-k8-deployments
-          fab check-server-port
+          #source .venv/bin/activate
+          uv run fab check-k8-deployments
+          uv run fab check-server-port
 
       - name: Use groundlight sdk through EE
         run: |
-          source .venv/bin/activate
-          EEUT_IP=$(pulumi stack output eeut_private_ip)
+          #source .venv/bin/activate
+          EEUT_IP=$(uv run pulumi stack output eeut_private_ip)
           export GROUNDLIGHT_ENDPOINT=http://${EEUT_IP}:30101
-          groundlight whoami
-          groundlight list-detectors
+          uv run groundlight whoami
+          uv run groundlight list-detectors
 
       - name: Thank the worker and shut down
         if: always()
         run: |
           echo "Strong work, G4! Now go to sleep."
-          source .venv/bin/activate
+          #source .venv/bin/activate
           # This saves money waiting for the sweeper to destroy the stack.
-          fab shutdown-instance
+          uv run fab shutdown-instance
 
   build-push-edge-endpoint-multiplatform:
     if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
