@@ -302,6 +302,9 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-path /opt/astral-sh/uv-cache
 
       - name: Make sure uv is working
         run: |
@@ -313,30 +316,36 @@ jobs:
 
       - name: Check that pulumi is installed and authenticated
         run: |
+          source .venv/bin/activate
           pulumi whoami
 
       - name: Preview pulumi stack
         run: |
+          source .venv/bin/activate
           pulumi stack init ${STACK_NAME}
           pulumi config
           pulumi preview
 
       - name: Create the EEUT
         run: |
+          source .venv/bin/activate
           pulumi up --yes 
 
       - name: Check that EE install succeeded
         run: |
+          source .venv/bin/activate
           fab connect --patience=150
           fab wait-for-ee-setup
 
       - name: Wait for K8 to load everything
         run: |
+          source .venv/bin/activate
           fab check-k8-deployments
           fab check-server-port
 
       - name: Use groundlight sdk through EE
         run: |
+          source .venv/bin/activate
           EEUT_IP=$(pulumi stack output eeut_private_ip)
           export GROUNDLIGHT_ENDPOINT=http://${EEUT_IP}:30101
           groundlight whoami
@@ -346,6 +355,7 @@ jobs:
         if: always()
         run: |
           echo "Strong work, G4! Now go to sleep."
+          source .venv/bin/activate
           # This saves money waiting for the sweeper to destroy the stack.
           fab shutdown-instance
 
