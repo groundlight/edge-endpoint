@@ -10,7 +10,8 @@ destroy_stack() {
   STACK_NAME=$1
   pulumi stack select $STACK_NAME
   pulumi destroy --yes  || echo "Failed to destroy stack $STACK_NAME"
-  pulumi stack rm $STACK_NAME --yes || echo "Failed to remove stack $STACK_NAME"
+  # TODO: Turn "stack rm" back on when we've figured out why destroy isn't working.
+  #pulumi stack rm $STACK_NAME --yes || echo "Failed to remove stack $STACK_NAME"
   echo -e "Stack $STACK_NAME destroyed\n\n"
 }
 

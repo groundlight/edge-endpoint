@@ -215,3 +215,10 @@ def full_check(c):
     wait_for_ee_setup(c)
     check_k8_deployments(c)
     check_server_port(c)
+
+
+@task
+def shutdown_instance(c):
+    """Shuts down the EEUT instance."""
+    conn = connect_server()
+    conn.run("sudo shutdown -h now")

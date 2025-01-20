@@ -340,13 +340,11 @@ jobs:
           groundlight whoami
           groundlight list-detectors
 
-      - name: Expire stack
+      - name: Declare victory and shut down
         run: |
-          # If it succeeded, rename the stack for immediate expiration
-          NOW=$(date +%s)
-          NEW_STACK_NAME=ee-cicd-${{ github.run_id }}-expires-${NOW}
-          pulumi stack select ${STACK_NAME}
-          pulumi stack rename ${NEW_STACK_NAME}
+          echo "Good job, G4! Now go to sleep."
+          # This saves money waiting for the sweeper to destroy the stack.
+          fab shutdown_instance
 
   build-push-edge-endpoint-multiplatform:
     if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
