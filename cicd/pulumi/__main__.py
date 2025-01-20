@@ -46,10 +46,8 @@ def load_user_data_script() -> str:
     with open('../bin/install-on-ubuntu.sh', 'r') as file:
         user_data_script = file.read()
     target_commit = get_target_commit()
-    # Async substitution of the commit hash into the user data script, because Pulumi.
-    out0 = user_data_script
-    out1 = target_commit.apply(lambda commit: out0.replace("__EE_COMMIT_HASH__", commit))
-    return out1
+    user_data_script = user_data_script.replace("__EE_COMMIT_HASH__", target_commit)
+    return user_data_script
 
 instance_profile_name = get_instance_profile_by_tag("Name", "edge-device-instance-profile")
 
