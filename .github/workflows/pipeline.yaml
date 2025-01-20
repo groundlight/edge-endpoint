@@ -343,7 +343,7 @@ jobs:
       - name: Expire stack
         run: |
           # If it succeeded, rename the stack for immediate expiration
-          NOW=$(($(date +%s) + 60 * 60))
+          NOW=$(date +%s)
           NEW_STACK_NAME=ee-cicd-${{ github.run_id }}-expires-${NOW}
           pulumi stack select ${STACK_NAME}
           pulumi stack rename ${NEW_STACK_NAME}
