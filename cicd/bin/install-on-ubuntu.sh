@@ -55,24 +55,18 @@ sudo apt install -y \
     bash-completion \
     ffmpeg
 
-TARGET_USER="ubuntu"
-# cloud-init script runs as root, but we will mostly install things in ubuntu
-
-# Clone edge-endpoint code into target user's home directory
-# (Note we can't just `su ubuntu` here.)
-mkdir -p /home/${TARGET_USER}/ptdev/
-cd /home/${TARGET_USER}/ptdev/
+# Download the edge-endpoint code
+CODE_BASE=/opt/groundlight/src/
+mkdir -p ${CODE_BASE}
+cd ${CODE_BASE}
 git clone https://github.com/groundlight/edge-endpoint
-chown -R ${TARGET_USER}:${TARGET_USER} /home/${TARGET_USER}/ptdev/
 cd edge-endpoint/
 
 # Set up k3s with GPU support
 ./deploy/bin/install-k3s-nvidia.sh
 
-# Prepare kubernetes
-kubectl create namespace gl-edge
-kubectl config set-context edge --namespace=gl-edge --cluster=default --user=default
-kubectl config use-context edge
+# Set up some shell niceties
+TARGET_USER="ubuntu"
 echo "alias k='kubectl'" >> /home/${TARGET_USER}/.bashrc
 echo "source <(kubectl completion bash)" >> /home/${TARGET_USER}/.bashrc
 echo "complete -F __start_kubectl k" >> /home/${TARGET_USER}/.bashrc
@@ -81,9 +75,12 @@ echo "set -o vi" >> /home/${TARGET_USER}/.bashrc
 # Configure the edge-endpoint with environment variables
 export DEPLOYMENT_NAMESPACE="gl-edge"
 export INFERENCE_FLAVOR="GPU"
-export GROUNDLIGHT_API_TOKEN="api_placeholder"
+export GROUNDLIGHT_API_TOKEN="api_token_not_set"
 
 # Install the edge-endpoint
+kubectl create namespace gl-edge
+kubectl config set-context edge --namespace=gl-edge --cluster=default --user=default
+kubectl config use-context edge
 ./deploy/bin/setup-ee.sh
 
 # Indicate that setup is complete

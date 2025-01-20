@@ -278,7 +278,7 @@ jobs:
           # Set to expire in 60 minutes
           EXPIRATION_TIME=$(($(date +%s) + 60 * 60))
           STACK_NAME=ee-cicd-${{ github.run_id }}-expires-${EXPIRATION_TIME}
-          echo "STACK_NAME=${STACK_NAME}" >> $GITHUB_ENV
+          echo "STACK_NAME=${STACK_NAME}" | tee -a $GITHUB_ENV
           # We give the stack a name including its expiration time so that the sweeper
           # (in sweeper-eeut.yaml) knows when to get rid of it.
           # This saves us having to clean up here, which can be quite slow (~7 minutes for a g4)
