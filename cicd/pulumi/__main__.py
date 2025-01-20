@@ -1,3 +1,5 @@
+import subprocess
+
 import boto3
 import pulumi
 import pulumi_aws as aws
