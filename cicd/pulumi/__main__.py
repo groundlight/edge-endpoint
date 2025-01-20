@@ -36,18 +36,20 @@ def get_instance_profile_by_tag(tag_key: str, tag_value: str) -> str:
                     return profile["InstanceProfileName"]
     raise ValueError(f"No instance profile found with tag {tag_key}: {tag_value}")
 
-def get_current_commit() -> str:
-    """Gets the current commit hash."""
-    return subprocess.check_output(["git", "rev-parse", "HEAD"]).decode("utf-8").strip()
+def get_target_commit() -> str:
+    """Gets the target commit hash."""
+    return config.require("targetCommit")
 
 def load_user_data_script() -> str:
     """Loads and customizes the user data script for the instance, which is used to install 
     everything on the instance."""
     with open('../bin/install-on-ubuntu.sh', 'r') as file:
         user_data_script = file.read()
-    current_commit = get_current_commit()
-    user_data_script = user_data_script.replace("__EE_COMMIT_HASH__", current_commit)
-    return user_data_script
+    target_commit = get_target_commit()
+    # Async substitution of the commit hash into the user data script, because Pulumi.
+    out0 = user_data_script
+    out1 = target_commit.apply(lambda commit: out0.replace("__EE_COMMIT_HASH__", commit))
+    return out1
 
 instance_profile_name = get_instance_profile_by_tag("Name", "edge-device-instance-profile")
 

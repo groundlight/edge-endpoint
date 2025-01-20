@@ -313,9 +313,10 @@ jobs:
         run: |
           uv run pulumi whoami
 
-      - name: Preview pulumi stack
+      - name: Prepare and preview pulumi stack
         run: |
           uv run pulumi stack init ${STACK_NAME}
+          uv run pulumi config set ee-cicd:targetCommit ${{ github.sha }}
           uv run pulumi config
           uv run pulumi preview
 

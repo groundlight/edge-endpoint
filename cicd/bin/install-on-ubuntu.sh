@@ -67,8 +67,13 @@ if [ -n "$SPECIFIC_COMMIT" ]; then
     # See if the string got substituted.  Note can't compare to the whole thing
     # because that would be substituted too!
     if [ "${SPECIFIC_COMMIT:0:10}" != "__EE_COMMIT" ]; then
+        echo "Checking out commit ${SPECIFIC_COMMIT}"
         git checkout ${SPECIFIC_COMMIT}
+    else
+        echo "It appears the commit hash was not substituted.  Staying on main."
     fi
+else
+    echo "A blank commit hash was provided.  Staying on main."
 fi
 
 # Set up k3s with GPU support
