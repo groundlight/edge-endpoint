@@ -221,8 +221,6 @@ def full_check(c):
 def shutdown_instance(c):
     """Shuts down the EEUT instance."""
     conn = connect_server()
-    try:
-        conn.run("sudo shutdown now")
-    except Exception as e:
-        print(f"Error issuing shutdown command: {e}")
-        print("This is probably fine - shutting down means we get kicked out")
+    # Tell it to shutdown in 2 minutes, so it doesn't die while we're still connected.
+    conn.run("sudo shutdown +2")
+    print("Instance will shutdown in 2 minutes.  Disconnecting...")

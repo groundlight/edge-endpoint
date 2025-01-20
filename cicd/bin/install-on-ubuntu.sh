@@ -61,9 +61,12 @@ mkdir -p ${CODE_BASE}
 cd ${CODE_BASE}
 git clone https://github.com/groundlight/edge-endpoint
 cd edge-endpoint/
+# The launching script should update this to a specific commit.
 SPECIFIC_COMMIT="__EE_COMMIT_HASH__"
 if [ -n "$SPECIFIC_COMMIT" ]; then
-    if [ "$SPECIFIC_COMMIT" != "__EE_COMMIT_HASH__" ]; then
+    # See if the string got substituted.  Note can't compare to the whole thing
+    # because that would be substituted too!
+    if [ "${SPECIFIC_COMMIT:0:10}" != "__EE_COMMIT" ]; then
         git checkout ${SPECIFIC_COMMIT}
     fi
 fi
