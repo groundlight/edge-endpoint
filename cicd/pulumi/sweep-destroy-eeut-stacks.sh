@@ -9,7 +9,7 @@ destroy_stack() {
   # we'll try again next cron time.
   STACK_NAME=$1
   pulumi stack select $STACK_NAME
-  INSTANCE_ID=$(pulumi stack output eeut_instance_id 2>/dev/null)
+  INSTANCE_ID=$(pulumi stack output eeut_instance_id 2>/dev/null || echo "")
   if [ -n "$INSTANCE_ID" ]; then
     # Note pulumi is too stupid to terminate an instance in the stopped state.
     # So we check for this manually.
