@@ -60,7 +60,8 @@ echo "NVIDIA GPU Operator installation completed."
 # Verify that we actually added GPU capacity to the node
 capacity=0
 elapsed=0
-timeout_min=5
+# Even 5 minutes isn't enough sometimes.
+timeout_min=10
 
 set +x # Don't echo us running around the loop
 
