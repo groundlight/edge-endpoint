@@ -252,6 +252,24 @@ jobs:
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
+  understand-git-hash-values:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+      - name: Print some git hash values
+        run: |
+          echo "GITHUB_SHA: ${{ github.sha }}"
+          echo "GITHUB_REF: ${{ github.ref }}"
+          echo "GITHUB_REF_TYPE: ${{ github.event.pull_request.number }}"
+      - name: Print even more git hash values
+        run: |
+          # We are looking for the commit hash that the engineer saw when pushing.
+          # The PUSH pr, not some intermediate weird merge commit hash
+          # This is the commit that will be used to build the EEUT.
+          git log -3 --pretty=format:%H
+          git reflog -3 --pretty=format:%H
+
   G4-end-to-end:
     # Note this job can run multiple times in parallel because the stack name is unique
     # for the run.  How much we want to do this is TBD.

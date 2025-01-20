@@ -38,7 +38,11 @@ def get_instance_profile_by_tag(tag_key: str, tag_value: str) -> str:
 
 def get_target_commit() -> str:
     """Gets the target commit hash."""
-    return config.require("targetCommit")
+    target_commit = config.require("targetCommit")
+    if target_commit == "main":
+        target_commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode("utf-8").strip()
+    print(f"Using target commit {target_commit}")
+    return target_commit
 
 def load_user_data_script() -> str:
     """Loads and customizes the user data script for the instance, which is used to install 
