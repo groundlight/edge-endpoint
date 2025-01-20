@@ -340,9 +340,10 @@ jobs:
           groundlight whoami
           groundlight list-detectors
 
-      - name: Declare victory and shut down
+      - name: Thank the worker and shut down
+        if: always()
         run: |
-          echo "Good job, G4! Now go to sleep."
+          echo "Strong work, G4! Now go to sleep."
           # This saves money waiting for the sweeper to destroy the stack.
           fab shutdown_instance
 
