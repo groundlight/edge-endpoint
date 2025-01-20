@@ -221,4 +221,8 @@ def full_check(c):
 def shutdown_instance(c):
     """Shuts down the EEUT instance."""
     conn = connect_server()
-    conn.run("sudo shutdown -h now")
+    try:
+        conn.run("sudo shutdown now")
+    except Exception as e:
+        print(f"Error issuing shutdown command: {e}")
+        # I think this is kinda expected
