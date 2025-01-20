@@ -269,6 +269,8 @@ jobs:
     defaults:
       run:
         working-directory: cicd/pulumi
+      env:
+        PYTHONUNBUFFERED: 1
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -294,47 +296,48 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install Pulumi
-        # Pulumi might be (probably is) already installed on the runner.
-        # But the path stuff is annoying, and this is working.
         run: |
           curl -fsSL https://get.pulumi.com | sh
           export HOME=$(eval echo ~$(whoami))
           echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
 
+      - name: Install uv and set up
+        run: |
+          # Example approach for uv installation. Adjust as needed if uv has a different recommended install method.
+          pip install --upgrade pipx
+          pipx install uv
+          uv --version
+          uv run python --version
+          uv venv
+          source .venv/bin/activate
+          python --version
+
       - name: Check that pulumi is installed and authenticated
         run: |
-          set -ex
           pulumi whoami
 
       - name: Preview pulumi stack
         run: |
-          set -ex
           pulumi stack init ${STACK_NAME}
           pulumi config
           pulumi preview
 
       - name: Create the EEUT
         run: |
-          set -ex
           pulumi up --yes 
 
       - name: Check that EE install succeeded
         run: |
-          source venv/bin/activate
-          export PYTHONUNBUFFERED=1
           fab connect --patience=150
           fab wait-for-ee-setup
 
       - name: Wait for K8 to load everything
         run: |
-          source venv/bin/activate
-          export PYTHONUNBUFFERED=1
           fab check-k8-deployments
           fab check-server-port
 
       - name: Use groundlight sdk through EE
         run: |
-          source venv/bin/activate
           EEUT_IP=$(pulumi stack output eeut_private_ip)
           export GROUNDLIGHT_ENDPOINT=http://${EEUT_IP}:30101
           groundlight whoami
@@ -345,7 +348,6 @@ jobs:
         run: |
           echo "Strong work, G4! Now go to sleep."
           # This saves money waiting for the sweeper to destroy the stack.
-          source venv/bin/activate
           fab shutdown-instance
 
   build-push-edge-endpoint-multiplatform:
