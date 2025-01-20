@@ -267,8 +267,9 @@ jobs:
           # We are looking for the commit hash that the engineer saw when pushing.
           # The PUSH pr, not some intermediate weird merge commit hash
           # This is the commit that will be used to build the EEUT.
-          git log -3 --pretty=format:%H
-          git reflog -3 --pretty=format:%H
+          set -x
+          git log -5
+          git reflog -10
 
   G4-end-to-end:
     # Note this job can run multiple times in parallel because the stack name is unique
