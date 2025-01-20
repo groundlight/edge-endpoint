@@ -252,27 +252,6 @@ jobs:
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
-  understand-git-hash-values:
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v3
-
-      - name: Print some git hash values
-        run: |
-          set -x
-          echo "GITHUB_SHA: ${{ github.sha }}"
-          echo "GITHUB_REF: ${{ github.ref }}"
-          echo "GITHUB_REF_TYPE: ${{ github.event.pull_request.number }}"
-          echo "GITHUB_HEAD_REF: ${{ github.head_ref }}"
-          echo "GITHUB_BASE_REF: ${{ github.base_ref }}"
-          echo "PR head ref: ${{ github.event.pull_request.head_ref }}"
-          echo "PR base ref: ${{ github.event.pull_request.base_ref }}"
-          echo "Event Path: $GITHUB_EVENT_PATH"
-          cat $GITHUB_EVENT_PATH
-          git log -5
-          git reflog -10
-
   G4-end-to-end:
     # Note this job can run multiple times in parallel because the stack name is unique
     # for the run.  How much we want to do this is TBD.
