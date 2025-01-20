@@ -345,6 +345,7 @@ jobs:
         run: |
           echo "Strong work, G4! Now go to sleep."
           # This saves money waiting for the sweeper to destroy the stack.
+          source venv/bin/activate
           fab shutdown_instance
 
   build-push-edge-endpoint-multiplatform:
