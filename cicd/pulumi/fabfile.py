@@ -225,4 +225,4 @@ def shutdown_instance(c):
         conn.run("sudo shutdown now")
     except Exception as e:
         print(f"Error issuing shutdown command: {e}")
-        # I think this is kinda expected
+        print("This is probably fine - shutting down means we get kicked out")

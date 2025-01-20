@@ -34,11 +34,20 @@ def get_instance_profile_by_tag(tag_key: str, tag_value: str) -> str:
                     return profile["InstanceProfileName"]
     raise ValueError(f"No instance profile found with tag {tag_key}: {tag_value}")
 
-instance_profile_name = get_instance_profile_by_tag("Name", "edge-device-instance-profile")
+def get_current_commit() -> str:
+    """Gets the current commit hash."""
+    return subprocess.check_output(["git", "rev-parse", "HEAD"]).decode("utf-8").strip()
 
-with open('../bin/install-on-ubuntu.sh', 'r') as file:
-    # Load the script that installs everything on the instance
-    user_data_script = file.read()
+def load_user_data_script() -> str:
+    """Loads and customizes the user data script for the instance, which is used to install 
+    everything on the instance."""
+    with open('../bin/install-on-ubuntu.sh', 'r') as file:
+        user_data_script = file.read()
+    current_commit = get_current_commit()
+    user_data_script = user_data_script.replace("__EE_COMMIT_HASH__", current_commit)
+    return user_data_script
+
+instance_profile_name = get_instance_profile_by_tag("Name", "edge-device-instance-profile")
 
 eeut_instance = aws.ec2.Instance("ee-cicd-instance",
     instance_type=instance_type,
@@ -46,7 +55,7 @@ eeut_instance = aws.ec2.Instance("ee-cicd-instance",
     key_name="ghar2eeut",
     vpc_security_group_ids=[eeut_sg.id],
     subnet_id=subnet.id,
-    user_data=user_data_script,
+    user_data=load_user_data_script(),
     associate_public_ip_address=True,
     iam_instance_profile=instance_profile_name,
     root_block_device={

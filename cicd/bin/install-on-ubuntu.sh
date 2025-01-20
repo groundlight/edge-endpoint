@@ -61,6 +61,12 @@ mkdir -p ${CODE_BASE}
 cd ${CODE_BASE}
 git clone https://github.com/groundlight/edge-endpoint
 cd edge-endpoint/
+SPECIFIC_COMMIT="__EE_COMMIT_HASH__"
+if [ -n "$SPECIFIC_COMMIT" ]; then
+    if [ "$SPECIFIC_COMMIT" != "__EE_COMMIT_HASH__" ]; then
+        git checkout ${SPECIFIC_COMMIT}
+    fi
+fi
 
 # Set up k3s with GPU support
 ./deploy/bin/install-k3s-nvidia.sh
