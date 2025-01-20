@@ -306,6 +306,7 @@ jobs:
       - name: Make sure uv is working
         run: |
           uv --version
+          uv sync
           uv run python --version
 
       - name: Check that pulumi is installed and authenticated
