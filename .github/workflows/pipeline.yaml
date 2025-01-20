@@ -333,8 +333,11 @@ jobs:
           echo "${{ github.event.pull_request.head.ref }}, which is the commit"
           echo "that was used to create the PR. Recognizing that this doesn't"
           echo "reflect what will happen after merge. But it's simpler."
+
+          # TODO: test on the merge commit by pushing it to the repo with a temporary
+          # branch, and then clean up the branch later.
+
           COMMIT_TO_TEST=${{ github.event.pull_request.head.ref }}
-          echo "COMMIT_TO_TEST=${COMMIT_TO_TEST}" | tee -a $GITHUB_ENV
           uv run pulumi config set ee-cicd:targetCommit ${COMMIT_TO_TEST}
 
       - name: Create the EEUT instance
