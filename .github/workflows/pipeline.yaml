@@ -266,6 +266,8 @@ jobs:
           echo "GITHUB_REF_TYPE: ${{ github.event.pull_request.number }}"
           echo "GITHUB_HEAD_REF: ${{ github.head_ref }}"
           echo "GITHUB_BASE_REF: ${{ github.base_ref }}"
+          echo "PR head ref: ${{ github.event.pull_request.head_ref }}"
+          echo "PR base ref: ${{ github.event.pull_request.base_ref }}"
           echo "Event Path: $GITHUB_EVENT_PATH"
           cat $GITHUB_EVENT_PATH
           git log -5
@@ -332,14 +334,31 @@ jobs:
         run: |
           uv run pulumi whoami
 
-      - name: Prepare and preview pulumi stack
+      - name: Prepare pulumi stack
         run: |
           uv run pulumi stack init ${STACK_NAME}
-          uv run pulumi config set ee-cicd:targetCommit ${{ github.sha }}
           uv run pulumi config
-          uv run pulumi preview
 
-      - name: Create the EEUT
+      - name: Pick which commit we will test
+        run: |
+          echo "This is a bit subtle."
+          echo "We can't just test on 'main' for fairly obvious reasons - we"
+          echo "want to test the code in this PR's branch. The current commit"
+          echo "right here is ${GITHUB_SHA}, which is likely a merge commit."
+          echo "Merge commits are challenging. They are what would happen if"
+          echo "this PR were to be merged into its base branch. But they are"
+          echo "ephemeral things and not available in the public repo. So the"
+          echo "EEUT can't just check them out. Making them available to the"
+          echo "EEUT would require pushing them and polluting the repo. So,"
+          echo "for now, we are going to use the PR's head ref"
+          echo "${{ github.event.pull_request.head.ref }}, which is the commit"
+          echo "that was used to create the PR. Recognizing that this doesn't"
+          echo "reflect what will happen after merge. But it's simpler."
+          COMMIT_TO_TEST=${{ github.event.pull_request.head.ref }}
+          echo "COMMIT_TO_TEST=${COMMIT_TO_TEST}" | tee -a $GITHUB_ENV
+          uv run pulumi config set ee-cicd:targetCommit ${COMMIT_TO_TEST}
+
+      - name: Create the EEUT instance
         run: |
           uv run pulumi up --yes 
 
