@@ -9,9 +9,16 @@ destroy_stack() {
   # we'll try again next cron time.
   STACK_NAME=$1
   pulumi stack select $STACK_NAME
+  # Note pulumi is too stupid to terminate an instance in the stopped state.
+  # So we have to do this manually.
+  INSTANCE_ID=$(pulumi stack output eeut_instance_id)
+  INSTANCE_STATE=$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --query 'Reservations[*].Instances[*].State.Name' --output text)
+  if [ "$INSTANCE_STATE" == "stopped" ]; then
+    echo "Instance $INSTANCE_ID is stopped. Terminating..."
+    aws ec2 terminate-instances --instance-ids $INSTANCE_ID || echo "Failed to terminate instance $INSTANCE_ID"
+  fi
   pulumi destroy --yes  || echo "Failed to destroy stack $STACK_NAME"
-  # TODO: Turn "stack rm" back on when we've figured out why destroy isn't working.
-  #pulumi stack rm $STACK_NAME --yes || echo "Failed to remove stack $STACK_NAME"
+  pulumi stack rm $STACK_NAME --yes || echo "Failed to remove stack $STACK_NAME"
   echo -e "Stack $STACK_NAME destroyed\n\n"
 }
 
