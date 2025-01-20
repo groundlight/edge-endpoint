@@ -300,11 +300,11 @@ jobs:
           export HOME=$(eval echo ~$(whoami))
           echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
 
-      - name: Install uv and set up
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Make sure uv is working
         run: |
-          # Example approach for uv installation. Adjust as needed if uv has a different recommended install method.
-          pip install --upgrade pipx
-          pipx install uv
           uv --version
           uv run python --version
           uv venv
