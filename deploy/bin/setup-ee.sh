@@ -66,7 +66,7 @@ K=${KUBECTL_CMD:-"kubectl"}
 INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"GPU"}
 DEPLOY_LOCAL_VERSION=${DEPLOY_LOCAL_VERSION:-1}
 DEPLOYMENT_NAMESPACE=${DEPLOYMENT_NAMESPACE:-$($K config view -o json | jq -r '.contexts[] | select(.name == "'$($K config current-context)'") | .context.namespace // "default"')}
-IMAGE_TAG=${IMAGE_TAG:-"latest"}
+export IMAGE_TAG=${IMAGE_TAG:-"latest"}
 
 # Update K to include the deployment namespace
 K="$K -n $DEPLOYMENT_NAMESPACE"
@@ -80,8 +80,8 @@ cd "$(dirname "$0")"/../..
 
 # Most users do not need to think about these.
 
-PERSISTENT_VOLUME_NAME=${PERSISTENT_VOLUME_NAME:-"edge-endpoint-pv"}
-EDGE_ENDPOINT_PORT=${EDGE_ENDPOINT_PORT:-30101}
+export PERSISTENT_VOLUME_NAME=${PERSISTENT_VOLUME_NAME:-"edge-endpoint-pv"}
+export EDGE_ENDPOINT_PORT=${EDGE_ENDPOINT_PORT:-30101}
 
 # Create Secrets
 if ! ./deploy/bin/make-aws-secret.sh; then
@@ -146,16 +146,12 @@ $K get service -o custom-columns=":metadata.name" --no-headers=true | \
 
 # Check if DEPLOY_LOCAL_VERSION is set. If so, use a local volume instead of an EFS volume
 if [[ "${DEPLOY_LOCAL_VERSION}" == "1" ]]; then
-    if ! check_pv_conflict "$PERSISTENT_VOLUME_NAME" "local-sc"; then
+    if ! check_pv_conflict "$PERSISTENT_VOLUME_NAME" "null"; then
         fail "PersistentVolume $PERSISTENT_VOLUME_NAME conflicts with the existing resource."
     fi
 
     # Use envsubst to replace the PERSISTENT_VOLUME_NAME, PERSISTENT_VOLUME_NAME in the local_persistent_volume.yaml template
     envsubst < deploy/k3s/local_persistent_volume.yaml > deploy/k3s/local_persistentvolume.yaml
-    $K apply -f deploy/k3s/local_persistentvolume.yaml
-    rm deploy/k3s/local_persistentvolume.yaml
-
-else
     # If environment variable EFS_VOLUME_ID is not set, exit
     if [[ -z "${EFS_VOLUME_ID}" ]]; then
         fail "EFS_VOLUME_ID environment variable not set"
@@ -194,7 +190,7 @@ rm deploy/k3s/service_account.yaml.tmp
 
 $K apply -f deploy/k3s/inference_deployment/warmup_inference_model.yaml
 
-# Substitutes the EDGE_ENDPOINT_PORT
+# Substitutes the EDGE_ENDPOINT_PORT and IMAGE_TAG
 envsubst < deploy/k3s/edge_deployment/edge_deployment.yaml > deploy/k3s/edge_deployment/edge_deployment.yaml.tmp
 $K apply -f deploy/k3s/edge_deployment/edge_deployment.yaml.tmp
 rm deploy/k3s/edge_deployment/edge_deployment.yaml.tmp

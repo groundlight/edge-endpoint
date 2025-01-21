@@ -25,4 +25,3 @@ spec:
     requests:
       storage: 2Gi
   storageClassName: efs-sc
-

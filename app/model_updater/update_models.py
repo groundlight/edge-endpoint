@@ -153,10 +153,15 @@ def update_models(
 
 
 if __name__ == "__main__":
+    logger.info("Starting model updater.")
+
     edge_config: RootEdgeConfig = load_edge_config()
+    logger.info(f"{edge_config=}")
+
     refresh_rate = edge_config.global_config.refresh_rate
     detector_inference_configs = get_detector_inference_configs(root_edge_config=edge_config)
 
+    logger.info("Creating edge inference manager, deployment manager, and database manager.")
     edge_inference_manager = EdgeInferenceManager(detector_inference_configs=detector_inference_configs, verbose=True)
     deployment_manager = InferenceDeploymentManager()
 

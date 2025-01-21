@@ -7,8 +7,7 @@ spec:
     storage: 2Gi
   accessModes:
     - ReadWriteOnce 
-  persistentVolumeReclaimPolicy: Retain 
-  storageClassName: local-sc
+  persistentVolumeReclaimPolicy: Retain
   hostPath:
     path: /opt/groundlight/edge
 ---
@@ -19,7 +18,7 @@ metadata:
 spec: 
   accessModes:
     - ReadWriteOnce
+  storageClassName: ""
   resources:
     requests:
       storage: 2Gi
-  storageClassName: local-sc

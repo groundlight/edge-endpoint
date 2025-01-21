@@ -11,6 +11,7 @@ from config import (
     ENDPOINT_URL,
     IMAGE_PATH,
     LOG_FILE,
+    NUM_OBJECTS_EXPECTED,
     REQUESTS_PER_SECOND,
     TIME_BETWEEN_RAMP,
 )
@@ -47,7 +48,9 @@ def send_image_requests(  # noqa: PLR0913
         request_start_time = time.time()
 
         try:
-            gl_client.ask_ml(detector=detector, image=IMAGE_PATH, wait=1)
+            answer = gl_client.ask_ml(detector=detector, image=IMAGE_PATH, wait=1)
+            if NUM_OBJECTS_EXPECTED is not None and answer.result.count != NUM_OBJECTS_EXPECTED:
+                print(f"Error: Expected count {NUM_OBJECTS_EXPECTED}, got {answer.result.count}")
             log_data.update({"latency": round(time.time() - request_start_time, 4), "success": True})
         except Exception as e:
             log_data.update({"latency": round(time.time() - request_start_time, 4), "success": False, "error": str(e)})

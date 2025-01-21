@@ -21,6 +21,9 @@ test-all: test test-with-docker  ## Run all tests in one make command
 
 test-with-k3s:
 	. test/integration/setup_and_run_tests.sh
+
+validate-setup-ee:
+	test/validate_setup_ee.sh
 	
 # Adjust which paths we lint
 LINT_PATHS="app test"
