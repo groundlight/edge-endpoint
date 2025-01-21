@@ -27,7 +27,9 @@ def get_groundlight():
         # the case we're in
         return Groundlight()
 
+
 gl = get_groundlight()
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -63,15 +65,16 @@ def main():
 
 
 def create_cat_detector() -> str:
-    """ Create the intial cat detector that we use for the integration tests. We create
-    a new one each time. """
+    """Create the intial cat detector that we use for the integration tests. We create
+    a new one each time."""
     random_number = random.randint(0, 9999)
     detector = gl.create_detector(name=f"cat_{random_number}", query="Is this a cat?")
     detector_id = detector.id
     return detector_id
 
+
 def submit_initial(detector: Detector) -> str:
-    """ Submit the initial dog and cat image to the edge. Since this method is called at the beginning
+    """Submit the initial dog and cat image to the edge. Since this method is called at the beginning
     of integration tests, we expect a low confidence from the default edge model"""
     start_time = time.time()
     # 0.5 threshold to ensure we get a edge answer
@@ -87,7 +90,7 @@ def submit_initial(detector: Detector) -> str:
 
 
 def improve_model(detector: Detector):
-    """ Improve the edge model by escalating to the cloud. """
+    """Improve the edge model by escalating to the cloud."""
     for _ in range(NUM_IQS_TO_IMPROVE_MODEL):
         # there's a subtle tradeoff here.
         # we're submitting images from the edge which will get escalated to the cloud
@@ -99,8 +102,8 @@ def improve_model(detector: Detector):
 
 
 def submit_final(detector: Detector):
-    """ This is called at the end of our integration tests to make sure the edge model
-        is now confident. """
+    """This is called at the end of our integration tests to make sure the edge model
+    is now confident."""
     # 0.5 threshold to ensure we get a edge answer
     start_time = time.time()
     iq_yes = _submit_cat(detector, confidence_threshold=0.5)
@@ -117,7 +120,6 @@ def submit_final(detector: Detector):
     print(f"Final confidence for no result: {iq_no.result.confidence}")
 
 
-
 def _submit_cat(detector: Detector, confidence_threshold: float, wait: int = None):
     return _submit_dog_or_cat(
         detector=detector, confidence_threshold=confidence_threshold, img_file="./test/integration/cat.jpg", wait=wait
@@ -128,8 +130,6 @@ def _submit_dog(detector: Detector, confidence_threshold: float, wait: int = Non
     return _submit_dog_or_cat(
         detector=detector, confidence_threshold=confidence_threshold, img_file="./test/integration/dog.jpg", wait=wait
     )
-
-
 
 
 def _submit_dog_or_cat(detector: Detector, confidence_threshold: float, img_file: str, wait: int = None):
