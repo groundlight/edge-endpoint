@@ -277,7 +277,10 @@ jobs:
 
   update-glhub:
     if: github.ref == 'refs/heads/main'
-    needs: validate-setup-ee
+    needs: 
+      - validate-setup-ee
+      - test-sdk
+      - test-with-k3s
     runs-on: ubuntu-latest
     environment: live
 
