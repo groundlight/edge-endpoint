@@ -1,0 +1,23 @@
+self-hosted-runner:
+  # Labels of self-hosted runner in array of strings.
+  labels: []
+
+# Configuration variables in array of strings defined in your repository or
+# organization. `null` means disabling configuration variables check.
+# Empty array means no configuration variable is allowed.
+config-variables: null
+
+# Configuration for file paths. The keys are glob patterns to match to file
+# paths relative to the repository root. The values are the configurations for
+# the file paths. Note that the path separator is always '/'.
+# The following configurations are available.
+# NOTE: Everything from here down is removed in the "Warnings" run of actionlint in the workflow.
+paths:
+  # "ignore" is an array of regular expression patterns. Matched error messages
+  # are ignored. This is similar to the "-ignore" command line option.
+  .github/workflows/**/*.{yml,yaml}:
+    ignore:
+      - '.*action is too old to run on GitHub Actions.*'
+      - '.*was deprecated.*'
+      - '.*shellcheck.*:warning:.*'
+      - '.*shellcheck.*:info:.*'
