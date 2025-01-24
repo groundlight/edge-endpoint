@@ -12,7 +12,7 @@ import random
 import time
 import os
 
-from groundlight import Groundlight, GroundlightClientError
+from groundlight import Groundlight
 from model import Detector
 
 EDGE_SETUP = os.getenv("EDGE_SETUP", "0") == "1"
