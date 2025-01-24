@@ -80,9 +80,8 @@ kubectl describe deployment/inferencemodel-$DETECTOR_ID_WITH_DASHES -n $DEPLOYME
 
 for i in {1..20}; do
     sleep 10
-    kubectl describe deployment/inferencemodel-$DETECTOR_ID_WITH_DASHES -n $DEPLOYMENT_NAMESPACE
+    kubectl describe pod -l app=inference-server -n $DEPLOYMENT_NAMESPACE
 done
-
 
 if ! kubectl rollout status deployment/inferencemodel-$DETECTOR_ID_WITH_DASHES -n $DEPLOYMENT_NAMESPACE --timeout=5m; then
     echo "Error: inference deployment for detector $DETECTOR_ID_WITH_DASHES failed to rollout within the timeout period."
