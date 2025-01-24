@@ -1,6 +1,9 @@
 name: cicd
 on:
-  push:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
     # This allows it to be triggered manually in the github console
     # You could put inputs here, but we don't need them.
@@ -10,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 env:
   PYTHON_VERSION: "3.11"
-  POETRY_VERSION: "1.5.1"
+  POETRY_VERSION: "1.8.3"
   # This is the token associated with "prod-biggies" (with shared credentials on 1password)
   GROUNDLIGHT_API_TOKEN: ${{ secrets.GROUNDLIGHT_API_TOKEN }}
   # This is the NGINX proxy endpoint
@@ -24,7 +27,8 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up python
-        uses: actions/setup-python@v4
+        id: setup_python
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -41,7 +45,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: .venv
-          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
+          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Install edge-endpoint's python dependencies
         run: |
@@ -175,7 +179,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -217,7 +221,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: .venv
-          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
+          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/poetry.lock') }}
 
       # Note that we're pulling the latest main from the SDK repo
       # This might be ahead of what's published to pypi, but it's useful to test things before they're released.
@@ -248,6 +252,122 @@ jobs:
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
+  G4-end-to-end:
+    # Note this job can run multiple times in parallel because the stack name is unique
+    # for the run.  How much we want to do this is TBD.
+    runs-on: self-hosted
+
+    # Run this on any PR.
+    # Question: Should we wait until the other tests pass before running this?
+    #needs:
+    #  - validate-setup-ee
+    #  - test-with-k3s
+    #  - test-sdk
+
+    env:
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
+      PYTHONUNBUFFERED: 1
+    defaults:
+      run:
+        working-directory: cicd/pulumi
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Name the stack
+        run: |
+          # Set to expire in 60 minutes
+          EXPIRATION_TIME=$(($(date +%s) + 60 * 60))
+          STACK_NAME=ee-cicd-${{ github.run_id }}-expires-${EXPIRATION_TIME}
+          echo "STACK_NAME=${STACK_NAME}" | tee -a $GITHUB_ENV
+          # We give the stack a name including its expiration time so that the sweeper
+          # (in sweeper-eeut.yaml) knows when to get rid of it.
+          # This saves us having to clean up here, which can be quite slow (~7 minutes for a g4)
+
+      - name: Check that aws credentials are set
+        # Credentials come from an IAM profile on the runner instance
+        run: |
+          aws sts get-caller-identity
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Pulumi
+        run: |
+          curl -fsSL https://get.pulumi.com | sh
+          export HOME=$(eval echo ~$(whoami))
+          echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Make sure uv is working
+        run: |
+          uv --version
+          uv sync
+          uv run python --version
+
+      - name: Check that pulumi is installed and authenticated
+        run: |
+          uv run pulumi whoami
+
+      - name: Prepare pulumi stack
+        run: |
+          uv run pulumi stack init ${STACK_NAME}
+          uv run pulumi config
+
+      - name: Pick which commit we will test
+        run: |
+          echo "This is a bit subtle."
+          echo "We can't just test on 'main' for fairly obvious reasons - we"
+          echo "want to test the code in this PR's branch. The current commit"
+          echo "right here is ${GITHUB_SHA}, which is likely a merge commit."
+          echo "Merge commits are challenging. They are what would happen if"
+          echo "this PR were to be merged into its base branch. But they are"
+          echo "ephemeral things and not available in the public repo. So the"
+          echo "EEUT can't just check them out. Making them available to the"
+          echo "EEUT would require pushing them and polluting the repo. So,"
+          echo "for now, we are going to use the PR's head ref"
+          echo "${{ github.event.pull_request.head.ref }}, which is the commit"
+          echo "that was used to create the PR. Recognizing that this doesn't"
+          echo "reflect what will happen after merge. But it's simpler."
+
+          # TODO: test on the merge commit by pushing it to the repo with a temporary
+          # branch, and then clean up the branch later.
+
+          COMMIT_TO_TEST=${{ github.event.pull_request.head.ref }}
+          uv run pulumi config set ee-cicd:targetCommit ${COMMIT_TO_TEST}
+
+      - name: Create the EEUT instance
+        run: |
+          uv run pulumi up --yes 
+
+      - name: Check that EE install succeeded
+        run: |
+          uv run fab connect --patience=150
+          uv run fab wait-for-ee-setup
+
+      - name: Wait for K8 to load everything
+        run: |
+          uv run fab check-k8-deployments
+          uv run fab check-server-port
+
+      - name: Use groundlight sdk through EE
+        run: |
+          EEUT_IP=$(uv run pulumi stack output eeut_private_ip)
+          export GROUNDLIGHT_ENDPOINT=http://${EEUT_IP}:30101
+          uv run groundlight whoami
+          uv run groundlight list-detectors
+
+      - name: Thank the worker and shut down
+        if: always()
+        run: |
+          echo "Strong work, G4! Now go to sleep. The grim sweeper will visit soon."
+          # This saves money and frees up resources
+          uv run fab shutdown-instance
+
   build-push-edge-endpoint-multiplatform:
     if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     # We only run this action if all the prior test actions succeed
@@ -255,6 +375,7 @@ jobs:
       - test-general-edge-endpoint
       - test-sdk
       - validate-setup-ee
+      - G4-end-to-end
     runs-on: ubuntu-22.04
     steps:
       - name: Configure AWS credentials
