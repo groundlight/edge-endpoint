@@ -27,6 +27,7 @@ ACCETABLE_TRAINED_CONFIDENCE = 0.75
 
 gl = Groundlight()
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Submit a dog and cat image to k3s Groundlight edge-endpoint for integration tests"
