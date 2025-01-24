@@ -11,7 +11,7 @@ import argparse
 import random
 import time
 
-from groundlight import Groundlight, GroundlightClientError
+from groundlight import Groundlight
 from model import Detector
 
 NUM_IQS_TO_IMPROVE_MODEL = 10
