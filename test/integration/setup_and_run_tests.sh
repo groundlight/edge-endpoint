@@ -5,6 +5,7 @@
 # Altogether, you can run everything with:
 # > make test-with-k3s
 set -e
+set -x
 
 if [ -z "$GROUNDLIGHT_API_TOKEN" ]; then
     echo "Error: GROUNDLIGHT_API_TOKEN environment variable is not set."
@@ -17,6 +18,8 @@ then
     exit 1
 
 fi
+
+echo $GROUNDLIGHT_ENDPOINT 
 
 # First create a detector to use for testing:
 export DETECTOR_ID=$(poetry run python test/integration/integration_test.py --mode create_detector)

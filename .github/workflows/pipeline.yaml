@@ -282,6 +282,7 @@ jobs:
   update-glhub:
     if: github.ref == 'refs/heads/main'
     needs: 
+      - test-general-edge-endpoint
       - validate-setup-ee
       - test-sdk
       - test-with-k3s
