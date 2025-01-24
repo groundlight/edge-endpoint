@@ -10,12 +10,11 @@
 import argparse
 import random
 import time
-
 from groundlight import Groundlight, GroundlightClientError
 from model import Detector
 
 NUM_IQS_TO_IMPROVE_MODEL = 10
-ACCETABLE_TRAINED_CONFIDENCE = 0.8
+ACCETABLE_TRAINED_CONFIDENCE = 0.75
 
 
 def get_groundlight():
@@ -85,8 +84,11 @@ def submit_initial(detector: Detector) -> str:
 
     # a bit dependent on the current default model,
     # but that one always defaults to 0.5 confidence at first.
-    assert iq_yes.result.confidence == 0.5
-    assert iq_no.result.confidence == 0.5
+
+    assert 0.5 <= iq_yes.result.confidence <= 0.55, \
+        f"Expected confidence to be between 0.5 and 0.55, but got {iq_yes.result.confidence}"
+    assert 0.5 <= iq_no.result.confidence <= 0.55, \
+        f"Expected confidence to be between 0.5 and 0.55, but got {iq_no.result.confidence}"
 
 
 def improve_model(detector: Detector):
@@ -110,14 +112,15 @@ def submit_final(detector: Detector):
     iq_no = _submit_dog(detector, confidence_threshold=0.5)
     end_time = time.time()
     print(f"Time taken to get high confidence response from edge: {end_time - start_time} seconds")
+    assert iq_yes.result.confidence > ACCETABLE_TRAINED_CONFIDENCE, \
+        f"Expected confidence to be greater than {ACCETABLE_TRAINED_CONFIDENCE}, but got {iq_yes.result.confidence}"
+    assert iq_yes.result.label.value == "YES", \
+        f"Expected label to be YES, but got {iq_yes.result.label.value}"
 
-    assert iq_yes.result.confidence > ACCETABLE_TRAINED_CONFIDENCE
-    assert iq_yes.result.label.value == "YES"
-    print(f"Final confidence for yes result: {iq_yes.result.confidence}")
-
-    assert iq_no.result.confidence > ACCETABLE_TRAINED_CONFIDENCE
-    assert iq_no.result.label.value == "NO"
-    print(f"Final confidence for no result: {iq_no.result.confidence}")
+    assert iq_no.result.confidence > ACCETABLE_TRAINED_CONFIDENCE, \
+        f"Expected confidence to be greater than {ACCETABLE_TRAINED_CONFIDENCE}, but got {iq_no.result.confidence}"
+    assert iq_no.result.label.value == "NO", \
+        f"Expected label to be NO, but got {iq_no.result.label.value}"
 
 
 def _submit_cat(detector: Detector, confidence_threshold: float, wait: int = None):

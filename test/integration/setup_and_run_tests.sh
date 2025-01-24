@@ -23,7 +23,7 @@ echo "created detector with id: $DETECTOR_ID"
 
 # set some other environment variables
 export PERSISTENT_VOLUME_NAME="test-with-k3s-pv"
-export EDGE_ENDPOINT_PORT="30107"
+export EDGE_ENDPOINT_PORT="30108"
 export INFERENCE_FLAVOR="CPU"
 export LIVE_TEST_ENDPOINT="http://localhost:$EDGE_ENDPOINT_PORT"
 export REFRESH_RATE=60 # not actually different than the default, but we may want to tweak this
