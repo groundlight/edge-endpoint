@@ -16,12 +16,13 @@ env:
   POETRY_VERSION: "1.8.3"
   # This is the token associated with "prod-biggies" (with shared credentials on 1password)
   GROUNDLIGHT_API_TOKEN: ${{ secrets.GROUNDLIGHT_API_TOKEN }}
-  # This is the NGINX proxy endpoint
-  GROUNDLIGHT_ENDPOINT: http://localhost:30101
 
 jobs:
   test-general-edge-endpoint:
     runs-on: ubuntu-22.04
+    env:
+      # This is the NGINX proxy endpoint
+      GROUNDLIGHT_ENDPOINT: http://localhost:30101
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -174,6 +175,9 @@ jobs:
   # Run Groundlight SDK tests against the edge proxy endpoint
   test-sdk:
     runs-on: ubuntu-22.04
+    env:
+      # This is the NGINX proxy endpoint
+      GROUNDLIGHT_ENDPOINT: http://localhost:30101
     steps:
       - name: Check out code
         uses: actions/checkout@v3
