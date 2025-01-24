@@ -74,6 +74,10 @@ echo "Edge-endpoint pods have successfully rolled out."
 echo "Waiting for the inference deployment to rollout (inferencemodel-$DETECTOR_ID)..."
 
 export DETECTOR_ID_WITH_DASHES=$(echo ${DETECTOR_ID//_/-} | tr '[:upper:]' '[:lower:]')
+sleep 60
+echo "Describing the inference model deployment (inferencemodel-$DETECTOR_ID_WITH_DASHES)..."
+kubectl describe deployment/inferencemodel-$DETECTOR_ID_WITH_DASHES -n $DEPLOYMENT_NAMESPACE
+
 if ! kubectl rollout status deployment/inferencemodel-$DETECTOR_ID_WITH_DASHES -n $DEPLOYMENT_NAMESPACE --timeout=5m; then
     echo "Error: inference deployment for detector $DETECTOR_ID_WITH_DASHES failed to rollout within the timeout period."
     exit 1
