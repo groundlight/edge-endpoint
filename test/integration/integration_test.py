@@ -20,11 +20,12 @@ EDGE_SETUP = os.getenv("EDGE_SETUP", "0") == "1"
 NUM_IQS_TO_IMPROVE_MODEL = 10
 ACCETABLE_TRAINED_CONFIDENCE = 0.75
 
-if EDGE_SETUP:
-    gl = Groundlight(endpoint="http://localhost:30107")
-else:
-    gl = Groundlight()
+# if EDGE_SETUP:
+#     gl = Groundlight(endpoint="http://localhost:30108")
+# else:
+#     gl = Groundlight()
 
+gl = Groundlight()
 
 def main():
     parser = argparse.ArgumentParser(
