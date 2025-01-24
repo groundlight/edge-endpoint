@@ -8,9 +8,9 @@
 ## - Submit the final dog/cat image query to the edge, expect high confidence
 
 import argparse
+import os
 import random
 import time
-import os
 
 from groundlight import Groundlight
 from model import Detector
