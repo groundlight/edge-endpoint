@@ -167,6 +167,10 @@ jobs:
         run: |
           poetry install --no-interaction --no-root
 
+      - name: Prune Docker system (to free up disk space)
+        run: |
+          docker system prune -f
+
       - name: Run tests with k3s
         run: |
           make test-with-k3s
