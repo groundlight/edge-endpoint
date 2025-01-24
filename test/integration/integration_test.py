@@ -10,15 +10,20 @@
 import argparse
 import random
 import time
+import os
 
 from groundlight import Groundlight, GroundlightClientError
 from model import Detector
 
+EDGE_SETUP = os.getenv("EDGE_SETUP", "0") == "1"
+
 NUM_IQS_TO_IMPROVE_MODEL = 10
 ACCETABLE_TRAINED_CONFIDENCE = 0.75
 
-groundlight_edge = Groundlight(endpoint="http://localhost:30107")
-groundlight_cloud = Groundlight()
+if EDGE_SETUP:
+    gl = Groundlight(endpoint="http://localhost:30107")
+else:
+    gl = Groundlight()
 
 
 def main():
@@ -38,7 +43,7 @@ def main():
 
     detector = None
     if args.detector_id:
-        detector = groundlight_cloud.get_detector(args.detector_id)
+        detector = gl.get_detector(args.detector_id)
 
     if detector is None and args.mode != "create_detector":
         raise ValueError("You must provide detector id unless mode is create detector")
@@ -58,7 +63,7 @@ def create_cat_detector() -> str:
     """Create the intial cat detector that we use for the integration tests. We create
     a new one each time."""
     random_number = random.randint(0, 9999)
-    detector = groundlight_cloud.create_detector(name=f"cat_{random_number}", query="Is this a cat?")
+    detector = gl.create_detector(name=f"cat_{random_number}", query="Is this a cat?")
     detector_id = detector.id
     return detector_id
 
@@ -91,9 +96,9 @@ def improve_model(detector: Detector):
         # we're submitting images from the edge which will get escalated to the cloud
         # and thus train our model. but this process is slow
         iq_yes = _submit_cat(detector, confidence_threshold=1, wait=0)
-        groundlight_edge.add_label(image_query=iq_yes, label="YES")
+        gl.add_label(image_query=iq_yes, label="YES")
         iq_no = _submit_dog(detector, confidence_threshold=1, wait=0)
-        groundlight_edge.add_label(image_query=iq_no, label="NO")
+        gl.add_label(image_query=iq_no, label="NO")
 
 
 def submit_final(detector: Detector):
@@ -129,7 +134,7 @@ def _submit_dog(detector: Detector, confidence_threshold: float, wait: int = Non
 
 
 def _submit_dog_or_cat(detector: Detector, confidence_threshold: float, img_file: str, wait: int = None):
-    image_query = groundlight_edge.submit_image_query(
+    image_query = gl.submit_image_query(
         detector=detector, confidence_threshold=confidence_threshold, image=img_file, wait=wait
     )
 
