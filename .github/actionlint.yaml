@@ -21,3 +21,8 @@ paths:
       - '.*was deprecated.*'
       - '.*shellcheck.*:warning:.*'
       - '.*shellcheck.*:info:.*'
+
+      # The security warning of head.ref being dangerous is painfully stupid.
+      # It's worried that the commit hash string could be malicious.  (Never mind that
+      # an attacker generating PR's can much more easily just execute malicious code.)
+      - '.*github.event.pull_request.head.ref.*is potentially untrusted.*'
