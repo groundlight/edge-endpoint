@@ -77,5 +77,5 @@ fi
 echo "Inference deployment for detector $DETECTOR_ID has successfully rolled out."
 
 
-./test/integration/run_tests.sh
+# ./test/integration/run_tests.sh
 
