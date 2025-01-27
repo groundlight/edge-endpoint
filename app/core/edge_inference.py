@@ -124,13 +124,18 @@ class EdgeInferenceManager:
             verbose: Whether to print verbose logs from the inference server client
         """
         self.verbose = verbose
-        self.detector_inference_configs, self.inference_client_urls = {}, {}
+        self.detector_inference_configs, self.inference_client_urls, self.oodd_inference_client_urls = {}, {}, {}
         self.speedmon = SpeedMonitor()
 
         if detector_inference_configs:
             self.detector_inference_configs = detector_inference_configs
             self.inference_client_urls = {
                 detector_id: get_edge_inference_service_name(detector_id) + ":8000"
+                for detector_id in self.detector_inference_configs.keys()
+                if self.detector_configured_for_edge_inference(detector_id)
+            }
+            self.oodd_inference_client_urls = {
+                detector_id: get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
                 for detector_id in self.detector_inference_configs.keys()
                 if self.detector_configured_for_edge_inference(detector_id)
             }
@@ -155,6 +160,7 @@ class EdgeInferenceManager:
         if detector_id not in self.detector_inference_configs.keys():
             self.detector_inference_configs[detector_id] = EdgeInferenceConfig(enabled=True, api_token=api_token)
             self.inference_client_urls[detector_id] = get_edge_inference_service_name(detector_id) + ":8000"
+            self.oodd_inference_client_urls[detector_id] = get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
             logger.info(f"Set up edge inference for {detector_id}")
 
     def detector_configured_for_edge_inference(self, detector_id: str) -> bool:
@@ -210,8 +216,13 @@ class EdgeInferenceManager:
         start_time = time.perf_counter()
 
         inference_client_url = self.inference_client_urls[detector_id]
+        oodd_inference_client_url = self.oodd_inference_client_urls[detector_id]
         response = submit_image_for_inference(inference_client_url, image_bytes, content_type)
+        oodd_response = submit_image_for_inference(oodd_inference_client_url, image_bytes, content_type)
         output_dict = parse_inference_response(response)
+        oodd_output_dict = parse_inference_response(oodd_response)
+        logger.info(f"EDGE OUTPUT DICT: {output_dict}")
+        logger.info(f"OODD OUTPUT DICT: {oodd_output_dict}")
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         self.speedmon.update(detector_id, elapsed_ms)
@@ -221,14 +232,14 @@ class EdgeInferenceManager:
         logger.info(f"Recent-average FPS for {detector_id=}: {fps:.2f}")
         return output_dict
 
-    def update_model(self, detector_id: str) -> bool:
+    def update_model(self, detector_id: str, is_oodd: bool = False) -> bool:
         """
         Request a new model from Groundlight. If there is a new model available, download it and
         write it to the model repository as a new version.
 
         Returns True if a new model was downloaded and saved, False otherwise.
         """
-        logger.info(f"Checking if there is a new model available for {detector_id}")
+        logger.info(f"Checking if there is a new {'OODD' if is_oodd else 'edge'} model available for {detector_id}")
 
         api_token = (
             self.detector_inference_configs[detector_id].api_token
@@ -465,15 +476,22 @@ def delete_model_version(detector_id: str, model_version: int, repository_root: 
         shutil.rmtree(model_version_dir)
 
 
-def get_edge_inference_service_name(detector_id: str) -> str:
+def get_edge_inference_service_name(detector_id: str, is_oodd: bool = False) -> str:
     """
     Kubernetes service/deployment names have a strict naming convention.
     They have to be alphanumeric, lower cased, and can only contain dashes.
     We just use `inferencemodel-<detector_id>` as the deployment name and
-    `inference-service-<detector_id>` as the service name.
+    `inference-service-<detector_id>` as the service name. If the deployment/service
+    is for an OODD model, we append "-oodd" to the name.
     """
-    return f"inference-service-{detector_id.replace('_', '-').lower()}"
+    service_name = f"inference-service-{detector_id.replace('_', '-').lower()}"
+    if is_oodd:
+        service_name += "-oodd"
+    return service_name
 
 
-def get_edge_inference_deployment_name(detector_id: str) -> str:
-    return f"inferencemodel-{detector_id.replace('_', '-').lower()}"
+def get_edge_inference_deployment_name(detector_id: str, is_oodd: bool = False) -> str:
+    deployment_name = f"inferencemodel-{detector_id.replace('_', '-').lower()}"
+    if is_oodd:
+        deployment_name += "-oodd"
+    return deployment_name

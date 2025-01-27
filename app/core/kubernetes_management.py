@@ -78,9 +78,9 @@ class InferenceDeploymentManager:
         inference_deployment = inference_deployment.replace("placeholder-model-name", detector_id)
         return inference_deployment.strip()
 
-    def create_inference_deployment(self, detector_id: str) -> None:
+    def create_inference_deployment(self, detector_id: str, is_oodd: bool = False) -> None:
         """
-        Creates an inference deployment for a given detector ID.
+        Creates an inference deployment (either OODD or primary) for a given detector ID.
 
         This method substitutes placeholders in the inference deployment template
         with the provided detector ID, service name, and deployment name, and then
@@ -89,26 +89,28 @@ class InferenceDeploymentManager:
         Args:
             detector_id (str): The unique identifier for the detector for which
                                the inference deployment is to be created.
+            is_oodd (bool): Whether the inference deployment is for an OODD model.
         """
-        deployment_name = get_edge_inference_deployment_name(detector_id)
-        service_name = get_edge_inference_service_name(detector_id)
+        deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd)
+        service_name = get_edge_inference_service_name(detector_id, is_oodd)
         inference_deployment = self._substitute_placeholders(
             service_name=service_name, deployment_name=deployment_name, detector_id=detector_id
         )
         self._create_from_kube_manifest(namespace=self._target_namespace, manifest=inference_deployment)
 
-    def get_inference_deployment(self, detector_id) -> V1Deployment | None:
+    def get_inference_deployment(self, detector_id: str, is_oodd: bool = False) -> V1Deployment | None:
         """
-        Retrieves the inference deployment for a given detector ID.
+        Retrieves the inference deployment for the oodd or primary model for a given detector ID.
 
         Args:
             detector_id (str): The unique identifier for the detector whose inference deployment
                                is to be retrieved.
+            is_oodd (bool): Whether the inference deployment to be retrieved is for OODD.
 
         Returns:
             Optional[V1Deployment]: The deployment object if it exists, otherwise None.
         """
-        deployment_name = get_edge_inference_deployment_name(detector_id)
+        deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd)
         try:
             deployment = self._app_kube_client.read_namespaced_deployment(
                 name=deployment_name, namespace=self._target_namespace
@@ -122,7 +124,7 @@ class InferenceDeploymentManager:
                 return None
             raise e
 
-    def get_or_create_inference_deployment(self, detector_id: str) -> V1Deployment | None:
+    def get_or_create_inference_deployment(self, detector_id: str, is_oodd: bool = False) -> V1Deployment | None:
         """
         Retrieves an existing inference deployment for the specified detector ID, or creates a new
         one if it does not exist.
@@ -130,20 +132,23 @@ class InferenceDeploymentManager:
         Args:
             detector_id (str): The unique identifier for the detector whose inference deployment
                                is to be retrieved or created.
+            is_oodd (bool): Whether the inference deployment is for an OODD model.
 
         Returns:
             Optional[V1Deployment]: The existing deployment if found, otherwise None if a new
                                     deployment is created.
         """
-        deployment = self.get_inference_deployment(detector_id)
+        deployment = self.get_inference_deployment(detector_id, is_oodd)
         if deployment is not None:
             return deployment
 
-        logger.debug(f"Deployment for {detector_id} does not currently exist in namespace {self._target_namespace}.")
-        self.create_inference_deployment(detector_id=detector_id)
+        logger.debug(
+            f"Deployment for {detector_id} with is_oodd={is_oodd=} does not currently exist in namespace {self._target_namespace}."
+        )
+        self.create_inference_deployment(detector_id=detector_id, is_oodd=is_oodd)
         return None
 
-    def update_inference_deployment(self, detector_id: str) -> bool:
+    def update_inference_deployment(self, detector_id: str, is_oodd: bool = False) -> bool:
         """
         Updates the inference deployment for a given detector ID.
 
@@ -155,12 +160,13 @@ class InferenceDeploymentManager:
         Args:
             detector_id (str): The unique identifier for the detector whose inference deployment
                                needs to be updated.
+            is_oodd (bool): Whether the inference deployment is for an OODD model.
 
         Returns:
             bool: True if the deployment was updated, False if a new deployment was created.
         """
-        deployment_name = get_edge_inference_deployment_name(detector_id)
-        deployment = self.get_or_create_inference_deployment(detector_id)
+        deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd)
+        deployment = self.get_or_create_inference_deployment(detector_id, is_oodd)
         if deployment is None:
             logger.info(f"Creating a new inference deployment: {deployment_name}")
             return False
@@ -181,7 +187,7 @@ class InferenceDeploymentManager:
         )
         return True
 
-    def is_inference_deployment_rollout_complete(self, detector_id: str) -> bool:
+    def is_inference_deployment_rollout_complete(self, detector_id: str, is_oodd: bool = False) -> bool:
         """
         Checks if the rollout of the inference deployment for a given detector ID is complete.
 
@@ -192,13 +198,14 @@ class InferenceDeploymentManager:
         Args:
             detector_id (str): The unique identifier for the detector whose inference deployment
                                 rollout status needs to be checked.
+            is_oodd (bool): Whether the inference deployment is for an OODD model.
 
         Returns:
             bool: True if the deployment rollout is complete, False otherwise.
         """
 
         # Fetch the Deployment object
-        deployment = self.get_inference_deployment(detector_id)
+        deployment = self.get_inference_deployment(detector_id, is_oodd)
         if deployment is None:
             return False
 
@@ -207,10 +214,10 @@ class InferenceDeploymentManager:
         available_replicas = deployment.status.available_replicas if deployment.status.available_replicas else 0
 
         if desired_replicas == updated_replicas == available_replicas:
-            logger.info(f"Inference deployment for {detector_id} is ready")
+            logger.info(f"Inference deployment for {detector_id} with is_oodd={is_oodd} is ready")
             return True
         logger.debug(
-            f"Inference deployment rollout for {detector_id} is not complete. Desired: {desired_replicas}, Updated:"
-            f" {updated_replicas}, Available: {available_replicas}"
+            f"Inference deployment rollout for {detector_id} with is_oodd={is_oodd} is not complete. "
+            f"Desired: {desired_replicas}, Updated: {updated_replicas}, Available: {available_replicas}"
         )
         return False

@@ -28,6 +28,7 @@ def _check_new_models_and_inference_deployments(
     edge_inference_manager: EdgeInferenceManager,
     deployment_manager: InferenceDeploymentManager,
     db_manager: DatabaseManager,
+    is_oodd: bool = False,
 ) -> None:
     """
     Check that a new model is available for the detector_id. If so, update the inference deployment
@@ -44,19 +45,19 @@ def _check_new_models_and_inference_deployments(
     # Download and write new model to model repo on disk
     new_model = edge_inference_manager.update_model(detector_id=detector_id)
 
-    deployment = deployment_manager.get_inference_deployment(detector_id=detector_id)
+    deployment = deployment_manager.get_inference_deployment(detector_id=detector_id, is_oodd=is_oodd)
     if deployment is None:
         logger.info(f"Creating a new inference deployment for {detector_id}")
-        deployment_manager.create_inference_deployment(detector_id=detector_id)
+        deployment_manager.create_inference_deployment(detector_id=detector_id, is_oodd=is_oodd)
         return
 
     if new_model:
         # Update inference deployment and rollout a new pod
         logger.info(f"Updating inference deployment for {detector_id}")
-        deployment_manager.update_inference_deployment(detector_id=detector_id)
+        deployment_manager.update_inference_deployment(detector_id=detector_id, is_oodd=is_oodd)
 
         poll_start = time.time()
-        while not deployment_manager.is_inference_deployment_rollout_complete(detector_id):
+        while not deployment_manager.is_inference_deployment_rollout_complete(detector_id, is_oodd=is_oodd):
             time.sleep(5)
             if time.time() - poll_start > TEN_MINUTES:
                 raise TimeoutError("Inference deployment is not ready within time limit")
@@ -67,7 +68,7 @@ def _check_new_models_and_inference_deployments(
         logger.info(f"Cleaning up old model versions for {detector_id}")
         delete_old_model_versions(detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2)
 
-    if deployment_manager.is_inference_deployment_rollout_complete(detector_id):
+    if deployment_manager.is_inference_deployment_rollout_complete(detector_id, is_oodd=is_oodd):
         # Database transaction to update the deployment_created field for the detector_id
         # At this time, we are sure that the deployment for the detector has been successfully created and rolled out.
         db_manager.update_inference_deployment_record(
@@ -111,14 +112,22 @@ def update_models(
         logger.info("Starting model update check for existing inference deployments.")
         for detector_id in edge_inference_manager.detector_inference_configs.keys():
             try:
-                logger.debug(f"Checking new models and inference deployments for detector_id: {detector_id}")
+                logger.debug(f"Checking new edge models and inference deployments for detector_id: {detector_id}")
                 _check_new_models_and_inference_deployments(
                     detector_id=detector_id,
                     edge_inference_manager=edge_inference_manager,
                     deployment_manager=deployment_manager,
                     db_manager=db_manager,
                 )
-                logger.info(f"Successfully updated model for detector_id: {detector_id}")
+                logger.debug(f"Checking OODD models and inference deployments for detector_id: {detector_id}")
+                _check_new_models_and_inference_deployments(
+                    detector_id=detector_id,
+                    edge_inference_manager=edge_inference_manager,
+                    deployment_manager=deployment_manager,
+                    db_manager=db_manager,
+                    is_oodd=True,
+                )
+                logger.info(f"Successfully updated models for detector_id: {detector_id}")
             except Exception as e:
                 logger.error(f"Failed to update model for detector_id: {detector_id}. Error: {e}", exc_info=True)
 
