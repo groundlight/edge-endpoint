@@ -61,7 +61,7 @@ export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
 ./deploy/bin/setup-ee.sh
 # restore config file
 mv configs/edge-config.yaml.tmp configs/edge-config.yaml
-
+rm -rf /usr/local/lib/android
 echo "Waiting for edge-endpoint pods to rollout..."
 
 if ! kubectl rollout status deployment/edge-endpoint -n $DEPLOYMENT_NAMESPACE --timeout=5m; then
@@ -74,6 +74,7 @@ echo "Edge-endpoint pods have successfully rolled out."
 echo "Waiting for the inference deployment to rollout (inferencemodel-$DETECTOR_ID)..."
 
 export DETECTOR_ID_WITH_DASHES=$(echo ${DETECTOR_ID//_/-} | tr '[:upper:]' '[:lower:]')
+sleep 60
 
 echo "Describing the inferencemodel pod (inferencemodel-$DETECTOR_ID_WITH_DASHES)..."
 kubectl describe pod -l app=inferencemodel-$DETECTOR_ID_WITH_DASHES -n $DEPLOYMENT_NAMESPACE
