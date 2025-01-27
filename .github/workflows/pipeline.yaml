@@ -144,6 +144,12 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v3
       
+      - name: Clean stuff up
+        run: |
+          sudo apt autoremove
+          sudo apt clean
+
+      
       - name: Install k3s
         run: |
           ./deploy/bin/install-k3s.sh
