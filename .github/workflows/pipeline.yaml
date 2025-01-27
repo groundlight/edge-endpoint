@@ -146,7 +146,7 @@ jobs:
       
       - name: Install k3s
         run: |
-          ./deploy/bin/install-k3s.sh
+          curl -sfL https://get.k3s.io | sh -
           
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
