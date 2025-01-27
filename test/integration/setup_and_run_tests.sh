@@ -75,11 +75,8 @@ echo "Waiting for the inference deployment to rollout (inferencemodel-$DETECTOR_
 
 export DETECTOR_ID_WITH_DASHES=$(echo ${DETECTOR_ID//_/-} | tr '[:upper:]' '[:lower:]')
 
-df -h
-sudo du -h / --max-depth=1 2>/dev/null | sort -hr | head -20
-sudo du -h /usr --max-depth=1 2>/dev/null | sort -hr | head -30
-sudo du -h /var --max-depth=1 2>/dev/null | sort -hr | head -30
-sudo du -h /usr/local/lib --max-depth=1 | sort -hr | head -20
+echo "Describing the inferencemodel pod (inferencemodel-$DETECTOR_ID_WITH_DASHES)..."
+kubectl describe pod -l app=inferencemodel-$DETECTOR_ID_WITH_DASHES -n $DEPLOYMENT_NAMESPACE
 
 if ! kubectl rollout status deployment/inferencemodel-$DETECTOR_ID_WITH_DASHES -n $DEPLOYMENT_NAMESPACE --timeout=5m; then
     echo "Error: inference deployment for detector $DETECTOR_ID_WITH_DASHES failed to rollout within the timeout period."
