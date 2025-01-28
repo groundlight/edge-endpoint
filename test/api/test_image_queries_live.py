@@ -19,7 +19,9 @@ MAX_WAIT_TIME_S = 60
 # - name="edge_testing_det",
 # - query="Is there a dog in the image?",
 # - confidence_threshold=0.9
-DETECTOR_ID = "det_2SagpFUrs83cbMZsap5hZzRjZw4"
+
+# we use a dynamically created detector for integration tests
+DETECTOR_ID = os.getenv("DETECTOR_ID", "det_2SagpFUrs83cbMZsap5hZzRjZw4")
 
 
 @pytest.mark.live

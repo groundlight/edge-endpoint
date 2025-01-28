@@ -16,12 +16,13 @@ env:
   POETRY_VERSION: "1.8.3"
   # This is the token associated with "prod-biggies" (with shared credentials on 1password)
   GROUNDLIGHT_API_TOKEN: ${{ secrets.GROUNDLIGHT_API_TOKEN }}
-  # This is the NGINX proxy endpoint
-  GROUNDLIGHT_ENDPOINT: http://localhost:30101
 
 jobs:
   test-general-edge-endpoint:
     runs-on: ubuntu-22.04
+    env:
+      # This is the NGINX proxy endpoint
+      GROUNDLIGHT_ENDPOINT: http://localhost:30101
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -138,7 +139,11 @@ jobs:
   # we run this seperately from validate-setup-ee since we run out of disk space doing
   # both of them on the same runner and they can be slow so its best to do them in parallel
   test-with-k3s:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-22.04-8core
+    env:
+      # associated with roxanne+test_edge account since for some reason it was failing with
+      # prod biggies
+      GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -166,6 +171,11 @@ jobs:
         run: |
           poetry install --no-interaction --no-root
 
+      - name: Clear Poetry cache
+        run: |
+          poetry cache clear pypi --all
+          poetry cache clear virtualenvs --all
+
       - name: Run tests with k3s
         run: |
           make test-with-k3s
@@ -174,6 +184,9 @@ jobs:
   # Run Groundlight SDK tests against the edge proxy endpoint
   test-sdk:
     runs-on: ubuntu-22.04
+    env:
+      # This is the NGINX proxy endpoint
+      GROUNDLIGHT_ENDPOINT: http://localhost:30101
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -374,6 +387,7 @@ jobs:
     needs:
       - test-general-edge-endpoint
       - test-sdk
+      - test-with-k3s
       - validate-setup-ee
       - G4-end-to-end
     runs-on: ubuntu-22.04
@@ -397,7 +411,11 @@ jobs:
 
   update-glhub:
     if: github.ref == 'refs/heads/main'
-    needs: validate-setup-ee
+    needs: 
+      - test-general-edge-endpoint
+      - validate-setup-ee
+      - test-sdk
+      - test-with-k3s
     runs-on: ubuntu-latest
     environment: live
 
