@@ -8,11 +8,10 @@
 ## - Submit the final dog/cat image query to the edge, expect high confidence
 
 import argparse
-import ksuid
 import os
-import random
 import time
 
+import ksuid
 from groundlight import Groundlight
 from model import Detector
 
