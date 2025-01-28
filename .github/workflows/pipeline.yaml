@@ -140,6 +140,10 @@ jobs:
   # both of them on the same runner and they can be slow so its best to do them in parallel
   test-with-k3s:
     runs-on: ubuntu-22.04-8core
+    env:
+      # associated with roxanne+test_edge account since for some reason it was failing with
+      # prod biggies
+      GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
     steps:
       - name: Check out code
         uses: actions/checkout@v3
