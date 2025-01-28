@@ -19,7 +19,7 @@ EDGE_SETUP = os.getenv("EDGE_SETUP", "0") == "1"
 ENDPOINT_PORT = os.getenv("EDGE_ENDPOINT_PORT", "30107")
 
 NUM_IQS_TO_IMPROVE_MODEL = 10
-ACCETABLE_TRAINED_CONFIDENCE = 0.75
+ACCEPTABLE_TRAINED_CONFIDENCE = 0.75
 
 if EDGE_SETUP:
     gl = Groundlight(endpoint=f"http://localhost:{ENDPOINT_PORT}")
@@ -112,13 +112,13 @@ def submit_final(detector: Detector):
     end_time = time.time()
     print(f"Time taken to get high confidence response from edge: {end_time - start_time} seconds")
     assert (
-        iq_yes.result.confidence > ACCETABLE_TRAINED_CONFIDENCE
-    ), f"Expected confidence to be greater than {ACCETABLE_TRAINED_CONFIDENCE}, but got {iq_yes.result.confidence}"
+        iq_yes.result.confidence > ACCEPTABLE_TRAINED_CONFIDENCE
+    ), f"Expected confidence to be greater than {ACCEPTABLE_TRAINED_CONFIDENCE}, but got {iq_yes.result.confidence}"
     assert iq_yes.result.label.value == "YES", f"Expected label to be YES, but got {iq_yes.result.label.value}"
 
     assert (
-        iq_no.result.confidence > ACCETABLE_TRAINED_CONFIDENCE
-    ), f"Expected confidence to be greater than {ACCETABLE_TRAINED_CONFIDENCE}, but got {iq_no.result.confidence}"
+        iq_no.result.confidence > ACCEPTABLE_TRAINED_CONFIDENCE
+    ), f"Expected confidence to be greater than {ACCEPTABLE_TRAINED_CONFIDENCE}, but got {iq_no.result.confidence}"
     assert iq_no.result.label.value == "NO", f"Expected label to be NO, but got {iq_no.result.label.value}"
 
 
