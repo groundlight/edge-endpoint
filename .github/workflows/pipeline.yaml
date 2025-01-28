@@ -139,7 +139,7 @@ jobs:
   # we run this seperately from validate-setup-ee since we run out of disk space doing
   # both of them on the same runner and they can be slow so its best to do them in parallel
   test-with-k3s:
-    runs-on: self-hosted
+    runs-on: ubuntu-20.04-64core
     steps:
       - name: Check out code
         uses: actions/checkout@v3
