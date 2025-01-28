@@ -22,7 +22,7 @@ fi
 echo $GROUNDLIGHT_ENDPOINT 
 
 # First create a detector to use for testing:
-export DETECTOR_ID=$(poetry run python test/integration/integration_test.py --mode create_detector)
+export DETECTOR_ID=$(poetry run python test/integration/integration.py --mode create_detector)
 echo "created detector with id: $DETECTOR_ID"
 
 # set some other environment variables

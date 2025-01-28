@@ -18,7 +18,7 @@ fi
 
 echo "Submitting initial iqs, ensuring we get low confidence at first"
 # submit initial tests that we get low confidence answers at first
-poetry run python test/integration/integration_test.py -m initial -d $DETECTOR_ID
+poetry run python test/integration/integration.py -m initial -d $DETECTOR_ID
 
 echo "Getting current inference pod creation time before training in the cloud..."
 # Get the creation time of the current inference pod before training
@@ -28,7 +28,7 @@ pod_creation_time_seconds_before_training=$(date -d "$pod_creation_time_before_t
 
 echo "Training detector in the cloud"
 # now we improve the model by submitting many iqs and labels
-poetry run python test/integration/integration_test.py -m improve_model -d $DETECTOR_ID
+poetry run python test/integration/integration.py -m improve_model -d $DETECTOR_ID
 
 # Give the new model time to be pulled. We're a bit generous here.
 echo "Now we sleep for $((3 * REFRESH_RATE)) seconds to get a newer model" 
@@ -49,5 +49,5 @@ else
 fi
 
 echo now we check if the edge model performs well...
-poetry run python test/integration/integration_test.py -m final -d $DETECTOR_ID
+poetry run python test/integration/integration.py -m final -d $DETECTOR_ID
 echo All tests pass :D
