@@ -8,6 +8,7 @@
 ## - Submit the final dog/cat image query to the edge, expect high confidence
 
 import argparse
+import ksuid
 import os
 import random
 import time
@@ -63,8 +64,8 @@ def main():
 def create_cat_detector() -> str:
     """Create the intial cat detector that we use for the integration tests. We create
     a new one each time."""
-    random_number = random.randint(0, 9999)
-    detector = gl.create_detector(name=f"cat_{random_number}", query="Is this a cat?")
+    random_id = ksuid.KsuidMs()
+    detector = gl.create_detector(name=f"cat_{random_id}", query="Is this a cat?")
     detector_id = detector.id
     return detector_id
 
