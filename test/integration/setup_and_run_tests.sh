@@ -61,7 +61,6 @@ export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
 ./deploy/bin/setup-ee.sh
 # restore config file
 mv configs/edge-config.yaml.tmp configs/edge-config.yaml
-apt-get remove --purge android-sdk -y
 echo "Waiting for edge-endpoint pods to rollout..."
 
 if ! kubectl rollout status deployment/edge-endpoint -n $DEPLOYMENT_NAMESPACE --timeout=5m; then
