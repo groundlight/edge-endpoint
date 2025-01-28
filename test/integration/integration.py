@@ -19,7 +19,7 @@ from model import Detector
 EDGE_SETUP = os.getenv("EDGE_SETUP", "0") == "1"
 ENDPOINT_PORT = os.getenv("EDGE_ENDPOINT_PORT", "30107")
 
-NUM_IQS_TO_IMPROVE_MODEL = 10
+NUM_IQS_PER_CLASS_TO_IMPROVE_MODEL = 10
 ACCEPTABLE_TRAINED_CONFIDENCE = 0.75
 
 if EDGE_SETUP:
@@ -93,7 +93,7 @@ def submit_initial(detector: Detector) -> str:
 
 def improve_model(detector: Detector):
     """Improve the edge model by escalating to the cloud."""
-    for _ in range(NUM_IQS_TO_IMPROVE_MODEL):
+    for _ in range(NUM_IQS_PER_CLASS_TO_IMPROVE_MODEL):
         # there's a subtle tradeoff here.
         # we're submitting images from the edge which will get escalated to the cloud
         # and thus train our model. but this process is slow
