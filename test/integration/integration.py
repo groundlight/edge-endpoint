@@ -36,7 +36,7 @@ def main():
         "--mode",
         type=str,
         choices=["create_detector", "initial", "improve_model", "final"],
-        help="Mode of operation: 'initial', 'many', or 'final'",
+        help="Mode of operation: 'create_detector', 'initial', 'improve_model', or 'final'",
         required=True,
     )
     parser.add_argument("-d", "--detector_id", type=str, help="id of detector to use", required=False)
