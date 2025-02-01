@@ -9,7 +9,6 @@ from app.core.edge_inference import (
     EdgeInferenceManager,
     delete_old_model_versions,
     get_edge_inference_deployment_name,
-    get_edge_inference_service_name,
 )
 from app.core.kubernetes_management import InferenceDeploymentManager
 

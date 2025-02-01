@@ -128,9 +128,7 @@ class InferenceDeploymentManager:
                 return None
             raise e
 
-    def get_or_create_inference_deployment(
-        self, detector_id: str, is_oodd: bool = False
-    ) -> V1Deployment | None:
+    def get_or_create_inference_deployment(self, detector_id: str, is_oodd: bool = False) -> V1Deployment | None:
         """
         Retrieves an existing inference deployment for the specified detector ID, or creates a new
         one if it does not exist.
@@ -156,9 +154,7 @@ class InferenceDeploymentManager:
         self.create_inference_deployment(detector_id=detector_id, is_oodd=is_oodd)
         return None
 
-    def update_inference_deployment(
-        self, detector_id: str, is_oodd: bool = False
-    ) -> bool:
+    def update_inference_deployment(self, detector_id: str, is_oodd: bool = False) -> bool:
         """
         Updates the inference deployment for a given detector ID.
 
