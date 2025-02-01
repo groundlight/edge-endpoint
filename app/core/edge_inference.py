@@ -272,7 +272,9 @@ class EdgeInferenceManager:
             logger.info(f"No current model version found in {edge_model_dir}")
         elif oodd_v is None:
             logger.info(f"No current OODD model version found in {oodd_model_dir}")
-        elif not should_update(edge_model_info, edge_model_dir, edge_v) and not should_update(oodd_model_info, oodd_model_dir, oodd_v):
+        elif not should_update(edge_model_info, edge_model_dir, edge_v) and not should_update(
+            oodd_model_info, oodd_model_dir, oodd_v
+        ):
             logger.info(f"No new edge or OODD model available for {detector_id}")
             return False
         else:
@@ -286,9 +288,7 @@ class EdgeInferenceManager:
                 f"New model binary available ({edge_model_info.model_binary_id}), attemping to update model "
                 f"for {detector_id}"
             )
-            edge_model_buffer = get_object_using_presigned_url(
-                edge_model_info.model_binary_url
-            )
+            edge_model_buffer = get_object_using_presigned_url(edge_model_info.model_binary_url)
         else:
             logger.info(f"Got a pipeline config but no model binary, attempting to update model for {detector_id}")
             edge_model_buffer = None
@@ -298,9 +298,7 @@ class EdgeInferenceManager:
                 f"New OODD model binary available ({oodd_model_info.model_binary_id}), attemping to update model "
                 f"for {detector_id}"
             )
-            oodd_model_buffer = get_object_using_presigned_url(
-                oodd_model_info.model_binary_url
-            )
+            oodd_model_buffer = get_object_using_presigned_url(oodd_model_info.model_binary_url)
         else:
             logger.info(f"Got a pipeline config but no model binary, attempting to update OODD model for {detector_id}")
             oodd_model_buffer = None
@@ -311,7 +309,7 @@ class EdgeInferenceManager:
             edge_model_info,
             repository_root=self.MODEL_REPOSITORY,
         )
-        logger.info(f"About to save OODD model to repository")
+        logger.info("About to save OODD model to repository")
         save_model_to_repository(
             detector_id,
             oodd_model_buffer,
@@ -321,7 +319,7 @@ class EdgeInferenceManager:
         )
 
         return True
-    
+
     def escalation_cooldown_complete(self, detector_id: str) -> bool:
         """
         Check if the time since the last escalation is long enough ago that we should escalate again.

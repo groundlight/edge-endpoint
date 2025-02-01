@@ -238,8 +238,16 @@ def parse_model_info(
         edge_model_info = ModelInfoNoBinary(**fetch_model_response)
 
     try:
-        oodd_model_info = ModelInfoWithBinary(model_binary_id=fetch_model_response["oodd_model_binary_id"], model_binary_url=fetch_model_response["oodd_model_binary_url"], pipeline_config=fetch_model_response["oodd_pipeline_config"], predictor_metadata=fetch_model_response["predictor_metadata"])
+        oodd_model_info = ModelInfoWithBinary(
+            model_binary_id=fetch_model_response["oodd_model_binary_id"],
+            model_binary_url=fetch_model_response["oodd_model_binary_url"],
+            pipeline_config=fetch_model_response["oodd_pipeline_config"],
+            predictor_metadata=fetch_model_response["predictor_metadata"],
+        )
     except ValidationError:
-        oodd_model_info = ModelInfoNoBinary(pipeline_config=fetch_model_response["oodd_pipeline_config"], predictor_metadata=fetch_model_response["predictor_metadata"])
+        oodd_model_info = ModelInfoNoBinary(
+            pipeline_config=fetch_model_response["oodd_pipeline_config"],
+            predictor_metadata=fetch_model_response["predictor_metadata"],
+        )
 
     return edge_model_info, oodd_model_info
