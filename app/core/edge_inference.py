@@ -275,8 +275,10 @@ class EdgeInferenceManager:
             logger.info(f"No new models available for {detector_id}")
             return False
 
-        self.update_model(edge_model_info, detector_id)
-        self.update_model(oodd_model_info, detector_id, is_oodd=True)
+        if new_edge_model_available:
+            self.update_model(edge_model_info, detector_id)
+        if new_oodd_model_available:
+            self.update_model(oodd_model_info, detector_id, is_oodd=True)
 
         return True
 
@@ -488,23 +490,22 @@ def create_file_from_template(template_values: dict, destination: str, template:
         output_file.write(filled_content)
 
 
-def delete_old_model_versions(detector_id: str, repository_root: str, num_to_keep: int = 2) -> None:
+def delete_old_model_versions(model_dir: str, num_to_keep: int = 2) -> None:
     """Recursively delete all but the latest model versions"""
-    model_dir = os.path.join(repository_root, detector_id)
     model_versions = get_all_model_versions(model_dir)
     model_versions = sorted(model_versions)
     if len(model_versions) < num_to_keep:
         return
     versions_to_delete = model_versions[:-num_to_keep]  # all except the last num_to_keep
-    logger.info(f"Deleting {len(versions_to_delete)} old model version(s) for {detector_id}")
+    logger.info(f"Deleting {len(versions_to_delete)} old model version(s) in {model_dir}")
     for v in versions_to_delete:
-        delete_model_version(detector_id, v, repository_root)
+        delete_model_version(model_dir, v)
 
 
-def delete_model_version(detector_id: str, model_version: int, repository_root: str) -> None:
-    """Recursively delete directory detector_id/model_version"""
-    model_version_dir = os.path.join(repository_root, detector_id, str(model_version))
-    logger.info(f"Deleting model version {model_version} for {detector_id}")
+def delete_model_version(model_dir: str, model_version: int) -> None:
+    """Recursively delete directory model_dir/model_version"""
+    model_version_dir = os.path.join(model_dir, str(model_version))
+    logger.info(f"Deleting model version {model_version} in {model_version_dir}")
     if os.path.exists(model_version_dir):
         shutil.rmtree(model_version_dir)
 

@@ -51,40 +51,28 @@ def _check_new_models_and_inference_deployments(
     new_model = edge_inference_manager.update_models_if_available(detector_id=detector_id)
 
     edge_deployment_name = get_edge_inference_deployment_name(detector_id)
-    edge_service_name = get_edge_inference_service_name(detector_id)
     oodd_deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd=True)
-    oodd_service_name = get_edge_inference_service_name(detector_id, is_oodd=True)
 
-    edge_deployment = deployment_manager.get_inference_deployment(deployment_name=edge_deployment_name)
-    oodd_deployment = deployment_manager.get_inference_deployment(deployment_name=oodd_deployment_name)
-    if edge_deployment is None:
-        logger.info(f"Creating a new edge inference deployment for {detector_id}")
-        deployment_manager.create_inference_deployment(
-            detector_id=detector_id, deployment_name=edge_deployment_name, service_name=edge_service_name
-        )
-        return
+    # edge_deployment = deployment_manager.get_inference_deployment(deployment_name=edge_deployment_name)
+    # oodd_deployment = deployment_manager.get_inference_deployment(deployment_name=oodd_deployment_name)
+    # if edge_deployment is None:
+    #     logger.info(f"Creating a new edge inference deployment for {detector_id}")
+    #     deployment_manager.create_inference_deployment(detector_id=detector_id)
 
-    if oodd_deployment is None:
-        logger.info(f"Creating a new oodd inference deployment for {detector_id}")
-        deployment_manager.create_inference_deployment(
-            detector_id=detector_id, deployment_name=oodd_deployment_name, service_name=oodd_service_name
-        )
-        return
+    # if oodd_deployment is None:
+    #     logger.info(f"Creating a new oodd inference deployment for {detector_id}")
+    #     deployment_manager.create_inference_deployment(detector_id=detector_id, is_oodd=True)
 
     if new_model:
         # Update inference deployment and rollout a new pod
         logger.info(f"Updating inference deployment for {detector_id}")
-        deployment_manager.update_inference_deployment(
-            detector_id=detector_id, deployment_name=edge_deployment_name, service_name=edge_service_name
-        )
-        deployment_manager.update_inference_deployment(
-            detector_id=detector_id, deployment_name=oodd_deployment_name, service_name=oodd_service_name, is_oodd=True
-        )
+        deployment_manager.update_inference_deployment(detector_id=detector_id)
+        deployment_manager.update_inference_deployment(detector_id=detector_id, is_oodd=True)
 
         poll_start = time.time()
         while not deployment_manager.is_inference_deployment_rollout_complete(
             detector_id, deployment_name=edge_deployment_name
-        ) and not deployment_manager.is_inference_deployment_rollout_complete(
+        ) or not deployment_manager.is_inference_deployment_rollout_complete(
             detector_id, deployment_name=oodd_deployment_name
         ):
             time.sleep(5)
@@ -95,7 +83,12 @@ def _check_new_models_and_inference_deployments(
         # To be a bit conservative, we keep the current model version as well as the version before that. Older
         # versions of the model for the current detector_id will be removed from disk.
         logger.info(f"Cleaning up old model versions for {detector_id}")
-        delete_old_model_versions(detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2)
+        delete_old_model_versions(
+            model_dir=os.path.join(edge_inference_manager.MODEL_REPOSITORY, detector_id), num_to_keep=2
+        )
+        delete_old_model_versions(
+            model_dir=os.path.join(edge_inference_manager.MODEL_REPOSITORY, detector_id, "_oodd"), num_to_keep=2
+        )
 
     if deployment_manager.is_inference_deployment_rollout_complete(
         detector_id, deployment_name=edge_deployment_name

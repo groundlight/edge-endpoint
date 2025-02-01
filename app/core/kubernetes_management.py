@@ -8,6 +8,7 @@ from kubernetes import client as kube_client
 from kubernetes import config
 from kubernetes.client import V1Deployment
 
+from .edge_inference import get_edge_inference_deployment_name, get_edge_inference_service_name
 from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH
 
 logger = logging.getLogger(__name__)
@@ -75,14 +76,14 @@ class InferenceDeploymentManager:
         inference_deployment = inference_deployment.replace("placeholder-inference-deployment-name", deployment_name)
         inference_deployment = inference_deployment.replace(
             "placeholder-inference-instance-name",
-            f"instance-{detector_id}-oodd" if is_oodd else f"instance-{detector_id}",
+            f"instance-{detector_id}-{'_oodd' if is_oodd else ''}",
         )
         inference_deployment = inference_deployment.replace(
             "placeholder-model-name", detector_id + "_oodd" if is_oodd else detector_id
         )
         return inference_deployment.strip()
 
-    def create_inference_deployment(self, detector_id: str, deployment_name: str, service_name: str) -> None:
+    def create_inference_deployment(self, detector_id: str, is_oodd: bool = False) -> None:
         """
         Creates an inference deployment (either OODD or primary) for a given detector ID.
 
@@ -93,11 +94,12 @@ class InferenceDeploymentManager:
         Args:
             detector_id (str): The unique identifier for the detector for which
                                the inference deployment is to be created.
-            deployment_name (str): The name of the deployment to be created.
-            service_name (str): The name of the service to be created.
+            is_oodd (bool): Whether the inference deployment is for an OODD model.
         """
+        deployment_name = get_edge_inference_deployment_name(detector_id)
+        service_name = get_edge_inference_service_name(detector_id)
         inference_deployment = self._substitute_placeholders(
-            service_name=service_name, deployment_name=deployment_name, detector_id=detector_id
+            service_name=service_name, deployment_name=deployment_name, detector_id=detector_id, is_oodd=is_oodd
         )
         self._create_from_kube_manifest(namespace=self._target_namespace, manifest=inference_deployment)
 
@@ -127,7 +129,7 @@ class InferenceDeploymentManager:
             raise e
 
     def get_or_create_inference_deployment(
-        self, detector_id: str, deployment_name: str, service_name: str
+        self, detector_id: str, is_oodd: bool = False
     ) -> V1Deployment | None:
         """
         Retrieves an existing inference deployment for the specified detector ID, or creates a new
@@ -143,6 +145,7 @@ class InferenceDeploymentManager:
             Optional[V1Deployment]: The existing deployment if found, otherwise None if a new
                                     deployment is created.
         """
+        deployment_name = get_edge_inference_deployment_name(detector_id)
         deployment = self.get_inference_deployment(deployment_name)
         if deployment is not None:
             return deployment
@@ -150,13 +153,11 @@ class InferenceDeploymentManager:
         logger.debug(
             f"Deployment for {detector_id} with deployment_name={deployment_name} does not currently exist in namespace {self._target_namespace}."
         )
-        self.create_inference_deployment(
-            detector_id=detector_id, deployment_name=deployment_name, service_name=service_name
-        )
+        self.create_inference_deployment(detector_id=detector_id, is_oodd=is_oodd)
         return None
 
     def update_inference_deployment(
-        self, detector_id: str, deployment_name: str, service_name: str, is_oodd: bool = False
+        self, detector_id: str, is_oodd: bool = False
     ) -> bool:
         """
         Updates the inference deployment for a given detector ID.
@@ -175,10 +176,11 @@ class InferenceDeploymentManager:
         Returns:
             bool: True if the deployment was updated, False if a new deployment was created.
         """
+        deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd)
         logger.info(f"Updating inference deployment for {detector_id} with deployment_name={deployment_name}")
-        deployment = self.get_or_create_inference_deployment(detector_id, deployment_name, service_name)
+        deployment = self.get_or_create_inference_deployment(detector_id, is_oodd)
         if deployment is None:
-            logger.info(f"Creating a new inference deployment: {deployment_name}")
+            logger.info(f"Creating a new inference deployment for {detector_id} with deployment_name={deployment_name}")
             return False
 
         if deployment.spec.template.metadata.annotations is None:
