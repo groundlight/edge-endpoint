@@ -35,9 +35,9 @@ def is_edge_inference_ready(inference_client_url: str) -> bool:
 
 def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, content_type: str) -> dict:
     inference_url = f"http://{inference_client_url}/infer"
-    logger.debug(f"Submitting image for inference to {inference_url}")
     headers = {"Content-Type": content_type}
     try:
+        logger.debug(f"Submitting image for inference to {inference_url}")
         response = requests.post(inference_url, data=image_bytes, headers=headers)
         if response.status_code != status.HTTP_200_OK:
             logger.error(f"Inference server returned an error: {response.status_code} - {response.text}")
@@ -268,20 +268,8 @@ class EdgeInferenceManager:
 
         edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
 
-        new_edge_model_available = True
-        new_oodd_model_available = True
-
-        if edge_v is None:
-            logger.info(f"No current edge model version found in {edge_model_dir}")
-        elif not should_update(edge_model_info, edge_model_dir, edge_v):
-            logger.info(f"No new edge model available for {detector_id}")
-            new_edge_model_available = False
-
-        if oodd_v is None:
-            logger.info(f"No current OODD model version found in {oodd_model_dir}")
-        elif not should_update(oodd_model_info, oodd_model_dir, oodd_v):
-            logger.info(f"No new OODD model available for {detector_id}")
-            new_oodd_model_available = False
+        new_edge_model_available = should_update(edge_model_info, edge_model_dir, edge_v)
+        new_oodd_model_available = should_update(oodd_model_info, oodd_model_dir, oodd_v)
 
         if not new_edge_model_available and not new_oodd_model_available:
             logger.info(f"No new models available for {detector_id}")
@@ -418,19 +406,20 @@ def save_model_to_repository(
     return old_model_version, new_model_version
 
 
-def should_update(model_info: ModelInfoBase, model_dir: str, version: int) -> bool:
+def should_update(model_info: Optional[ModelInfoBase], model_dir: str, version: int) -> bool:
     """Determines if the model needs to be updated based on the received and current model info."""
     if isinstance(model_info, ModelInfoWithBinary):
         edge_binary_ksuid = get_current_model_ksuid(model_dir, version)
         if edge_binary_ksuid and model_info.model_binary_id == edge_binary_ksuid:
-            # The edge binary is the same as the cloud binary, so we don't need to update the model.
+            logger.info(f"The edge binary is the same as the cloud binary, so we don't need to update the model.")
             return False
-    else:
+    elif model_info is not None:
         current_pipeline_config = get_current_pipeline_config(model_dir, version)
         if current_pipeline_config and current_pipeline_config == yaml.safe_load(model_info.pipeline_config):
-            # There is no saved binary and the current pipeline_config is the same as the received
-            # pipeline_config, so we don't need to update the model.
+            logger.info(f"There is no saved binary and the current pipeline_config is the same as the received pipeline_config, so we don't need to update the model.")
             return False
+    else:
+        logger.info(f"No current model version found in {model_dir}.")
 
     return True
 
