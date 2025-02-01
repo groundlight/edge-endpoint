@@ -161,7 +161,9 @@ class EdgeInferenceManager:
         if detector_id not in self.detector_inference_configs.keys():
             self.detector_inference_configs[detector_id] = EdgeInferenceConfig(enabled=True, api_token=api_token)
             self.inference_client_urls[detector_id] = get_edge_inference_service_name(detector_id) + ":8000"
-            self.oodd_inference_client_urls[detector_id] = get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
+            self.oodd_inference_client_urls[detector_id] = (
+                get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
+            )
             logger.info(f"Set up edge inference for {detector_id}")
 
     def detector_configured_for_edge_inference(self, detector_id: str) -> bool:
