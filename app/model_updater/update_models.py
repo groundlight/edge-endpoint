@@ -5,7 +5,7 @@ import time
 from app.core.app_state import get_detector_inference_configs, load_edge_config
 from app.core.configs import RootEdgeConfig
 from app.core.database import DatabaseManager
-from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions
+from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions, get_edge_inference_deployment_name, get_edge_inference_service_name
 from app.core.kubernetes_management import InferenceDeploymentManager
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -28,10 +28,9 @@ def _check_new_models_and_inference_deployments(
     edge_inference_manager: EdgeInferenceManager,
     deployment_manager: InferenceDeploymentManager,
     db_manager: DatabaseManager,
-    is_oodd: bool = False,
 ) -> None:
     """
-    Check that a new model is available for the detector_id. If so, update the inference deployment
+    Check if new models are available for the detector_id. If so, update the inference deployment
     to reflect the new state. This is also the entrypoint for creating a new inference deployment
     and updating the database record for the detector_id (i.e., setting deployment_created to True
     when we have successfully rolled out the inference deployment).
@@ -43,21 +42,34 @@ def _check_new_models_and_inference_deployments(
 
     """
     # Download and write new model to model repo on disk
+    # TODO: rename to indicate we're updating the OODD and edge models
     new_model = edge_inference_manager.update_model(detector_id=detector_id)
 
-    deployment = deployment_manager.get_inference_deployment(detector_id=detector_id, is_oodd=is_oodd)
-    if deployment is None:
-        logger.info(f"Creating a new inference deployment for {detector_id}")
-        deployment_manager.create_inference_deployment(detector_id=detector_id, is_oodd=is_oodd)
+    edge_deployment_name = get_edge_inference_deployment_name(detector_id)
+    edge_service_name = get_edge_inference_service_name(detector_id)
+    oodd_deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd=True)
+    oodd_service_name = get_edge_inference_service_name(detector_id, is_oodd=True)
+
+    edge_deployment = deployment_manager.get_inference_deployment(deployment_name=edge_deployment_name)
+    oodd_deployment = deployment_manager.get_inference_deployment(deployment_name=oodd_deployment_name)
+    if edge_deployment is None:
+        logger.info(f"Creating a new edge inference deployment for {detector_id}")
+        deployment_manager.create_inference_deployment(detector_id=detector_id, deployment_name=edge_deployment_name, service_name=edge_service_name)
+        return
+
+    if oodd_deployment is None:
+        logger.info(f"Creating a new oodd inference deployment for {detector_id}")
+        deployment_manager.create_inference_deployment(detector_id=detector_id, deployment_name=oodd_deployment_name, service_name=oodd_service_name)
         return
 
     if new_model:
         # Update inference deployment and rollout a new pod
         logger.info(f"Updating inference deployment for {detector_id}")
-        deployment_manager.update_inference_deployment(detector_id=detector_id, is_oodd=is_oodd)
+        deployment_manager.update_inference_deployment(detector_id=detector_id, deployment_name=edge_deployment_name, service_name=edge_service_name)
+        deployment_manager.update_inference_deployment(detector_id=detector_id, deployment_name=oodd_deployment_name, service_name=oodd_service_name, is_oodd=True)
 
         poll_start = time.time()
-        while not deployment_manager.is_inference_deployment_rollout_complete(detector_id, is_oodd=is_oodd):
+        while not deployment_manager.is_inference_deployment_rollout_complete(detector_id, deployment_name=edge_deployment_name) and not deployment_manager.is_inference_deployment_rollout_complete(detector_id, deployment_name=oodd_deployment_name):
             time.sleep(5)
             if time.time() - poll_start > TEN_MINUTES:
                 raise TimeoutError("Inference deployment is not ready within time limit")
@@ -68,12 +80,12 @@ def _check_new_models_and_inference_deployments(
         logger.info(f"Cleaning up old model versions for {detector_id}")
         delete_old_model_versions(detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2)
 
-    if deployment_manager.is_inference_deployment_rollout_complete(detector_id, is_oodd=is_oodd):
+    if deployment_manager.is_inference_deployment_rollout_complete(detector_id, deployment_name=edge_deployment_name) and deployment_manager.is_inference_deployment_rollout_complete(detector_id, deployment_name=oodd_deployment_name):
         # Database transaction to update the deployment_created field for the detector_id
         # At this time, we are sure that the deployment for the detector has been successfully created and rolled out.
         db_manager.update_inference_deployment_record(
             detector_id=detector_id,
-            fields_to_update={"deployment_created": True, "deployment_name": deployment.metadata.name},
+            fields_to_update={"deployment_created": True, "deployment_name": edge_deployment.metadata.name},
         )
 
 
@@ -119,14 +131,6 @@ def update_models(
                     deployment_manager=deployment_manager,
                     db_manager=db_manager,
                 )
-                logger.debug(f"Checking OODD models and inference deployments for detector_id: {detector_id}")
-                _check_new_models_and_inference_deployments(
-                    detector_id=detector_id,
-                    edge_inference_manager=edge_inference_manager,
-                    deployment_manager=deployment_manager,
-                    db_manager=db_manager,
-                    is_oodd=True,
-                )
                 logger.info(f"Successfully updated models for detector_id: {detector_id}")
             except Exception as e:
                 logger.error(f"Failed to update model for detector_id: {detector_id}. Error: {e}", exc_info=True)
@@ -154,7 +158,11 @@ def update_models(
         # Update the status of the inference deployments in the database
         deployment_records = db_manager.get_inference_deployment_records()
         for record in deployment_records:
-            deployment_created = deployment_manager.get_inference_deployment(record.detector_id) is not None
+            edge_deployment_name = get_edge_inference_deployment_name(record.detector_id)
+            oodd_deployment_name = get_edge_inference_deployment_name(record.detector_id, is_oodd=True)
+            edge_deployment = deployment_manager.get_inference_deployment(edge_deployment_name)
+            oodd_deployment = deployment_manager.get_inference_deployment(oodd_deployment_name)
+            deployment_created = edge_deployment is not None and oodd_deployment is not None
             db_manager.update_inference_deployment_record(
                 detector_id=record.detector_id,
                 fields_to_update={"deployment_created": deployment_created},

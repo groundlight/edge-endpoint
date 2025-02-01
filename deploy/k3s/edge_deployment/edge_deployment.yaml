@@ -16,7 +16,7 @@ spec:
   ports:
   - protocol: TCP
     # Service port for NGINX
-    port: 30101
+    port: 30106
     nodePort: ${EDGE_ENDPOINT_PORT}
   type: NodePort
 ---
@@ -41,7 +41,7 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       initContainers:
       - name: database-prep
-        image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${IMAGE_TAG}
+        image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:oodd-on-edge-726f0f3cf-dirty-d41b891787ba317
         imagePullPolicy: Always
         volumeMounts:
         - name: edge-endpoint-persistent-volume
@@ -55,7 +55,7 @@ spec:
         image: *edgeEndpointImage
         imagePullPolicy: Always
         ports:
-        - containerPort: 30101
+        - containerPort: 30106
         env:
         - name: LOG_LEVEL
           value: "INFO"
@@ -76,21 +76,21 @@ spec:
         startupProbe:
           httpGet:
             path: /health/live  # Checks if the server is up
-            port: 30101
+            port: 30106
           initialDelaySeconds: 10
           periodSeconds: 10
           failureThreshold: 6  # Wait for up to 1 min
         readinessProbe:
           httpGet:
             path: /health/ready  # Checks if the server is ready to serve requests
-            port: 30101
+            port: 30106
           initialDelaySeconds: 10
           periodSeconds: 10
           failureThreshold: 2  # after 20 seconds of failure, stop sending traffic to the pod
         livenessProbe:
           httpGet:
             path: /health/ready
-            port: 30101
+            port: 30106
           initialDelaySeconds: 10
           periodSeconds: 10
           failureThreshold: 4  # after 40 seconds of failure, restart the pod

@@ -8,7 +8,8 @@ from app.api.api import api_router, health_router, ping_router
 from app.api.naming import API_BASE_PATH
 from app.core.app_state import AppState
 
-LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+# LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+LOG_LEVEL = "DEBUG"
 DEPLOY_DETECTOR_LEVEL_INFERENCE = bool(int(os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", 0)))
 
 logging.basicConfig(

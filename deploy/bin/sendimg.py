@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import logging
 import random
 from io import BytesIO
 
@@ -42,7 +43,7 @@ def submit_image_to_local_edge_endpoint(image, detector_id):
     image.save(buffered, format="JPEG")
     image_bytes = buffered.getvalue()
 
-    client = Groundlight(endpoint="http://localhost:30101")
+    client = Groundlight(endpoint="http://localhost:30106")
 
     detector = client.get_detector(detector_id)
     response = client.ask_ml(detector=detector, image=image_bytes)
@@ -61,9 +62,11 @@ def main():
     else:
         image = generate_random_image()
 
+    print(f"Submitting image to edge-endpoint: {args.detector_id}")
     response = submit_image_to_local_edge_endpoint(image, args.detector_id)
     print("Response from Groundlight:", response)
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     main()
