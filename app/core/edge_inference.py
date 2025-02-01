@@ -302,7 +302,6 @@ class EdgeInferenceManager:
             model_dir,
         )
 
-
     def escalation_cooldown_complete(self, detector_id: str) -> bool:
         """
         Check if the time since the last escalation is long enough ago that we should escalate again.
