@@ -48,7 +48,7 @@ def _check_new_models_and_inference_deployments(
     """
     # Download and write new model to model repo on disk
     # TODO: rename to indicate we're updating the OODD and edge models
-    new_model = edge_inference_manager.update_model(detector_id=detector_id)
+    new_model = edge_inference_manager.update_models_if_available(detector_id=detector_id)
 
     edge_deployment_name = get_edge_inference_deployment_name(detector_id)
     edge_service_name = get_edge_inference_service_name(detector_id)
@@ -110,7 +110,7 @@ def _check_new_models_and_inference_deployments(
         )
 
 
-def update_models(
+def manage_update_models(
     edge_inference_manager: EdgeInferenceManager,
     deployment_manager: InferenceDeploymentManager,
     db_manager: DatabaseManager,
@@ -207,7 +207,7 @@ if __name__ == "__main__":
     # So here we don't run a task to create the tables if they don't already exist.
     db_manager = DatabaseManager()
 
-    update_models(
+    manage_update_models(
         edge_inference_manager=edge_inference_manager,
         deployment_manager=deployment_manager,
         db_manager=db_manager,

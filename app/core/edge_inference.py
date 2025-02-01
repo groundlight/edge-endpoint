@@ -35,7 +35,7 @@ def is_edge_inference_ready(inference_client_url: str) -> bool:
 
 def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, content_type: str) -> dict:
     inference_url = f"http://{inference_client_url}/infer"
-    logger.info(f"Submitting image for inference to {inference_url}, maybe OODD")
+    logger.debug(f"Submitting image for inference to {inference_url}")
     headers = {"Content-Type": content_type}
     try:
         response = requests.post(inference_url, data=image_bytes, headers=headers)
@@ -194,7 +194,7 @@ class EdgeInferenceManager:
             inference_client_url = self.inference_client_urls[detector_id]
             oodd_inference_client_url = self.oodd_inference_client_urls[detector_id]
         except KeyError:
-            logger.info(f"Failed to look up inference client for {detector_id}")
+            logger.info(f"Failed to look up inference clients for {detector_id}")
             return False
 
         if not is_edge_inference_ready(inference_client_url):
@@ -224,8 +224,6 @@ class EdgeInferenceManager:
 
         inference_client_url = self.inference_client_urls[detector_id]
         oodd_inference_client_url = self.oodd_inference_client_urls[detector_id]
-        logger.info(f"INFERENCE CLIENT URL: {inference_client_url}")
-        logger.info(f"OODD INFERENCE CLIENT URL: {oodd_inference_client_url}")
 
         response = submit_image_for_inference(inference_client_url, image_bytes, content_type)
         oodd_response = submit_image_for_inference(oodd_inference_client_url, image_bytes, content_type)
@@ -233,8 +231,8 @@ class EdgeInferenceManager:
         output_dict = parse_inference_response(response)
         oodd_output_dict = parse_inference_response(oodd_response)
 
-        logger.info(f"EDGE OUTPUT DICT: {output_dict}")
-        logger.info(f"OODD OUTPUT DICT: {oodd_output_dict}")
+        logger.info(f"Response from edge model inference: {output_dict}")
+        logger.info(f"Response from OODD model inference: {oodd_output_dict}")
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         self.speedmon.update(detector_id, elapsed_ms)
@@ -244,14 +242,14 @@ class EdgeInferenceManager:
         logger.info(f"Recent-average FPS for {detector_id=}: {fps:.2f}")
         return output_dict
 
-    def update_model(self, detector_id: str) -> bool:
+    def update_models_if_available(self, detector_id: str) -> bool:
         """
         Request a new model from Groundlight. If there is a new model available, download it and
         write it to the model repository as a new version.
 
         Returns True if a new model was downloaded and saved, False otherwise.
         """
-        logger.info(f"Checking if there is a new OODD and/or edge model available for {detector_id}")
+        logger.info(f"Checking if there is a new model available for {detector_id}")
 
         api_token = (
             self.detector_inference_configs[detector_id].api_token
@@ -264,61 +262,58 @@ class EdgeInferenceManager:
 
         edge_model_dir = os.path.join(self.MODEL_REPOSITORY, detector_id)
         oodd_model_dir = os.path.join(self.MODEL_REPOSITORY, detector_id + "_oodd")
-        edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
 
         edge_v = get_current_model_version(edge_model_dir)
         oodd_v = get_current_model_version(oodd_model_dir)
+
+        edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
+
+        new_edge_model_available = True
+        new_oodd_model_available = True
+
         if edge_v is None:
-            logger.info(f"No current model version found in {edge_model_dir}")
-        elif oodd_v is None:
+            logger.info(f"No current edge model version found in {edge_model_dir}")
+        elif not should_update(edge_model_info, edge_model_dir, edge_v):
+            logger.info(f"No new edge model available for {detector_id}")
+            new_edge_model_available = False
+
+        if oodd_v is None:
             logger.info(f"No current OODD model version found in {oodd_model_dir}")
-        elif not should_update(edge_model_info, edge_model_dir, edge_v) and not should_update(
-            oodd_model_info, oodd_model_dir, oodd_v
-        ):
-            logger.info(f"No new edge or OODD model available for {detector_id}")
+        elif not should_update(oodd_model_info, oodd_model_dir, oodd_v):
+            logger.info(f"No new OODD model available for {detector_id}")
+            new_oodd_model_available = False
+
+        if not new_edge_model_available and not new_oodd_model_available:
+            logger.info(f"No new models available for {detector_id}")
             return False
-        else:
-            logger.info(f"New edge or OODD model available for {detector_id}")
-            logger.info(f"OODD model info: {oodd_model_info}")
-            logger.info(f"OODD model directory: {oodd_model_dir}")
-            logger.info(f"OODD model version: {oodd_v}")
 
-        if isinstance(edge_model_info, ModelInfoWithBinary):
-            logger.info(
-                f"New model binary available ({edge_model_info.model_binary_id}), attemping to update model "
-                f"for {detector_id}"
-            )
-            edge_model_buffer = get_object_using_presigned_url(edge_model_info.model_binary_url)
-        else:
-            logger.info(f"Got a pipeline config but no model binary, attempting to update model for {detector_id}")
-            edge_model_buffer = None
-
-        if isinstance(oodd_model_info, ModelInfoWithBinary):
-            logger.info(
-                f"New OODD model binary available ({oodd_model_info.model_binary_id}), attemping to update model "
-                f"for {detector_id}"
-            )
-            oodd_model_buffer = get_object_using_presigned_url(oodd_model_info.model_binary_url)
-        else:
-            logger.info(f"Got a pipeline config but no model binary, attempting to update OODD model for {detector_id}")
-            oodd_model_buffer = None
-
-        save_model_to_repository(
-            detector_id,
-            edge_model_buffer,
-            edge_model_info,
-            repository_root=self.MODEL_REPOSITORY,
-        )
-        logger.info("About to save OODD model to repository")
-        save_model_to_repository(
-            detector_id,
-            oodd_model_buffer,
-            oodd_model_info,
-            repository_root=self.MODEL_REPOSITORY,
-            is_oodd=True,
-        )
+        self.update_model(edge_model_info, detector_id)
+        self.update_model(oodd_model_info, detector_id, is_oodd=True)
 
         return True
+
+    def update_model(self, model_info: ModelInfoBase, detector_id: str, is_oodd: bool = False) -> None:
+        if isinstance(model_info, ModelInfoWithBinary):
+            logger.info(
+                f"New model binary available ({model_info.model_binary_id}), attemping to update model "
+                f"for {detector_id}"
+            )
+            model_buffer = get_object_using_presigned_url(model_info.model_binary_url)
+        else:
+            logger.info(f"Got a pipeline config but no model binary, attempting to update model for {detector_id}")
+            model_buffer = None
+
+        if is_oodd:
+            model_dir = os.path.join(self.MODEL_REPOSITORY, detector_id + "_oodd")
+        else:
+            model_dir = os.path.join(self.MODEL_REPOSITORY, detector_id)
+
+        save_model_to_repository(
+            model_buffer,
+            model_info,
+            model_dir,
+        )
+
 
     def escalation_cooldown_complete(self, detector_id: str) -> bool:
         """
@@ -343,6 +338,15 @@ class EdgeInferenceManager:
 
 
 def fetch_model_info(detector_id: str, api_token: Optional[str] = None) -> tuple[ModelInfoBase, ModelInfoBase]:
+    """
+    Fetch the model info for a detector from the Groundlight API at the fetch-model-urls endpoint.
+    Gets information about both the primary edge model and the OODD model.
+    Args:
+        detector_id: The ID of the detector to fetch the model info for
+        api_token: The API token to use to fetch the model info
+    Returns:
+        A tuple of two ModelInfoBase objects, one for the edge model and one for the OODD model
+    """
     if not api_token:
         raise ValueError(f"No API token provided for {detector_id=}")
 
@@ -351,7 +355,7 @@ def fetch_model_info(detector_id: str, api_token: Optional[str] = None) -> tuple
     url = f"https://api.groundlight.ai/edge-api/v1/fetch-model-urls/{detector_id}/"
     headers = {"x-api-token": api_token}
     response = requests.get(url, headers=headers, timeout=10)
-    logger.info(f"fetch-model-urls response = {response.json()}")
+    logger.debug(f"Received response from fetch-model-urls: {response.json()}")
 
     if response.status_code == status.HTTP_200_OK:
         return parse_model_info(response.json())
@@ -373,11 +377,9 @@ def get_object_using_presigned_url(presigned_url: str) -> bytes:
 
 
 def save_model_to_repository(
-    detector_id: str,
     model_buffer: Optional[bytes],
     model_info: ModelInfoBase,
-    repository_root: str,
-    is_oodd: bool = False,
+    model_dir: str,
 ) -> tuple[Optional[int], int]:
     """
     Make new version-directory for the model and save the new version of the model and pipeline config to it.
@@ -389,9 +391,6 @@ def save_model_to_repository(
                 <model-definition-files (e.g. model.buf, pipeline_config.yaml, etc)>
     ```
     """
-    model_dir = os.path.join(repository_root, detector_id)
-    if is_oodd:
-        model_dir = os.path.join(repository_root, detector_id + "_oodd")
     os.makedirs(model_dir, exist_ok=True)
 
     old_model_version = get_current_model_version(model_dir)
@@ -412,7 +411,7 @@ def save_model_to_repository(
             f.write(model_info.model_binary_id)
 
     logger.info(
-        f"Wrote new model version {new_model_version} for {detector_id}"
+        f"Wrote new model version {new_model_version} to {model_dir}"
         + (f" with model binary id {model_info.model_binary_id}" if isinstance(model_info, ModelInfoWithBinary) else "")
     )
 

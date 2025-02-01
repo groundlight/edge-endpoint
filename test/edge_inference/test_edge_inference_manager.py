@@ -68,7 +68,7 @@ class TestEdgeInferenceManager:
                     edge_manager = EdgeInferenceManager(detector_inference_configs=None)
                     edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
                     detector_id = "test_detector"
-                    edge_manager.update_model(detector_id)
+                    edge_manager.update_models_if_available(detector_id)
 
                     validate_model_directory(temp_dir, detector_id, 1, model_info_with_binary)
 
@@ -78,12 +78,12 @@ class TestEdgeInferenceManager:
                     model_info_with_binary_2.model_binary_id = "test_binary_id_2"
                     model_info_with_binary_2.model_binary_url = "test_model_binary_url_2"
                     mock_fetch.return_value = model_info_with_binary_2
-                    edge_manager.update_model(detector_id)
+                    edge_manager.update_models_if_available(detector_id)
 
                     validate_model_directory(temp_dir, detector_id, 2, model_info_with_binary_2)
 
                 with mock.patch("app.core.edge_inference.get_object_using_presigned_url") as mock_get_from_s3:
-                    edge_manager.update_model(detector_id)
+                    edge_manager.update_models_if_available(detector_id)
                     # Shouldn't pull a model from s3 if there is no new binary available
                     mock_get_from_s3.assert_not_called()
                     # Should not create a new version for the same model info
@@ -96,7 +96,7 @@ class TestEdgeInferenceManager:
                 edge_manager = EdgeInferenceManager(detector_inference_configs=None)
                 edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
                 detector_id = "test_detector"
-                edge_manager.update_model(detector_id)
+                edge_manager.update_models_if_available(detector_id)
 
                 validate_model_directory(temp_dir, detector_id, 1, model_info_no_binary)
 
@@ -104,10 +104,10 @@ class TestEdgeInferenceManager:
                 model_info_no_binary_2 = model_info_no_binary
                 model_info_no_binary_2.pipeline_config = "test_pipeline_config_2"
                 mock_fetch.return_value = model_info_no_binary_2
-                edge_manager.update_model(detector_id)
+                edge_manager.update_models_if_available(detector_id)
 
                 validate_model_directory(temp_dir, detector_id, 2, model_info_no_binary_2)
 
-                edge_manager.update_model(detector_id)
+                edge_manager.update_models_if_available(detector_id)
                 # Should not create a new version for the same pipeline config
                 assert not os.path.exists(os.path.join(temp_dir, detector_id, "3"))
