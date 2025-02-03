@@ -76,7 +76,7 @@ class InferenceDeploymentManager:
         inference_deployment = inference_deployment.replace("placeholder-inference-deployment-name", deployment_name)
         inference_deployment = inference_deployment.replace(
             "placeholder-inference-instance-name",
-            f"instance-{detector_id}-{'_oodd' if is_oodd else ''}",
+            f"instance-{detector_id}{'-oodd' if is_oodd else ''}",
         )
         inference_deployment = inference_deployment.replace(
             "placeholder-model-name", detector_id + "_oodd" if is_oodd else detector_id

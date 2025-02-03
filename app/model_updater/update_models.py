@@ -51,15 +51,15 @@ def _check_new_models_and_inference_deployments(
     edge_deployment_name = get_edge_inference_deployment_name(detector_id)
     oodd_deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd=True)
 
-    # edge_deployment = deployment_manager.get_inference_deployment(deployment_name=edge_deployment_name)
-    # oodd_deployment = deployment_manager.get_inference_deployment(deployment_name=oodd_deployment_name)
-    # if edge_deployment is None:
-    #     logger.info(f"Creating a new edge inference deployment for {detector_id}")
-    #     deployment_manager.create_inference_deployment(detector_id=detector_id)
+    edge_deployment = deployment_manager.get_inference_deployment(deployment_name=edge_deployment_name)
+    oodd_deployment = deployment_manager.get_inference_deployment(deployment_name=oodd_deployment_name)
+    if edge_deployment is None:
+        logger.info(f"Creating a new edge inference deployment for {detector_id}")
+        deployment_manager.create_inference_deployment(detector_id=detector_id)
 
-    # if oodd_deployment is None:
-    #     logger.info(f"Creating a new oodd inference deployment for {detector_id}")
-    #     deployment_manager.create_inference_deployment(detector_id=detector_id, is_oodd=True)
+    if oodd_deployment is None:
+        logger.info(f"Creating a new oodd inference deployment for {detector_id}")
+        deployment_manager.create_inference_deployment(detector_id=detector_id, is_oodd=True)
 
     if new_model:
         # Update inference deployment and rollout a new pod
