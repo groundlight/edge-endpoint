@@ -520,7 +520,7 @@ def get_edge_inference_service_name(detector_id: str, is_oodd: bool = False) -> 
     `inference-service-<detector_id>` as the service name. If the deployment/service
     is for an OODD model, we append "-oodd" to the name.
     """
-    service_name = f"inference-service"
+    service_name = "inference-service"
     if is_oodd:
         service_name += "-oodd"
     service_name += f"-{detector_id.replace('_', '-').lower()}"
