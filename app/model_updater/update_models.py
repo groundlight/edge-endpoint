@@ -71,9 +71,9 @@ def _check_new_models_and_inference_deployments(
 
         poll_start = time.time()
         while not deployment_manager.is_inference_deployment_rollout_complete(
-            detector_id, deployment_name=edge_deployment_name
+            deployment_name=edge_deployment_name
         ) or not deployment_manager.is_inference_deployment_rollout_complete(
-            detector_id, deployment_name=oodd_deployment_name
+            deployment_name=oodd_deployment_name
         ):
             time.sleep(5)
             if time.time() - poll_start > TEN_MINUTES:
@@ -87,13 +87,13 @@ def _check_new_models_and_inference_deployments(
             model_dir=os.path.join(edge_inference_manager.MODEL_REPOSITORY, detector_id), num_to_keep=2
         )
         delete_old_model_versions(
-            model_dir=os.path.join(edge_inference_manager.MODEL_REPOSITORY, detector_id, "_oodd"), num_to_keep=2
+            model_dir=os.path.join(edge_inference_manager.MODEL_REPOSITORY, detector_id + "_oodd"), num_to_keep=2
         )
 
     if deployment_manager.is_inference_deployment_rollout_complete(
-        detector_id, deployment_name=edge_deployment_name
+        deployment_name=edge_deployment_name
     ) and deployment_manager.is_inference_deployment_rollout_complete(
-        detector_id, deployment_name=oodd_deployment_name
+        deployment_name=oodd_deployment_name
     ):
         # Database transaction to update the deployment_created field for the detector_id
         # At this time, we are sure that the deployment for the detector has been successfully created and rolled out.

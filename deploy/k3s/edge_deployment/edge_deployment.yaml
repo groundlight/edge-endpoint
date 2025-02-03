@@ -41,7 +41,7 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       initContainers:
       - name: database-prep
-        image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:oodd-on-edge-726f0f3cf-dirty-d41b891787ba317
+        image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:oodd-on-edge-00fbf59ad-dirty-a6946fb5cfe5d98
         imagePullPolicy: Always
         volumeMounts:
         - name: edge-endpoint-persistent-volume

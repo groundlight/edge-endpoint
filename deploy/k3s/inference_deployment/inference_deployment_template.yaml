@@ -66,7 +66,7 @@ spec:
 
       containers:
       - name: inference-server
-        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:3601a94dd-francine-inference-server-logging
+        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:francine-inference-server-logging-3601a94dd-dirty-8f7269f65fc9b5c
         imagePullPolicy: Always
         env:
         - name: MODEL_REPOSITORY
