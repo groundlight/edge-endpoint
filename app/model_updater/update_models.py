@@ -70,9 +70,7 @@ def _check_new_models_and_inference_deployments(
         poll_start = time.time()
         while not deployment_manager.is_inference_deployment_rollout_complete(
             deployment_name=edge_deployment_name
-        ) or not deployment_manager.is_inference_deployment_rollout_complete(
-            deployment_name=oodd_deployment_name
-        ):
+        ) or not deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name):
             time.sleep(5)
             if time.time() - poll_start > TEN_MINUTES:
                 raise TimeoutError("Inference deployment is not ready within time limit")
@@ -90,9 +88,7 @@ def _check_new_models_and_inference_deployments(
 
     if deployment_manager.is_inference_deployment_rollout_complete(
         deployment_name=edge_deployment_name
-    ) and deployment_manager.is_inference_deployment_rollout_complete(
-        deployment_name=oodd_deployment_name
-    ):
+    ) and deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name):
         # Database transaction to update the deployment_created field for the detector_id
         # At this time, we are sure that the deployment for the detector has been successfully created and rolled out.
         db_manager.update_inference_deployment_record(
