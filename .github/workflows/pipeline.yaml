@@ -361,7 +361,7 @@ jobs:
 
       - name: Check that EE install succeeded
         run: |
-          uv run fab connect --patience=150
+          uv run fab connect --patience=300
           uv run fab wait-for-ee-setup
 
       - name: Wait for K8 to load everything
