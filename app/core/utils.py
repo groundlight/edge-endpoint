@@ -244,7 +244,7 @@ def parse_model_info(
             pipeline_config=fetch_model_response["oodd_pipeline_config"],
             predictor_metadata=fetch_model_response["predictor_metadata"],
         )
-    except ValidationError:
+    except (ValidationError, KeyError):
         oodd_model_info = ModelInfoNoBinary(
             pipeline_config=fetch_model_response["oodd_pipeline_config"],
             predictor_metadata=fetch_model_response["predictor_metadata"],
