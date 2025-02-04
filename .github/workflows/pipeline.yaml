@@ -387,11 +387,13 @@ jobs:
       - name: Instructions for connecting to a failed worker to debug
         if: always()
         run: |
+          EEUT_IP=$(uv run pulumi stack output eeut_private_ip)
           echo "If the tests failed, the EEUT (edge endpoint under test) is still running."
           echo "You can connect to it via ssh using the following command:"
           echo "ssh ubuntu@${EEUT_IP}"
           echo "(Assuming you have the private key and are coming from the right subnet.)"
-          echo "\nIf the machine was put to sleep and you want it back, run:"
+          echo ""
+          echo "If the machine was put to sleep and you want it back, run:"
           echo "wake-ec2 eeut-${STACK_NAME}"
           echo "In the GL_Public account."
 
