@@ -384,6 +384,17 @@ jobs:
           echo "Strong work, G4!  You did it.  Now go to sleep. The grim sweeper will visit soon."
           uv run fab shutdown-instance
 
+      - name: Instructions for connecting to a failed worker to debug
+        if: always()
+        run: |
+          echo "If the tests failed, the EEUT (edge endpoint under test) is still running."
+          echo "You can connect to it via ssh using the following command:"
+          echo "ssh ubuntu@${EEUT_IP}"
+          echo "(Assuming you have the private key and are coming from the right subnet.)"
+          echo "\nIf the machine was put to sleep and you want it back, run:"
+          echo "wake-ec2 eeut-${STACK_NAME}"
+          echo "In the GL_Public account."
+
   build-push-edge-endpoint-multiplatform:
     if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     # We only run this action if all the prior test actions succeed
