@@ -1,5 +1,8 @@
 name: cicd
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
@@ -108,11 +111,11 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v3
-      
+
       - name: Install k3s
         run: |
           ./deploy/bin/install-k3s.sh
-          
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -127,7 +130,7 @@ jobs:
           virtualenvs-create: true
           virtualenvs-in-project: true
           installer-parallel: true
-      
+
       - name: Install edge-endpoint's python dependencies
         run: |
           poetry install --no-interaction --no-root
@@ -147,11 +150,11 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v3
-      
+
       - name: Install k3s
         run: |
           ./deploy/bin/install-k3s.sh
-          
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -166,7 +169,7 @@ jobs:
           virtualenvs-create: true
           virtualenvs-in-project: true
           installer-parallel: true
-      
+
       - name: Install edge-endpoint's python dependencies
         run: |
           poetry install --no-interaction --no-root
@@ -179,7 +182,6 @@ jobs:
       - name: Run tests with k3s
         run: |
           make test-with-k3s
-
 
   # Run Groundlight SDK tests against the edge proxy endpoint
   test-sdk:
@@ -355,7 +357,7 @@ jobs:
 
       - name: Create the EEUT instance
         run: |
-          uv run pulumi up --yes 
+          uv run pulumi up --yes
 
       - name: Check that EE install succeeded
         run: |
@@ -375,10 +377,11 @@ jobs:
           uv run groundlight list-detectors
 
       - name: Thank the worker and shut down
-        if: always()
+        # if: always()
+        # Only turn it off if the tests all pass.  If not, leave the failed machine up to debug.
+        # The grim sweeper will turn it off in an hour or so.
         run: |
-          echo "Strong work, G4! Now go to sleep. The grim sweeper will visit soon."
-          # This saves money and frees up resources
+          echo "Strong work, G4!  You did it.  Now go to sleep. The grim sweeper will visit soon."
           uv run fab shutdown-instance
 
   build-push-edge-endpoint-multiplatform:
@@ -411,7 +414,7 @@ jobs:
 
   update-glhub:
     if: github.ref == 'refs/heads/main'
-    needs: 
+    needs:
       - test-general-edge-endpoint
       - validate-setup-ee
       - test-sdk
