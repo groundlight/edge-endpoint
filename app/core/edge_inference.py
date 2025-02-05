@@ -239,12 +239,15 @@ class EdgeInferenceManager:
         # fallback to env var if we don't have a token in the config
         api_token = api_token or os.environ.get("GROUNDLIGHT_API_TOKEN", None)
 
-        detector_models_dir = os.path.join(self.MODEL_REPOSITORY, detector_id)
+        detector_models_dir = get_detector_models_dir(self.MODEL_REPOSITORY, detector_id)
         edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
 
-        edge_version, oodd_version = get_current_model_versions(detector_models_dir)
-        update_primary_model = should_update(edge_model_info, detector_models_dir, edge_version)
-        update_oodd_model = should_update(oodd_model_info, detector_models_dir, oodd_version)
+        edge_version, oodd_version = get_current_model_versions(self.MODEL_REPOSITORY, detector_id)
+        primary_edge_model_dir = get_primary_edge_model_dir(detector_models_dir, detector_id)
+        oodd_model_dir = get_oodd_model_dir(detector_models_dir, detector_id)
+
+        update_primary_model = should_update(edge_model_info, primary_edge_model_dir, edge_version)
+        update_oodd_model = should_update(oodd_model_info, oodd_model_dir, oodd_version)
 
         if not update_primary_model and not update_oodd_model:
             logger.info(f"No new models available for {detector_id}")
@@ -353,13 +356,12 @@ def save_models_to_repository(
                     <model-definition-files (e.g. model.buf, pipeline_config.yaml, etc)>
     ```
     """
-    model_dir = os.path.join(repository_root, detector_id)
-    edge_model_dir = os.path.join(model_dir, "primary")
-    oodd_model_dir = os.path.join(model_dir, "oodd")
+    edge_model_dir = get_primary_edge_model_dir(repository_root, detector_id)
+    oodd_model_dir = get_oodd_model_dir(repository_root, detector_id)
     os.makedirs(edge_model_dir, exist_ok=True)
     os.makedirs(oodd_model_dir, exist_ok=True)
 
-    old_primary_model_version, old_oodd_model_version = get_current_model_versions(model_dir)
+    old_primary_model_version, old_oodd_model_version = get_current_model_versions(repository_root, detector_id)
 
     if edge_model_info:
         new_primary_model_version = 1 if old_primary_model_version is None else old_primary_model_version + 1
@@ -425,13 +427,13 @@ def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[i
     return True
 
 
-def get_current_model_versions(model_dir: str) -> tuple[Optional[int], Optional[int]]:
+def get_current_model_versions(repository_root: str, detector_id: str) -> tuple[Optional[int], Optional[int]]:
     """Edge inference server model_repositories contain model versions in subdirectories. These subdirectories
     are named with integers. This function returns the highest integer in the model repository directory.
     """
-    logger.debug(f"Checking for current model versions in {model_dir}")
-    primary_dir = os.path.join(model_dir, "primary")
-    oodd_dir = os.path.join(model_dir, "oodd")
+    logger.debug(f"Checking for current model versions for {detector_id}")
+    primary_dir = get_primary_edge_model_dir(repository_root, detector_id)
+    oodd_dir = get_oodd_model_dir(repository_root, detector_id)
 
     # If the primary or oodd directories don't exist, we'll update both models. This will happen when the edge endpoint
     # switches from the old model repository format to the new one.
@@ -513,19 +515,19 @@ def create_file_from_template(template_values: dict, destination: str, template:
 
 def delete_old_model_versions(detector_id: str, repository_root: str, num_to_keep: int = 2) -> None:
     """Recursively delete all but the latest model versions"""
-    model_dir = os.path.join(repository_root, detector_id)
-    primary_model_dir = os.path.join(model_dir, "primary")
-    oodd_model_dir = os.path.join(model_dir, "oodd")
+    detector_models_dir = get_detector_models_dir(repository_root, detector_id)
+    primary_edge_model_dir = get_primary_edge_model_dir(repository_root, detector_id)
+    oodd_model_dir = get_oodd_model_dir(repository_root, detector_id)
 
     # We will delete all model versions in the old model repository format
-    old_dir_model_versions = get_all_model_versions(model_dir)
+    old_dir_model_versions = get_all_model_versions(detector_models_dir)
     if len(old_dir_model_versions) > 0:
         logger.info(f"Deleting all model versions in the old model repository format for {detector_id}")
         for v in old_dir_model_versions:
             delete_model_version(detector_id, v, repository_root)
 
     # We will also delete all but the latest num_to_keep model versions in the new model repository format
-    primary_model_versions = get_all_model_versions(primary_model_dir)
+    primary_model_versions = get_all_model_versions(primary_edge_model_dir)
     oodd_model_versions = get_all_model_versions(oodd_model_dir)
     primary_model_versions = sorted(primary_model_versions)
     oodd_model_versions = sorted(oodd_model_versions)
@@ -535,7 +537,7 @@ def delete_old_model_versions(detector_id: str, repository_root: str, num_to_kee
     
     logger.info(f"Deleting {len(primary_versions_to_delete)} old primary edge model version(s) for {detector_id}")
     for v in primary_versions_to_delete:
-        delete_model_version(primary_model_dir, v)
+        delete_model_version(primary_edge_model_dir, v)
     logger.info(f"Deleting {len(oodd_versions_to_delete)} old OODD model version(s) for {detector_id}")
     for v in oodd_versions_to_delete:
         delete_model_version(oodd_model_dir, v)
@@ -561,3 +563,12 @@ def get_edge_inference_service_name(detector_id: str) -> str:
 
 def get_edge_inference_deployment_name(detector_id: str) -> str:
     return f"inferencemodel-{detector_id.replace('_', '-').lower()}"
+
+def get_detector_models_dir(repository_root: str, detector_id: str) -> str:
+    return os.path.join(repository_root, detector_id)
+
+def get_primary_edge_model_dir(repository_root: str, detector_id: str) -> str:
+    return os.path.join(get_detector_models_dir(repository_root, detector_id), "primary")
+
+def get_oodd_model_dir(repository_root: str, detector_id: str) -> str:
+    return os.path.join(get_detector_models_dir(repository_root, detector_id), "oodd")
