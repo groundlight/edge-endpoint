@@ -105,7 +105,7 @@ class TestEdgeInferenceManager:
                     edge_manager.update_models_if_available(detector_id)
 
                     validate_model_directory(temp_dir, detector_id, 1, edge_model_info_with_binary)
-                    validate_model_directory(temp_dir, detector_id, 1, oodd_model_info_with_binary)
+                    validate_model_directory(temp_dir, detector_id, 1, oodd_model_info_with_binary, is_oodd=True)
 
                     # Should create a new version for new model info
                     mock_get_from_s3.return_value = b"test_model_2"
@@ -119,7 +119,7 @@ class TestEdgeInferenceManager:
                     edge_manager.update_models_if_available(detector_id)
 
                     validate_model_directory(temp_dir, detector_id, 2, edge_model_info_with_binary_2)
-                    validate_model_directory(temp_dir, detector_id, 2, oodd_model_info_with_binary_2)
+                    validate_model_directory(temp_dir, detector_id, 2, oodd_model_info_with_binary_2, is_oodd=True)
 
                 with mock.patch("app.core.edge_inference.get_object_using_presigned_url") as mock_get_from_s3:
                     edge_manager.update_models_if_available(detector_id)
