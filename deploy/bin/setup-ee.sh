@@ -161,6 +161,12 @@ if [[ "${DEPLOY_LOCAL_VERSION}" == "1" ]]; then
     apply_yaml deploy/k3s/local_persistent_volume.yaml
     echo $PERSISTENT_VOLUME_NAME
 
+    # TODO: integrate this...
+    # Use envsubst to replace the PERSISTENT_VOLUME_NAME, PERSISTENT_VOLUME_NAME in the local_persistent_volume.yaml template
+    #envsubst < deploy/k3s/local_persistent_volume.yaml > deploy/k3s/local_persistentvolume.yaml
+    #$K apply -f deploy/k3s/local_persistentvolume.yaml
+    #rm deploy/k3s/local_persistentvolume.yaml
+
 else
     # If environment variable EFS_VOLUME_ID is not set, exit
     if [[ -z "${EFS_VOLUME_ID}" ]]; then

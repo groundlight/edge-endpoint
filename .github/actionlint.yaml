@@ -1,6 +1,7 @@
 self-hosted-runner:
   # Labels of self-hosted runner in array of strings.
-  labels: []
+  # this isn't a self hosted runner but it's a special enterprise big runner
+  labels: ["ubuntu-22.04-8core"]
 
 # Configuration variables in array of strings defined in your repository or
 # organization. `null` means disabling configuration variables check.
