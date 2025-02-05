@@ -121,11 +121,16 @@ class TestParseModelInfo:
             "predictor_metadata": "test_metadata",
             "model_binary_id": "test_binary_id",
             "model_binary_url": "test_binary_url",
+            "oodd_pipeline_config": "test_oodd_pipeline_config",
+            "oodd_model_binary_id": "test_oodd_binary_id",
+            "oodd_model_binary_url": "test_oodd_binary_url",
         }
-        model_info = parse_model_info(model_info)
+        primary_edge_model_info, oodd_model_info = parse_model_info(model_info)
 
-        assert isinstance(model_info, ModelInfoBase)
-        assert isinstance(model_info, ModelInfoWithBinary)
+        assert isinstance(primary_edge_model_info, ModelInfoBase)
+        assert isinstance(primary_edge_model_info, ModelInfoWithBinary)
+        assert isinstance(oodd_model_info, ModelInfoBase)
+        assert isinstance(oodd_model_info, ModelInfoWithBinary)
 
     def test_parse_no_binary(self):
         model_info = {
@@ -133,15 +138,55 @@ class TestParseModelInfo:
             "predictor_metadata": "test_metadata",
             "model_binary_id": None,
             "model_binary_url": None,
+            "oodd_pipeline_config": "test_oodd_pipeline_config",
+            "oodd_model_binary_id": None,
+            "oodd_model_binary_url": None,
         }
-        model_info = parse_model_info(model_info)
-        assert isinstance(model_info, ModelInfoBase)
-        assert isinstance(model_info, ModelInfoNoBinary)
+        primary_edge_model_info, oodd_model_info = parse_model_info(model_info)
+
+        assert isinstance(primary_edge_model_info, ModelInfoBase)
+        assert isinstance(primary_edge_model_info, ModelInfoNoBinary)
+        assert isinstance(oodd_model_info, ModelInfoBase)
+        assert isinstance(oodd_model_info, ModelInfoNoBinary)
 
         model_info = {
             "pipeline_config": "test_pipeline_config",
             "predictor_metadata": "test_metadata",
+            "oodd_pipeline_config": "test_oodd_pipeline_config",
         }
-        model_info = parse_model_info(model_info)
-        assert isinstance(model_info, ModelInfoBase)
-        assert isinstance(model_info, ModelInfoNoBinary)
+        primary_edge_model_info, oodd_model_info = parse_model_info(model_info)
+
+        assert isinstance(primary_edge_model_info, ModelInfoBase)
+        assert isinstance(primary_edge_model_info, ModelInfoNoBinary)
+        assert isinstance(oodd_model_info, ModelInfoBase)
+        assert isinstance(oodd_model_info, ModelInfoNoBinary)
+
+    def test_parse_one_binary(self):
+        model_info = {
+            "pipeline_config": "test_pipeline_config",
+            "predictor_metadata": "test_metadata",
+            "model_binary_id": "test_binary_id",
+            "model_binary_url": "test_binary_url",
+            "oodd_pipeline_config": "test_oodd_pipeline_config",
+        }
+        primary_edge_model_info, oodd_model_info = parse_model_info(model_info)
+
+        assert isinstance(primary_edge_model_info, ModelInfoBase)
+        assert isinstance(primary_edge_model_info, ModelInfoWithBinary)
+        assert isinstance(oodd_model_info, ModelInfoBase)
+        assert isinstance(oodd_model_info, ModelInfoNoBinary)
+
+        model_info = {
+            "pipeline_config": "test_pipeline_config",
+            "predictor_metadata": "test_metadata",
+            "oodd_pipeline_config": "test_oodd_pipeline_config",
+            "oodd_model_binary_id": "test_oodd_binary_id",
+            "oodd_model_binary_url": "test_oodd_binary_url",
+        }
+        primary_edge_model_info, oodd_model_info = parse_model_info(model_info)
+
+        assert isinstance(primary_edge_model_info, ModelInfoBase)
+        assert isinstance(primary_edge_model_info, ModelInfoNoBinary)
+        assert isinstance(oodd_model_info, ModelInfoBase)
+        assert isinstance(oodd_model_info, ModelInfoWithBinary)
+
