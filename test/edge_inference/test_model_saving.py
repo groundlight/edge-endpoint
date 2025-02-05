@@ -2,7 +2,7 @@ import os
 import tempfile
 from test.edge_inference.test_edge_inference_manager import validate_model_directory
 
-from app.core.edge_inference import delete_model_version, save_model_to_repository, should_update
+from app.core.edge_inference import delete_model_version, save_models_to_repository, should_update
 from app.core.utils import parse_model_info
 
 
@@ -17,7 +17,7 @@ def test_save_model_with_binary_to_repository():
             "model_binary_url": "test_binary_url",
         }
         model_info = parse_model_info(model_info)
-        save_model_to_repository(
+        save_models_to_repository(
             detector_id=detector_id,
             model_buffer=b"test_model1",
             model_info=model_info,
@@ -35,7 +35,7 @@ def test_save_model_with_binary_to_repository():
         }
         model_info = parse_model_info(model_info)
         assert should_update(model_info, os.path.join(temp_dir, detector_id), 1)
-        save_model_to_repository(
+        save_models_to_repository(
             detector_id=detector_id,
             model_buffer=b"test_model2",
             model_info=model_info,
@@ -65,7 +65,7 @@ def test_save_model_with_no_binary_to_repository():
             "model_binary_url": None,
         }
         model_info = parse_model_info(model_info)
-        save_model_to_repository(
+        save_models_to_repository(
             detector_id=detector_id,
             model_buffer=None,
             model_info=model_info,
@@ -85,7 +85,7 @@ def test_save_model_with_no_binary_to_repository():
         model_info = parse_model_info(model_info)
         detector_dir = os.path.join(temp_dir, detector_id)
         assert should_update(model_info, detector_dir, 1)
-        save_model_to_repository(
+        save_models_to_repository(
             detector_id=detector_id,
             model_buffer=None,
             model_info=model_info,

@@ -226,13 +226,29 @@ class ModelInfoWithBinary(ModelInfoBase):
         protected_namespaces = ()  # Disables protection for all namespaces, since model_ is protected by default
 
 
-# Function to parse the response
 def parse_model_info(
     fetch_model_response: dict[str, str],
-) -> ModelInfoNoBinary | ModelInfoWithBinary:
+) -> tuple[ModelInfoBase, ModelInfoBase]:
+    """
+    Parse the response from the fetch model urls endpoint. Attempt to parse both the edge and oodd models
+    with their ML binaries, and fall back to no binary cases if that fails.
+    """
     try:
-        # Attempt to parse as FetchModelResponseWithMLBinary
-        return ModelInfoWithBinary(**fetch_model_response)
+        edge_model_info = ModelInfoWithBinary(**fetch_model_response)
     except ValidationError:
-        # Fall back to FetchModelResponseNoMLBinary
-        return ModelInfoNoBinary(**fetch_model_response)
+        edge_model_info = ModelInfoNoBinary(**fetch_model_response)
+
+    try:
+        oodd_model_info = ModelInfoWithBinary(
+            model_binary_id=fetch_model_response["oodd_model_binary_id"],
+            model_binary_url=fetch_model_response["oodd_model_binary_url"],
+            pipeline_config=fetch_model_response["oodd_pipeline_config"],
+            predictor_metadata=fetch_model_response["predictor_metadata"],
+        )
+    except (ValidationError, KeyError):
+        oodd_model_info = ModelInfoNoBinary(
+            pipeline_config=fetch_model_response["oodd_pipeline_config"],
+            predictor_metadata=fetch_model_response["predictor_metadata"],
+        )
+
+    return edge_model_info, oodd_model_info
