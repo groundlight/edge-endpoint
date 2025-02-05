@@ -134,7 +134,7 @@ $K create configmap setup-db --from-file=$(pwd)/deploy/bin/setup_db.sh -n ${DEPL
 # Clean up existing deployments and services (if they exist)
 $K delete --ignore-not-found deployment edge-endpoint
 $K delete --ignore-not-found service edge-endpoint-service
-$K delete --ignore-not-found deployment warmup-inference-model
+$K delete --ignore-not-found job warmup-inference-model
 $K get deployments -o custom-columns=":metadata.name" --no-headers=true | \
     grep "inferencemodel" | \
     xargs -I {} $K delete deployments {}
