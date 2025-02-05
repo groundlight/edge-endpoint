@@ -193,7 +193,7 @@ class TestParseModelInfo:
         }
 
         edge_model_info, oodd_model_info = parse_model_info(model_info)
-        
+
         assert isinstance(edge_model_info, ModelInfoBase)
         assert isinstance(edge_model_info, ModelInfoNoBinary)
         assert isinstance(oodd_model_info, ModelInfoBase)
