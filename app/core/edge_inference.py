@@ -426,13 +426,8 @@ def get_current_model_versions(model_dir: str) -> tuple[Optional[int], Optional[
     primary_dir = os.path.join(model_dir, "primary")
     oodd_dir = os.path.join(model_dir, "oodd")
 
-    # If the primary or oodd directories don't exist, we need to check the model_dir for the latest version of the
-    # primary model. The OODD model does not exist in the old model repository format.
-    if not os.path.exists(primary_dir) or not os.path.exists(oodd_dir):
-        model_versions = get_all_model_versions(model_dir)
-        current_version = max(model_versions) if len(model_versions) > 0 else None
-        return current_version, None
-
+    # If the primary or oodd directories don't exist, we'll update both models. This will happen when the edge endpoint
+    # switches from the old model repository format to the new one.
     primary_version = None
     oodd_version = None
 
@@ -508,20 +503,37 @@ def create_file_from_template(template_values: dict, destination: str, template:
 def delete_old_model_versions(detector_id: str, repository_root: str, num_to_keep: int = 2) -> None:
     """Recursively delete all but the latest model versions"""
     model_dir = os.path.join(repository_root, detector_id)
-    model_versions = get_all_model_versions(model_dir)
-    model_versions = sorted(model_versions)
-    if len(model_versions) < num_to_keep:
-        return
-    versions_to_delete = model_versions[:-num_to_keep]  # all except the last num_to_keep
-    logger.info(f"Deleting {len(versions_to_delete)} old model version(s) for {detector_id}")
-    for v in versions_to_delete:
-        delete_model_version(detector_id, v, repository_root)
+    primary_model_dir = os.path.join(model_dir, "primary")
+    oodd_model_dir = os.path.join(model_dir, "oodd")
+
+    # We will delete all model versions in the old model repository format
+    old_dir_model_versions = get_all_model_versions(model_dir)
+    if len(old_dir_model_versions) > 0:
+        logger.info(f"Deleting all model versions in the old model repository format for {detector_id}")
+        for v in old_dir_model_versions:
+            delete_model_version(detector_id, v, repository_root)
+
+    # We will also delete all but the latest num_to_keep model versions in the new model repository format
+    primary_model_versions = get_all_model_versions(primary_model_dir)
+    oodd_model_versions = get_all_model_versions(oodd_model_dir)
+    primary_model_versions = sorted(primary_model_versions)
+    oodd_model_versions = sorted(oodd_model_versions)
+
+    primary_versions_to_delete = primary_model_versions[:-num_to_keep] if len(primary_model_versions) > num_to_keep else []
+    oodd_versions_to_delete = oodd_model_versions[:-num_to_keep] if len(oodd_model_versions) > num_to_keep else []
+    
+    logger.info(f"Deleting {len(primary_versions_to_delete)} old primary edge model version(s) for {detector_id}")
+    for v in primary_versions_to_delete:
+        delete_model_version(primary_model_dir, v)
+    logger.info(f"Deleting {len(oodd_versions_to_delete)} old OODD model version(s) for {detector_id}")
+    for v in oodd_versions_to_delete:
+        delete_model_version(oodd_model_dir, v)
 
 
-def delete_model_version(detector_id: str, model_version: int, repository_root: str) -> None:
-    """Recursively delete directory detector_id/model_version"""
-    model_version_dir = os.path.join(repository_root, detector_id, str(model_version))
-    logger.info(f"Deleting model version {model_version} for {detector_id}")
+def delete_model_version(model_dir: str, model_version: int) -> None:
+    """Recursively delete directory model_dir/model_version"""
+    model_version_dir = os.path.join(model_dir, str(model_version))
+    logger.info(f"Deleting model version {model_version} for {model_dir}")
     if os.path.exists(model_version_dir):
         shutil.rmtree(model_version_dir)
 

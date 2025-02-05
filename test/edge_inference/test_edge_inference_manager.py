@@ -42,6 +42,9 @@ def model_info_with_binary() -> ModelInfoWithBinary:
         "predictor_metadata": test_predictor_metadata,
         "model_binary_id": "test_binary_id",
         "model_binary_url": "test_model_binary_url",
+        "oodd_pipeline_config": "test_oodd_pipeline_config",
+        "oodd_model_binary_id": "test_oodd_binary_id",
+        "oodd_model_binary_url": "test_oodd_model_binary_url",
     }
     return ModelInfoWithBinary(**model_info)
 
@@ -54,6 +57,9 @@ def model_info_no_binary() -> ModelInfoNoBinary:
         "predictor_metadata": test_predictor_metadata,
         "model_binary_id": None,
         "model_binary_url": None,
+        "oodd_pipeline_config": "test_oodd_pipeline_config",
+        "oodd_model_binary_id": None,
+        "oodd_model_binary_url": None,
     }
     return ModelInfoNoBinary(**model_info)
 
