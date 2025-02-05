@@ -303,17 +303,17 @@ def fetch_model_info(detector_id: str, api_token: Optional[str] = None) -> tuple
 
         raise HTTPException(status_code=response.status_code, detail=exception_string)
 
+
 def get_model_buffer(model_info: ModelInfoBase) -> bytes | None:
     if isinstance(model_info, ModelInfoWithBinary):
-        logger.info(
-            f"New model binary available ({model_info.model_binary_id}), attemping to update model."    
-        )
+        logger.info(f"New model binary available ({model_info.model_binary_id}), attemping to update model.")
         model_buffer = get_object_using_presigned_url(model_info.model_binary_url)
     else:
-        logger.info(f"Got a pipeline config but no model binary, attempting to update model.")
+        logger.info("Got a pipeline config but no model binary, attempting to update model.")
         model_buffer = None
-    
+
     return model_buffer
+
 
 def get_object_using_presigned_url(presigned_url: str) -> bytes:
     response = requests.get(presigned_url, timeout=10)
@@ -377,7 +377,9 @@ def save_models_to_repository(
     return old_primary_model_version, new_primary_model_version
 
 
-def save_model_to_repository(model_buffer: bytes, model_info: ModelInfoBase, model_dir: str, model_version: int) -> None:
+def save_model_to_repository(
+    model_buffer: bytes, model_info: ModelInfoBase, model_dir: str, model_version: int
+) -> None:
     model_version_dir = os.path.join(model_dir, str(model_version))
     os.makedirs(model_version_dir, exist_ok=True)
 
@@ -397,6 +399,7 @@ def save_model_to_repository(model_buffer: bytes, model_info: ModelInfoBase, mod
         + (f" with model binary id {model_info.model_binary_id}" if isinstance(model_info, ModelInfoWithBinary) else "")
     )
 
+
 def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[int]) -> bool:
     """Determines if the model needs to be updated based on the received and current model info."""
     if version is None:
@@ -406,15 +409,19 @@ def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[i
     if isinstance(model_info, ModelInfoWithBinary):
         edge_binary_ksuid = get_current_model_ksuid(model_dir, version)
         if edge_binary_ksuid and model_info.model_binary_id == edge_binary_ksuid:
-            logger.info(f"The edge binary is the same as the cloud binary, so we don't need to update the model.")
+            logger.info("The edge binary is the same as the cloud binary, so we don't need to update the model.")
             return False
     else:
         current_pipeline_config = get_current_pipeline_config(model_dir, version)
         if current_pipeline_config and current_pipeline_config == yaml.safe_load(model_info.pipeline_config):
-            logger.info(f"The current pipeline_config is the same as the received pipeline_config and we have no model binary, so we don't need to update the model.")
+            logger.info(
+                "The current pipeline_config is the same as the received pipeline_config and we have no model binary, so we don't need to update the model."
+            )
             return False
 
-    logger.info(f"The model in {model_dir} needs to be updated, the current edge model is different from the cloud model.")
+    logger.info(
+        f"The model in {model_dir} needs to be updated, the current edge model is different from the cloud model."
+    )
     return True
 
 
@@ -455,7 +462,11 @@ def get_all_model_versions(model_dir: str) -> list:
         return []
     # explicitly exclude primary and oodd directories so we can search for the latest version in the old or new model
     # repository format
-    model_versions = [int(d) for d in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, d)) and not d.startswith("primary") and not d.startswith("oodd")]
+    model_versions = [
+        int(d)
+        for d in os.listdir(model_dir)
+        if os.path.isdir(os.path.join(model_dir, d)) and not d.startswith("primary") and not d.startswith("oodd")
+    ]
     return model_versions
 
 
