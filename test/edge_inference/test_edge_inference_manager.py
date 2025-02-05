@@ -8,13 +8,17 @@ from app.core.edge_inference import EdgeInferenceManager
 from app.core.utils import ModelInfoBase, ModelInfoNoBinary, ModelInfoWithBinary
 
 
-def validate_model_directory(base_dir: str, detector_id: str, version: int, model_info: ModelInfoBase, is_oodd: bool = False):
+def validate_model_directory(
+    base_dir: str, detector_id: str, version: int, model_info: ModelInfoBase, is_oodd: bool = False
+):
     """Helper function to validate the structure and contents of a model directory."""
     version_str = str(version)
     model_dir = os.path.join(base_dir, detector_id + ("_oodd" if is_oodd else ""), version_str)
 
     # Validate structure and always-present files
-    assert os.path.exists(os.path.join(base_dir, detector_id + ("_oodd" if is_oodd else ""))), f"Model directory {os.path.join(base_dir, detector_id + ('_oodd' if is_oodd else ''))} does not exist"
+    assert os.path.exists(
+        os.path.join(base_dir, detector_id + ("_oodd" if is_oodd else ""))
+    ), f"Model directory {os.path.join(base_dir, detector_id + ('_oodd' if is_oodd else ''))} does not exist"
     assert os.path.exists(model_dir), f"Model directory {model_dir} does not exist"
     assert os.path.exists(os.path.join(model_dir, "pipeline_config.yaml"))
     assert os.path.exists(os.path.join(model_dir, "predictor_metadata.json"))
