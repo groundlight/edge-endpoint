@@ -242,42 +242,20 @@ class EdgeInferenceManager:
         detector_models_dir = os.path.join(self.MODEL_REPOSITORY, detector_id)
         edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
 
-        # TODO: reduce repetition here
         edge_version, oodd_version = get_current_model_versions(detector_models_dir)
-        if edge_version is None:
-            logger.info(f"No current primary edge model version found in {detector_models_dir}")
-        elif not should_update(edge_model_info, detector_models_dir, edge_version):
-            logger.info(f"No new primary edge model available for {detector_id}")
+        update_primary_model = should_update(edge_model_info, detector_models_dir, edge_version)
+        update_oodd_model = should_update(oodd_model_info, detector_models_dir, oodd_version)
+
+        if not update_primary_model and not update_oodd_model:
+            logger.info(f"No new models available for {detector_id}")
             return False
-
-        if oodd_version is None:
-            logger.info(f"No current OODD model version found in {detector_models_dir}")
-        elif not should_update(oodd_model_info, detector_models_dir, oodd_version):
-            logger.info(f"No new OODD model available for {detector_id}")
-            return False
-
-        if isinstance(edge_model_info, ModelInfoWithBinary):
-            logger.info(
-                f"New primary edge model binary available ({edge_model_info.model_binary_id}), attemping to update model "
-                f"for {detector_id}"
-            )
-            edge_model_buffer = get_object_using_presigned_url(edge_model_info.model_binary_url)
-        else:
-            logger.info(f"Got a pipeline config but no model binary, attempting to update model for {detector_id}")
-            edge_model_buffer = None
-
-        if isinstance(oodd_model_info, ModelInfoWithBinary):
-            oodd_model_buffer = get_object_using_presigned_url(oodd_model_info.model_binary_url)
-        else:
-            logger.info(f"Got a pipeline config but no model binary, attempting to update model for {detector_id}")
-            oodd_model_buffer = None
 
         save_models_to_repository(
-            detector_id,
-            edge_model_buffer,
-            edge_model_info,
-            oodd_model_buffer,
-            oodd_model_info,
+            detector_id=detector_id,
+            edge_model_buffer=get_model_buffer(edge_model_info) if update_primary_model else None,
+            edge_model_info=edge_model_info if update_primary_model else None,
+            oodd_model_buffer=get_model_buffer(oodd_model_info) if update_oodd_model else None,
+            oodd_model_info=oodd_model_info if update_oodd_model else None,
             repository_root=self.MODEL_REPOSITORY,
         )
         return True
@@ -325,6 +303,17 @@ def fetch_model_info(detector_id: str, api_token: Optional[str] = None) -> tuple
 
         raise HTTPException(status_code=response.status_code, detail=exception_string)
 
+def get_model_buffer(model_info: ModelInfoBase) -> bytes | None:
+    if isinstance(model_info, ModelInfoWithBinary):
+        logger.info(
+            f"New model binary available ({model_info.model_binary_id}), attemping to update model."    
+        )
+        model_buffer = get_object_using_presigned_url(model_info.model_binary_url)
+    else:
+        logger.info(f"Got a pipeline config but no model binary, attempting to update model.")
+        model_buffer = None
+    
+    return model_buffer
 
 def get_object_using_presigned_url(presigned_url: str) -> bytes:
     response = requests.get(presigned_url, timeout=10)
@@ -367,15 +356,16 @@ def save_models_to_repository(
     model_dir = os.path.join(repository_root, detector_id)
     edge_model_dir = os.path.join(model_dir, "primary")
     oodd_model_dir = os.path.join(model_dir, "oodd")
-    os.makedirs(model_dir, exist_ok=True)
     os.makedirs(edge_model_dir, exist_ok=True)
     os.makedirs(oodd_model_dir, exist_ok=True)
 
     old_primary_model_version, old_oodd_model_version = get_current_model_versions(model_dir)
+
     if edge_model_info:
         new_primary_model_version = 1 if old_primary_model_version is None else old_primary_model_version + 1
     else:
         new_primary_model_version = old_primary_model_version
+
     if oodd_model_info:
         new_oodd_model_version = 1 if old_oodd_model_version is None else old_oodd_model_version + 1
     else:
@@ -403,24 +393,28 @@ def save_model_to_repository(model_buffer: bytes, model_info: ModelInfoBase, mod
             f.write(model_info.model_binary_id)
 
     logger.info(
-        f"Wrote new model version {model_version} for {detector_id}"
+        f"Wrote new model version {model_version} to {model_dir}"
         + (f" with model binary id {model_info.model_binary_id}" if isinstance(model_info, ModelInfoWithBinary) else "")
     )
 
-def should_update(model_info: ModelInfoBase, model_dir: str, version: int) -> bool:
+def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[int]) -> bool:
     """Determines if the model needs to be updated based on the received and current model info."""
+    if version is None:
+        logger.info(f"No current model version found in {model_dir}, updating model")
+        return True
+
     if isinstance(model_info, ModelInfoWithBinary):
         edge_binary_ksuid = get_current_model_ksuid(model_dir, version)
         if edge_binary_ksuid and model_info.model_binary_id == edge_binary_ksuid:
-            # The edge binary is the same as the cloud binary, so we don't need to update the model.
+            logger.info(f"The edge binary is the same as the cloud binary, so we don't need to update the model.")
             return False
     else:
         current_pipeline_config = get_current_pipeline_config(model_dir, version)
         if current_pipeline_config and current_pipeline_config == yaml.safe_load(model_info.pipeline_config):
-            # There is no saved binary and the current pipeline_config is the same as the received
-            # pipeline_config, so we don't need to update the model.
+            logger.info(f"The current pipeline_config is the same as the received pipeline_config and we have no model binary, so we don't need to update the model.")
             return False
 
+    logger.info(f"The model in {model_dir} needs to be updated, the current edge model is different from the cloud model.")
     return True
 
 
@@ -428,7 +422,7 @@ def get_current_model_versions(model_dir: str) -> tuple[Optional[int], Optional[
     """Edge inference server model_repositories contain model versions in subdirectories. These subdirectories
     are named with integers. This function returns the highest integer in the model repository directory.
     """
-    logger.debug(f"Checking for current model version in {model_dir}")
+    logger.debug(f"Checking for current model versions in {model_dir}")
     primary_dir = os.path.join(model_dir, "primary")
     oodd_dir = os.path.join(model_dir, "oodd")
 
@@ -459,6 +453,8 @@ def get_all_model_versions(model_dir: str) -> list:
     """
     if not os.path.exists(model_dir):
         return []
+    # explicitly exclude primary and oodd directories so we can search for the latest version in the old or new model
+    # repository format
     model_versions = [int(d) for d in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, d)) and not d.startswith("primary") and not d.startswith("oodd")]
     return model_versions
 
