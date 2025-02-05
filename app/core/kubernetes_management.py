@@ -172,7 +172,7 @@ class InferenceDeploymentManager:
         # Set the correct model name for this inference deployment
         for env_var in deployment.spec.template.spec.containers[0].env:
             if env_var.name == "MODEL_NAME":
-                env_var.value = detector_id
+                env_var.value = os.path.join(detector_id, "primary")
                 break
 
         logger.info(f"Patching an existing inference deployment: {deployment_name}")
