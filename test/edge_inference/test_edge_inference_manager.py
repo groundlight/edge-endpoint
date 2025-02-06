@@ -129,25 +129,30 @@ class TestEdgeInferenceManager:
                     assert not os.path.exists(os.path.join(temp_dir, detector_id, "primary", "3"))
                     assert not os.path.exists(os.path.join(temp_dir, detector_id, "oodd", "3"))
 
-    def test_update_model_no_binary(self, model_info_no_binary):
+    def test_update_model_no_binary(self, edge_model_info_no_binary, oodd_model_info_no_binary):
         with tempfile.TemporaryDirectory() as temp_dir:
             with mock.patch("app.core.edge_inference.fetch_model_info") as mock_fetch:
-                mock_fetch.return_value = model_info_no_binary
+                mock_fetch.return_value = (edge_model_info_no_binary, oodd_model_info_no_binary)
                 edge_manager = EdgeInferenceManager(detector_inference_configs=None)
                 edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
                 detector_id = "test_detector"
                 edge_manager.update_models_if_available(detector_id)
 
-                validate_model_directory(temp_dir, detector_id, 1, model_info_no_binary)
+                validate_model_directory(temp_dir, detector_id, 1, edge_model_info_no_binary)
+                validate_model_directory(temp_dir, detector_id, 1, oodd_model_info_no_binary, is_oodd=True)
 
                 # Should create a new version for new pipeline config
-                model_info_no_binary_2 = model_info_no_binary
-                model_info_no_binary_2.pipeline_config = "test_pipeline_config_2"
-                mock_fetch.return_value = model_info_no_binary_2
+                edge_model_info_no_binary_2 = edge_model_info_no_binary
+                edge_model_info_no_binary_2.pipeline_config = "test_pipeline_config_2"
+                oodd_model_info_no_binary_2 = oodd_model_info_no_binary
+                oodd_model_info_no_binary_2.pipeline_config = "test_oodd_pipeline_config_2"
+                mock_fetch.return_value = (edge_model_info_no_binary_2, oodd_model_info_no_binary_2)
                 edge_manager.update_models_if_available(detector_id)
 
-                validate_model_directory(temp_dir, detector_id, 2, model_info_no_binary_2)
+                validate_model_directory(temp_dir, detector_id, 2, edge_model_info_no_binary_2)
+                validate_model_directory(temp_dir, detector_id, 2, oodd_model_info_no_binary_2, is_oodd=True)
 
                 edge_manager.update_models_if_available(detector_id)
                 # Should not create a new version for the same pipeline config
-                assert not os.path.exists(os.path.join(temp_dir, detector_id, "3"))
+                assert not os.path.exists(os.path.join(temp_dir, detector_id, "primary", "3"))
+                assert not os.path.exists(os.path.join(temp_dir, detector_id, "oodd", "3"))
