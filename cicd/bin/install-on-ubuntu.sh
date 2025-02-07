@@ -66,7 +66,7 @@ SPECIFIC_COMMIT="__EE_COMMIT_HASH__"
 if [ -n "$SPECIFIC_COMMIT" ]; then
     # See if the string got substituted.  Note can't compare to the whole thing
     # because that would be substituted too!
-    if [ "${SPECIFIC_COMMIT:0:10}" != "__EE_COMMIT" ]; then
+    if [ "${SPECIFIC_COMMIT:0:11}" != "__EE_COMMIT" ]; then
         echo "Checking out commit ${SPECIFIC_COMMIT}"
         git checkout ${SPECIFIC_COMMIT}
     else

@@ -1,3 +1,5 @@
+# This Dockerfile is used to build the edge-endpoint container image.
+
 # Build args
 ARG NGINX_PORT=30101
 ARG NGINX_PORT_OLD=6717
@@ -27,12 +29,23 @@ RUN apt-get update && \
     bash \
     curl \
     nginx \
+    less \
+    unzip \
     libglib2.0-0 \
     libgl1-mesa-glx \
     sqlite3 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
-    curl -sSL https://install.python-poetry.org | python -
+    curl -sSL https://install.python-poetry.org | python - && \
+    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
+    install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl && \
+    rm kubectl
+
+RUN cd /tmp && \
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    ./aws/install --update && \
+    rm -rf awscliv2.zip aws
 
 # Set Python and Poetry ENV vars
 ENV PYTHONUNBUFFERED=1 \
@@ -81,6 +94,7 @@ WORKDIR ${APP_ROOT}
 
 # Copy the remaining files
 COPY /app ${APP_ROOT}/app/
+COPY /deploy ${APP_ROOT}/deploy/
 
 COPY --from=production-dependencies-build-stage ${APP_ROOT}/configs/nginx.conf /etc/nginx/nginx.conf
 
