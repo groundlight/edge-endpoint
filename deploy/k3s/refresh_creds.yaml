@@ -1,0 +1,37 @@
+# Cron job to refresh our local credentials
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: refresh-creds
+spec:
+  schedule: "0 */2 * * *"  # Every 2 hours
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      template:
+        metadata:
+          labels:
+            app: refresh_creds
+        spec:
+          serviceAccountName: edge-endpoint-service-account
+          containers:
+          - name: ecr
+            image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${IMAGE_TAG}
+            command: [
+              "/bin/sh",
+              "-c",
+              "/groundlight-edge/deploy/bin/refresh-ecr-login.sh"
+              ]
+            env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: aws_access_key_id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: aws_secret_access_key
+            
+          restartPolicy: OnFailure
