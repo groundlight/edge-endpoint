@@ -333,7 +333,7 @@ def save_models_to_repository(
     oodd_model_buffer: Optional[bytes],
     oodd_model_info: Optional[ModelInfoBase],
     repository_root: str,
-) -> tuple[Optional[int], int]:
+) -> None:
     """
     Make new version-directory for the model and save the new version of the model and pipeline config to it.
     Old model repository directory structure:
@@ -373,10 +373,10 @@ def save_models_to_repository(
     else:
         new_oodd_model_version = old_oodd_model_version
 
-    save_model_to_repository(edge_model_buffer, edge_model_info, edge_model_dir, new_primary_model_version)
-    save_model_to_repository(oodd_model_buffer, oodd_model_info, oodd_model_dir, new_oodd_model_version)
-
-    return old_primary_model_version, new_primary_model_version
+    if edge_model_info:
+        save_model_to_repository(edge_model_buffer, edge_model_info, edge_model_dir, new_primary_model_version)
+    if oodd_model_info:
+        save_model_to_repository(oodd_model_buffer, oodd_model_info, oodd_model_dir, new_oodd_model_version)
 
 
 def save_model_to_repository(
@@ -525,8 +525,9 @@ def delete_old_model_versions(detector_id: str, repository_root: str, num_to_kee
     old_dir_model_versions = get_all_model_versions(detector_models_dir)
     if len(old_dir_model_versions) > 0:
         logger.info(f"Deleting all model versions in the old model repository format for {detector_id}")
+        
         for v in old_dir_model_versions:
-            delete_model_version(detector_id, v, repository_root)
+            delete_model_version(detector_models_dir, v)
 
     # We will also delete all but the latest num_to_keep model versions in the new model repository format
     primary_model_versions = get_all_model_versions(primary_edge_model_dir)

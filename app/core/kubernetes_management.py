@@ -75,7 +75,7 @@ class InferenceDeploymentManager:
         inference_deployment = inference_deployment.replace(
             "placeholder-inference-instance-name", f"instance-{detector_id}"
         )
-        inference_deployment = inference_deployment.replace("placeholder-model-name", detector_id)
+        inference_deployment = inference_deployment.replace("placeholder-model-name", detector_id + "/primary")
         return inference_deployment.strip()
 
     def create_inference_deployment(self, detector_id: str) -> None:
