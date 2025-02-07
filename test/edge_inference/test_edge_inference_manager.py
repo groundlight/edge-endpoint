@@ -8,7 +8,9 @@ from app.core.edge_inference import EdgeInferenceManager
 from app.core.utils import ModelInfoBase, ModelInfoNoBinary, ModelInfoWithBinary
 
 
-def validate_model_directory(model_repository: str, detector_id: str, version: int, model_info: ModelInfoBase, is_oodd: bool = False):
+def validate_model_directory(
+    model_repository: str, detector_id: str, version: int, model_info: ModelInfoBase, is_oodd: bool = False
+):
     """Helper function to validate the structure and contents of a model directory."""
     version_str = str(version)
     model_dir = os.path.join(model_repository, detector_id, "oodd" if is_oodd else "primary", version_str)

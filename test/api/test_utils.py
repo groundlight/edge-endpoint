@@ -189,4 +189,3 @@ class TestParseModelInfo:
         assert isinstance(primary_edge_model_info, ModelInfoNoBinary)
         assert isinstance(oodd_model_info, ModelInfoBase)
         assert isinstance(oodd_model_info, ModelInfoWithBinary)
-
