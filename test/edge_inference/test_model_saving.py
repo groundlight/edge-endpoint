@@ -2,7 +2,12 @@ import os
 import tempfile
 from test.edge_inference.test_edge_inference_manager import validate_model_directory
 
-from app.core.edge_inference import delete_model_version, save_models_to_repository, should_update, delete_old_model_versions
+from app.core.edge_inference import (
+    delete_model_version,
+    delete_old_model_versions,
+    save_models_to_repository,
+    should_update,
+)
 from app.core.utils import parse_model_info
 
 
@@ -133,6 +138,7 @@ def test_save_model_with_no_binary_to_repository():
         assert not should_update(edge_model_info, os.path.join(temp_dir, detector_id, "primary"), 2)
         assert not should_update(oodd_model_info, os.path.join(temp_dir, detector_id, "oodd"), 2)
 
+
 def test_delete_old_model_versions():
     with tempfile.TemporaryDirectory() as temp_dir:
         detector_id = "test_detector"
@@ -171,7 +177,7 @@ def test_delete_old_model_versions():
 
         # Update the oodd model but not the primary model
         os.makedirs(os.path.join(oodd_model_dir, "4"))
-  
+
         delete_old_model_versions(detector_id=detector_id, repository_root=temp_dir, num_to_keep=2)
 
         # Version 2 should now be deleted for both primary and oodd
@@ -183,6 +189,7 @@ def test_delete_old_model_versions():
         assert os.path.exists(os.path.join(oodd_model_dir, "3"))
         assert os.path.exists(os.path.join(primary_model_dir, "4"))
         assert os.path.exists(os.path.join(oodd_model_dir, "4"))
+
 
 def test_switch_to_new_model_repository_format():
     with tempfile.TemporaryDirectory() as temp_dir:

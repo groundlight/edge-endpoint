@@ -525,7 +525,7 @@ def delete_old_model_versions(detector_id: str, repository_root: str, num_to_kee
     old_dir_model_versions = get_all_model_versions(detector_models_dir)
     if len(old_dir_model_versions) > 0:
         logger.info(f"Deleting all model versions in the old model repository format for {detector_id}")
-        
+
         for v in old_dir_model_versions:
             delete_model_version(detector_models_dir, v)
 
@@ -570,11 +570,14 @@ def get_edge_inference_service_name(detector_id: str) -> str:
 def get_edge_inference_deployment_name(detector_id: str) -> str:
     return f"inferencemodel-{detector_id.replace('_', '-').lower()}"
 
+
 def get_detector_models_dir(repository_root: str, detector_id: str) -> str:
     return os.path.join(repository_root, detector_id)
 
+
 def get_primary_edge_model_dir(repository_root: str, detector_id: str) -> str:
     return os.path.join(get_detector_models_dir(repository_root, detector_id), "primary")
+
 
 def get_oodd_model_dir(repository_root: str, detector_id: str) -> str:
     return os.path.join(get_detector_models_dir(repository_root, detector_id), "oodd")
