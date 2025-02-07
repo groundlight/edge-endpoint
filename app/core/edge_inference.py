@@ -535,9 +535,11 @@ def delete_old_model_versions(detector_id: str, repository_root: str, num_to_kee
     primary_model_versions = sorted(primary_model_versions)
     oodd_model_versions = sorted(oodd_model_versions)
 
-    primary_versions_to_delete = primary_model_versions[:-num_to_keep] if len(primary_model_versions) > num_to_keep else []
+    primary_versions_to_delete = (
+        primary_model_versions[:-num_to_keep] if len(primary_model_versions) > num_to_keep else []
+    )
     oodd_versions_to_delete = oodd_model_versions[:-num_to_keep] if len(oodd_model_versions) > num_to_keep else []
-    
+
     logger.info(f"Deleting {len(primary_versions_to_delete)} old primary edge model version(s) for {detector_id}")
     for v in primary_versions_to_delete:
         delete_model_version(primary_edge_model_dir, v)
