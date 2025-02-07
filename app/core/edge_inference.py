@@ -541,6 +541,7 @@ def delete_old_model_versions(detector_id: str, repository_root: str, num_to_kee
     logger.info(f"Deleting {len(primary_versions_to_delete)} old primary edge model version(s) for {detector_id}")
     for v in primary_versions_to_delete:
         delete_model_version(primary_edge_model_dir, v)
+
     logger.info(f"Deleting {len(oodd_versions_to_delete)} old OODD model version(s) for {detector_id}")
     for v in oodd_versions_to_delete:
         delete_model_version(oodd_model_dir, v)
