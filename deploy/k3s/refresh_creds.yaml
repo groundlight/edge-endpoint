@@ -14,6 +14,8 @@ spec:
             app: refresh_creds
         spec:
           serviceAccountName: edge-endpoint-service-account
+          imagePullSecrets:
+            - name: registry-credentials
           containers:
           - name: ecr
             image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${IMAGE_TAG}
