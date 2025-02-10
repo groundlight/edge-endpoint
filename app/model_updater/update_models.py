@@ -44,30 +44,41 @@ def _check_new_models_and_inference_deployments(
     # Download and write new model to model repo on disk
     new_model = edge_inference_manager.update_model(detector_id=detector_id)
 
-    deployment = deployment_manager.get_inference_deployment(detector_id=detector_id)
-    if deployment is None:
-        logger.info(f"Creating a new inference deployment for {detector_id}")
+    edge_deployment_name = get_edge_inference_deployment_name(detector_id)
+    oodd_deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd=True)
+
+    edge_deployment = deployment_manager.get_inference_deployment(deployment_name=edge_deployment_name)
+    oodd_deployment = deployment_manager.get_inference_deployment(deployment_name=oodd_deployment_name)
+    if edge_deployment is None:
+        logger.info(f"Creating a new edge inference deployment for {detector_id}")
         deployment_manager.create_inference_deployment(detector_id=detector_id)
-        return
+
+    if oodd_deployment is None:
+        logger.info(f"Creating a new oodd inference deployment for {detector_id}")
+        deployment_manager.create_inference_deployment(detector_id=detector_id, is_oodd=True)
 
     if new_model:
         # Update inference deployment and rollout a new pod
         logger.info(f"Updating inference deployment for {detector_id}")
         deployment_manager.update_inference_deployment(detector_id=detector_id)
+        deployment_manager.update_inference_deployment(detector_id=detector_id, is_oodd=True)
 
         poll_start = time.time()
-        while not deployment_manager.is_inference_deployment_rollout_complete(detector_id):
+        while not deployment_manager.is_inference_deployment_rollout_complete(
+            deployment_name=edge_deployment_name
+        ) or not deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name):
             time.sleep(5)
             if time.time() - poll_start > TEN_MINUTES:
-                raise TimeoutError("Inference deployment is not ready within time limit")
+                raise TimeoutError("Inference deployments are not ready within time limit")
 
-        # Now that we have successfully rolled out a new model version, we can clean up our model repository a bit.
+        # Now that we have successfully rolled out new model versions, we can clean up our model repository a bit.
         # To be a bit conservative, we keep the current model version as well as the version before that. Older
         # versions of the model for the current detector_id will be removed from disk.
         logger.info(f"Cleaning up old model versions for {detector_id}")
         delete_old_model_versions(detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2)
 
-    if deployment_manager.is_inference_deployment_rollout_complete(detector_id):
+    # TODO: figure out the deployment record saving for OODD and primary models
+    if deployment_manager.is_inference_deployment_rollout_complete(deployment_name=edge_deployment_name) and deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name):
         # Database transaction to update the deployment_created field for the detector_id
         # At this time, we are sure that the deployment for the detector has been successfully created and rolled out.
         db_manager.update_inference_deployment_record(
@@ -145,7 +156,8 @@ def update_models(
         # Update the status of the inference deployments in the database
         deployment_records = db_manager.get_inference_deployment_records()
         for record in deployment_records:
-            deployment_created = deployment_manager.get_inference_deployment(record.detector_id) is not None
+            deployment_name = get_edge_inference_deployment_name(record.detector_id)
+            deployment_created = deployment_manager.get_inference_deployment(deployment_name) is not None
             db_manager.update_inference_deployment_record(
                 detector_id=record.detector_id,
                 fields_to_update={"deployment_created": deployment_created},
