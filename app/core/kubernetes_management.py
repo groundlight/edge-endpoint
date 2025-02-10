@@ -144,7 +144,9 @@ class InferenceDeploymentManager:
         if deployment is not None:
             return deployment
 
-        logger.debug(f"Deployment for {detector_id} with deployment name {deployment_name} does not currently exist in namespace {self._target_namespace}.")
+        logger.debug(
+            f"Deployment for {detector_id} with deployment name {deployment_name} does not currently exist in namespace {self._target_namespace}."
+        )
         self.create_inference_deployment(detector_id=detector_id, is_oodd=is_oodd)
         return None
 
@@ -197,7 +199,7 @@ class InferenceDeploymentManager:
         match, it indicates that the deployment rollout is complete.
 
         Args:
-            deployment_name (str): The name of the deployment whose rollout status needs to be 
+            deployment_name (str): The name of the deployment whose rollout status needs to be
                 checked.
 
         Returns:

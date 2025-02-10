@@ -498,5 +498,6 @@ def get_edge_inference_service_name(detector_id: str, is_oodd: bool = False) -> 
 def get_edge_inference_deployment_name(detector_id: str, is_oodd: bool = False) -> str:
     return f"inferencemodel{'-oodd' if is_oodd else ''}-{detector_id.replace('_', '-').lower()}"
 
+
 def get_edge_inference_model_name(detector_id: str, is_oodd: bool = False) -> str:
     return os.path.join(detector_id, "primary" if not is_oodd else "oodd")

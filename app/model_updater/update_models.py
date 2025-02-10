@@ -78,7 +78,9 @@ def _check_new_models_and_inference_deployments(
         delete_old_model_versions(detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2)
 
     # TODO: figure out the deployment record saving for OODD and primary models
-    if deployment_manager.is_inference_deployment_rollout_complete(deployment_name=edge_deployment_name) and deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name):
+    if deployment_manager.is_inference_deployment_rollout_complete(
+        deployment_name=edge_deployment_name
+    ) and deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name):
         # Database transaction to update the deployment_created field for the detector_id
         # At this time, we are sure that the deployment for the detector has been successfully created and rolled out.
         db_manager.update_inference_deployment_record(
