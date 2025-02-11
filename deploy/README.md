@@ -84,7 +84,7 @@ Check the `refresh_creds` cron job to see if it's running. If it's not, you may 
 kubectl logs -n <YOUR-NAMESPACE> -l app=refresh_creds
 ```
 
-### Changing IP address causes DNS failures and other problems
+### Changing IP Address Causes DNS Failures and Other Problems
 When the IP address of the machine you're using to run edge-endpoint changes, it creates an inconsistent environment for the
 k3s system (which doesn't automatically update itself to reflect the change). The most obvious symptom of this is that DNS
 address resolution stops working.
@@ -102,6 +102,21 @@ be back online.
 
 If you're running edge-endpoint on a transportable device, such as a laptop, you should run `ip-changed.sh` every time you switch
 access points.
+
+### EC2 Networking Setup Creates a Rule That Causes DNS Failures and Other Problems
+
+Another source of DNS/Kubernetes service problems is the netplan setup that some EC2 nodes use. I don't know why this
+happens on some nodes but not others, but it's easy to see if this is the problem. 
+
+To check, run `ip rule`. If the output has an item with rule 1000 like the following, you have this issue:
+```
+0:      from 10.45.0.177 lookup 1000
+```
+
+to resolve this, simply run the script `deploy/bin/fix-g4-routing.sh`.
+
+The issue should be permanently resolved at this point. You shouldn't need to run the script again on that node, 
+even after rebooting.
 
 ## Pushing/Pulling Images from Elastic Container Registry (ECR)
 
