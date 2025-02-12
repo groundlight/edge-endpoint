@@ -75,7 +75,9 @@ class InferenceDeploymentManager:
         inference_deployment = inference_deployment.replace(
             "placeholder-inference-instance-name", f"instance-{detector_id}"
         )
-        inference_deployment = inference_deployment.replace("placeholder-model-name", detector_id)
+        inference_deployment = inference_deployment.replace(
+            "placeholder-model-name", os.path.join(detector_id, "primary")
+        )
         return inference_deployment.strip()
 
     def create_inference_deployment(self, detector_id: str) -> None:
@@ -172,7 +174,7 @@ class InferenceDeploymentManager:
         # Set the correct model name for this inference deployment
         for env_var in deployment.spec.template.spec.containers[0].env:
             if env_var.name == "MODEL_NAME":
-                env_var.value = detector_id
+                env_var.value = os.path.join(detector_id, "primary")
                 break
 
         logger.info(f"Patching an existing inference deployment: {deployment_name}")

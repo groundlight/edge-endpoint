@@ -221,14 +221,14 @@ class EdgeInferenceManager:
         logger.info(f"Recent-average FPS for {detector_id=}: {fps:.2f}")
         return output_dict
 
-    def update_model(self, detector_id: str) -> bool:
+    def update_models_if_available(self, detector_id: str) -> bool:
         """
         Request a new model from Groundlight. If there is a new model available, download it and
         write it to the model repository as a new version.
 
         Returns True if a new model was downloaded and saved, False otherwise.
         """
-        logger.info(f"Checking if there is a new model available for {detector_id}")
+        logger.info(f"Checking if there are new models available for {detector_id}")
 
         api_token = (
             self.detector_inference_configs[detector_id].api_token
@@ -236,32 +236,29 @@ class EdgeInferenceManager:
             else None
         )
 
-        # fallback to env var if we dont have a token in the config
+        # fallback to env var if we don't have a token in the config
         api_token = api_token or os.environ.get("GROUNDLIGHT_API_TOKEN", None)
 
-        model_dir = os.path.join(self.MODEL_REPOSITORY, detector_id)
-        model_info = fetch_model_info(detector_id, api_token=api_token)
+        edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
 
-        v = get_current_model_version(model_dir)
-        if v is None:
-            logger.info(f"No current model version found in {model_dir}")
-        elif not should_update(model_info, model_dir, v):
-            logger.info(f"No new model available for {detector_id}")
+        edge_version, oodd_version = get_current_model_versions(self.MODEL_REPOSITORY, detector_id)
+        primary_edge_model_dir = get_primary_edge_model_dir(self.MODEL_REPOSITORY, detector_id)
+        oodd_model_dir = get_oodd_model_dir(self.MODEL_REPOSITORY, detector_id)
+
+        update_primary_model = should_update(edge_model_info, primary_edge_model_dir, edge_version)
+        update_oodd_model = should_update(oodd_model_info, oodd_model_dir, oodd_version)
+
+        if not update_primary_model and not update_oodd_model:
+            logger.info(f"No new models available for {detector_id}")
             return False
 
-        if isinstance(model_info, ModelInfoWithBinary):
-            logger.info(
-                f"New model binary available ({model_info.model_binary_id}), attemping to update model "
-                f"for {detector_id}"
-            )
-            model_buffer = get_object_using_presigned_url(model_info.model_binary_url)
-        else:
-            logger.info(f"Got a pipeline config but no model binary, attempting to update model for {detector_id}")
-            model_buffer = None
-        save_model_to_repository(
-            detector_id,
-            model_buffer,
-            model_info,
+        logger.info(f"At least one new model is available for {detector_id}, saving models to repository.")
+        save_models_to_repository(
+            detector_id=detector_id,
+            edge_model_buffer=get_model_buffer(edge_model_info) if update_primary_model else None,
+            edge_model_info=edge_model_info if update_primary_model else None,
+            oodd_model_buffer=get_model_buffer(oodd_model_info) if update_oodd_model else None,
+            oodd_model_info=oodd_model_info if update_oodd_model else None,
             repository_root=self.MODEL_REPOSITORY,
         )
         return True
@@ -288,7 +285,7 @@ class EdgeInferenceManager:
         return False
 
 
-def fetch_model_info(detector_id: str, api_token: Optional[str] = None) -> ModelInfoBase:
+def fetch_model_info(detector_id: str, api_token: Optional[str] = None) -> tuple[ModelInfoBase, ModelInfoBase]:
     if not api_token:
         raise ValueError(f"No API token provided for {detector_id=}")
 
@@ -297,7 +294,7 @@ def fetch_model_info(detector_id: str, api_token: Optional[str] = None) -> Model
     url = f"https://api.groundlight.ai/edge-api/v1/fetch-model-urls/{detector_id}/"
     headers = {"x-api-token": api_token}
     response = requests.get(url, headers=headers, timeout=10)
-    logger.debug(f"fetch-model-urls response = {response}")
+    logger.debug(f"fetch-model-urls response = {response.json()}")
 
     if response.status_code == status.HTTP_200_OK:
         return parse_model_info(response.json())
@@ -310,6 +307,17 @@ def fetch_model_info(detector_id: str, api_token: Optional[str] = None) -> Model
         raise HTTPException(status_code=response.status_code, detail=exception_string)
 
 
+def get_model_buffer(model_info: ModelInfoBase) -> bytes | None:
+    if isinstance(model_info, ModelInfoWithBinary):
+        logger.info(f"New model binary available ({model_info.model_binary_id}), attemping to update model.")
+        model_buffer = get_object_using_presigned_url(model_info.model_binary_url)
+    else:
+        logger.info("Got a pipeline config but no model binary, attempting to update model.")
+        model_buffer = None
+
+    return model_buffer
+
+
 def get_object_using_presigned_url(presigned_url: str) -> bytes:
     response = requests.get(presigned_url, timeout=10)
     if response.status_code == status.HTTP_200_OK:
@@ -318,74 +326,133 @@ def get_object_using_presigned_url(presigned_url: str) -> bytes:
         raise HTTPException(status_code=response.status_code, detail=f"Failed to retrieve data from {presigned_url}.")
 
 
-def save_model_to_repository(
+def save_models_to_repository(
     detector_id: str,
-    model_buffer: Optional[bytes],
-    model_info: ModelInfoBase,
+    edge_model_buffer: Optional[bytes],
+    edge_model_info: Optional[ModelInfoBase],
+    oodd_model_buffer: Optional[bytes],
+    oodd_model_info: Optional[ModelInfoBase],
     repository_root: str,
-) -> tuple[Optional[int], int]:
+) -> None:
     """
     Make new version-directory for the model and save the new version of the model and pipeline config to it.
-    Model repository directory structure:
+    Old model repository directory structure:
     ```
     <model-repository-path>/
         <model-name>/
             <version>/
                 <model-definition-files (e.g. model.buf, pipeline_config.yaml, etc)>
     ```
+
+    New model repository directory structure:
+    ```
+    <model-repository-path>/
+        <detector-id (formerly referred to as model-name)>/
+            <primary>/
+                <version>/
+                    <model-definition-files (e.g. model.buf, pipeline_config.yaml, etc)>
+            <oodd>/
+                <version>/
+                    <model-definition-files (e.g. model.buf, pipeline_config.yaml, etc)>
+    ```
     """
-    model_dir = os.path.join(repository_root, detector_id)
-    os.makedirs(model_dir, exist_ok=True)
+    edge_model_dir = get_primary_edge_model_dir(repository_root, detector_id)
+    oodd_model_dir = get_oodd_model_dir(repository_root, detector_id)
+    os.makedirs(edge_model_dir, exist_ok=True)
+    os.makedirs(oodd_model_dir, exist_ok=True)
 
-    old_model_version = get_current_model_version(model_dir)
-    new_model_version = 1 if old_model_version is None else old_model_version + 1
+    old_primary_model_version, old_oodd_model_version = get_current_model_versions(repository_root, detector_id)
 
-    model_version_dir = os.path.join(model_dir, str(new_model_version))
+    if edge_model_info:
+        new_primary_model_version = 1 if old_primary_model_version is None else old_primary_model_version + 1
+    else:
+        new_primary_model_version = old_primary_model_version
+
+    if oodd_model_info:
+        new_oodd_model_version = 1 if old_oodd_model_version is None else old_oodd_model_version + 1
+    else:
+        new_oodd_model_version = old_oodd_model_version
+
+    if edge_model_info:
+        save_model_to_repository(edge_model_buffer, edge_model_info, edge_model_dir, new_primary_model_version)
+    if oodd_model_info:
+        save_model_to_repository(oodd_model_buffer, oodd_model_info, oodd_model_dir, new_oodd_model_version)
+
+
+def save_model_to_repository(
+    model_buffer: bytes, model_info: ModelInfoBase, model_dir: str, model_version: int
+) -> None:
+    model_version_dir = os.path.join(model_dir, str(model_version))
     os.makedirs(model_version_dir, exist_ok=True)
 
     if model_buffer:
         with open(os.path.join(model_version_dir, "model.buf"), "wb") as f:
             f.write(model_buffer)
+
     with open(os.path.join(model_version_dir, "pipeline_config.yaml"), "w") as f:
         yaml.dump(yaml.safe_load(model_info.pipeline_config), f)
     with open(os.path.join(model_version_dir, "predictor_metadata.json"), "w") as f:
         f.write(model_info.predictor_metadata)
+
     if isinstance(model_info, ModelInfoWithBinary):
         with open(os.path.join(model_version_dir, "model_id.txt"), "w") as f:
             f.write(model_info.model_binary_id)
 
     logger.info(
-        f"Wrote new model version {new_model_version} for {detector_id}"
+        f"Wrote new model version {model_version} to {model_dir}"
         + (f" with model binary id {model_info.model_binary_id}" if isinstance(model_info, ModelInfoWithBinary) else "")
     )
 
-    return old_model_version, new_model_version
 
-
-def should_update(model_info: ModelInfoBase, model_dir: str, version: int) -> bool:
+def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[int]) -> bool:
     """Determines if the model needs to be updated based on the received and current model info."""
+    if version is None:
+        logger.info(f"No current model version found in {model_dir}, updating model")
+        return True
+
     if isinstance(model_info, ModelInfoWithBinary):
         edge_binary_ksuid = get_current_model_ksuid(model_dir, version)
         if edge_binary_ksuid and model_info.model_binary_id == edge_binary_ksuid:
-            # The edge binary is the same as the cloud binary, so we don't need to update the model.
+            logger.info(
+                f"The edge binary in {model_dir} is the same as the cloud binary, so we don't need to update the model."
+            )
             return False
     else:
         current_pipeline_config = get_current_pipeline_config(model_dir, version)
         if current_pipeline_config and current_pipeline_config == yaml.safe_load(model_info.pipeline_config):
-            # There is no saved binary and the current pipeline_config is the same as the received
-            # pipeline_config, so we don't need to update the model.
+            logger.info(
+                f"The current pipeline_config in {model_dir} is the same as the received pipeline_config and we have no model binary, so we don't need to update the model."
+            )
             return False
 
+    logger.info(
+        f"The model in {model_dir} needs to be updated, the current edge model is different from the cloud model."
+    )
     return True
 
 
-def get_current_model_version(model_dir: str) -> Optional[int]:
+def get_current_model_versions(repository_root: str, detector_id: str) -> tuple[Optional[int], Optional[int]]:
     """Edge inference server model_repositories contain model versions in subdirectories. These subdirectories
     are named with integers. This function returns the highest integer in the model repository directory.
     """
-    logger.debug(f"Checking for current model version in {model_dir}")
-    model_versions = get_all_model_versions(model_dir)
-    return max(model_versions) if len(model_versions) > 0 else None
+    logger.debug(f"Checking for current model versions for {detector_id}")
+    primary_dir = get_primary_edge_model_dir(repository_root, detector_id)
+    oodd_dir = get_oodd_model_dir(repository_root, detector_id)
+
+    # If the primary or oodd directories don't exist, we'll update both models. This will happen when the edge endpoint
+    # switches from the old model repository format to the new one.
+    primary_version = None
+    oodd_version = None
+
+    if os.path.exists(primary_dir):
+        primary_versions = get_all_model_versions(primary_dir)
+        primary_version = max(primary_versions) if primary_versions else None
+
+    if os.path.exists(oodd_dir):
+        oodd_versions = get_all_model_versions(oodd_dir)
+        oodd_version = max(oodd_versions) if oodd_versions else None
+
+    return primary_version, oodd_version
 
 
 def get_all_model_versions(model_dir: str) -> list:
@@ -394,7 +461,13 @@ def get_all_model_versions(model_dir: str) -> list:
     """
     if not os.path.exists(model_dir):
         return []
-    model_versions = [int(d) for d in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, d))]
+    # explicitly exclude primary and oodd directories so we can search for the latest version in the old or new model
+    # repository format
+    model_versions = [
+        int(d)
+        for d in os.listdir(model_dir)
+        if os.path.isdir(os.path.join(model_dir, d)) and not d.startswith("primary") and not d.startswith("oodd")
+    ]
     return model_versions
 
 
@@ -446,21 +519,42 @@ def create_file_from_template(template_values: dict, destination: str, template:
 
 def delete_old_model_versions(detector_id: str, repository_root: str, num_to_keep: int = 2) -> None:
     """Recursively delete all but the latest model versions"""
-    model_dir = os.path.join(repository_root, detector_id)
-    model_versions = get_all_model_versions(model_dir)
-    model_versions = sorted(model_versions)
-    if len(model_versions) < num_to_keep:
-        return
-    versions_to_delete = model_versions[:-num_to_keep]  # all except the last num_to_keep
-    logger.info(f"Deleting {len(versions_to_delete)} old model version(s) for {detector_id}")
-    for v in versions_to_delete:
-        delete_model_version(detector_id, v, repository_root)
+    detector_models_dir = get_detector_models_dir(repository_root, detector_id)
+    primary_edge_model_dir = get_primary_edge_model_dir(repository_root, detector_id)
+    oodd_model_dir = get_oodd_model_dir(repository_root, detector_id)
+
+    # We will delete all model versions in the old model repository format
+    old_dir_model_versions = get_all_model_versions(detector_models_dir)
+    if len(old_dir_model_versions) > 0:
+        logger.info(f"Deleting all model versions in the old model repository format for {detector_id}")
+
+        for v in old_dir_model_versions:
+            delete_model_version(detector_models_dir, v)
+
+    # We will also delete all but the latest num_to_keep model versions in the new model repository format
+    primary_model_versions = get_all_model_versions(primary_edge_model_dir)
+    oodd_model_versions = get_all_model_versions(oodd_model_dir)
+    primary_model_versions = sorted(primary_model_versions)
+    oodd_model_versions = sorted(oodd_model_versions)
+
+    primary_versions_to_delete = (
+        primary_model_versions[:-num_to_keep] if len(primary_model_versions) > num_to_keep else []
+    )
+    oodd_versions_to_delete = oodd_model_versions[:-num_to_keep] if len(oodd_model_versions) > num_to_keep else []
+
+    logger.info(f"Deleting {len(primary_versions_to_delete)} old primary edge model version(s) for {detector_id}")
+    for v in primary_versions_to_delete:
+        delete_model_version(primary_edge_model_dir, v)
+
+    logger.info(f"Deleting {len(oodd_versions_to_delete)} old OODD model version(s) for {detector_id}")
+    for v in oodd_versions_to_delete:
+        delete_model_version(oodd_model_dir, v)
 
 
-def delete_model_version(detector_id: str, model_version: int, repository_root: str) -> None:
-    """Recursively delete directory detector_id/model_version"""
-    model_version_dir = os.path.join(repository_root, detector_id, str(model_version))
-    logger.info(f"Deleting model version {model_version} for {detector_id}")
+def delete_model_version(model_dir: str, model_version: int) -> None:
+    """Recursively delete directory model_dir/model_version"""
+    model_version_dir = os.path.join(model_dir, str(model_version))
+    logger.info(f"Deleting model version {model_version} for {model_dir}")
     if os.path.exists(model_version_dir):
         shutil.rmtree(model_version_dir)
 
@@ -477,3 +571,15 @@ def get_edge_inference_service_name(detector_id: str) -> str:
 
 def get_edge_inference_deployment_name(detector_id: str) -> str:
     return f"inferencemodel-{detector_id.replace('_', '-').lower()}"
+
+
+def get_detector_models_dir(repository_root: str, detector_id: str) -> str:
+    return os.path.join(repository_root, detector_id)
+
+
+def get_primary_edge_model_dir(repository_root: str, detector_id: str) -> str:
+    return os.path.join(get_detector_models_dir(repository_root, detector_id), "primary")
+
+
+def get_oodd_model_dir(repository_root: str, detector_id: str) -> str:
+    return os.path.join(get_detector_models_dir(repository_root, detector_id), "oodd")
