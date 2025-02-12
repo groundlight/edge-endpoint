@@ -413,13 +413,13 @@ def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[i
     if isinstance(model_info, ModelInfoWithBinary):
         edge_binary_ksuid = get_current_model_ksuid(model_dir, version)
         if edge_binary_ksuid and model_info.model_binary_id == edge_binary_ksuid:
-            logger.info("The edge binary is the same as the cloud binary, so we don't need to update the model.")
+            logger.info(f"The edge binary in {model_dir} is the same as the cloud binary, so we don't need to update the model.")
             return False
     else:
         current_pipeline_config = get_current_pipeline_config(model_dir, version)
         if current_pipeline_config and current_pipeline_config == yaml.safe_load(model_info.pipeline_config):
             logger.info(
-                "The current pipeline_config is the same as the received pipeline_config and we have no model binary, so we don't need to update the model."
+                f"The current pipeline_config in {model_dir} is the same as the received pipeline_config and we have no model binary, so we don't need to update the model."
             )
             return False
 
