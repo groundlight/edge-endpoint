@@ -42,7 +42,7 @@ def _check_new_models_and_inference_deployments(
 
     """
     # Download and write new model to model repo on disk
-    new_model = edge_inference_manager.update_model(detector_id=detector_id)
+    new_model = edge_inference_manager.update_models_if_available(detector_id=detector_id)
 
     edge_deployment_name = get_edge_inference_deployment_name(detector_id)
     oodd_deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd=True)
