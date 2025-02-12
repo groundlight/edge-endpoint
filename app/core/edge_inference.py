@@ -413,7 +413,9 @@ def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[i
     if isinstance(model_info, ModelInfoWithBinary):
         edge_binary_ksuid = get_current_model_ksuid(model_dir, version)
         if edge_binary_ksuid and model_info.model_binary_id == edge_binary_ksuid:
-            logger.info(f"The edge binary in {model_dir} is the same as the cloud binary, so we don't need to update the model.")
+            logger.info(
+                f"The edge binary in {model_dir} is the same as the cloud binary, so we don't need to update the model."
+            )
             return False
     else:
         current_pipeline_config = get_current_pipeline_config(model_dir, version)
