@@ -8,7 +8,7 @@ from kubernetes import client as kube_client
 from kubernetes import config
 from kubernetes.client import V1Deployment
 
-from .edge_inference import get_edge_inference_deployment_name, get_edge_inference_service_name
+from .edge_inference import get_edge_inference_deployment_name, get_edge_inference_model_name, get_edge_inference_service_name
 from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH
 
 logger = logging.getLogger(__name__)
@@ -74,7 +74,7 @@ class InferenceDeploymentManager:
         inference_deployment = inference_deployment.replace("placeholder-inference-deployment-name", deployment_name)
 
         inference_deployment = inference_deployment.replace(
-            "placeholder-inference-instance-name", f"instance-{model_name}"
+            "placeholder-inference-instance-name", f"instance-{model_name.replace('/', '-')}"
         )
 
         inference_deployment = inference_deployment.replace("placeholder-model-name", model_name)
@@ -216,10 +216,10 @@ class InferenceDeploymentManager:
         available_replicas = deployment.status.available_replicas if deployment.status.available_replicas else 0
 
         if desired_replicas == updated_replicas == available_replicas:
-            logger.info(f"Inference deployment for {detector_id} is ready")
+            logger.info(f"Inference deployment for {deployment_name} is ready")
             return True
         logger.debug(
-            f"Inference deployment rollout for {detector_id} is not complete. Desired: {desired_replicas}, Updated:"
+            f"Inference deployment rollout for {deployment_name} is not complete. Desired: {desired_replicas}, Updated:"
             f" {updated_replicas}, Available: {available_replicas}"
         )
         return False

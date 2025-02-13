@@ -586,11 +586,11 @@ def get_edge_inference_service_name(detector_id: str, is_oodd: bool = False) -> 
     We just use `inferencemodel-<detector_id>` as the deployment name and
     `inference-service-<detector_id>` as the service name.
     """
-    return f"inference-service{'-oodd' if is_oodd else ''}-{detector_id.replace('_', '-').lower()}"
+    return f"inference-service-{'oodd' if is_oodd else 'primary'}-{detector_id.replace('_', '-').lower()}"
 
 
 def get_edge_inference_deployment_name(detector_id: str, is_oodd: bool = False) -> str:
-    return f"inferencemodel{'-oodd' if is_oodd else ''}-{detector_id.replace('_', '-').lower()}"
+    return f"inferencemodel-{'oodd' if is_oodd else 'primary'}-{detector_id.replace('_', '-').lower()}"
 
 
 def get_edge_inference_model_name(detector_id: str, is_oodd: bool = False) -> str:
