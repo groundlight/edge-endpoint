@@ -15,6 +15,7 @@ from app.core.app_state import (
     refresh_detector_metadata_if_needed,
 )
 from app.core.utils import create_iq, safe_call_sdk
+from app.core.edge_inference import get_edge_inference_model_name
 
 logger = logging.getLogger(__name__)
 
@@ -197,8 +198,14 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         # Create an edge-inference deployment record, which may be used to spin up an edge-inference server.
         logger.debug(f"Local inference not available for {detector_id=}. Creating inference deployment record.")
         api_token = gl.api_client.configuration.api_key["ApiToken"]
+        primary_model_name = get_edge_inference_model_name(detector_id=detector_id, is_oodd=False)
+        oodd_model_name = get_edge_inference_model_name(detector_id=detector_id, is_oodd=True)
+
         app_state.db_manager.create_or_update_inference_deployment_record(
-            deployment={"detector_id": detector_id, "api_token": api_token, "deployment_created": False}
+            deployment={"model_name": primary_model_name, "detector_id": detector_id, "api_token": api_token, "deployment_created": False}
+        )
+        app_state.db_manager.create_or_update_inference_deployment_record(
+            deployment={"model_name": oodd_model_name, "detector_id": detector_id, "api_token": api_token, "deployment_created": False}
         )
 
         if return_edge_prediction:

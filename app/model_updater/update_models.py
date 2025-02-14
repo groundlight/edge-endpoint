@@ -5,7 +5,7 @@ import time
 from app.core.app_state import get_detector_inference_configs, load_edge_config
 from app.core.configs import RootEdgeConfig
 from app.core.database import DatabaseManager
-from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions, get_edge_inference_deployment_name
+from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions, get_edge_inference_deployment_name, get_edge_inference_model_name
 from app.core.kubernetes_management import InferenceDeploymentManager
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -82,12 +82,16 @@ def _check_new_models_and_inference_deployments(
     ) and deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name):
         # Database transaction to update the deployment_created field for the detector_id
         # At this time, we are sure that the deployment for the detector has been successfully created and rolled out.
+
+        primary_model_name = get_edge_inference_model_name(detector_id)
+        oodd_model_name = get_edge_inference_model_name(detector_id, is_oodd=True)
+
         db_manager.update_inference_deployment_record(
-            deployment_name=edge_deployment_name,
+            model_name=primary_model_name,
             fields_to_update={"deployment_created": True, "deployment_name": edge_deployment_name},
         )
         db_manager.update_inference_deployment_record(
-            deployment_name=oodd_deployment_name,
+            model_name=oodd_model_name,
             fields_to_update={"deployment_created": True, "deployment_name": oodd_deployment_name},
         )
 
@@ -167,11 +171,11 @@ def manage_update_models(
             oodd_deployment_created = deployment_manager.get_inference_deployment(oodd_deployment_name) is not None
             
             db_manager.update_inference_deployment_record(
-                deployment_name=primary_deployment_name,
+                model_name=get_edge_inference_model_name(record.detector_id, is_oodd=False),
                 fields_to_update={"deployment_created": primary_deployment_created},
             )
             db_manager.update_inference_deployment_record(
-                deployment_name=oodd_deployment_name,
+                model_name=get_edge_inference_model_name(record.detector_id, is_oodd=True),
                 fields_to_update={"deployment_created": oodd_deployment_created},
             )
 
