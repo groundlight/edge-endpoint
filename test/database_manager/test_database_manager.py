@@ -34,16 +34,26 @@ def database_reset(db_manager: DatabaseManager):
 
 def test_create_or_update_inference_deployment_record(db_manager: DatabaseManager, database_reset):
     """Test creating a new detector deployment record."""
+    deployments = []
 
-    deployments = [
-        {
-            "model_name": prefixed_ksuid("det_") + "/primary",
-            "detector_id": prefixed_ksuid("det_"),
-            "api_token": prefixed_ksuid("api_"),
-            "deployment_created": False,
-        }
-        for _ in range(NUM_TESTING_RECORDS)
-    ]
+    for _ in range(NUM_TESTING_RECORDS):
+        detector_id = prefixed_ksuid("det_")
+        edge_model_name = detector_id + "/primary"
+        oodd_model_name = detector_id + "/oodd"
+        api_token = prefixed_ksuid("api_")
+        deployment_created = False
+        deployments.append({
+            "model_name": edge_model_name,
+            "detector_id": detector_id,
+            "api_token": api_token,
+            "deployment_created": deployment_created,
+        })
+        deployments.append({
+            "model_name": oodd_model_name,
+            "detector_id": detector_id,
+            "api_token": api_token,
+            "deployment_created": deployment_created,
+        })
 
     for deployment in deployments:
         db_manager.create_or_update_inference_deployment_record(deployment=deployment)
@@ -86,15 +96,26 @@ def test_update_inference_deployment_record(db_manager, database_reset):
     """
     Create a few testing records, update the deployment_created field, and check that the update was successful.
     """
-    deployments = [
-        {
-            "detector_id": prefixed_ksuid("det_"),
-            "model_name": prefixed_ksuid("det_") + "/primary",
-            "api_token": prefixed_ksuid("api_"),
-            "deployment_created": False,
-        }
-        for _ in range(NUM_TESTING_RECORDS)
-    ]
+    deployments = []
+
+    for _ in range(NUM_TESTING_RECORDS):
+        detector_id = prefixed_ksuid("det_")
+        edge_model_name = detector_id + "/primary"
+        oodd_model_name = detector_id + "/oodd"
+        api_token = prefixed_ksuid("api_")
+        deployment_created = False
+        deployments.append({
+            "model_name": edge_model_name,
+            "detector_id": detector_id,
+            "api_token": api_token,
+            "deployment_created": deployment_created,
+        })
+        deployments.append({
+            "model_name": oodd_model_name,
+            "detector_id": detector_id,
+            "api_token": api_token,
+            "deployment_created": deployment_created,
+        })
 
     for deployment in deployments:
         db_manager.create_or_update_inference_deployment_record(deployment=deployment)
