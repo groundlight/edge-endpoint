@@ -20,7 +20,7 @@ class InferenceDeployment(Base):
     """
 
     __tablename__ = "inference_deployments"
-    deployment_name = Column(String(44), primary_key=True, unique=True, nullable=False, comment="Detector ID + `-primary` or `-oodd`")
+    deployment_name = Column(String(100), primary_key=True, unique=True, nullable=False, comment="Deployment name, Detector ID + `-primary` or `-oodd`")
 
     api_token = Column(String(66), nullable=False, comment="API token")
     deployment_created = Column(
@@ -29,10 +29,10 @@ class InferenceDeployment(Base):
         nullable=False,
         comment="Indicates whether the given detector already has an inference deployment in the kubernetes cluster.",
     )
-    deployment_name = Column(
-        String(100),
+    detector_id = Column(
+        String(44),
         nullable=True,
-        comment="Name of the kubernetes deployment for the inference server.",
+        comment="Detector ID",
     )
 
     created_at = Column(
