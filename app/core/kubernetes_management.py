@@ -8,7 +8,11 @@ from kubernetes import client as kube_client
 from kubernetes import config
 from kubernetes.client import V1Deployment
 
-from .edge_inference import get_edge_inference_deployment_name, get_edge_inference_model_name, get_edge_inference_service_name
+from .edge_inference import (
+    get_edge_inference_deployment_name,
+    get_edge_inference_model_name,
+    get_edge_inference_service_name,
+)
 from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH
 
 logger = logging.getLogger(__name__)
