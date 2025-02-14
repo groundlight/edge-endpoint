@@ -30,7 +30,7 @@ def _check_new_models_and_inference_deployments(
     db_manager: DatabaseManager,
 ) -> None:
     """
-    Check that a new model is available for the detector_id. If so, update the inference deployment
+    Check if there are new models available for the detector_id. If so, update the inference deployment
     to reflect the new state. This is also the entrypoint for creating a new inference deployment
     and updating the database record for the detector_id (i.e., setting deployment_created to True
     when we have successfully rolled out the inference deployment).
@@ -77,19 +77,22 @@ def _check_new_models_and_inference_deployments(
         logger.info(f"Cleaning up old model versions for {detector_id}")
         delete_old_model_versions(detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2)
 
-    # TODO: figure out the deployment record saving for OODD and primary models
     if deployment_manager.is_inference_deployment_rollout_complete(
         deployment_name=edge_deployment_name
     ) and deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name):
         # Database transaction to update the deployment_created field for the detector_id
         # At this time, we are sure that the deployment for the detector has been successfully created and rolled out.
         db_manager.update_inference_deployment_record(
-            detector_id=detector_id,
-            fields_to_update={"deployment_created": True, "deployment_name": deployment.metadata.name},
+            deployment_name=edge_deployment_name,
+            fields_to_update={"deployment_created": True, "deployment_name": edge_deployment_name},
+        )
+        db_manager.update_inference_deployment_record(
+            deployment_name=oodd_deployment_name,
+            fields_to_update={"deployment_created": True, "deployment_name": oodd_deployment_name},
         )
 
 
-def update_models(
+def manage_update_models(
     edge_inference_manager: EdgeInferenceManager,
     deployment_manager: InferenceDeploymentManager,
     db_manager: DatabaseManager,
@@ -158,11 +161,18 @@ def update_models(
         # Update the status of the inference deployments in the database
         deployment_records = db_manager.get_inference_deployment_records()
         for record in deployment_records:
-            deployment_name = get_edge_inference_deployment_name(record.detector_id)
-            deployment_created = deployment_manager.get_inference_deployment(deployment_name) is not None
+            primary_deployment_name = get_edge_inference_deployment_name(record.detector_id)
+            oodd_deployment_name = get_edge_inference_deployment_name(record.detector_id, is_oodd=True)
+            primary_deployment_created = deployment_manager.get_inference_deployment(primary_deployment_name) is not None
+            oodd_deployment_created = deployment_manager.get_inference_deployment(oodd_deployment_name) is not None
+            
             db_manager.update_inference_deployment_record(
-                detector_id=record.detector_id,
-                fields_to_update={"deployment_created": deployment_created},
+                deployment_name=primary_deployment_name,
+                fields_to_update={"deployment_created": primary_deployment_created},
+            )
+            db_manager.update_inference_deployment_record(
+                deployment_name=oodd_deployment_name,
+                fields_to_update={"deployment_created": oodd_deployment_created},
             )
 
 
@@ -183,7 +193,7 @@ if __name__ == "__main__":
     # So here we don't run a task to create the tables if they don't already exist.
     db_manager = DatabaseManager()
 
-    update_models(
+    manage_update_models(
         edge_inference_manager=edge_inference_manager,
         deployment_manager=deployment_manager,
         db_manager=db_manager,

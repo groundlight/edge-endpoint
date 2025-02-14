@@ -106,8 +106,7 @@ class InferenceDeploymentManager:
         Retrieves the inference deployment for a given deployment name.
 
         Args:
-            detector_id (str): The unique identifier for the detector whose inference deployment
-                               is to be retrieved.
+            deployment_name (str): The unique identifier for the deployment to be retrieved.
 
         Returns:
             Optional[V1Deployment]: The deployment object if it exists, otherwise None.
