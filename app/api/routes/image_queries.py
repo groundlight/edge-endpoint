@@ -14,8 +14,8 @@ from app.core.app_state import (
     get_groundlight_sdk_instance,
     refresh_detector_metadata_if_needed,
 )
-from app.core.utils import create_iq, safe_call_sdk
 from app.core.edge_inference import get_edge_inference_model_name
+from app.core.utils import create_iq, safe_call_sdk
 
 logger = logging.getLogger(__name__)
 
@@ -202,10 +202,20 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         oodd_model_name = get_edge_inference_model_name(detector_id=detector_id, is_oodd=True)
 
         app_state.db_manager.create_or_update_inference_deployment_record(
-            deployment={"model_name": primary_model_name, "detector_id": detector_id, "api_token": api_token, "deployment_created": False}
+            deployment={
+                "model_name": primary_model_name,
+                "detector_id": detector_id,
+                "api_token": api_token,
+                "deployment_created": False,
+            }
         )
         app_state.db_manager.create_or_update_inference_deployment_record(
-            deployment={"model_name": oodd_model_name, "detector_id": detector_id, "api_token": api_token, "deployment_created": False}
+            deployment={
+                "model_name": oodd_model_name,
+                "detector_id": detector_id,
+                "api_token": api_token,
+                "deployment_created": False,
+            }
         )
 
         if return_edge_prediction:

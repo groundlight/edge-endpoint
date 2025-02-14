@@ -20,7 +20,13 @@ class InferenceDeployment(Base):
     """
 
     __tablename__ = "inference_deployments"
-    model_name = Column(String(100), primary_key=True, unique=True, nullable=False, comment="Name of the model, detector_id + `/primary` or `/oodd`")
+    model_name = Column(
+        String(100),
+        primary_key=True,
+        unique=True,
+        nullable=False,
+        comment="Name of the model, detector_id + `/primary` or `/oodd`",
+    )
     detector_id = Column(String(44), primary_key=False, nullable=False, comment="Detector ID")
 
     api_token = Column(String(66), nullable=False, comment="API token")

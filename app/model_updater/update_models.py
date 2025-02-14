@@ -5,7 +5,12 @@ import time
 from app.core.app_state import get_detector_inference_configs, load_edge_config
 from app.core.configs import RootEdgeConfig
 from app.core.database import DatabaseManager
-from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions, get_edge_inference_deployment_name, get_edge_inference_model_name
+from app.core.edge_inference import (
+    EdgeInferenceManager,
+    delete_old_model_versions,
+    get_edge_inference_deployment_name,
+    get_edge_inference_model_name,
+)
 from app.core.kubernetes_management import InferenceDeploymentManager
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
