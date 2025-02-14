@@ -87,7 +87,9 @@ class DatabaseManager:
         existing_api_token = detectors[0].api_token
         if existing_api_token != deployment["api_token"]:  # type: ignore
             logger.info(f"Updating API token for deployment name {deployment['deployment_name']}.")
-            self.update_inference_deployment_record(deployment_name=deployment["deployment_name"], fields_to_update=deployment)
+            self.update_inference_deployment_record(
+                deployment_name=deployment["deployment_name"], fields_to_update=deployment
+            )
 
     def update_inference_deployment_record(self, deployment_name: str, fields_to_update: Dict[str, Any]):
         """

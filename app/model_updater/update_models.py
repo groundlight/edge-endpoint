@@ -163,9 +163,11 @@ def manage_update_models(
         for record in deployment_records:
             primary_deployment_name = get_edge_inference_deployment_name(record.detector_id)
             oodd_deployment_name = get_edge_inference_deployment_name(record.detector_id, is_oodd=True)
-            primary_deployment_created = deployment_manager.get_inference_deployment(primary_deployment_name) is not None
+            primary_deployment_created = (
+                deployment_manager.get_inference_deployment(primary_deployment_name) is not None
+            )
             oodd_deployment_created = deployment_manager.get_inference_deployment(oodd_deployment_name) is not None
-            
+
             db_manager.update_inference_deployment_record(
                 deployment_name=primary_deployment_name,
                 fields_to_update={"deployment_created": primary_deployment_created},
