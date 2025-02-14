@@ -583,8 +583,8 @@ def get_edge_inference_service_name(detector_id: str, is_oodd: bool = False) -> 
     """
     Kubernetes service/deployment names have a strict naming convention.
     They have to be alphanumeric, lower cased, and can only contain dashes.
-    We just use `inferencemodel-<detector_id>` as the deployment name and
-    `inference-service-<detector_id>` as the service name.
+    We just use `inferencemodel-{'oodd' or 'primary'}-<detector_id>` as the deployment name and
+    `inference-service-{'oodd' or 'primary'}-<detector_id>` as the service name.
     """
     return f"inference-service-{'oodd' if is_oodd else 'primary'}-{detector_id.replace('_', '-').lower()}"
 
