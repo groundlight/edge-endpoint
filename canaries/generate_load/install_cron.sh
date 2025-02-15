@@ -43,4 +43,10 @@ CRON_JOB="*/5 * * * * $CRON_SCRIPT >> $LOG_FILE 2>&1"
 # Install the cron job (prevents duplicates)
 (crontab -l 2>/dev/null | grep -v "$CRON_SCRIPT"; echo "$CRON_JOB") | crontab -
 
+# Define the reboot cron job (daily at 1:00 PM Pacific Daylight Time)
+REBOOT_JOB="00 20 * * * /sbin/shutdown -r now"
+
+# Install the reboot cron job (prevents duplicates)
+(crontab -l 2>/dev/null | grep -v "/sbin/shutdown -r now"; echo "$REBOOT_JOB") | crontab -
+
 echo "Cron job installed successfully! Check logs: $LOG_FILE"

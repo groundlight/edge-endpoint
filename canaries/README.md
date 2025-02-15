@@ -1,6 +1,8 @@
 # Edge Endpoint Canaries
 
-This directory contains setup scripts for `edge-endpoint` canary processes.
+This directory contains setup scripts for edge canary processes.
+
+To set up an Edge Endpoint for a canary, follow the 
 
 Each subdirectory contains an installation script.
 
