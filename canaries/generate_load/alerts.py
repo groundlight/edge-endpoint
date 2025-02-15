@@ -13,6 +13,11 @@ cloud_endpoint = 'https://api.groundlight.ai/device-api'
 gl = groundlight.ExperimentalApi(endpoint=cloud_endpoint)
 
 def create_hearbeat_alert(detector: Detector, heartbeat_timeout_minutes: int) -> None:
+    """Sets up a heartbeat alert on Groundlight. Grounlight will send an email if the 
+    relevant detector has not submitted an image query in with heartbeat_timeout_minutes.
+    
+    Use `send_heartbeat` to submit image queries.
+    """
     verb = VerbEnum.NO_QUERIES
     parameters = {"time_value": heartbeat_timeout_minutes, "time_unit": "MINUTES"}
     condition = gl.make_condition(verb, parameters)
@@ -39,5 +44,9 @@ def create_hearbeat_alert(detector: Detector, heartbeat_timeout_minutes: int) ->
             logger.error(f'Unexpected error while creating a rule: {e}')
             
 def send_heartbeat(detector: Detector, frame: np.ndarray) -> None:
+    """Sends an image query to a detector to act as a heartbeat. 
+    
+    Use `create_hearbeat_alert` to create the relevant alert. 
+    """
     gl.submit_image_query(detector, frame, human_review="NEVER", wait=0.0)
     logger.info('Heartbeat submitted!')

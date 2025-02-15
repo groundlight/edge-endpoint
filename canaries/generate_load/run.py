@@ -11,9 +11,11 @@ logger = logging.getLogger(__name__)
 
 gl = groundlight.Groundlight()
 
+# TODO parameterize this
 detector_id = "det_2sxWe4bhmSjcAeqNk2R9wc2xaIb"
 detector = gl.get_detector(detector_id)
 
+# Create a new heartbeat detector based on the provided detector
 heartbeat_detector = gl.get_or_create_detector(
     name = detector.name + " (Edge Canary Heartbeat)",
     query=detector.query
@@ -32,17 +34,17 @@ config = {
 }
 grabber = framegrab.FrameGrabber.create_grabber(config)
 
-logger.info('Starting canary load test...')
+
+# Track all unique label values received
 unique_labels = set()
+
+logger.info('Starting canary load test...')
 load_test_start_time = time.time()
 for n in range(NUM_IMAGE_QUERIES):
     
     frame = grabber.grab()
     
-    inf_start = time.time()
     iq = gl.ask_ml(detector, frame)
-    inf_end = time.time()
-    inference_time = inf_end - inf_start
     
     unique_labels.add(iq.result.label.value)
     
