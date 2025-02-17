@@ -1,6 +1,12 @@
 name: cicd
 on:
   push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
     # This allows it to be triggered manually in the github console
     # You could put inputs here, but we don't need them.
@@ -10,21 +16,23 @@ concurrency:
   cancel-in-progress: true
 env:
   PYTHON_VERSION: "3.11"
-  POETRY_VERSION: "1.5.1"
+  POETRY_VERSION: "1.8.3"
   # This is the token associated with "prod-biggies" (with shared credentials on 1password)
   GROUNDLIGHT_API_TOKEN: ${{ secrets.GROUNDLIGHT_API_TOKEN }}
-  # This is the NGINX proxy endpoint
-  GROUNDLIGHT_ENDPOINT: http://localhost:30101
 
 jobs:
   test-general-edge-endpoint:
     runs-on: ubuntu-22.04
+    env:
+      # This is the NGINX proxy endpoint
+      GROUNDLIGHT_ENDPOINT: http://localhost:30101
     steps:
       - name: Check out code
         uses: actions/checkout@v3
 
       - name: Set up python
-        uses: actions/setup-python@v4
+        id: setup_python
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -41,7 +49,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: .venv
-          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
+          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Install edge-endpoint's python dependencies
         run: |
@@ -103,11 +111,11 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v3
-      
+
       - name: Install k3s
         run: |
           ./deploy/bin/install-k3s.sh
-          
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -122,7 +130,7 @@ jobs:
           virtualenvs-create: true
           virtualenvs-in-project: true
           installer-parallel: true
-      
+
       - name: Install edge-endpoint's python dependencies
         run: |
           poetry install --no-interaction --no-root
@@ -134,15 +142,19 @@ jobs:
   # we run this seperately from validate-setup-ee since we run out of disk space doing
   # both of them on the same runner and they can be slow so its best to do them in parallel
   test-with-k3s:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-22.04-8core
+    env:
+      # associated with roxanne+test_edge account since for some reason it was failing with
+      # prod biggies
+      GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
     steps:
       - name: Check out code
         uses: actions/checkout@v3
-      
+
       - name: Install k3s
         run: |
           ./deploy/bin/install-k3s.sh
-          
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -157,25 +169,32 @@ jobs:
           virtualenvs-create: true
           virtualenvs-in-project: true
           installer-parallel: true
-      
+
       - name: Install edge-endpoint's python dependencies
         run: |
           poetry install --no-interaction --no-root
+
+      - name: Clear Poetry cache
+        run: |
+          poetry cache clear pypi --all
+          poetry cache clear virtualenvs --all
 
       - name: Run tests with k3s
         run: |
           make test-with-k3s
 
-
   # Run Groundlight SDK tests against the edge proxy endpoint
   test-sdk:
     runs-on: ubuntu-22.04
+    env:
+      # This is the NGINX proxy endpoint
+      GROUNDLIGHT_ENDPOINT: http://localhost:30101
     steps:
       - name: Check out code
         uses: actions/checkout@v3
 
       - name: Set up python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -217,7 +236,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: .venv
-          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{hashFiles('**/poetry.lock') }}
+          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/poetry.lock') }}
 
       # Note that we're pulling the latest main from the SDK repo
       # This might be ahead of what's published to pypi, but it's useful to test things before they're released.
@@ -248,13 +267,145 @@ jobs:
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
+  G4-end-to-end:
+    # Note this job can run multiple times in parallel because the stack name is unique
+    # for the run.  How much we want to do this is TBD.
+    runs-on: self-hosted
+
+    # Run this on any PR.
+    # Question: Should we wait until the other tests pass before running this?
+    #needs:
+    #  - validate-setup-ee
+    #  - test-with-k3s
+    #  - test-sdk
+
+    env:
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
+      PYTHONUNBUFFERED: 1
+    defaults:
+      run:
+        working-directory: cicd/pulumi
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Name the stack
+        run: |
+          # Set to expire in 60 minutes
+          EXPIRATION_TIME=$(($(date +%s) + 60 * 60))
+          STACK_NAME=ee-cicd-${{ github.run_id }}-expires-${EXPIRATION_TIME}
+          echo "STACK_NAME=${STACK_NAME}" | tee -a $GITHUB_ENV
+          # We give the stack a name including its expiration time so that the sweeper
+          # (in sweeper-eeut.yaml) knows when to get rid of it.
+          # This saves us having to clean up here, which can be quite slow (~7 minutes for a g4)
+
+      - name: Check that aws credentials are set
+        # Credentials come from an IAM profile on the runner instance
+        run: |
+          aws sts get-caller-identity
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Pulumi
+        run: |
+          curl -fsSL https://get.pulumi.com | sh
+          export HOME=$(eval echo ~$(whoami))
+          echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Make sure uv is working
+        run: |
+          uv --version
+          uv sync
+          uv run python --version
+
+      - name: Check that pulumi is installed and authenticated
+        run: |
+          uv run pulumi whoami
+
+      - name: Prepare pulumi stack
+        run: |
+          uv run pulumi stack init ${STACK_NAME}
+          uv run pulumi config
+
+      - name: Pick which commit we will test
+        run: |
+          echo "This is a bit subtle."
+          echo "We can't just test on 'main' for fairly obvious reasons - we"
+          echo "want to test the code in this PR's branch. The current commit"
+          echo "right here is ${GITHUB_SHA}, which is likely a merge commit."
+          echo "Merge commits are challenging. They are what would happen if"
+          echo "this PR were to be merged into its base branch. But they are"
+          echo "ephemeral things and not available in the public repo. So the"
+          echo "EEUT can't just check them out. Making them available to the"
+          echo "EEUT would require pushing them and polluting the repo. So,"
+          echo "for now, we are going to use the PR's head ref"
+          echo "${{ github.event.pull_request.head.ref }}, which is the commit"
+          echo "that was used to create the PR. Recognizing that this doesn't"
+          echo "reflect what will happen after merge. But it's simpler."
+
+          # TODO: test on the merge commit by pushing it to the repo with a temporary
+          # branch, and then clean up the branch later.
+
+          COMMIT_TO_TEST=${{ github.event.pull_request.head.ref }}
+          uv run pulumi config set ee-cicd:targetCommit ${COMMIT_TO_TEST}
+
+      - name: Create the EEUT instance
+        run: |
+          uv run pulumi up --yes
+
+      - name: Check that EE install succeeded
+        run: |
+          uv run fab connect --patience=300
+          uv run fab wait-for-ee-setup
+
+      - name: Wait for K8 to load everything
+        run: |
+          uv run fab check-k8-deployments
+          uv run fab check-server-port
+
+      - name: Use groundlight sdk through EE
+        run: |
+          EEUT_IP=$(uv run pulumi stack output eeut_private_ip)
+          export GROUNDLIGHT_ENDPOINT=http://${EEUT_IP}:30101
+          uv run groundlight whoami
+          uv run groundlight list-detectors
+
+      - name: Thank the worker and shut down
+        # if: always()
+        # Only turn it off if the tests all pass.  If not, leave the failed machine up to debug.
+        # The grim sweeper will turn it off in an hour or so.
+        run: |
+          echo "Strong work, G4!  You did it.  Now go to sleep. The grim sweeper will visit soon."
+          uv run fab shutdown-instance
+
+      - name: Instructions for connecting to a failed worker to debug
+        if: always()
+        run: |
+          EEUT_IP=$(uv run pulumi stack output eeut_private_ip)
+          echo "If the tests failed, the EEUT (edge endpoint under test) is still running."
+          echo "You can connect to it via ssh using the following command:"
+          echo "ssh ubuntu@${EEUT_IP}"
+          echo "(Assuming you have the private key and are coming from the right subnet.)"
+          echo ""
+          echo "If the machine was put to sleep and you want it back, run:"
+          echo "wake-ec2 eeut-${STACK_NAME}"
+          echo "In the GL_Public account."
+
   build-push-edge-endpoint-multiplatform:
     if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     # We only run this action if all the prior test actions succeed
     needs:
       - test-general-edge-endpoint
       - test-sdk
+      - test-with-k3s
       - validate-setup-ee
+      - G4-end-to-end
     runs-on: ubuntu-22.04
     steps:
       - name: Configure AWS credentials
@@ -276,7 +427,11 @@ jobs:
 
   update-glhub:
     if: github.ref == 'refs/heads/main'
-    needs: validate-setup-ee
+    needs:
+      - test-general-edge-endpoint
+      - validate-setup-ee
+      - test-sdk
+      - test-with-k3s
     runs-on: ubuntu-latest
     environment: live
 

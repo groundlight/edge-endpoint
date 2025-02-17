@@ -134,13 +134,21 @@ $K create configmap setup-db --from-file=$(pwd)/deploy/bin/setup_db.sh -n ${DEPL
 # Clean up existing deployments and services (if they exist)
 $K delete --ignore-not-found deployment edge-endpoint
 $K delete --ignore-not-found service edge-endpoint-service
-$K delete --ignore-not-found deployment warmup-inference-model
+$K delete --ignore-not-found job warmup-inference-model
 $K get deployments -o custom-columns=":metadata.name" --no-headers=true | \
     grep "inferencemodel" | \
     xargs -I {} $K delete deployments {}
 $K get service -o custom-columns=":metadata.name" --no-headers=true | \
     grep "inference-service" | \
     xargs -I {} $K delete service {}
+
+
+# Define a function to envsubst and apply a yaml file
+apply_yaml() {
+    envsubst < $1 > $1.tmp
+    $K apply -f $1.tmp
+    rm $1.tmp
+}
 
 # Reapply changes
 
@@ -150,11 +158,8 @@ if [[ "${DEPLOY_LOCAL_VERSION}" == "1" ]]; then
         fail "PersistentVolume $PERSISTENT_VOLUME_NAME conflicts with the existing resource."
     fi
 
-    # Use envsubst to replace the PERSISTENT_VOLUME_NAME, PERSISTENT_VOLUME_NAME in the local_persistent_volume.yaml template
-    envsubst < deploy/k3s/local_persistent_volume.yaml > deploy/k3s/local_persistentvolume.yaml
+    apply_yaml deploy/k3s/local_persistent_volume.yaml
     echo $PERSISTENT_VOLUME_NAME
-    $K apply -f deploy/k3s/local_persistentvolume.yaml
-    rm deploy/k3s/local_persistentvolume.yaml
 
 else
     # If environment variable EFS_VOLUME_ID is not set, exit
@@ -166,11 +171,7 @@ else
         fail "PersistentVolume $PERSISTENT_VOLUME_NAME conflicts with the existing resource."
     fi
 
-    # Use envsubst to replace the EFS_VOLUME_ID, PERSISTENT_VOLUME_NAME, PERSISTENT_PERSISTENT_VOLUME_NAMEVOLUME_CLAIM_NAME
-    # in the persistentvolumeclaim.yaml template
-    envsubst < deploy/k3s/efs_persistent_volume.yaml > deploy/k3s/persistentvolume.yaml
-    $K apply -f deploy/k3s/persistentvolume.yaml
-    rm deploy/k3s/persistentvolume.yaml
+    apply_yaml deploy/k3s/efs_persistent_volume.yaml
 fi
 
 # Check if the persistent volume claim exists. If not, create it
@@ -179,25 +180,16 @@ if ! $K get pvc edge-endpoint-pvc; then
     if [[ -z "${EFS_VOLUME_ID}" ]]; then
         fail "EFS_VOLUME_ID environment variable not set"
     fi
-    # Use envsubst to replace the EFS_VOLUME_ID in the persistentvolumeclaim.yaml template
-    envsubst < deploy/k3s/persistentvolume.yaml > deploy/k3s/persistentvolume.yaml.tmp
-    $K apply -f deploy/k3s/persistentvolume.yaml.tmp
-    rm deploy/k3s/persistentvolume.yaml.tmp
+    apply_yaml deploy/k3s/persistentvolume.yaml
 fi
 
 # Make pinamod directory for hostmapped volume
 $MAYBE_SUDO mkdir -p /opt/groundlight/edge/pinamod-public
 
-# Substitutes the namespace in the service_account.yaml template
-envsubst < deploy/k3s/service_account.yaml > deploy/k3s/service_account.yaml.tmp
-$K apply -f deploy/k3s/service_account.yaml.tmp
-rm deploy/k3s/service_account.yaml.tmp
-
-$K apply -f deploy/k3s/inference_deployment/warmup_inference_model.yaml
-
-# Substitutes the EDGE_ENDPOINT_PORT and IMAGE_TAG
-envsubst < deploy/k3s/edge_deployment/edge_deployment.yaml > deploy/k3s/edge_deployment/edge_deployment.yaml.tmp
-$K apply -f deploy/k3s/edge_deployment/edge_deployment.yaml.tmp
-rm deploy/k3s/edge_deployment/edge_deployment.yaml.tmp
+#TODO: We should probably make this more automatic, like *.yaml or something.
+apply_yaml deploy/k3s/service_account.yaml
+apply_yaml deploy/k3s/inference_deployment/warmup_inference_model.yaml
+apply_yaml deploy/k3s/edge_deployment/edge_deployment.yaml
+apply_yaml deploy/k3s/refresh_creds.yaml
 
 $K describe deployment edge-endpoint

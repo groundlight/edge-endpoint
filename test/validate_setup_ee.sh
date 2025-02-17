@@ -2,6 +2,8 @@
 # basic script to validate that setup_ee works as expected
 export DEPLOYMENT_NAMESPACE="validate-setup-ee"
 export INFERENCE_FLAVOR="CPU"
+export DEPLOY_LOCAL_VERSION="1"
+export EDGE_ENDPOINT_PORT="30107"
 
 kubectl create namespace $DEPLOYMENT_NAMESPACE
 ./deploy/bin/setup-ee.sh

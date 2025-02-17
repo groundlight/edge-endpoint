@@ -61,12 +61,13 @@ NAME                                    READY   STATUS    RESTARTS   AGE
 edge-endpoint-594d645588-5mf28          2/2     Running   0          4s
 ```
 
-If you configured detectors in the [edge config file](/configs/edge-config.yaml), you should also see a pod for each of them, e.g.:
+If you configured detectors in the [edge config file](/configs/edge-config.yaml), you should also see 2 pods for each of them (one for primary inference and one for OODD), e.g.:
 
 ```
-NAME                                                              READY   STATUS    RESTARTS   AGE
-edge-endpoint-594d645588-5mf28                                    2/2     Running   0          4s
-inferencemodel-det-3jemxiunjuekdjzbuxavuevw15k-5d8b454bcb-xqf8m   1/1     Running   0          2s
+NAME                                                                        READY   STATUS    RESTARTS   AGE
+edge-endpoint-594d645588-5mf28                                              2/2     Running   0          4s
+inferencemodel-primary-det-3jemxiunjuekdjzbuxavuevw15k-5d8b454bcb-xqf8m     1/1     Running   0          2s
+inferencemodel-oodd-det-3jemxiunjuekdjzbuxavuevw15k-5d8b454bcb-xqf8m        1/1     Running   0          2s
 ```
 
 We currently have a hard-coded docker image from ECR in the [edge-endpoint](/edge-endpoint/deploy/k3s/edge_deployment.yaml)
@@ -78,66 +79,45 @@ image to ECR see [Pushing/Pulling Images from ECR](#pushingpulling-images-from-e
 
 ### Pods with `ImagePullBackOff` Status
 
-If you run `kubectl get pods -n <YOUR-NAMESPACE>` and see pods with a `ImagePullBackOff` status, you may need to re-run [deploy/bin/make-aws-secret.sh](/deploy/bin/make-aws-secret.sh) to update the AWS credentials.  There is a known issue with expiration of the  AWS credentials used by docker/k3s to pull images from ECR.
+Check the `refresh_creds` cron job to see if it's running. If it's not, you may need to re-run [refresh-ecr-login.sh](/deploy/bin/refresh-ecr-login.sh) to update the credentials used by docker/k3s to pull images from ECR.  If the script is running but failing, this indicates that the stored AWS credentials (in secret `aws-credentials`) are invalid or not authorized to pull algorithm images from ECR.
 
-### DNS Issues Inside Containers
-If your edge-endpoint pod comes online, but none of your inference pods come online, you may be experiencing DNS issues inside the containers.
-```bash
-username@hostname:~/edge-endpoint$ kubectl get pods -n <YOUR-NAMESPACE>
-NAME                                                              READY   STATUS             RESTARTS        AGE
-edge-endpoint-78cddd689d-vls5m                                    2/2     Running            0               11m
 ```
-You can confirm this by exec'ing into the inference-model-updater container.
-```bash
-kubectl exec -it edge-endpoint-<YOUR-PODS-ID> -n <YOUR-NAMESPACE> -c inference-model-updater -- /bin/bash
-```
-Try running `apt-get update`. It may fail with the following error message, indicating DNS issues.
-```text
-Err:1 https://deb.debian.org/debian bullseye InRelease
-  Certificate verification failed: The certificate is NOT trusted. The certificate issuer is unknown. The name in the certificate does not match the expected.  Could not handshake: Error in the certificate verification. [IP: 192.168.1.1 443]
-...
-```
-Notice how debian.org is resolving to a local IP address here. If this is the case, you can fix the issue by configuring the network to use Google’s DNS servers, bypassing the local router’s DNS.
-#### Step 1: Confirm Your Network Interface
-
-First, confirm the name of your network interface (often wlo1 for Wi-Fi or eth0 for Ethernet) by running:
-
-```bash
-nmcli device status
-```
-#### Step 2: Update DNS Settings with nmcli
-
-Use nmcli to set the DNS servers to Google’s DNS (8.8.8.8 and 8.8.4.4) and ignore the DNS settings provided by DHCP:
-
-```bash
-sudo nmcli connection modify <YOUR-CONNECTION-NAME> ipv4.dns "8.8.8.8,8.8.4.4"
-sudo nmcli connection modify <YOUR-CONNECTION-NAME> ipv4.ignore-auto-dns yes
+kubectl logs -n <YOUR-NAMESPACE> -l app=refresh_creds
 ```
 
-Replace <YOUR-CONNECTION-NAME> with the name of your active connection, such as your Wi-Fi network name.
-#### Step 3: Restart the Interface
+### Changing IP Address Causes DNS Failures and Other Problems
+When the IP address of the machine you're using to run edge-endpoint changes, it creates an inconsistent environment for the
+k3s system (which doesn't automatically update itself to reflect the change). The most obvious symptom of this is that DNS
+address resolution stops working.
 
-Restart the connection to apply the changes:
+If this happens, there's a script to reset the address in k3s and restart the components that need restarting.
 
-```bash
-sudo nmcli connection down <YOUR-CONNECTION-NAME> && sudo nmcli connection up <YOUR-CONNECTION-NAME>
+From the edge-endpoint directory, you can run:
 ```
-#### Step 4: Confirm the Update Worked
+deploy/bin/ip-changed.sh
+```
+If you're in another directory, adjust the path appropriately.
 
-Verify that the DNS settings have been applied correctly by running:
+When the script is complete (it should take roughly 15 seconds), address resolution and other Kubernetes features should
+be back online.
 
-```bash
-nmcli connection show "<YOUR-CONNECTION-NAME>" | grep ipv4.dns
+If you're running edge-endpoint on a transportable device, such as a laptop, you should run `ip-changed.sh` every time you switch
+access points.
+
+### EC2 Networking Setup Creates a Rule That Causes DNS Failures and Other Problems
+
+Another source of DNS/Kubernetes service problems is the netplan setup that some EC2 nodes use. I don't know why this
+happens on some nodes but not others, but it's easy to see if this is the problem. 
+
+To check, run `ip rule`. If the output has an item with rule 1000 like the following, you have this issue:
+```
+0:      from 10.45.0.177 lookup 1000
 ```
 
-This should show the configured DNS servers, `8.8.8.8` and `8.8.4.4`.
+to resolve this, simply run the script `deploy/bin/fix-g4-routing.sh`.
 
-#### Step 5: Uninstall and Reinstall k3s.
-Uninstall by running `sudo /usr/local/bin/k3s-uninstall.sh`.
-
-Reinstall by following the instructions earlier in this readme.
-
-This should resolve the DNS issue and allow the inference pods to launch.
+The issue should be permanently resolved at this point. You shouldn't need to run the script again on that node, 
+even after rebooting.
 
 ## Pushing/Pulling Images from Elastic Container Registry (ECR)
 
