@@ -46,7 +46,7 @@ async def submit_image_for_inference(inference_client_url: str, image_bytes: byt
                 logger.error(f"Inference server returned an error: {response.status_code} - {response.text}")
                 raise RuntimeError(f"Inference server error: {response.status_code} - {response.text}")
             return response.json()
-        except requests.exceptions.RequestException as e:
+        except httpx.RequestError as e:
             logger.error(f"Failed to connect to {inference_url}: {e}")
             raise RuntimeError("Failed to submit image for inference") from e
 
@@ -199,7 +199,10 @@ class EdgeInferenceManager:
             logger.info(f"Failed to look up inference clients for {detector_id}")
             return False
 
-        if not (is_edge_inference_ready(inference_client_url) and is_edge_inference_ready(oodd_inference_client_url)):
+        inference_clients_are_ready = (
+            is_edge_inference_ready(inference_client_url) and is_edge_inference_ready(oodd_inference_client_url)
+        )
+        if not inference_clients_are_ready:
             logger.debug("Edge inference server and/or OODD inference server is not ready")
             return False
         return True
