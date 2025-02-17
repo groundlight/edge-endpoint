@@ -63,6 +63,7 @@ def get_inference_result(primary_response: dict, oodd_response: dict) -> str:
     combined_output_dict = adjust_confidence_with_oodd(primary_output_dict, oodd_output_dict, primary_num_classes)
     return combined_output_dict
 
+
 def get_num_classes(response: dict) -> int:
     """
     Get the number of classes from the inference response dictionary.
@@ -78,7 +79,9 @@ def get_num_classes(response: dict) -> int:
         # binary case
         return 2
     else:
-        raise ValueError("Can't get number of classes from inference response with no predictions or multi_predictions.")
+        raise ValueError(
+            "Can't get number of classes from inference response with no predictions or multi_predictions."
+        )
 
 
 def adjust_confidence_with_oodd(primary_output_dict: dict, oodd_output_dict: dict, num_classes: int) -> dict:
@@ -93,11 +96,11 @@ def adjust_confidence_with_oodd(primary_output_dict: dict, oodd_output_dict: dic
     primary_confidence = primary_output_dict["confidence"]
     if oodd_confidence is None or primary_confidence is None:
         return primary_output_dict
-    
+
     # 1.0 is the FAIL (outlier) class
     outlier_probability = oodd_confidence if oodd_label == 1 else 1 - oodd_confidence
 
-    adjusted_confidence = (outlier_probability * 1/num_classes) + (1-outlier_probability) * primary_confidence
+    adjusted_confidence = (outlier_probability * 1 / num_classes) + (1 - outlier_probability) * primary_confidence
     primary_output_dict["confidence"] = adjusted_confidence
 
     return primary_output_dict
