@@ -199,8 +199,8 @@ class EdgeInferenceManager:
             logger.info(f"Failed to look up inference clients for {detector_id}")
             return False
 
-        inference_clients_are_ready = (
-            is_edge_inference_ready(inference_client_url) and is_edge_inference_ready(oodd_inference_client_url)
+        inference_clients_are_ready = is_edge_inference_ready(inference_client_url) and is_edge_inference_ready(
+            oodd_inference_client_url
         )
         if not inference_clients_are_ready:
             logger.debug("Edge inference server and/or OODD inference server is not ready")
