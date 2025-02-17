@@ -61,12 +61,13 @@ NAME                                    READY   STATUS    RESTARTS   AGE
 edge-endpoint-594d645588-5mf28          2/2     Running   0          4s
 ```
 
-If you configured detectors in the [edge config file](/configs/edge-config.yaml), you should also see a pod for each of them, e.g.:
+If you configured detectors in the [edge config file](/configs/edge-config.yaml), you should also see 2 pods for each of them (one for primary inference and one for OODD), e.g.:
 
 ```
-NAME                                                              READY   STATUS    RESTARTS   AGE
-edge-endpoint-594d645588-5mf28                                    2/2     Running   0          4s
-inferencemodel-det-3jemxiunjuekdjzbuxavuevw15k-5d8b454bcb-xqf8m   1/1     Running   0          2s
+NAME                                                                        READY   STATUS    RESTARTS   AGE
+edge-endpoint-594d645588-5mf28                                              2/2     Running   0          4s
+inferencemodel-primary-det-3jemxiunjuekdjzbuxavuevw15k-5d8b454bcb-xqf8m     1/1     Running   0          2s
+inferencemodel-oodd-det-3jemxiunjuekdjzbuxavuevw15k-5d8b454bcb-xqf8m        1/1     Running   0          2s
 ```
 
 We currently have a hard-coded docker image from ECR in the [edge-endpoint](/edge-endpoint/deploy/k3s/edge_deployment.yaml)

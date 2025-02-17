@@ -70,18 +70,38 @@ fi
 
 echo "Edge-endpoint pods have successfully rolled out."
 
-echo "Waiting for the inference deployment to rollout (inferencemodel-$DETECTOR_ID)..."
+echo "Waiting for the inference deployment to rollout (inferencemodel-primary-$DETECTOR_ID) and (inferencemodel-oodd-$DETECTOR_ID)..."
 
 export DETECTOR_ID_WITH_DASHES=$(echo ${DETECTOR_ID//_/-} | tr '[:upper:]' '[:lower:]')
 sleep 60
 
-echo "Describing the inferencemodel pod (inferencemodel-$DETECTOR_ID_WITH_DASHES)..."
-kubectl describe pod -l app=inferencemodel-$DETECTOR_ID_WITH_DASHES -n $DEPLOYMENT_NAMESPACE
+echo "Describing the inferencemodel pod (inferencemodel-primary-$DETECTOR_ID_WITH_DASHES)..."
+kubectl describe pod -l app=inferencemodel-primary-$DETECTOR_ID_WITH_DASHES -n $DEPLOYMENT_NAMESPACE
 
-if ! kubectl rollout status deployment/inferencemodel-$DETECTOR_ID_WITH_DASHES -n $DEPLOYMENT_NAMESPACE --timeout=5m; then
-    echo "Error: inference deployment for detector $DETECTOR_ID_WITH_DASHES failed to rollout within the timeout period."
+echo "Describing the inferencemodel pod (inferencemodel-oodd-$DETECTOR_ID_WITH_DASHES)..."
+kubectl describe pod -l app=inferencemodel-oodd-$DETECTOR_ID_WITH_DASHES -n $DEPLOYMENT_NAMESPACE
+
+# Run both rollout checks in parallel
+kubectl rollout status deployment/inferencemodel-primary-$DETECTOR_ID_WITH_DASHES \
+    -n $DEPLOYMENT_NAMESPACE --timeout=5m &
+primary_pid=$!
+
+kubectl rollout status deployment/inferencemodel-oodd-$DETECTOR_ID_WITH_DASHES \
+    -n $DEPLOYMENT_NAMESPACE --timeout=5m &
+oodd_pid=$!
+
+# Wait for both background jobs to finish and capture their exit statuses
+wait $primary_pid
+primary_status=$?
+
+wait $oodd_pid
+oodd_status=$?
+
+if [ $primary_status -ne 0 ] || [ $oodd_status -ne 0 ]; then
+    echo "Error: One or both inference deployments for detector $DETECTOR_ID_WITH_DASHES failed to rollout within the timeout period."
     exit 1
 fi
+
 echo "Inference deployment for detector $DETECTOR_ID has successfully rolled out."
 
 export EDGE_SETUP=1

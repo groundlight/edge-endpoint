@@ -1,9 +1,11 @@
+import asyncio
 import logging
 import os
 import shutil
 import time
 from typing import Optional
 
+import httpx
 import requests
 import yaml
 from cachetools import TTLCache, cached
@@ -33,18 +35,20 @@ def is_edge_inference_ready(inference_client_url: str) -> bool:
         return False
 
 
-def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, content_type: str) -> dict:
+async def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, content_type: str) -> dict:
     inference_url = f"http://{inference_client_url}/infer"
     headers = {"Content-Type": content_type}
-    try:
-        response = requests.post(inference_url, data=image_bytes, headers=headers)
-        if response.status_code != status.HTTP_200_OK:
-            logger.error(f"Inference server returned an error: {response.status_code} - {response.text}")
-            raise RuntimeError(f"Inference server error: {response.status_code} - {response.text}")
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to connect to {inference_url}: {e}")
-        raise RuntimeError("Failed to submit image for inference") from e
+    async with httpx.AsyncClient() as client:
+        try:
+            logger.debug(f"Submitting image for inference to {inference_url}")
+            response = await client.post(inference_url, data=image_bytes, headers=headers)
+            if response.status_code != status.HTTP_200_OK:
+                logger.error(f"Inference server returned an error: {response.status_code} - {response.text}")
+                raise RuntimeError(f"Inference server error: {response.status_code} - {response.text}")
+            return response.json()
+        except httpx.RequestError as e:
+            logger.error(f"Failed to connect to {inference_url}: {e}")
+            raise RuntimeError("Failed to submit image for inference") from e
 
 
 def parse_inference_response(response: dict) -> dict:
@@ -124,7 +128,7 @@ class EdgeInferenceManager:
             verbose: Whether to print verbose logs from the inference server client
         """
         self.verbose = verbose
-        self.detector_inference_configs, self.inference_client_urls = {}, {}
+        self.detector_inference_configs, self.inference_client_urls, self.oodd_inference_client_urls = {}, {}, {}
         self.speedmon = SpeedMonitor()
 
         if detector_inference_configs:
@@ -134,7 +138,11 @@ class EdgeInferenceManager:
                 for detector_id in self.detector_inference_configs.keys()
                 if self.detector_configured_for_edge_inference(detector_id)
             }
-
+            self.oodd_inference_client_urls = {
+                detector_id: get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
+                for detector_id in self.detector_inference_configs.keys()
+                if self.detector_configured_for_edge_inference(detector_id)
+            }
         # Last time we escalated to cloud for each detector
         self.last_escalation_times = {detector_id: None for detector_id in self.detector_inference_configs.keys()}
         # Minimum time between escalations for each detector
@@ -155,6 +163,9 @@ class EdgeInferenceManager:
         if detector_id not in self.detector_inference_configs.keys():
             self.detector_inference_configs[detector_id] = EdgeInferenceConfig(enabled=True, api_token=api_token)
             self.inference_client_urls[detector_id] = get_edge_inference_service_name(detector_id) + ":8000"
+            self.oodd_inference_client_urls[detector_id] = (
+                get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
+            )
             logger.info(f"Set up edge inference for {detector_id}")
 
     def detector_configured_for_edge_inference(self, detector_id: str) -> bool:
@@ -183,16 +194,20 @@ class EdgeInferenceManager:
         """
         try:
             inference_client_url = self.inference_client_urls[detector_id]
+            oodd_inference_client_url = self.oodd_inference_client_urls[detector_id]
         except KeyError:
-            logger.debug(f"Failed to look up inference client for {detector_id}")
+            logger.info(f"Failed to look up inference clients for {detector_id}")
             return False
 
-        if not is_edge_inference_ready(inference_client_url):
-            logger.debug("Edge inference server is not ready")
+        inference_clients_are_ready = is_edge_inference_ready(inference_client_url) and is_edge_inference_ready(
+            oodd_inference_client_url
+        )
+        if not inference_clients_are_ready:
+            logger.debug("Edge inference server and/or OODD inference server is not ready")
             return False
         return True
 
-    def run_inference(self, detector_id: str, image_bytes: bytes, content_type: str) -> dict:
+    async def run_inference(self, detector_id: str, image_bytes: bytes, content_type: str) -> dict:
         """
         Submit an image to the inference server, route to a specific model, and return the results.
         Args:
@@ -210,8 +225,16 @@ class EdgeInferenceManager:
         start_time = time.perf_counter()
 
         inference_client_url = self.inference_client_urls[detector_id]
-        response = submit_image_for_inference(inference_client_url, image_bytes, content_type)
+        oodd_inference_client_url = self.oodd_inference_client_urls[detector_id]
+
+        response, oodd_response = await asyncio.gather(
+            submit_image_for_inference(inference_client_url, image_bytes, content_type),
+            submit_image_for_inference(oodd_inference_client_url, image_bytes, content_type),
+        )
         output_dict = parse_inference_response(response)
+        logger.debug(f"Primary inference server response for request {detector_id=}: {output_dict}.")
+        oodd_output_dict = parse_inference_response(oodd_response)
+        logger.debug(f"OODD inference server response for request {detector_id=}: {oodd_output_dict}.")
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         self.speedmon.update(detector_id, elapsed_ms)
@@ -559,18 +582,22 @@ def delete_model_version(model_dir: str, model_version: int) -> None:
         shutil.rmtree(model_version_dir)
 
 
-def get_edge_inference_service_name(detector_id: str) -> str:
+def get_edge_inference_service_name(detector_id: str, is_oodd: bool = False) -> str:
     """
     Kubernetes service/deployment names have a strict naming convention.
     They have to be alphanumeric, lower cased, and can only contain dashes.
-    We just use `inferencemodel-<detector_id>` as the deployment name and
-    `inference-service-<detector_id>` as the service name.
+    We just use `inferencemodel-{'oodd' or 'primary'}-<detector_id>` as the deployment name and
+    `inference-service-{'oodd' or 'primary'}-<detector_id>` as the service name.
     """
-    return f"inference-service-{detector_id.replace('_', '-').lower()}"
+    return f"inference-service-{'oodd' if is_oodd else 'primary'}-{detector_id.replace('_', '-').lower()}"
 
 
-def get_edge_inference_deployment_name(detector_id: str) -> str:
-    return f"inferencemodel-{detector_id.replace('_', '-').lower()}"
+def get_edge_inference_deployment_name(detector_id: str, is_oodd: bool = False) -> str:
+    return f"inferencemodel-{'oodd' if is_oodd else 'primary'}-{detector_id.replace('_', '-').lower()}"
+
+
+def get_edge_inference_model_name(detector_id: str, is_oodd: bool = False) -> str:
+    return os.path.join(detector_id, "primary" if not is_oodd else "oodd")
 
 
 def get_detector_models_dir(repository_root: str, detector_id: str) -> str:

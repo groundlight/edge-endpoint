@@ -69,7 +69,7 @@ class DatabaseManager:
                 session.add(InferenceDeployment(**deployment))
                 session.commit()
         except IntegrityError as e:
-            if "detector_id" not in str(e.orig):
+            if "model_name" not in str(e.orig):
                 raise e
             self._handle_existing_detector(deployment)
 
@@ -79,24 +79,24 @@ class DatabaseManager:
         If the API token has changed, it updates the record with the new API token.
         :param deployment: A dictionary containing the deployment details.
         """
-        logger.debug(f"Detector ID {deployment['detector_id']} already exists in the database.")
-        detectors = self.get_inference_deployment_records(detector_id=deployment["detector_id"])
+        logger.debug(f"Model name {deployment['model_name']} already exists in the database.")
+        detectors = self.get_inference_deployment_records(model_name=deployment["model_name"])
         if len(detectors) != 1:
             raise AssertionError("Expected exactly one detector to be returned.")
 
         existing_api_token = detectors[0].api_token
         if existing_api_token != deployment["api_token"]:  # type: ignore
-            logger.info(f"Updating API token for detector ID {deployment['detector_id']}.")
-            self.update_inference_deployment_record(detector_id=deployment["detector_id"], fields_to_update=deployment)
+            logger.info(f"Updating API token for model name {deployment['model_name']}.")
+            self.update_inference_deployment_record(model_name=deployment["model_name"], fields_to_update=deployment)
 
-    def update_inference_deployment_record(self, detector_id: str, fields_to_update: Dict[str, Any]):
+    def update_inference_deployment_record(self, model_name: str, fields_to_update: Dict[str, Any]):
         """
-        Update the record for the given detector.
-        :param detector_id: Detector ID
+        Update the record for the given deployment name.
+        :param model_name: Model name
         :param fields_to_update: A dictionary fields in the deployment record to update.
         """
         with self.session_maker() as session:
-            query = select(InferenceDeployment).filter_by(detector_id=detector_id)
+            query = select(InferenceDeployment).filter_by(model_name=model_name)
             result = session.execute(query)
 
             detector_record = result.scalar_one_or_none()
