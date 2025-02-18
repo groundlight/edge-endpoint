@@ -63,7 +63,7 @@ def get_inference_result(primary_response: dict, oodd_response: dict) -> str:
     logger.debug(f"OODD inference server response: {oodd_output_dict}.")
 
     combined_output_dict = adjust_confidence_with_oodd(primary_output_dict, oodd_output_dict, primary_num_classes)
-    logger.debug(f"Final inference result: {combined_output_dict}.")
+    logger.debug(f"Combined (primary + OODD) inference result: {combined_output_dict}.")
 
     return combined_output_dict
 
@@ -84,7 +84,7 @@ def get_num_classes(response: dict) -> int:
         return 2
     else:
         raise ValueError(
-            "Can't get number of classes from inference response with no predictions or multi_predictions."
+            "Can't get number of classes from inference response with neither predictions nor multi_predictions."
         )
 
 
@@ -93,7 +93,8 @@ def adjust_confidence_with_oodd(primary_output_dict: dict, oodd_output_dict: dic
     Adjust the confidence of the primary result based on the OODD result.
 
     NOTE: This is a duplication of the cloud inference result OODD confidence adjustment logic. Changes should not be
-    made here that bring this out of sync with the cloud OODD confidence adjustment logic.
+    made here that bring this out of sync with the cloud OODD confidence adjustment logic. The cloud implementation for
+    binary detectors is found in detector_modes_logic, implemented separately for each detector mode.
     """
     oodd_confidence = oodd_output_dict["confidence"]
     oodd_label = oodd_output_dict["label"]
