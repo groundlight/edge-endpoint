@@ -105,8 +105,10 @@ def adjust_confidence_with_oodd(primary_output_dict: dict, oodd_output_dict: dic
     # 1.0 is the FAIL (outlier) class
     outlier_probability = oodd_confidence if oodd_label == 1 else 1 - oodd_confidence
 
-    adjusted_confidence = (outlier_probability * 1/num_classes) + (1 - outlier_probability) * primary_confidence
-    logger.debug(f"Adjusted confidence of the primary prediction with the OODD prediction. New confidence is {adjusted_confidence}.")
+    adjusted_confidence = (outlier_probability * 1 / num_classes) + (1 - outlier_probability) * primary_confidence
+    logger.debug(
+        f"Adjusted confidence of the primary prediction with the OODD prediction. New confidence is {adjusted_confidence}."
+    )
 
     adjusted_output_dict = primary_output_dict.copy()
     adjusted_output_dict["confidence"] = adjusted_confidence
