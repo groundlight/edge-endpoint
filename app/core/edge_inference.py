@@ -56,11 +56,15 @@ def get_inference_result(primary_response: dict, oodd_response: dict) -> str:
     Get the final inference result from the primary and OODD responses.
     """
     primary_num_classes = get_num_classes(primary_response)
+
     primary_output_dict = parse_inference_response(primary_response)
     logger.debug(f"Primary inference server response: {primary_output_dict}.")
     oodd_output_dict = parse_inference_response(oodd_response)
     logger.debug(f"OODD inference server response: {oodd_output_dict}.")
+
     combined_output_dict = adjust_confidence_with_oodd(primary_output_dict, oodd_output_dict, primary_num_classes)
+    logger.debug(f"Final inference result: {combined_output_dict}.")
+
     return combined_output_dict
 
 def get_num_classes(response: dict) -> int:
@@ -92,15 +96,19 @@ def adjust_confidence_with_oodd(primary_output_dict: dict, oodd_output_dict: dic
     oodd_label = oodd_output_dict["label"]
     primary_confidence = primary_output_dict["confidence"]
     if oodd_confidence is None or primary_confidence is None:
+        logger.warning("Either the OODD or primary confidence is None, returning the primary result.")
         return primary_output_dict
     
     # 1.0 is the FAIL (outlier) class
     outlier_probability = oodd_confidence if oodd_label == 1 else 1 - oodd_confidence
 
-    adjusted_confidence = (outlier_probability * 1/num_classes) + (1-outlier_probability) * primary_confidence
-    primary_output_dict["confidence"] = adjusted_confidence
+    adjusted_confidence = (outlier_probability * 1/num_classes) + (1 - outlier_probability) * primary_confidence
+    logger.debug(f"Adjusted confidence of the primary prediction with the OODD prediction. New confidence is {adjusted_confidence}.")
 
-    return primary_output_dict
+    adjusted_output_dict = primary_output_dict.copy()
+    adjusted_output_dict["confidence"] = adjusted_confidence
+
+    return adjusted_output_dict
 
 
 def parse_inference_response(response: dict) -> dict:
