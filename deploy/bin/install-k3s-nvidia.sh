@@ -60,18 +60,29 @@ echo "NVIDIA GPU Operator installation completed."
 # Verify that we actually added GPU capacity to the node
 capacity=0
 elapsed=0
-timeout=120
+# Even 5 minutes isn't enough sometimes.
+timeout_min=10
 
 set +x # Don't echo us running around the loop
 
 echo
-echo "Waiting up to two minutes for the GPU capacity to come online:"
+echo "Waiting up to $timeout_min minutes for the GPU capacity to come online:"
 
-while [ "$elapsed" -lt "$timeout" ]; do
-    # Run the command and capture its output
-    capacity=$($K get $($K get nodes -o name) -o=jsonpath='{.status.capacity.nvidia\.com/gpu}')
+timeout_sec=$((timeout_min * 60))
+while [ "$elapsed" -lt "$timeout_sec" ]; do
+    node_name=$($K get nodes -o name | head -n1)
+    # First make sure the node has registered
+    if [ -z "$node_name" ]; then
+        echo -n "Waiting for node to register..."
+        sleep 1
+        ((elapsed++)) || true
+        continue
+    fi
 
-    # Check if the command output is non-zero
+    # Now check the GPU capacity for the node
+    capacity=$($K get "$node_name" -o=jsonpath='{.status.capacity.nvidia\.com/gpu}')
+
+    # Check if GPU capacity is non-zero
     if [ -n "$capacity" ] && [ "$capacity" -ne 0 ]; then
         break
     fi
@@ -80,7 +91,7 @@ while [ "$elapsed" -lt "$timeout" ]; do
 
     # Wait for 1 second
     sleep 1
-    ((elapsed++)) || true  # Increment elapsed time (returns a non-zero code??)
+    ((elapsed++)) || true
 done
 
 echo

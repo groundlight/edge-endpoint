@@ -1,0 +1,29 @@
+self-hosted-runner:
+  # Labels of self-hosted runner in array of strings.
+  # this isn't a self hosted runner but it's a special enterprise big runner
+  labels: ["ubuntu-22.04-8core"]
+
+# Configuration variables in array of strings defined in your repository or
+# organization. `null` means disabling configuration variables check.
+# Empty array means no configuration variable is allowed.
+config-variables: null
+
+# Configuration for file paths. The keys are glob patterns to match to file
+# paths relative to the repository root. The values are the configurations for
+# the file paths. Note that the path separator is always '/'.
+# The following configurations are available.
+# NOTE: Everything from here down is removed in the "Warnings" run of actionlint in the workflow.
+paths:
+  # "ignore" is an array of regular expression patterns. Matched error messages
+  # are ignored. This is similar to the "-ignore" command line option.
+  .github/workflows/**/*.{yml,yaml}:
+    ignore:
+      - '.*action is too old to run on GitHub Actions.*'
+      - '.*was deprecated.*'
+      - '.*shellcheck.*:warning:.*'
+      - '.*shellcheck.*:info:.*'
+
+      # The security warning of head.ref being dangerous is painfully stupid.
+      # It's worried that the commit hash string could be malicious.  (Never mind that
+      # an attacker generating PR's can much more easily just execute malicious code.)
+      - '.*github.event.pull_request.head.ref.*is potentially untrusted.*'

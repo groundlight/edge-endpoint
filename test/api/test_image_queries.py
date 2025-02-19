@@ -187,6 +187,8 @@ def test_post_image_query_with_async_request(test_client: TestClient, detector: 
         assert "id" in response_data, "Response should contain an 'id' field"
 
 
+# TODO: This test doesn't seem to actually test this behavior, since it was passing when it should have failed.
+# It should get removed once this behavior is tested in the live environment.
 def test_post_image_query_with_human_review(test_client: TestClient, detector: Detector):
     """Test submitting an image query with human review set to ALWAYS."""
     image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))

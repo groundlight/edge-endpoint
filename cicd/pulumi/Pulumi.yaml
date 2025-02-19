@@ -1,0 +1,11 @@
+name: ee-cicd
+runtime:
+  name: python
+  options:
+    toolchain: uv
+description: CI/CD for Edge Endpoint
+config:
+  ee-cicd:instanceType: g4dn.xlarge
+  # Default to "main" so things are sensible if this doesn't get customized.
+  # But for testing purposes, this should be set to the specific commit you want to test.
+  ee-cicd:targetCommit: main

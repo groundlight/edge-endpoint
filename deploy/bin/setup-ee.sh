@@ -14,7 +14,6 @@
 # - DEPLOYMENT_NAMESPACE: The namespace for deployment. Defaults to the current namespace.
 # - RUN_EDGE_ENDPOINT: Controls the launch of edge endpoint pods.
 #   - If set, the edge-endpoint pods will be launched. If not set, pods will not be launched.
-
 set -ex
 
 # If we're in a container, sudo won't be available. But otherwise there are commands where we want sudo.
@@ -67,12 +66,22 @@ K=${KUBECTL_CMD:-"kubectl"}
 INFERENCE_FLAVOR=${INFERENCE_FLAVOR:-"GPU"}
 DEPLOY_LOCAL_VERSION=${DEPLOY_LOCAL_VERSION:-1}
 DEPLOYMENT_NAMESPACE=${DEPLOYMENT_NAMESPACE:-$($K config view -o json | jq -r '.contexts[] | select(.name == "'$($K config current-context)'") | .context.namespace // "default"')}
+export IMAGE_TAG=${IMAGE_TAG:-"latest"}
 
 # Update K to include the deployment namespace
 K="$K -n $DEPLOYMENT_NAMESPACE"
 
 # move to the root directory of the repo
 cd "$(dirname "$0")"/../..
+
+
+# Replace some configurable values in our deployment manifests,
+# if they are provided in environment variables.
+
+# Most users do not need to think about these.
+
+export PERSISTENT_VOLUME_NAME=${PERSISTENT_VOLUME_NAME:-"edge-endpoint-pv"}
+export EDGE_ENDPOINT_PORT=${EDGE_ENDPOINT_PORT:-30101}
 
 # Create Secrets
 if ! ./deploy/bin/make-aws-secret.sh; then
@@ -125,7 +134,7 @@ $K create configmap setup-db --from-file=$(pwd)/deploy/bin/setup_db.sh -n ${DEPL
 # Clean up existing deployments and services (if they exist)
 $K delete --ignore-not-found deployment edge-endpoint
 $K delete --ignore-not-found service edge-endpoint-service
-$K delete --ignore-not-found deployment warmup-inference-model
+$K delete --ignore-not-found job warmup-inference-model
 $K get deployments -o custom-columns=":metadata.name" --no-headers=true | \
     grep "inferencemodel" | \
     xargs -I {} $K delete deployments {}
@@ -133,52 +142,54 @@ $K get service -o custom-columns=":metadata.name" --no-headers=true | \
     grep "inference-service" | \
     xargs -I {} $K delete service {}
 
+
+# Define a function to envsubst and apply a yaml file
+apply_yaml() {
+    envsubst < $1 > $1.tmp
+    $K apply -f $1.tmp
+    rm $1.tmp
+}
+
 # Reapply changes
 
 # Check if DEPLOY_LOCAL_VERSION is set. If so, use a local volume instead of an EFS volume
 if [[ "${DEPLOY_LOCAL_VERSION}" == "1" ]]; then
-    if ! check_pv_conflict "edge-endpoint-pv" "local-sc"; then
-        fail "PersistentVolume edge-endpoint-pv conflicts with the existing resource."
+    if ! check_pv_conflict "$PERSISTENT_VOLUME_NAME" "null"; then
+        fail "PersistentVolume $PERSISTENT_VOLUME_NAME conflicts with the existing resource."
     fi
 
-    $K apply -f deploy/k3s/local_persistent_volume.yaml
+    apply_yaml deploy/k3s/local_persistent_volume.yaml
+    echo $PERSISTENT_VOLUME_NAME
+
 else
     # If environment variable EFS_VOLUME_ID is not set, exit
     if [[ -z "${EFS_VOLUME_ID}" ]]; then
         fail "EFS_VOLUME_ID environment variable not set"
     fi
 
-    if ! check_pv_conflict "edge-endpoint-pv" "efs-sc"; then
-        fail "PersistentVolume edge-endpoint-pv conflicts with the existing resource."
+    if ! check_pv_conflict "$PERSISTENT_VOLUME_NAME" "efs-sc"; then
+        fail "PersistentVolume $PERSISTENT_VOLUME_NAME conflicts with the existing resource."
     fi
 
-    # Use envsubst to replace the EFS_VOLUME_ID in the persistentvolumeclaim.yaml template
-    envsubst < deploy/k3s/efs_persistent_volume.yaml > deploy/k3s/persistentvolume.yaml
-    $K apply -f deploy/k3s/persistentvolume.yaml
-    rm deploy/k3s/persistentvolume.yaml
+    apply_yaml deploy/k3s/efs_persistent_volume.yaml
 fi
 
-# Check if the edge-endpoint-pvc exists. If not, create it
+# Check if the persistent volume claim exists. If not, create it
 if ! $K get pvc edge-endpoint-pvc; then
     # If environment variable EFS_VOLUME_ID is not set, exit
     if [[ -z "${EFS_VOLUME_ID}" ]]; then
         fail "EFS_VOLUME_ID environment variable not set"
     fi
-    # Use envsubst to replace the EFS_VOLUME_ID in the persistentvolumeclaim.yaml template
-    envsubst < deploy/k3s/persistentvolume.yaml > deploy/k3s/persistentvolume.yaml.tmp
-    $K apply -f deploy/k3s/persistentvolume.yaml.tmp
-    rm deploy/k3s/persistentvolume.yaml.tmp
+    apply_yaml deploy/k3s/persistentvolume.yaml
 fi
 
 # Make pinamod directory for hostmapped volume
 $MAYBE_SUDO mkdir -p /opt/groundlight/edge/pinamod-public
 
-# Substitutes the namespace in the service_account.yaml template
-envsubst < deploy/k3s/service_account.yaml > deploy/k3s/service_account.yaml.tmp
-$K apply -f deploy/k3s/service_account.yaml.tmp
-rm deploy/k3s/service_account.yaml.tmp
-
-$K apply -f deploy/k3s/inference_deployment/warmup_inference_model.yaml
-$K apply -f deploy/k3s/edge_deployment/edge_deployment.yaml
+#TODO: We should probably make this more automatic, like *.yaml or something.
+apply_yaml deploy/k3s/service_account.yaml
+apply_yaml deploy/k3s/inference_deployment/warmup_inference_model.yaml
+apply_yaml deploy/k3s/edge_deployment/edge_deployment.yaml
+apply_yaml deploy/k3s/refresh_creds.yaml
 
 $K describe deployment edge-endpoint
