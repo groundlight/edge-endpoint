@@ -180,15 +180,12 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                     )
                     background_tasks.add_task(
                         safe_call_sdk,
-                        gl.submit_image_query,
+                        gl.ask_async,
                         detector=detector_id,
                         image=image_bytes,
-                        wait=0,
                         patience_time=patience_time,
                         confidence_threshold=confidence_threshold,
-                        human_review="ALWAYS",  # Require human review for audited queries so we can evaluate accuracy
-                        want_async=True,
-                        metadata={"is_edge_audit": True},  # Provide metadata to identify edge audits in the cloud
+                        metadata={"is_edge_audit": True},  # This metadata will trigger an audit in the cloud
                     )
 
                     # Don't want to escalate to cloud again if we're already auditing the query
