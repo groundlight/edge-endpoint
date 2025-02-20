@@ -1,0 +1,61 @@
+name: sweeper-eeut
+# This workflow tears down old EEUT stacks from pulumi.
+# We do this as a background sweeper job, because the teardown is VERY slow (~7 minutes for a g4)
+# and we don't want to slow down the main pipeline for that.
+on:
+  schedule:
+    - cron: '*/15 * * * *'  # Every 15 minutes
+      # Note cron workflows only run from the main branch.
+  push:
+    branches:
+      # If you're working on this stuff, name your branch e2e-something and this will run.
+      - e2e*
+concurrency:
+  group: sweeper-eeut
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  destroy-expired-eeut-stacks:
+    #runs-on: ubuntu-22.04  # preferably
+    # Currently running on self-hosted because something is wrong with the AWS perms on the GH runners.
+    runs-on: self-hosted
+    env:
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
+    defaults:
+      run:
+        working-directory: cicd/pulumi
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Set AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-region: us-west-2
+          # TODO: move these back to GH-provided secrets
+          # Currently using IAM roles on the self-hosted runner instance.
+          #aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          #aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          #aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Pulumi
+        run: |
+          curl -fsSL https://get.pulumi.com | sh
+          export HOME=$(eval echo ~$(whoami))
+          echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
+
+      - name: Check that pulumi is installed and authenticated
+        run: |
+          set -ex
+          pulumi whoami
+
+      - name: Destroy old EEUT stacks
+        working-directory: cicd/pulumi
+        run: |
+          ./sweep-destroy-eeut-stacks.sh

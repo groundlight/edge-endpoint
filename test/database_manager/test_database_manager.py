@@ -34,22 +34,38 @@ def database_reset(db_manager: DatabaseManager):
 
 def test_create_or_update_inference_deployment_record(db_manager: DatabaseManager, database_reset):
     """Test creating a new detector deployment record."""
+    deployments = []
 
-    deployments = [
-        {
-            "detector_id": prefixed_ksuid("det_"),
-            "api_token": prefixed_ksuid("api_"),
-            "deployment_created": False,
-        }
-        for _ in range(NUM_TESTING_RECORDS)
-    ]
+    for _ in range(NUM_TESTING_RECORDS):
+        detector_id = prefixed_ksuid("det_")
+        edge_model_name = detector_id + "/primary"
+        oodd_model_name = detector_id + "/oodd"
+        api_token = prefixed_ksuid("api_")
+        deployment_created = False
+        deployments.append(
+            {
+                "model_name": edge_model_name,
+                "detector_id": detector_id,
+                "api_token": api_token,
+                "deployment_created": deployment_created,
+            }
+        )
+        deployments.append(
+            {
+                "model_name": oodd_model_name,
+                "detector_id": detector_id,
+                "api_token": api_token,
+                "deployment_created": deployment_created,
+            }
+        )
 
     for deployment in deployments:
         db_manager.create_or_update_inference_deployment_record(deployment=deployment)
         with db_manager.session_maker() as session:
-            query_text = f"SELECT * FROM inference_deployments WHERE detector_id = '{deployment['detector_id']}'"
+            query_text = f"SELECT * FROM inference_deployments WHERE model_name = '{deployment['model_name']}'"
             query = session.execute(text(query_text))
             result = query.first()
+            assert result.model_name == deployment["model_name"]
             assert result.detector_id == deployment["detector_id"]
             assert result.api_token == deployment["api_token"]
             assert result.deployment_created == deployment["deployment_created"] is False
@@ -62,6 +78,7 @@ def test_get_detectors_without_deployments(db_manager, database_reset):
     deployments = [
         {
             "detector_id": prefixed_ksuid("det_"),
+            "model_name": prefixed_ksuid("det_") + "/oodd",
             "api_token": prefixed_ksuid("api_"),
             "deployment_created": False,
         }
@@ -76,31 +93,49 @@ def test_get_detectors_without_deployments(db_manager, database_reset):
     for record in undeployed_detectors:
         assert record.detector_id in set([r["detector_id"] for r in deployments])
         assert record.api_token in set([r["api_token"] for r in deployments])
+        assert record.model_name in set([r["model_name"] for r in deployments])
 
 
 def test_update_inference_deployment_record(db_manager, database_reset):
     """
     Create a few testing records, update the deployment_created field, and check that the update was successful.
     """
-    deployments = [
-        {
-            "detector_id": prefixed_ksuid("det_"),
-            "api_token": prefixed_ksuid("api_"),
-            "deployment_created": False,
-        }
-        for _ in range(NUM_TESTING_RECORDS)
-    ]
+    deployments = []
+
+    for _ in range(NUM_TESTING_RECORDS):
+        detector_id = prefixed_ksuid("det_")
+        edge_model_name = detector_id + "/primary"
+        oodd_model_name = detector_id + "/oodd"
+        api_token = prefixed_ksuid("api_")
+        deployment_created = False
+        deployments.append(
+            {
+                "model_name": edge_model_name,
+                "detector_id": detector_id,
+                "api_token": api_token,
+                "deployment_created": deployment_created,
+            }
+        )
+        deployments.append(
+            {
+                "model_name": oodd_model_name,
+                "detector_id": detector_id,
+                "api_token": api_token,
+                "deployment_created": deployment_created,
+            }
+        )
 
     for deployment in deployments:
         db_manager.create_or_update_inference_deployment_record(deployment=deployment)
         db_manager.update_inference_deployment_record(
-            detector_id=deployment["detector_id"], fields_to_update={"deployment_created": True}
+            model_name=deployment["model_name"], fields_to_update={"deployment_created": True}
         )
 
         with db_manager.session_maker() as session:
-            query_text = f"SELECT * FROM inference_deployments WHERE detector_id = '{deployment['detector_id']}'"
+            query_text = f"SELECT * FROM inference_deployments WHERE model_name = '{deployment['model_name']}'"
             query = session.execute(text(query_text))
             result = query.first()
+            assert result.model_name == deployment["model_name"]
             assert result.detector_id == deployment["detector_id"]
             assert result.api_token == deployment["api_token"]
             assert bool(result.deployment_created) is True
@@ -109,11 +144,12 @@ def test_update_inference_deployment_record(db_manager, database_reset):
 def test_update_api_token_for_detector(db_manager, database_reset):
     deployment = {
         "detector_id": prefixed_ksuid("det_"),
+        "model_name": prefixed_ksuid("det_") + "/primary",
         "api_token": prefixed_ksuid("api_"),
         "deployment_created": False,
     }
     db_manager.create_or_update_inference_deployment_record(deployment=deployment)
-    detectors = db_manager.get_inference_deployment_records(detector_id=deployment["detector_id"])
+    detectors = db_manager.get_inference_deployment_records(model_name=deployment["model_name"])
     assert len(detectors) == 1
     assert detectors[0].api_token == deployment["api_token"]
     assert bool(detectors[0].deployment_created) is False
@@ -121,11 +157,11 @@ def test_update_api_token_for_detector(db_manager, database_reset):
     # Now change the API token
     new_api_token = prefixed_ksuid("api_")
     db_manager.update_inference_deployment_record(
-        detector_id=deployment["detector_id"], fields_to_update={"api_token": new_api_token}
+        model_name=deployment["model_name"], fields_to_update={"api_token": new_api_token}
     )
 
     # Check that the API token has been updated
-    detectors = db_manager.get_inference_deployment_records(detector_id=deployment["detector_id"])
+    detectors = db_manager.get_inference_deployment_records(model_name=deployment["model_name"])
     assert len(detectors) == 1
     assert detectors[0].api_token == new_api_token
     assert bool(detectors[0].deployment_created) is False

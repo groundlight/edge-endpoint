@@ -20,7 +20,7 @@ test-all: test test-with-docker  ## Run all tests in one make command
 	@echo "All tests completed."
 
 test-with-k3s:
-	. test/setup_k3s_test_environment.sh && poetry run pytest -m live
+	. test/integration/setup_and_run_tests.sh
 
 validate-setup-ee:
 	test/validate_setup_ee.sh

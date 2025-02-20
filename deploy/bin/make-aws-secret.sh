@@ -5,47 +5,35 @@ DEPLOYMENT_NAMESPACE=${DEPLOYMENT_NAMESPACE:-$($K config view -o json | jq -r '.
 # Update K to include the deployment namespace
 K="$K -n $DEPLOYMENT_NAMESPACE"
 
-if command -v docker >/dev/null 2>&1; then
-    # Enable ECR login - make sure you have the aws client configured properly, or an IAM role
-    # attached to your instance
-    aws ecr get-login-password --region us-west-2 | docker login \
-        --username AWS \
-        --password-stdin  \
-        767397850842.dkr.ecr.us-west-2.amazonaws.com
-else
-    echo "Docker is not installed. Skipping docker ECR login."
-fi
+cd $(dirname "$0")
 
+# Run the refresh-ecr-login.sh, telling it to use the configured KUBECTL_CMD
+KUBECTL_CMD="$K" ./refresh-ecr-login.sh
 
-# Note: needs testing
-$K delete --ignore-not-found secret registry-credentials
-$K delete --ignore-not-found secret aws-credentials
-
-# NOTE: these credentials seem to be expiring, causing problems later.
-PASSWORD=$(aws ecr get-login-password --region us-west-2)
-$K create secret docker-registry registry-credentials \
-    --docker-server=767397850842.dkr.ecr.us-west-2.amazonaws.com \
-    --docker-username=AWS \
-    --docker-password=$PASSWORD
-
-# Store AWS credentials in a Kubernetes secret
+# Now we try to find the AWS credentials.  Let's look in the CLI
 if command -v aws >/dev/null 2>&1; then
     # Try to retrieve AWS credentials from aws configure
     AWS_ACCESS_KEY_ID_CMD=$(aws configure get aws_access_key_id 2>/dev/null)
     AWS_SECRET_ACCESS_KEY_CMD=$(aws configure get aws_secret_access_key 2>/dev/null)
 fi
-
-# Use configured credentials if both are available, otherwise use environment variables
+# Use the CLI credentials if available, otherwise use environment variables
 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID_CMD:-$AWS_ACCESS_KEY_ID}
 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY_CMD:-$AWS_SECRET_ACCESS_KEY}
 
+# Check that we have credentials
+if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+    fail "No AWS credentials found"
+fi
+
 # Create the secret with either retrieved or environment values
+$K delete --ignore-not-found secret aws-credentials
 $K create secret generic aws-credentials \
     --from-literal=aws_access_key_id=$AWS_ACCESS_KEY_ID \
     --from-literal=aws_secret_access_key=$AWS_SECRET_ACCESS_KEY
 
 # Verify secrets have been properly created
 if ! $K get secret registry-credentials; then
+    # These should have been created in refresh-ecr-login.sh
     fail "registry-credentials secret not found"
 fi
 

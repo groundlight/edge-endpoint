@@ -32,6 +32,8 @@ DETECTOR_ID_3 = "det_2rdUb0jljHCosfKGuTugVoo4eiY"
 # - confidence_threshold=0.9
 DETECTOR_ID_4 = "det_2rdVBErF53NWjVjhVdIrb6QJbRT"
 
+# we use a dynamically created detector for integration tests
+DETECTOR_ID = os.getenv("DETECTOR_ID", "det_2SagpFUrs83cbMZsap5hZzRjZw4")
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
