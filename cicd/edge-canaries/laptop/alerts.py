@@ -3,7 +3,7 @@ from groundlight import VerbEnum, ApiException, Detector
 import logging
 import numpy as np
 
-# TODO update this to the real pager duty inbox
+# TODO update this to the real pager duty inbox (edge-canary@groundlight.ai)
 PAGER_DUTY_INBOX = 'tim@groundlight.ai'
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ def create_hearbeat_alert(detector: Detector, heartbeat_timeout_minutes: int) ->
         logger.info("New alert created successfully.")
     except ApiException as e:
         if "already exists" in e.body.lower():
-            logger.info("Alert already exists.")
+            logger.info("Heartbeat alert already exists. Skipping...")
         else:
             logger.error(f'Unexpected error while creating a rule: {e}')
             
