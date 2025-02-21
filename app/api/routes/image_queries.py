@@ -56,6 +56,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     detector_id: str = Query(...),
     content_type: str = Depends(validate_content_type),
     image_bytes: bytes = Depends(validate_image_bytes),
+    wait: Optional[float] = Query(None, ge=0),
     patience_time: Optional[float] = Query(None, ge=0),
     confidence_threshold: Optional[float] = Query(None, ge=0, le=1),
     human_review: Optional[Literal["DEFAULT", "ALWAYS", "NEVER"]] = Query(None),
@@ -107,6 +108,16 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     disable_cloud_escalation = (
         detector_inference_config.disable_cloud_escalation if detector_inference_config is not None else False
     )
+
+    logger.info(f"wait is {wait}")
+    if wait > 0 and return_edge_prediction:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=(
+                f"A non-zero wait is currently not supported when 'always_return_edge_prediction' is True. "
+                f"Received wait={wait}."
+            ),
+        )
 
     if require_human_review and return_edge_prediction:
         raise HTTPException(
