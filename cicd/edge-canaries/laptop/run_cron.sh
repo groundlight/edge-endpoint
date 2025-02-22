@@ -24,7 +24,6 @@ mkdir -p "$(dirname "$LOG_FILE")" && touch "$LOG_FILE"
 # Log execution info (for debugging)
 echo "----------------------------" >> "$LOG_FILE" 2>&1
 echo "Cron job started at $(date)" >> "$LOG_FILE" 2>&1
-echo "Using Python: $(which python3)" >> "$LOG_FILE" 2>&1
 
 # Run the python script and log output to LOG_FILE
 # Redirect any logs from OpenCV that contain "[h264 @" because they will clutter the logs

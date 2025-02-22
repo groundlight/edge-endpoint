@@ -8,6 +8,7 @@ import sys
 from alerts import create_hearbeat_alert, send_heartbeat
 
 NUM_IMAGE_QUERIES = 1000
+MAX_EXPECTED_EDGE_INFERENCE_TIME_SEC = 0.5
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -45,6 +46,8 @@ grabber = framegrab.FrameGrabber.create_grabber(config)
 # Track all unique label values received
 unique_labels = set()
 
+confidences = []
+
 logger.info(
     f'Starting laptop edge canary test. Submitting {NUM_IMAGE_QUERIES} image queries to {detector_id}...'
     )
@@ -53,14 +56,25 @@ for n in range(NUM_IMAGE_QUERIES):
     
     frame = grabber.grab()
     
+    inference_start = time.time()
     iq = gl.submit_image_query(
         detector=detector,
         image=frame,
         human_review="NEVER",
         wait=0.0,
+        confidence_threshold=0.6, # let's be conservative about escalation to keep inferences moving quickly
     )
+    inference_end = time.time()
+    inference_duration = inference_end - inference_start
+    
+    if inference_duration > MAX_EXPECTED_EDGE_INFERENCE_TIME_SEC:
+        logger.warning(
+            f'Image query {iq.id} finished in {inference_duration:.2f} second(s), which suggests it got a cloud answer rather than an edge answer. '
+            f'Too many cloud inferences might slow this test down to the point of failure. Consider adding more labels to your detector ({detector_id}).'
+            )
     
     unique_labels.add(iq.result.label.value)
+    confidences.append(iq.result.confidence)
     
 test_end_time = time.time()
 test_duration = test_end_time - test_start_time
@@ -73,7 +87,7 @@ logger.info(f'Processed {NUM_IMAGE_QUERIES} image queries in {test_duration:.2f}
 MINIMUM_EXPECTED_BINARY_QUERY_RATE = 5.0 
 if query_rate < MINIMUM_EXPECTED_BINARY_QUERY_RATE:
     logger.error(
-        f"Edge Canary actual binary query rate is {query_rate}, less that expected minimum of {MINIMUM_EXPECTED_BINARY_QUERY_RATE}."
+        f"Edge Canary actual binary query rate is {query_rate}, less that expected minimum of {MINIMUM_EXPECTED_BINARY_QUERY_RATE}. "
         f"There might be something wrong with the Edge Endpoint, or your detector ({detector_id}) might need more labels to function properly."
         )
     sys.exit(1) # exit to avoid sending heartbeat
@@ -84,6 +98,10 @@ unexpected_labels = unique_labels - EXPECTED_BINARY_LABELS
 if len(unexpected_labels) > 0:
     logger.error(f"Found unexpected label(s) in results from Edge Endpoint: {unexpected_labels}. Expected: {EXPECTED_BINARY_LABELS}")
     sys.exit(1) # exit to avoid sending heartbeat
+    
+# TODO should we have any expectations about average confidence?
+average_confidence = sum(confidences) / len(confidences)
+logging.info(f'Finished with an average confidence of {average_confidence:.2f}.')
 
 # Report heartbeat
 # If all previous tests pass, send one image query to Groundlight Cloud, an alert will fire if the

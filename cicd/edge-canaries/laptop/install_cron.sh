@@ -80,7 +80,8 @@ CRON_JOB="*/5 * * * * $CRON_SCRIPT >> $LOG_FILE 2>&1"
 (crontab -l 2>/dev/null | grep -v "$CRON_SCRIPT"; echo "$CRON_JOB") | crontab -
 
 # Install the reboot cron job
-REBOOT_JOB="00 20 * * * /bin/bash -c 'echo \"\$(date) - System rebooting via cron\" >> ${LOG_FILE} && /sbin/shutdown -r now'"
+# TODO figure out why it isn't actually rebooting
+REBOOT_JOB="00 20 * * * echo \"\$(date) - System rebooting via cron\" >> ${LOG_FILE} && /sbin/shutdown -r +1"
 (crontab -l 2>/dev/null | grep -Fv "shutdown -r now"; echo "$REBOOT_JOB") | crontab -
 
 # Install the boot log cron job
