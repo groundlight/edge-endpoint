@@ -8,13 +8,15 @@ import sys
 from alerts import create_hearbeat_alert, send_heartbeat
 
 NUM_IMAGE_QUERIES = 1000
-MAX_EXPECTED_EDGE_INFERENCE_TIME_SEC = 0.5
+MAX_EXPECTED_EDGE_INFERENCE_TIME_SEC = 0.4
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     level=logging.INFO,
     datefmt="%Y-%m-%d %H:%M:%S",
-    force=True, # It seems one of framegrab's dependencies is causing an issue with this. See: https://github.com/groundlight/framegrab/pull/59
+    # It seems one of framegrab's dependencies is overriding any logging config that we try to set here: See: https://github.com/groundlight/framegrab/pull/59
+    # force=True fixes this
+    force=True, 
 )
 
 logger = logging.getLogger(__name__)
@@ -62,10 +64,11 @@ for n in range(NUM_IMAGE_QUERIES):
         image=frame,
         human_review="NEVER",
         wait=0.0,
-        confidence_threshold=0.6, # let's be conservative about escalation to keep inferences moving quickly
+        confidence_threshold=0.75, # let's be conservative about escalation to keep inferences moving quickly
     )
     inference_end = time.time()
     inference_duration = inference_end - inference_start
+    # logger.info(f'inference_duration: {inference_duration:.2f}')
     
     if inference_duration > MAX_EXPECTED_EDGE_INFERENCE_TIME_SEC:
         logger.warning(
@@ -79,7 +82,7 @@ for n in range(NUM_IMAGE_QUERIES):
 test_end_time = time.time()
 test_duration = test_end_time - test_start_time
 query_rate = NUM_IMAGE_QUERIES / test_duration
-logger.info(f'Processed {NUM_IMAGE_QUERIES} image queries in {test_duration:.2f} seconds. {query_rate:.2f} queries per second.')
+logger.info(f'Processed {NUM_IMAGE_QUERIES} image queries in {test_duration:.2f} seconds at {query_rate:.2f} queries per second.')
 
 # Check that the query rate is sufficiently fast (edge speed)
 # keep MINIMUM_EXPECTED_BINARY_QUERY_RATE on the conservative side to avoid alerting too much
