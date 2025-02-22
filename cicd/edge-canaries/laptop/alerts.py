@@ -14,7 +14,7 @@ cloud_endpoint = 'https://api.groundlight.ai/device-api'
 gl = groundlight.ExperimentalApi(endpoint=cloud_endpoint)
 
 def create_heartbeat_alert(detector: Detector, heartbeat_timeout_minutes: int) -> None:
-    """Sets up a heartbeat alert on Groundlight. Grounlight will send an email if the 
+    """Sets up a heartbeat alert on Groundlight. Groundlight will send an email if the 
     relevant detector has not submitted an image query in with heartbeat_timeout_minutes.
     
     Use `send_heartbeat` to submit image queries.
