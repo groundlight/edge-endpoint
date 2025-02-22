@@ -5,7 +5,7 @@ import logging
 import os
 import sys
 
-from alerts import create_hearbeat_alert, send_heartbeat
+from alerts import create_heartbeat_alert, send_heartbeat
 
 NUM_IMAGE_QUERIES = 1000
 MAX_EXPECTED_EDGE_INFERENCE_TIME_SEC = 0.4
@@ -32,7 +32,7 @@ heartbeat_detector = gl.get_or_create_detector(
     query=detector.query
 )
 
-create_hearbeat_alert(heartbeat_detector, 15)
+create_heartbeat_alert(heartbeat_detector, 15)
 
 config = {
     "input_type": "rtsp",
@@ -109,7 +109,7 @@ logging.info(f'Finished with an average confidence of {average_confidence:.2f}.'
 # Report heartbeat
 # If all previous tests pass, send one image query to Groundlight Cloud, an alert will fire if the
 # detector goes silent for too long
-logger.info("Laptop edge canary seems to be online and functioning properly. Submitting hearbeat...")
+logger.info("Laptop edge canary seems to be online and functioning properly. Submitting heartbeat...")
 heartbeat_frame = grabber.grab()
 send_heartbeat(heartbeat_detector, heartbeat_frame)
 
