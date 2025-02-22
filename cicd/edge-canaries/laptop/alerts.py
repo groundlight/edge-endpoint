@@ -2,6 +2,7 @@ import groundlight
 from groundlight import VerbEnum, ApiException, Detector
 import logging
 import numpy as np
+import sys
 
 # TODO update this to the real pager duty inbox (edge-canary@groundlight.ai)
 PAGER_DUTY_INBOX = 'tim@groundlight.ai'
@@ -38,10 +39,10 @@ def create_heartbeat_alert(detector: Detector, heartbeat_timeout_minutes: int) -
         )
         logger.info("New alert created successfully.")
     except ApiException as e:
-        if "already exists" in e.body.lower():
+        if "name already exists" in e.body.lower():
             logger.info("Heartbeat alert already exists. Skipping...")
         else:
-            logger.error(f'Unexpected error while creating a rule: {e}')
+            raise(e)
             
 def send_heartbeat(detector: Detector, frame: np.ndarray) -> None:
     """Sends an image query to a detector to act as a heartbeat. 
