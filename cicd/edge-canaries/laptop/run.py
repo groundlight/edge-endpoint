@@ -4,11 +4,13 @@ import time
 import logging
 import os
 import sys
+import image_utils
 
 from alerts import create_heartbeat_alert, send_heartbeat
 
 NUM_IMAGE_QUERIES = 1000
 MAX_EXPECTED_EDGE_INFERENCE_TIME_SEC = 0.4
+TARGET_FRAME_WIDTH = 640
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -57,11 +59,12 @@ test_start_time = time.time()
 for n in range(NUM_IMAGE_QUERIES):
     
     frame = grabber.grab()
+    resized_frame = image_utils.resize_image(frame, TARGET_FRAME_WIDTH)
     
     inference_start = time.time()
     iq = gl.submit_image_query(
         detector=detector,
-        image=frame,
+        image=resized_frame,
         human_review="NEVER",
         wait=0.0,
         confidence_threshold=0.75, # let's be conservative about escalation to keep inferences moving quickly
@@ -111,6 +114,7 @@ logging.info(f'Finished with an average confidence of {average_confidence:.2f}.'
 # detector goes silent for too long
 logger.info("Laptop edge canary seems to be online and functioning properly. Submitting heartbeat...")
 heartbeat_frame = grabber.grab()
-send_heartbeat(heartbeat_detector, heartbeat_frame)
+resized_heartbeat_frame = image_utils.resize_image(heartbeat_frame, TARGET_FRAME_WIDTH)
+send_heartbeat(heartbeat_detector, resized_heartbeat_frame)
 
 grabber.release()
