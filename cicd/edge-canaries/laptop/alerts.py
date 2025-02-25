@@ -40,7 +40,7 @@ def create_heartbeat_alert(detector: Detector, heartbeat_timeout_minutes: int) -
         logger.info("New alert created successfully.")
     except ApiException as e:
         if "name already exists" in e.body.lower():
-            logger.info("Heartbeat alert already exists. Skipping...")
+            logger.info("Heartbeat alert already exists. No need to create one. Skipping...")
         else:
             raise(e)
             
