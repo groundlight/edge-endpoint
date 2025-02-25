@@ -74,32 +74,6 @@ RUN apt-get update && \
     apt install -y curl runc software-properties-common kmod && \
     rm -rf /var/lib/apt/lists/*
 
-# # Install CUDA and PyTorch dependencies
-# ENV LD_LIBRARY_PATH="/usr/lib/aarch64-linux-gnu:${LD_LIBRARY_PATH}"
-# RUN apt-get update && \
-#     apt-get install -y --no-install-recommends \
-#         cuda-toolkit-12-2 \
-#         libcudnn8 \
-#         libcudnn8-dev \
-#         python3-pip \
-#         libopenblas-base \
-#         libopenmpi-dev \
-#         libomp-dev \
-#         && rm -rf /var/lib/apt/lists/*
-
-# RUN pip3 install 'Cython<3'
-
-# # PyTorch 2.1.0 for Python 3.10
-# ARG PYTORCH_URL=https://nvidia.box.com/shared/static/0h6tk4msrl9xz3evft9t0mpwwwkw7a32.whl
-# ARG PYTORCH_WHL=torch-2.1.0-cp310-cp310-linux_aarch64.whl
-
-# RUN wget --quiet --show-progress --progress=bar:force:noscroll --no-check-certificate ${PYTORCH_URL} -O ${PYTORCH_WHL} && \
-#     pip3 install ${PYTORCH_WHL} --verbose && \
-#     rm ${PYTORCH_WHL}
-
-# # Install NumPy version 1.22.0
-# RUN pip3 install numpy==1.22.0
-
 # Install K3s binary (also installs containerd - must be done before installing nvidia-container-toolkit)
 RUN curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_START=true INSTALL_K3S_SKIP_ENABLE=true INSTALL_K3S_VERSION=${K3S_TAG} sh
 
