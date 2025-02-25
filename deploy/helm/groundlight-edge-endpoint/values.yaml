@@ -1,0 +1,19 @@
+# Default values for groundlight-edge-endpoint.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+namespace: "edge"
+
+imageTag: "latest"
+
+edgeEndpointPort: 30101
+
+persistentVolumeName: "edge-endpoint-pv"
+
+# The user must provide the Groundlight API token as input or the deployment will fail
+groundlightApiToken: ""
+
+# The user must provide the AWS Access Key Id as input or the deployment will fail
+awsAccessKeyId: ""
+# The user must provide the AWS Secret Access Key as input or the deployment will fail
+awsSecretAccessKey: ""

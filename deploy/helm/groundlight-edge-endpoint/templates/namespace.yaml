@@ -1,0 +1,8 @@
+{{- if eq .Values.namespace "default" -}}
+{{ fail "Error: Deployments to the 'default' namespace are not allowed!" }}
+{{- end -}}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespace }}

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: edge-config
+data:
+  edge-config.yaml: |
+    {{- if .Values.configFile }}
+    {{ .Values.configFile | indent 4 }}
+    {{- else }}
+    {{ .Files.Get "files/default-edge-config.yaml" | indent 4 }}
+    {{- end }}
