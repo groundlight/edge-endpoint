@@ -90,7 +90,7 @@ logger.info(f'Processed {NUM_IMAGE_QUERIES} image queries in {test_duration:.2f}
 # Check that the query rate is sufficiently fast (edge speed)
 # keep MINIMUM_EXPECTED_BINARY_QUERY_RATE on the conservative side to avoid alerting too much
 # Queries might still escalate to cloud ML if unsure, which could slow things down.
-MINIMUM_EXPECTED_BINARY_QUERY_RATE = 5.0 
+MINIMUM_EXPECTED_BINARY_QUERY_RATE = 7.0 
 if query_rate < MINIMUM_EXPECTED_BINARY_QUERY_RATE:
     logger.error(
         f"Edge Canary actual binary query rate is {query_rate}, less that expected minimum of {MINIMUM_EXPECTED_BINARY_QUERY_RATE}. "
