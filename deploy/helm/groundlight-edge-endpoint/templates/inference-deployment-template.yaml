@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inference-deployment-template
+  namespace: {{ .Values.namespace }}
+data:
+  inference_deployment_template.yaml: |
+{{ tpl (.Files.Get "files/inference-deployment-template.yaml") . | indent 4 }}

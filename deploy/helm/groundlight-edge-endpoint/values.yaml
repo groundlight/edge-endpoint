@@ -10,6 +10,8 @@ edgeEndpointPort: 30101
 
 persistentVolumeName: "edge-endpoint-pv"
 
+inferenceFlavor: "gpu"
+
 # The user must provide the Groundlight API token as input or the deployment will fail
 groundlightApiToken: ""
 
