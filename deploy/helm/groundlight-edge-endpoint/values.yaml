@@ -17,3 +17,8 @@ groundlightApiToken: ""
 awsAccessKeyId: ""
 # The user must provide the AWS Secret Access Key as input or the deployment will fail
 awsSecretAccessKey: ""
+
+# Currently, all Groundlight services are deployed in the us-west-2 region
+awsRegion: "us-west-2"
+
+ecrRegistry: "767397850842.dkr.ecr.us-west-2.amazonaws.com"

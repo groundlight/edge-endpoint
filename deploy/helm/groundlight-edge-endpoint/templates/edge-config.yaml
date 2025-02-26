@@ -2,6 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: edge-config
+  namespace: {{ .Values.namespace }}
 data:
   edge-config.yaml: |
     {{- if .Values.configFile }}
