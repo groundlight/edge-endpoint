@@ -5,7 +5,7 @@ metadata:
 data:
   edge-config.yaml: |
     {{- if .Values.configFile }}
-    {{ .Values.configFile | indent 4 }}
+    {{- .Values.configFile | indent 4 }}
     {{- else }}
-    {{ .Files.Get "files/default-edge-config.yaml" | indent 4 }}
+    {{- .Files.Get "files/default-edge-config.yaml" | indent 4 }}
     {{- end }}

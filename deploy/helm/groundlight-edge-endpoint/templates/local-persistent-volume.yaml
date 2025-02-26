@@ -1,7 +1,11 @@
+# All this precise matching is considered poor practice in K8s, but it makes
+# things more reliable here.
 apiVersion: v1 
 kind: PersistentVolume 
 metadata:
-  name: {{ .Values.persistentVolumeName }}
+  name: "{{ .Values.persistentVolumeName }}-{{ .Values.namespace }}"
+  labels:
+    edge-pv-for-namespace: {{ .Values.namespace }}
 spec:
   capacity: 
     storage: 2Gi
@@ -23,3 +27,6 @@ spec:
   resources:
     requests:
       storage: 2Gi
+  selector:
+    matchLabels:
+      edge-pv-for-namespace: {{ .Values.namespace }}
