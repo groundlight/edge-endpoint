@@ -1,0 +1,49 @@
+{{- define "edge-endpoint.registry-credentials.podSpec" -}}
+restartPolicy: Never
+serviceAccountName: edge-endpoint-service-account
+
+containers:
+  - name: aws-cli
+    image: amazon/aws-cli:latest
+    command:
+      - /bin/sh
+      - -c
+      - |
+        echo "Fetching AWS ECR login token..."
+        TOKEN=$(aws ecr get-login-password --region {{ .Values.awsRegion }})
+        echo $TOKEN > /shared/token.txt
+        echo "Token fetched and saved to /shared/token.txt"
+    env:
+      - name: AWS_ACCESS_KEY_ID
+        valueFrom:
+          secretKeyRef:
+            name: aws-credentials
+            key: aws_access_key_id
+      - name: AWS_SECRET_ACCESS_KEY
+        valueFrom:
+          secretKeyRef:
+            name: aws-credentials
+            key: aws_secret_access_key
+    volumeMounts:
+      - name: shared-volume
+        mountPath: /shared
+
+  - name: kubectl
+    image: bitnami/kubectl:latest
+    command:
+      - /bin/sh
+      - -c
+      - |
+        sleep 5  # Ensure the token is written before using it
+        kubectl create secret -n "{{ .Values.namespace }}" docker-registry registry-credentials \
+          --docker-server={{ .Values.ecrRegistry }} \
+          --docker-username=AWS \
+          --docker-password="$(cat /shared/token.txt)" \
+          --dry-run=client -o yaml | kubectl apply -f -
+    volumeMounts:
+      - name: shared-volume
+        mountPath: /shared
+volumes:
+  - name: shared-volume
+    emptyDir: {}
+{{- end }}
