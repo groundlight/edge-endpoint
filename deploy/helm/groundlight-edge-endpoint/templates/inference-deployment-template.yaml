@@ -5,4 +5,4 @@ metadata:
   namespace: {{ .Values.namespace }}
 data:
   inference_deployment_template.yaml: |
-{{ tpl (.Files.Get "files/inference-deployment-template.yaml") . | indent 4 }}
+    {{- tpl (.Files.Get "files/inference-deployment-template.yaml") . | nindent 4 }}

@@ -5,4 +5,4 @@ metadata:
   namespace: {{ .Values.namespace }}
 data:
   setup_db.sh: |
-{{ .Files.Get "files/setup_db.sh" | indent 4 }}
+    {{- .Files.Get "files/setup_db.sh" | nindent 4 }}
