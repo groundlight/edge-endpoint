@@ -24,3 +24,7 @@ awsSecretAccessKey: ""
 awsRegion: "us-west-2"
 
 ecrRegistry: "767397850842.dkr.ecr.us-west-2.amazonaws.com"
+
+# These values override the automated settings in _helpers.tpl to keep this short and sweet
+nameOverride: "edge-endpoint"
+fullnameOverride: "edge-endpoint"
