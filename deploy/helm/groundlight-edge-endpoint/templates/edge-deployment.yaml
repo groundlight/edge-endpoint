@@ -15,6 +15,8 @@ kind: Service
 metadata:
   name: edge-endpoint-service
   namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
 spec:
   selector:
     app: edge-logic-server
@@ -32,6 +34,7 @@ metadata:
   namespace: {{ .Values.namespace }}
   labels:
     app: edge-endpoint
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
 spec:
   replicas: 1
   selector:

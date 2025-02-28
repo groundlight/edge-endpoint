@@ -6,6 +6,7 @@ metadata:
   name: "{{ .Values.persistentVolumeName }}-{{ .Values.namespace }}"
   labels:
     edge-pv-for-namespace: {{ .Values.namespace }}
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
 spec:
   capacity: 
     storage: 2Gi

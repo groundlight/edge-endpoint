@@ -3,6 +3,8 @@ kind: Job
 metadata:
   name: warmup-inference-model
   namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
 spec:
   template:
     spec:

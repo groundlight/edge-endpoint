@@ -7,6 +7,8 @@ kind: Secret
 metadata:
   name: groundlight-api-token
   namespace: "{{ .Values.namespace }}"
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
 type: Opaque
 data:
   GROUNDLIGHT_API_TOKEN: {{ .Values.groundlightApiToken | b64enc | quote }}
