@@ -151,9 +151,6 @@ spec:
       - name: inference-deployment-template-volume
         configMap:
           name: inference-deployment-template
-      - name: sqlite-db-setup-script-volume
-        configMap:
-          name: setup-db
       - name: edge-endpoint-persistent-volume
         persistentVolumeClaim:
           claimName: edge-endpoint-pvc
