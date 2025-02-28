@@ -1,4 +1,4 @@
-{{- if not (lookup "node.k8s.io/v1" "RuntimeClass" "" "nvidia") }}
+{{- if and (eq .Values.inferenceFlavor "gpu") (not (lookup "node.k8s.io/v1" "RuntimeClass" "" "nvidia")) }}
 # Required runtime class for GPU use in k3s
 # Pods must have `runtimeClassName: nvidia` set to access GPU
 apiVersion: node.k8s.io/v1

@@ -33,3 +33,13 @@ lint: install-lint  ## Run linter to check formatting and style
 
 format: install-lint  ## Run standard python formatting
 	./code-quality/format ${LINT_PATHS}
+
+# You can add any args to your helm install by adding `HELM_ARGS="<your args>".
+# For example, `make helm-install HELM_ARGS="--set groundlightApiToken=api_2hRQVo...."` to set your token.
+HELM_ARGS =
+
+helm-install:
+	helm upgrade -i ${HELM_ARGS} edge-endpoint deploy/helm/groundlight-edge-endpoint 
+
+helm-package:
+	helm package deploy/helm/groundlight-edge-endpoint
