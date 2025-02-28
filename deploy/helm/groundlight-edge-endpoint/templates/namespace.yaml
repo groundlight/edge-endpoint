@@ -1,0 +1,10 @@
+{{- if eq .Values.namespace "default" -}}
+{{ fail "Error: Deployments to the 'default' namespace are not allowed!" }}
+{{- end -}}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespace }}
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
