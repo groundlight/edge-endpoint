@@ -1,5 +1,8 @@
 # Local values for helm, can include credentials so we don't want to check them in
-values.local.yaml
+values.local*.yaml
+
+# Ignore the built Helm package
+*.tgz
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
