@@ -19,11 +19,11 @@
 # Examples:
 #   ./deploy_balena.sh my-fleet cpu    # Deploy to a fleet of CPU-only devices
 #   ./deploy_balena.sh my-fleet gpu    # Deploy to a fleet of GPU devices w/ NVIDIA drivers and GPU operator
-#   ./deploy_balena.sh my-fleet jetson    # Deploy to a fleet of Jetson devices w/ Jetpack and GPU operator
+#   ./deploy_balena.sh my-fleet jetson-orin    # Deploy to a fleet of Jetson Orin devices w/ Jetpack and GPU operator
 
 
 if [ "$#" -lt 2 ]; then
-    echo "Usage: $0 <fleet_name> <cpu|gpu|jetson>"
+    echo "Usage: $0 <fleet_name> <cpu|gpu|jetson-orin>"
     exit 1
 fi
 
@@ -32,8 +32,8 @@ cd "$(dirname "$0")"
 FLEET_NAME=$1
 FLAVOR=$(echo "$2" | tr '[:upper:]' '[:lower:]')
 
-if [ "$FLAVOR" != "cpu" ] && [ "$FLAVOR" != "gpu" ] && [ "$FLAVOR" != "jetson" ]; then
-    echo "Error: Second argument must be 'cpu', 'gpu', or 'jetson'"
+if [ "$FLAVOR" != "cpu" ] && [ "$FLAVOR" != "gpu" ] && [ "$FLAVOR" != "jetson-orin" ]; then
+    echo "Error: Second argument must be 'cpu', 'gpu', or 'jetson-orin'"
     exit 1
 fi
 
@@ -45,11 +45,11 @@ case "$FLAVOR" in
     "gpu")
         cp deploy/balena-k3s/resources/docker-compose-gpu.yml docker-compose.yml
         ;;
-    "jetson")
-        cp deploy/balena-k3s/resources/docker-compose-jetson.yml docker-compose.yml
+    "jetson-orin")
+        cp deploy/balena-k3s/resources/docker-compose-jetson-orin.yml docker-compose.yml
         ;;
     *)
-        echo "Error: Second argument must be 'cpu', 'gpu', or 'jetson'"
+        echo "Error: Second argument must be 'cpu', 'gpu', or 'jetson-orin'"
         exit 1
         ;;
 esac

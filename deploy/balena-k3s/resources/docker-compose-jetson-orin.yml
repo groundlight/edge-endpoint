@@ -7,7 +7,7 @@ services:
   server-jetson:
     # https://docs.k3s.io/advanced#running-k3s-in-docker
     build:
-      context: deploy/balena-k3s/server-jetson
+      context: deploy/balena-k3s/server-jetson-orin
       args:
         # This args does not do anything since Jetpack comes with the NVIDIA drivers pre-installed and it is not possible to install a different version. 540.3.0 is the version that comes with L4T 36.3 (Jetpack 6.0), CUDA version 12.2.
         NVIDIA_DRIVER_VERSION: "540.3.0"
