@@ -51,6 +51,72 @@ async def submit_image_for_inference(inference_client_url: str, image_bytes: byt
             raise RuntimeError("Failed to submit image for inference") from e
 
 
+def get_inference_result(primary_response: dict, oodd_response: dict) -> str:
+    """
+    Get the final inference result from the primary and OODD responses.
+    """
+    primary_num_classes = get_num_classes(primary_response)
+
+    primary_output_dict = parse_inference_response(primary_response)
+    logger.debug(f"Primary inference server response: {primary_output_dict}.")
+    oodd_output_dict = parse_inference_response(oodd_response)
+    logger.debug(f"OODD inference server response: {oodd_output_dict}.")
+
+    combined_output_dict = adjust_confidence_with_oodd(primary_output_dict, oodd_output_dict, primary_num_classes)
+    logger.debug(f"Combined (primary + OODD) inference result: {combined_output_dict}.")
+
+    return combined_output_dict
+
+
+def get_num_classes(response: dict) -> int:
+    """
+    Get the number of classes from the inference response dictionary.
+    """
+    multi_predictions: dict = response.get("multi_predictions", None)
+    predictions: dict = response.get("predictions", None)
+    if multi_predictions is not None and predictions is not None:
+        raise ValueError("Got result with both multi_predictions and predictions.")
+    if multi_predictions is not None:
+        # multiclass or count case
+        return len(multi_predictions["probabilities"][0])
+    elif predictions is not None:
+        # binary case
+        return 2
+    else:
+        raise ValueError(
+            "Can't get number of classes from inference response with neither predictions nor multi_predictions."
+        )
+
+
+def adjust_confidence_with_oodd(primary_output_dict: dict, oodd_output_dict: dict, num_classes: int) -> dict:
+    """
+    Adjust the confidence of the primary result based on the OODD result.
+
+    NOTE: This is a duplication of the cloud inference result OODD confidence adjustment logic. Changes should not be
+    made here that bring this out of sync with the cloud OODD confidence adjustment logic. The cloud implementation for
+    binary detectors is found in detector_modes_logic, implemented separately for each detector mode.
+    """
+    oodd_confidence = oodd_output_dict["confidence"]
+    oodd_label = oodd_output_dict["label"]
+    primary_confidence = primary_output_dict["confidence"]
+    if oodd_confidence is None or primary_confidence is None:
+        logger.warning("Either the OODD or primary confidence is None, returning the primary result.")
+        return primary_output_dict
+
+    # 1.0 is the FAIL (outlier) class
+    outlier_probability = oodd_confidence if oodd_label == 1 else 1 - oodd_confidence
+
+    adjusted_confidence = (outlier_probability * 1 / num_classes) + (1 - outlier_probability) * primary_confidence
+    logger.debug(
+        f"Adjusted confidence of the primary prediction with the OODD prediction. New confidence is {adjusted_confidence}."
+    )
+
+    adjusted_output_dict = primary_output_dict.copy()
+    adjusted_output_dict["confidence"] = adjusted_confidence
+
+    return adjusted_output_dict
+
+
 def parse_inference_response(response: dict) -> dict:
     if "predictions" not in response:
         logger.error(f"Invalid inference response: {response}")
@@ -231,10 +297,8 @@ class EdgeInferenceManager:
             submit_image_for_inference(inference_client_url, image_bytes, content_type),
             submit_image_for_inference(oodd_inference_client_url, image_bytes, content_type),
         )
-        output_dict = parse_inference_response(response)
-        logger.debug(f"Primary inference server response for request {detector_id=}: {output_dict}.")
-        oodd_output_dict = parse_inference_response(oodd_response)
-        logger.debug(f"OODD inference server response for request {detector_id=}: {oodd_output_dict}.")
+
+        output_dict = get_inference_result(response, oodd_response)
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         self.speedmon.update(detector_id, elapsed_ms)
