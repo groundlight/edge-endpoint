@@ -15,6 +15,10 @@ inferenceFlavor: "gpu"
 # The user must provide the Groundlight API token as input or the deployment will fail
 groundlightApiToken: ""
 
+# If you want to override the default Groundlight API URL, you can do so here
+groundlightEndpoint: "https://api.groundlight.ai"
+
+# TODO: remove these values once we retrieve them from Janzu
 # The user must provide the AWS Access Key Id as input or the deployment will fail
 awsAccessKeyId: ""
 # The user must provide the AWS Secret Access Key as input or the deployment will fail

@@ -14,6 +14,8 @@ containers:
         echo $TOKEN > /shared/token.txt
         echo "Token fetched and saved to /shared/token.txt"
     env:
+      - name: GROUNDLIGHT_ENDPOINT
+        value: "{{ .Values.groundlightEndpoint }}"
       - name: AWS_ACCESS_KEY_ID
         valueFrom:
           secretKeyRef:

@@ -75,9 +75,14 @@ spec:
         # TODO: Once we have kubernetes-based tests, we can remove this feature flag.
         - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
           value: "1"
+        - name: GROUNDLIGHT_ENDPOINT
+          value: "{{ .Values.groundlightEndpoint }}"
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
+        - name: nginx-config-volume
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/sqlite
         startupProbe:
@@ -112,6 +117,8 @@ spec:
           value: "INFO"
         - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
           value: "1"
+        - name: GROUNDLIGHT_ENDPOINT
+          value: "{{ .Values.groundlightEndpoint }}"
         - name: GROUNDLIGHT_API_TOKEN
           valueFrom:
             secretKeyRef:
@@ -121,7 +128,9 @@ spec:
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
-
+        - name: nginx-config-volume
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
         - name: kubernetes-namespace
           mountPath: /etc/groundlight/kubernetes-namespace
 
@@ -145,6 +154,9 @@ spec:
       - name: edge-config-volume
         configMap:
           name: edge-config
+      - name: nginx-config-volume
+        configMap:
+          name: nginx-config
       - name: kubernetes-namespace
         configMap:
           name: kubernetes-namespace
