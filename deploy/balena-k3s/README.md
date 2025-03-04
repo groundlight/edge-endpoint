@@ -42,8 +42,6 @@ Now, we have our k3s single-node cluster built and running, but we have not star
 see the [Configuration](#Configuration) section below (specifically, you will need to set the `RUN_EDGE_ENDPOINT` variable).
 
 ### Deploying to a Jetson Orin device
-Not yet tested
-
 From the root of `edge-endpoint`, run:
 ```bash
 ./deploy_balena.sh <my-fleet> jetson-orin
