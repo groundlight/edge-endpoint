@@ -61,6 +61,7 @@ GROUNDLIGHT_API_TOKEN - so that we can authorize the fetching of edge model bina
 AWS_ACCESS_KEY_ID - so we can pull the edge-endpoint and gl-edge-inference images from ECR
 AWS_SECRET_ACCESS_KEY - needed along with AWS_ACCESS_KEY_ID
 RUN_EDGE_ENDPOINT - Set this to anything (such as "1") to start the pods (added for glhub integration)
+INFERENCE_FLAVOR - Set this to `GPU` or `CPU` if you are running on a device that does not support GPU inferencing, defaults to "GPU" if not set
 ```
 
 ## Extras:
