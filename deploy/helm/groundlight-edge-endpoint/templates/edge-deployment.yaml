@@ -124,7 +124,6 @@ spec:
             secretKeyRef:
               name: groundlight-api-token
               key: GROUNDLIGHT_API_TOKEN
-              optional: true
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config

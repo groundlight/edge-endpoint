@@ -7,28 +7,22 @@ containers:
     image: amazon/aws-cli:latest
     command:
       - /bin/sh
-      - -c
-      - |
-        echo "Fetching AWS ECR login token..."
-        TOKEN=$(aws ecr get-login-password --region {{ .Values.awsRegion }})
-        echo $TOKEN > /shared/token.txt
-        echo "Token fetched and saved to /shared/token.txt"
+      - /app/init-aws-access.sh
     env:
       - name: GROUNDLIGHT_ENDPOINT
         value: "{{ .Values.groundlightEndpoint }}"
-      - name: AWS_ACCESS_KEY_ID
+      - name: GROUNDLIGHT_API_TOKEN
         valueFrom:
           secretKeyRef:
-            name: aws-credentials
-            key: aws_access_key_id
-      - name: AWS_SECRET_ACCESS_KEY
-        valueFrom:
-          secretKeyRef:
-            name: aws-credentials
-            key: aws_secret_access_key
+            name: groundlight-api-token
+            key: GROUNDLIGHT_API_TOKEN
+
     volumeMounts:
       - name: shared-volume
         mountPath: /shared
+      - name: init-aws-access
+        mountPath: /app/init-aws-access.sh
+        subPath: init-aws-access.sh
 
   - name: kubectl
     image: bitnami/kubectl:latest
@@ -42,10 +36,15 @@ containers:
           --docker-username=AWS \
           --docker-password="$(cat /shared/token.txt)" \
           --dry-run=client -o yaml | kubectl apply -f -
+
+        kubectl create secret generic aws-credentials-file --from-file /shared/credentials
     volumeMounts:
       - name: shared-volume
         mountPath: /shared
 volumes:
+  - name: init-aws-access
+    configMap:
+      name: init-aws-access
   - name: shared-volume
     emptyDir: {}
 {{- end }}
