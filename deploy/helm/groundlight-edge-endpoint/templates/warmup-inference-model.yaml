@@ -18,7 +18,7 @@ spec:
       - name: sync-pinamod
         image: amazon/aws-cli:latest
         # Sync models from S3 to the local hostmapped filesystem.
-        command: ['sh', '-c', 'aws s3 sync s3://pinamod-artifacts-public/pinamod $PINAMOD_DIR --delete']
+        command: ['sh', '-c', 'mkdir -p $PINAMOD_DIR; aws s3 sync s3://pinamod-artifacts-public/pinamod $PINAMOD_DIR --delete']
         env:
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
@@ -31,13 +31,12 @@ spec:
               name: aws-credentials
               key: aws_secret_access_key
         - name: PINAMOD_DIR
-          value: /opt/models/pinamod
+          value: /opt/models/pinamod-public/pinamod
         volumeMounts:
         - name: pina-models
           mountPath: /opt/models
       volumes:
       - name: pina-models
-        hostPath:
-          path: /opt/groundlight/edge/pinamod-public
-          type: Directory
+        persistentVolumeClaim:
+          claimName: edge-endpoint-pvc
   backoffLimit: 2
