@@ -7,7 +7,7 @@ containers:
     image: amazon/aws-cli:latest
     command:
       - /bin/sh
-      - /app/init-aws-access.sh
+      - /app/init-aws-access-retrieve.sh
     env:
       - name: GROUNDLIGHT_ENDPOINT
         value: "{{ .Values.groundlightEndpoint }}"
@@ -21,26 +21,20 @@ containers:
       - name: shared-volume
         mountPath: /shared
       - name: init-aws-access
-        mountPath: /app/init-aws-access.sh
-        subPath: init-aws-access.sh
+        mountPath: /app/init-aws-access-retrieve.sh
+        subPath: init-aws-access-retrieve.sh
 
   - name: kubectl
     image: bitnami/kubectl:latest
     command:
       - /bin/sh
-      - -c
-      - |
-        sleep 5  # Ensure the token is written before using it
-        kubectl create secret -n "{{ .Values.namespace }}" docker-registry registry-credentials \
-          --docker-server={{ .Values.ecrRegistry }} \
-          --docker-username=AWS \
-          --docker-password="$(cat /shared/token.txt)" \
-          --dry-run=client -o yaml | kubectl apply -f -
-
-        kubectl create secret generic aws-credentials-file --from-file /shared/credentials
+      - /app/init-aws-access-apply.sh
     volumeMounts:
       - name: shared-volume
         mountPath: /shared
+      - name: init-aws-access
+        mountPath: /app/init-aws-access-apply.sh
+        subPath: init-aws-access-apply.sh
 volumes:
   - name: init-aws-access
     configMap:

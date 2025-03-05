@@ -6,5 +6,7 @@ metadata:
   labels:
     {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
 data:
-  init-aws-access.sh: |
-    {{- tpl (.Files.Get "files/init-aws-access.sh") . | nindent 4 }}
+  init-aws-access-retrieve.sh: |
+    {{- tpl (.Files.Get "files/init-aws-access-retrieve.sh") . | nindent 4 }}
+  init-aws-access-apply.sh: |
+    {{- tpl (.Files.Get "files/init-aws-access-apply.sh") . | nindent 4 }}
