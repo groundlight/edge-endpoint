@@ -61,3 +61,17 @@ Create the name of the service account to use
 {{- end }}
 {{- end }}
 
+{{/*
+    We want to "own" the namespace we install into. This is a safety mechanism to ensure that
+    can run the full lifecycle without getting tangled up with other stuff going on in the cluster.
+*/}}
+{{- define "validate.namespace" -}}
+{{- $ns := lookup "v1" "Namespace" "" .Values.namespace }}
+{{- if $ns }}
+  {{- $helmOwner := index $ns.metadata.labels "app.kubernetes.io/managed-by" | default "" }}
+  {{- $releaseName := index $ns.metadata.labels "app.kubernetes.io/instance" | default "" }}
+  {{- if or (ne $helmOwner "Helm") (ne $releaseName .Release.Name) }}
+    {{ fail (printf "❌ Error: Namespace '%s' already exists but is NOT owned by this Helm release ('%s'). Aborting deployment!" .Values.namespace .Release.Name) }}
+  {{- end }}
+{{- end }}
+{{- end }}
