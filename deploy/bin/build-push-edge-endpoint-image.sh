@@ -73,9 +73,15 @@ docker buildx inspect tempgroundlightedgebuilder --bootstrap
 docker buildx build \
   --platform linux/arm64,linux/amd64 \
   --tag ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG} \
-  --tag ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:latest \
   ../.. --push
 
 echo "Successfully pushed image to ECR_URL=${ECR_URL}"
 echo "${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG}"
-echo "${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:latest"
+
+# Only push the :latest tag if the script is running in GitHub Actions
+if [ "$GITHUB_ACTIONS" == "true" ]; then
+  docker tag ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG} ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:latest
+  docker push ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:latest
+  echo "${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:latest"
+fi
+

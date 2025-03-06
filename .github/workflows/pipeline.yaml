@@ -424,6 +424,9 @@ jobs:
       - name: Build and Push Multiplatform edge-endpoint Image to ECR
         timeout-minutes: 45
         run: ./deploy/bin/build-push-edge-endpoint-image.sh
+      - name: Tag main images with the "pre-release" tag
+        if: github.ref == 'refs/heads/main'
+        run: ./deploy/bin/tag-edge-endpoint-image.sh pre-release
 
   update-glhub:
     if: github.ref == 'refs/heads/main'
@@ -456,3 +459,30 @@ jobs:
         env:
           GIT_AUTHOR_NAME: "edge-glhub-bot"
           GIT_AUTHOR_EMAIL: "roxanne+gh_bot@groundlight.ai"
+
+  tag-release:
+    # The environment rules are not defined in code -- instead, they are defined in the Github UI:
+    #   https://github.com/positronix-ai/zuuul/settings/environments/546185741/edit
+    # As of this time of writing, the environment rules require manual approval for tagging a release.
+    environment: Release
+    # This will run (after manual approval) if a commit is pushed to the `main` branch
+    if: github.ref == 'refs/heads/main'
+    needs:
+      - build-push-edge-endpoint-multiplatform
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          mask-password: "true"
+      - name: Check out code
+        uses: actions/checkout@v4
+      - name: Tag main images with the "release" tag
+\        run: ./deploy/bin/tag-edge-endpoint-image.sh release
