@@ -462,7 +462,7 @@ jobs:
 
   tag-release:
     # The environment rules are not defined in code -- instead, they are defined in the Github UI:
-    #   https://github.com/positronix-ai/zuuul/settings/environments/546185741/edit
+    #   https://github.com/groundlight/edge-endpoint/settings/environments/5838966020/edit
     # As of this time of writing, the environment rules require manual approval for tagging a release.
     environment: Release
     # This will run (after manual approval) if a commit is pushed to the `main` branch
@@ -484,5 +484,7 @@ jobs:
           mask-password: "true"
       - name: Check out code
         uses: actions/checkout@v4
-      - name: Tag main images with the "release" tag
-\        run: ./deploy/bin/tag-edge-endpoint-image.sh release
+      - name: Tag main images with the "latest" and "release" tags
+        run: |-
+          ./deploy/bin/tag-edge-endpoint-image.sh latest
+          ./deploy/bin/tag-edge-endpoint-image.sh release

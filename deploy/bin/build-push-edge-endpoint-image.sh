@@ -78,10 +78,3 @@ docker buildx build \
 echo "Successfully pushed image to ECR_URL=${ECR_URL}"
 echo "${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG}"
 
-# Only push the :latest tag if the script is running in GitHub Actions
-if [ "$GITHUB_ACTIONS" == "true" ]; then
-  docker tag ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG} ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:latest
-  docker push ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:latest
-  echo "${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:latest"
-fi
-
