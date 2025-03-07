@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: init-aws-access
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+data:
+  init-aws-access-retrieve.sh: |
+    {{- tpl (.Files.Get "files/init-aws-access-retrieve.sh") . | nindent 4 }}
+  init-aws-access-apply.sh: |
+    {{- tpl (.Files.Get "files/init-aws-access-apply.sh") . | nindent 4 }}

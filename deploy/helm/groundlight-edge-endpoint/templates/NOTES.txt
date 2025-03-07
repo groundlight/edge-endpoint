@@ -1,0 +1,11 @@
+Groundlight Edge Endpoint in the namespace {{ .Values.namespace }} has been installed.
+
+Set the `GROUNDLIGHT_ENDPOINT` environment variable to the following URL to use the endpoint in your application:
+
+From your host: 
+
+export GROUNDLIGHT_ENDPOINT="http://localhost:{{ .Values.edgeEndpointPort }}/"
+
+From within the cluster:
+
+export GROUNDLIGHT_ENDPOINT="http://edge-endpoint-service.{{ .Values.namespace }}.svc.cluster.local:30101/"   
