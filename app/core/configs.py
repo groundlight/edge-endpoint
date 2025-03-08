@@ -12,7 +12,7 @@ class GlobalConfig(BaseModel):
         description="The interval (in seconds) at which the inference server checks for a new model binary update.",
     )
     confident_audit_rate: float = Field(
-        default=0.001,
+        default=1e-5,  # A detector running at 1 FPS = ~100,000 IQ/day, so 1e-5 is ~1 confident IQ/day audited
         description="The probability that any given confident prediction will be sent to the cloud for auditing.",
     )
 
@@ -88,7 +88,7 @@ class RootEdgeConfig(BaseModel):
             {
                 'global_config': {
                     'refresh_rate': 60.0,
-                    'confident_audit_rate': 0.001,
+                    'confident_audit_rate': 1e-5,
                 },
                 'edge_inference_configs': {
                     'default': EdgeInferenceConfig(
