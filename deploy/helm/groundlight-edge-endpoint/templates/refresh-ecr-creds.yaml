@@ -10,6 +10,7 @@ spec:
   schedule: "0 */2 * * *"  # Every 2 hours
   jobTemplate:
     spec:
+      ttlSecondsAfterFinished: 3600
       backoffLimit: 3
       template:
         metadata:

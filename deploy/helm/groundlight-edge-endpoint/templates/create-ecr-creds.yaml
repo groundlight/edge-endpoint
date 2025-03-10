@@ -6,6 +6,7 @@ metadata:
   labels:
     {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
 spec:
+  ttlSecondsAfterFinished: 3600
   template:
     spec:
     {{- include "edge-endpoint.registry-credentials.podSpec" . | nindent 6 }}
