@@ -1,7 +1,7 @@
 version: "2.4"
 
 # Balena docker-compose.yml for standing up a k3s server (with NVIDIA GPU support) and bastion
-# Limitations: Currently only works on `generic-amd64` devices.
+# Limitations: Currently only works on `Jetson Nano Orin` devices.
 
 services:
   server-jetson:
