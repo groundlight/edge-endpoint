@@ -75,3 +75,16 @@ Create the name of the service account to use
   {{- end }}
 {{- end }}
 {{- end }}
+
+{{/*
+  Determine the correct image tag to use for each container type. If the specific override
+  is set for that image, use it. Otherwise, use the global image tag.
+*/}}
+{{- define "groundlight-edge-endpoint.edgeEndpointTag" -}}
+{{- .Values.edgeEndpointTag | default .Values.imageTag }}
+{{- end }}
+
+{{- define "groundlight-edge-endpoint.inferenceTag" -}}
+{{- .Values.inferenceTag | default .Values.imageTag }}
+{{- end }}
+

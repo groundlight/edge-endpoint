@@ -2,14 +2,38 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+# The Kubernetees namespace where the Edge Endpoint will be deployed
+# We recommend that you don't change this value unless you're doing something unusual
+# like running more that one instance of the Edge Endpoint in the same cluster
 namespace: "edge"
 
+# The tag to use for the images. The value of `imageTag` is used for both the edge-endpoint and
+# inference images, unless you add a specific tag for one or the other image
 imageTag: "latest"
+edgeEndpointTag: ""
+inferenceTag: ""
 
+# The image pull policy for the containers.
+# TODO: This is curently set to Always to make sure that the latest image is always pulled, but
+# that will be unnecessarily costly. We need to develop a strategy for managing the image pull
+# that only gets new images when there's a new version available.
+imagePullPolicy: "Always"
+
+# The port that the Edge Endpoint will listen on on the host. 
+# Within the cluster, edge-endpoint always listens on port 30101 and can be addressed by 
+# other services in the cluster on that port using
+# http://edge-endpoint-service.edge.svc.cluster.local:30101/ (or substitute the appropriate
+# namespace if you've overriden the default value).
 edgeEndpointPort: 30101
 
-persistentVolumeName: "edge-endpoint-pv"
+# This is used as the base of the name for the PeristentVolume. The full name of the volume is 
+# created by appending the namespace to this value. Generally, this should not be overridden.
+# The PersistentVolume is used to store the model files and other data that the Edge Endpoint wants
+# to persist between restarts. It is mapped to `/opt/groundlight/edge` on the host.
+persistentVolumeNameBase: "edge-endpoint-pv"
 
+# Edge Endpoint will default to using the GPU for inference. If you want to use the CPU instead,
+# set this value to "cpu".
 inferenceFlavor: "gpu"
 
 # The user must provide the Groundlight API token as input or the deployment will fail
@@ -30,5 +54,6 @@ awsRegion: "us-west-2"
 ecrRegistry: "767397850842.dkr.ecr.us-west-2.amazonaws.com"
 
 # These values override the automated settings in _helpers.tpl to keep this short and sweet
+# Don't override these
 nameOverride: "edge-endpoint"
 fullnameOverride: "edge-endpoint"

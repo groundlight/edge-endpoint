@@ -13,7 +13,7 @@ spec:
       - name: registry-credentials
       containers:
       - name: image-puller
-        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:{{ .Values.imageTag }}
+        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
         command: ["echo", "Successfully pulled image to warm cache"]
       - name: sync-pinamod
         image: amazon/aws-cli:latest

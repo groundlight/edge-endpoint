@@ -46,12 +46,12 @@ spec:
         app: edge-logic-server
     spec:
       # This service account is used by the edge logic to access the Kubernetes API
-      # from within the pod. See deploy/k3s/service_account.yaml for more details
+      # from within the pod. See templates/service_account.yaml for more details
       serviceAccountName: edge-endpoint-service-account
       initContainers:
       - name: database-prep
-        image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:{{ .Values.imageTag }}
-        imagePullPolicy: Always
+        image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
         volumeMounts:
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/sqlite
@@ -60,7 +60,7 @@ spec:
       containers:
       - name: edge-endpoint
         image: *edgeEndpointImage
-        imagePullPolicy: Always
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
         ports:
         - containerPort: 30101
         env:
@@ -109,7 +109,7 @@ spec:
 
       - name: inference-model-updater
         image: *edgeEndpointImage
-        imagePullPolicy: Always
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
         command: ["/bin/bash", "-c"]
         args: ["poetry run python -m app.model_updater.update_models"]
         env:
