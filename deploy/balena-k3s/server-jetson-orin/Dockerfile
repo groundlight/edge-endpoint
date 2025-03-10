@@ -44,7 +44,7 @@ ENV DEBIAN_FRONTEND noninteractive
 ENV K3S_TAG=${K3S_TAG}
 ENV ENABLE_GPU=${ENABLE_GPU}
 
-# Install X for GUI support (if monitor is plugged in)
+# Install X for GUI support (in case monitor is plugged in)
 RUN apt-get install -y --no-install-recommends \
     xserver-xorg-input-evdev \
     xinit \
