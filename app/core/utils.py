@@ -67,6 +67,7 @@ def create_iq(  # noqa: PLR0913
         confidence_threshold=confidence_threshold,
         rois=rois,
         text=text,
+        done_processing=True,  # Signal that this is the final answer that will be produced by the edge
     )
 
 
@@ -84,7 +85,7 @@ def _mode_to_result_and_type(
 
     :return: A tuple of the result type and the generated result object.
     """
-    source = Source.ALGORITHM  # Results from edge model are always from algorithm
+    source = Source.EDGE  # Source is always EDGE for edge model results
     if mode == ModeEnum.BINARY:
         result_type = ResultTypeEnum.binary_classification
         label = Label.NO if result_value else Label.YES  # Map false / 0 to "YES" and true / 1 to "NO"

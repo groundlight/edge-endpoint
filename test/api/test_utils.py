@@ -37,10 +37,11 @@ class TestCreateIQ:
         assert "iq_" in iq.id
         assert iq.result_type == ResultTypeEnum.binary_classification
         assert isinstance(iq.result, BinaryClassificationResult)
-        assert iq.result.source == Source.ALGORITHM
+        assert iq.result.source == Source.EDGE
         assert iq.result.label == Label.YES
         assert "is_from_edge" in iq.metadata
         assert iq.metadata["is_from_edge"]
+        assert iq.done_processing
 
     def test_create_count_iq(self):
         """Test creating a basic count IQ."""
@@ -58,11 +59,12 @@ class TestCreateIQ:
         assert "iq_" in iq.id
         assert iq.result_type == ResultTypeEnum.counting
         assert isinstance(iq.result, CountingResult)
-        assert iq.result.source == Source.ALGORITHM
+        assert iq.result.source == Source.EDGE
         assert iq.result.count == count_value
         assert not iq.result.greater_than_max
         assert "is_from_edge" in iq.metadata
         assert iq.metadata["is_from_edge"]
+        assert iq.done_processing
 
     def test_create_count_iq_greater_than_max(self):
         """Test creating a count IQ with count greater than the max count."""
@@ -80,9 +82,10 @@ class TestCreateIQ:
 
         assert iq.result_type == ResultTypeEnum.counting
         assert isinstance(iq.result, CountingResult)
-        assert iq.result.source == Source.ALGORITHM
+        assert iq.result.source == Source.EDGE
         assert iq.result.greater_than_max
         assert iq.result.count == max_count_value
+        assert iq.done_processing
 
     def test_create_multiclass_iq(self):
         """Test creating a basic multiclass IQ."""
