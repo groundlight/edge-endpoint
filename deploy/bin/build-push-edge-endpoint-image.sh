@@ -67,9 +67,8 @@ docker buildx inspect tempgroundlightedgebuilder --bootstrap
 docker buildx build \
   --platform linux/arm64,linux/amd64 \
   --tag ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG} \
-  --tag ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:latest \
   ../.. --push
 
 echo "Successfully pushed image to ECR_URL=${ECR_URL}"
 echo "${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG}"
-echo "${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:latest"
+
