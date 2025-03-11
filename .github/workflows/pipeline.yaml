@@ -464,7 +464,7 @@ jobs:
     # The environment rules are not defined in code -- instead, they are defined in the Github UI:
     #   https://github.com/groundlight/edge-endpoint/settings/environments/5838966020/edit
     # As of this time of writing, the environment rules require manual approval for tagging a release.
-    environment: Release
+    environment: live
     # This will run (after manual approval) if a commit is pushed to the `main` branch
     if: github.ref == 'refs/heads/main'
     needs:
