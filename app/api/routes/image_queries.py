@@ -187,6 +187,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         want_async=True,
                         image_query_id=image_query.id,  # Ensure the cloud IQ has the same ID as the returned edge IQ
                     )
+                    image_query.done_processing = False  # Signal that there may be a better answer in the cloud later
                 else:
                     logger.debug(
                         f"Not escalating to cloud due to rate limit on background cloud escalations: {detector_id=}"

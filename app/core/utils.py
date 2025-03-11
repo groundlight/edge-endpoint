@@ -67,7 +67,7 @@ def create_iq(  # noqa: PLR0913
         confidence_threshold=confidence_threshold,
         rois=rois,
         text=text,
-        done_processing=True,  # Signal that this is the final answer that will be produced by the edge
+        done_processing=True,
     )
 
 
