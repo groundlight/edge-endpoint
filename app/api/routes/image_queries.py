@@ -162,6 +162,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 result_value=results["label"],
                 confidence=ml_confidence,
                 confidence_threshold=confidence_threshold,
+                is_done_processing=True,
                 query=detector_metadata.query,
                 patience_time=patience_time,
                 rois=results["rois"],
