@@ -181,12 +181,15 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                     )
                     background_tasks.add_task(
                         safe_call_sdk,
-                        gl.ask_async,
+                        gl.submit_image_query,
                         detector=detector_id,
                         image=image_bytes,
+                        wait=0,
                         patience_time=patience_time,
                         confidence_threshold=confidence_threshold,
+                        want_async=True,
                         metadata={"is_edge_audit": True},  # This metadata will trigger an audit in the cloud
+                        image_query_id=image_query.id,  # We give the cloud IQ the same ID as the returned edge IQ
                     )
 
                     # Don't want to escalate to cloud again if we're already auditing the query
