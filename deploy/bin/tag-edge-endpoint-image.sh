@@ -23,7 +23,7 @@ fi
 NEW_TAG=$1
 
 # Only the pipeline can create releases
-if [[ "$NEW_TAG" == "pre-release" || "$NEW_TAG" == "release" ]]; then
+if [[ "$NEW_TAG" == "pre-release" || "$NEW_TAG" == "release" || "$NEW_TAG" == "latest" ]]; then
     if [ -z "$GITHUB_ACTIONS" ]; then
         echo "Error: The tag '$NEW_TAG' can only be used inside GitHub Actions."
         exit 1
