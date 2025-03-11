@@ -41,6 +41,19 @@ This will build and push three services to the edge devices in your chosen fleet
 Now, we have our k3s single-node cluster built and running, but we have not started our edge deployment. To do this,
 see the [Configuration](#Configuration) section below (specifically, you will need to set the `RUN_EDGE_ENDPOINT` variable).
 
+### Deploying to a Jetson Orin device
+From the root of `edge-endpoint`, run:
+```bash
+./deploy_balena.sh <my-fleet> jetson-orin
+```
+
+This will build and push three services to the edge devices in your chosen fleet:
+1. A `server-jetson` service running a [k3s server](https://docs.k3s.io/architecture) that acts as the k3s cluster node and installs the NVIDIA GPU operator for Kubernetes GPU support
+2. A `bastion` service that provides access to the k3s cluster via kubectl commands and contains a copy of this repo at `/app/edge-endpoint`
+
+Now, we have our k3s single-node cluster built and running, but we have not started our edge deployment. To do this,
+see the [Configuration](#Configuration) section below (specifically, you will need to set the `RUN_EDGE_ENDPOINT` variable).
+
 ### Configuration
 Configure the following variables via the `<fleet>/Variables` or `<device>/Device Variables` interfaces on the BalenaCloud dashboard:
 ```
@@ -48,6 +61,7 @@ GROUNDLIGHT_API_TOKEN - so that we can authorize the fetching of edge model bina
 AWS_ACCESS_KEY_ID - so we can pull the edge-endpoint and gl-edge-inference images from ECR
 AWS_SECRET_ACCESS_KEY - needed along with AWS_ACCESS_KEY_ID
 RUN_EDGE_ENDPOINT - Set this to anything (such as "1") to start the pods (added for glhub integration)
+INFERENCE_FLAVOR - Set this to `GPU` or `CPU` if you are running on a device that does not support GPU inferencing, defaults to "GPU" if not set
 ```
 
 ## Extras:
