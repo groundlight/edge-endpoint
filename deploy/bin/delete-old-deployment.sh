@@ -18,7 +18,7 @@ K="$K -n $DEPLOYMENT_NAMESPACE"
 
 # Check to see if this namespace was installed using helm and, if so, tell the user
 # to use helm to clear the deployment
-HELM_RELEASE=$($K get deployment edge-endpoint -o json --ignore-not-found | jq -r '.metadata.annotations."meta.helm.sh/release-name"')
+HELM_RELEASE=$($K get deployment edge-endpoint -o json --ignore-not-found | jq -r '.metadata.annotations."meta.helm.sh/release-name"|select(.)')
 if [ -n "$HELM_RELEASE" ]; then
     echo "Namespace $DEPLOYMENT_NAMESPACE was installed using helm. Please use helm to delete the deployment:"
     echo "   helm uninstall $HELM_RELEASE"
