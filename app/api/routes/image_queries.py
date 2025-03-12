@@ -190,7 +190,6 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         metadata={"is_edge_audit": True},  # This metadata will trigger an audit in the cloud
                         image_query_id=image_query.id,  # We give the cloud IQ the same ID as the returned edge IQ
                     )
-                    # image_query.done_processing will be True because audits should be invisible to the user
 
                     # Don't want to escalate to cloud again if we're already auditing the query
                     return image_query
