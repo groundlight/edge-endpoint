@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from app.core.app_state import (
     STALE_METADATA_THRESHOLD_SEC,
     get_detector_metadata,
@@ -62,6 +64,37 @@ def test_timestamped_cache_basic():
     key1_timestamp_updated = cache.get_timestamp("key1")
     assert key1_timestamp_updated is not None
     assert key1_timestamp_updated > key1_timestamp
+
+
+def test_timestamped_cache_suspended_values():
+    """Test that the suspended value functionality of the TimestampedCache class works."""
+    cache = TimestampedCache(maxsize=100)
+
+    # Can suspend and restore a value, and it retains the original timestamp
+    cache["key1"] = "value1"
+    key1_timestamp = cache.get_timestamp("key1")
+    assert key1_timestamp is not None
+    cache.suspend_cached_value("key1")
+    assert cache.get("key1", None) is None
+    assert cache.get_timestamp("key1") is None
+    assert cache.restore_suspended_value("key1")
+    assert cache.get("key1", None) == "value1"
+    assert cache.get_timestamp("key1") == key1_timestamp
+
+    # Can delete a suspended value
+    cache["key2"] = "value2"
+    cache.suspend_cached_value("key2")
+    assert cache.get("key2", None) is None
+    assert cache.delete_suspended_value("key2")
+    with pytest.raises(KeyError):
+        cache.restore_suspended_value("key2")  # Can't restore a deleted suspended value
+
+    with pytest.raises(KeyError):
+        cache.suspend_cached_value("not_in_cache")  # Can't suspend a value that's not in the cache
+    with pytest.raises(KeyError):
+        cache.restore_suspended_value("not_in_cache")  # Can't restore a value that hasn't been suspended
+    with pytest.raises(KeyError):
+        cache.delete_suspended_value("not_in_cache")  # Can't delete a value that hasn't been suspended
 
 
 def test_refresh_detector_metadata_if_needed_basic():

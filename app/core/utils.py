@@ -177,7 +177,7 @@ def pil_image_to_bytes(img: Image.Image, format: str = "JPEG") -> bytes:
 
 
 class TimestampedCache(cachetools.Cache):
-    """Cache subclass that tracks when items were added to the cache."""
+    """Cache subclass that tracks when items were added to the cache, and supports suspending and restoring values."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -197,30 +197,52 @@ class TimestampedCache(cachetools.Cache):
         self.timestamps.pop(key, None)
 
     def get_timestamp(self, key) -> float | None:
-        """Get the timestamp when an item was added to the cache."""
+        """Get the timestamp of when an item was added to the cache."""
         return self.timestamps.get(key)
 
     def suspend_cached_value(self, key) -> bool:
+        """
+        Suspend a value from the cache such that it can be restored later.
+
+        Returns True if the value was successfully suspended.
+        Raises KeyError if the key is not in the cache.
+        """
         timestamp = self.timestamps.get(key, None)
         item = self.pop(key, None)
         if item is not None and timestamp is not None:
             self.suspended_values[key] = item
             self.suspended_timestamps[key] = timestamp
             return True
-        return False
+        raise KeyError(f"Key {key} not found in cache")
 
     def restore_suspended_value(self, key) -> bool:
+        """
+        Restore a suspended value to the cache.
+
+        Returns True if the value was successfully restored.
+        Raises KeyError if the key is not in the suspended values.
+        """
+        # TODO what should the behavior be if the key is already in the cache?
+
         item = self.suspended_values.pop(key, None)
         timestamp = self.suspended_timestamps.pop(key, None)
         if item is not None and timestamp is not None:
             self.__setitem__(key, item, timestamp=timestamp)
             return True
-        return False
+        raise KeyError(f"Key {key} not found in suspended values")
 
     def delete_suspended_value(self, key) -> bool:
+        """
+        Delete a suspended value.
+
+        Returns True if the value was successfully deleted.
+        Raises KeyError if the key is not in the suspended values.
+        """
         item = self.suspended_values.pop(key, None)
         timestamp = self.suspended_timestamps.pop(key, None)
-        return item is not None and timestamp is not None
+        if item is not None and timestamp is not None:
+            return True
+        raise KeyError(f"Key {key} not found in suspended values")
 
 
 # Utilities for parsing the fetch models response
