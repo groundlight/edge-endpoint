@@ -105,9 +105,16 @@ def refresh_detector_metadata_if_needed(detector_id: str, gl: Groundlight) -> No
         cached_value_age = time.monotonic() - cached_value_timestamp
         if cached_value_age > STALE_METADATA_THRESHOLD_SEC:
             logger.info(f"Detector metadata for {detector_id=} is stale. Refreshing...")
-            metadata_cache.pop(detector_id, None)
-            # Repopulate the cache with fresh metadata
-            get_detector_metadata(detector_id=detector_id, gl=gl)
+            metadata_cache.suspend_cached_value(detector_id)
+            try:
+                # Repopulate the cache with fresh metadata
+                get_detector_metadata(detector_id=detector_id, gl=gl)
+                metadata_cache.delete_suspended_value(detector_id)
+            except Exception as e:
+                logger.error(
+                    f"Failed to refresh detector metadata for {detector_id=}: {e}. Restoring stale cached metadata."
+                )
+                metadata_cache.restore_suspended_value(detector_id)
 
 
 @cachetools.cached(

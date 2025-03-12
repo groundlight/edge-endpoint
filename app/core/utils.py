@@ -181,11 +181,15 @@ class TimestampedCache(cachetools.Cache):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.timestamps = {}  # Store timestamps for each key
+        self.timestamps: dict[Any, float] = {}  # Store timestamps for each key
+        self.suspended_values: dict[Any, Any] = {}
+        self.suspended_timestamps: dict[Any, float] = {}
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key, value, timestamp: float | None = None):
         # Track the current time when setting an item
-        self.timestamps[key] = time.monotonic()
+        if timestamp is None:
+            timestamp = time.monotonic()
+        self.timestamps[key] = timestamp
         super().__setitem__(key, value)
 
     def __delitem__(self, key):
@@ -195,6 +199,28 @@ class TimestampedCache(cachetools.Cache):
     def get_timestamp(self, key) -> float | None:
         """Get the timestamp when an item was added to the cache."""
         return self.timestamps.get(key)
+
+    def suspend_cached_value(self, key) -> bool:
+        timestamp = self.timestamps.get(key, None)
+        item = self.pop(key, None)
+        if item and timestamp:
+            self.suspended_values[key] = item
+            self.suspended_timestamps[key] = timestamp
+            return True
+        return False
+
+    def restore_suspended_value(self, key) -> bool:
+        item = self.suspended_values.pop(key, None)
+        timestamp = self.suspended_timestamps.pop(key, None)
+        if item and timestamp:
+            self.__setitem__(key, item, timestamp=timestamp)
+            return True
+        return False
+
+    def delete_suspended_value(self, key) -> bool:
+        item = self.suspended_values.pop(key, None)
+        timestamp = self.suspended_timestamps.pop(key, None)
+        return item is not None and timestamp is not None
 
 
 # Utilities for parsing the fetch models response
