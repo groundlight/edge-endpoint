@@ -196,9 +196,7 @@ def test_post_image_query_with_confident_audit(test_client: TestClient, detector
         detector=detector,
         sdk_response=confident_cloud_iq,
     ):
-        with enable_edge_inference(
-            edge_response={"confidence": 0.95, "label": 0, "text": None, "rois": None}, assert_ran=True
-        ):
+        with enable_edge_inference(edge_response={"confidence": 0.95, "label": 0, "text": None, "rois": None}):
             with mock.patch("app.api.routes.image_queries.get_app_state") as mock_get_app_state:
                 # Guarantee an audit
                 mock_get_app_state.return_value.edge_config.global_config.confident_audit_rate = 1.0
