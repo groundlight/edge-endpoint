@@ -41,7 +41,7 @@ class MockTimer:
         self.current_time += seconds
 
 
-def test_timestamped_ttl_cache():
+def test_timestamped_cache_basic():
     """Test basic functionality of the TimestampedCache class."""
     cache = TimestampedCache(maxsize=100)
     cache["key1"] = "value1"
@@ -64,7 +64,7 @@ def test_timestamped_ttl_cache():
     assert key1_timestamp_updated > key1_timestamp
 
 
-def test_refresh_detector_metadata_if_needed():
+def test_refresh_detector_metadata_if_needed_basic():
     """Test that refresh_detector_metadata_if_needed correctly refreshes the cache if the metadata is stale."""
     mock_gl = MagicMock()
     mock_timer = MockTimer()
@@ -88,3 +88,38 @@ def test_refresh_detector_metadata_if_needed():
         # Now refresh should trigger a new API call
         refresh_detector_metadata_if_needed(detector_id, mock_gl)
         assert mock_sdk_call.call_count == 2  # Should have called again
+
+
+def test_refresh_detector_metadata_if_needed_error():
+    """Test that refresh_detector_metadata_if_needed correctly restores the cache if the refresh fails."""
+    mock_gl = MagicMock()
+    mock_timer = MockTimer()
+    mock_metadata = MagicMock()
+
+    with (
+        patch("app.core.utils.time.monotonic", new=mock_timer),  # Enable control over the cache's timer
+        patch("app.core.app_state.safe_call_sdk", return_value=mock_metadata) as mock_sdk_call,
+    ):
+        detector_id = "test-detector-2"  # NOTE: the get_detector_metadata cache persists between tests
+        # Populate cache
+        get_detector_metadata(detector_id=detector_id, gl=mock_gl)
+        metadata_cache: TimestampedCache = get_detector_metadata.cache
+        assert mock_sdk_call.call_count == 1
+        assert "test-detector-2" in metadata_cache
+        assert metadata_cache["test-detector-2"] == mock_metadata
+
+        # Move timer forward past the stale threshold
+        mock_timer.advance(STALE_METADATA_THRESHOLD_SEC + 1)
+        # Mock the call to fetch new metadata to fail
+        mock_sdk_call.side_effect = Exception("Error fetching metadata")
+
+        with patch.object(
+            metadata_cache, "restore_suspended_value", wraps=metadata_cache.restore_suspended_value
+        ) as restore_suspended_value_spy:
+            refresh_detector_metadata_if_needed(detector_id, mock_gl)
+            assert mock_sdk_call.call_count == 2
+            # Verify the cache was restored
+            assert "test-detector-2" in metadata_cache
+            assert metadata_cache["test-detector-2"] == mock_metadata
+            # Verify the restore method was called with the correct arguments
+            restore_suspended_value_spy.assert_called_once_with(detector_id)

@@ -203,7 +203,7 @@ class TimestampedCache(cachetools.Cache):
     def suspend_cached_value(self, key) -> bool:
         timestamp = self.timestamps.get(key, None)
         item = self.pop(key, None)
-        if item and timestamp:
+        if item is not None and timestamp is not None:
             self.suspended_values[key] = item
             self.suspended_timestamps[key] = timestamp
             return True
@@ -212,7 +212,7 @@ class TimestampedCache(cachetools.Cache):
     def restore_suspended_value(self, key) -> bool:
         item = self.suspended_values.pop(key, None)
         timestamp = self.suspended_timestamps.pop(key, None)
-        if item and timestamp:
+        if item is not None and timestamp is not None:
             self.__setitem__(key, item, timestamp=timestamp)
             return True
         return False
