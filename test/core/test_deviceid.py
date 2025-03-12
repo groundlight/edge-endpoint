@@ -1,11 +1,7 @@
 """Tests for the deviceid module."""
-import os
 from unittest.mock import patch
 
-import pytest
-
-from core import deviceid
-from core.utils import prefixed_ksuid
+from app.core import deviceid
 
 
 def test_load_device_id_file_exists(monkeypatch, tmp_path):
@@ -65,12 +61,14 @@ def test_save_new_device_id(monkeypatch, tmp_path):
     monkeypatch.setattr(deviceid, "WELL_KNOWN_PATH", str(test_device_path))
     monkeypatch.setattr(deviceid, "DEVICE_ID_FILE", str(test_device_id_file))
     
+    # First check that the file is not there.
+    assert deviceid._load_device_id() is None
+
     # Mock the prefixed_ksuid function to return a predictable ID
     test_device_id = "device_testid123456789"
-    with patch("core.deviceid.prefixed_ksuid", return_value=test_device_id):
-        device_id = deviceid._save_new_device_id()
-    
-    # Check that the function returns the correct ID and writes it to the file
+    with patch("app.core.deviceid.prefixed_ksuid", return_value=test_device_id):
+        device_id = deviceid.get_device_id()
+
     assert device_id == test_device_id
     assert test_device_id_file.read_text() == test_device_id
     assert test_device_path.exists()
@@ -105,7 +103,7 @@ def test_get_device_id_new(monkeypatch, tmp_path):
     
     # Mock the prefixed_ksuid function to return a predictable ID
     test_device_id = "device_testid123456789"
-    with patch("core.deviceid.prefixed_ksuid", return_value=test_device_id):
+    with patch("app.core.deviceid.prefixed_ksuid", return_value=test_device_id):
         device_id = deviceid.get_device_id()
     
     # Check that the function returns the new ID and writes it to the file

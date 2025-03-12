@@ -7,7 +7,7 @@ mounted on the host using hostPath.
 import logging
 import os
 
-from core.utils import prefixed_ksuid
+from app.core.utils import prefixed_ksuid
 
 WELL_KNOWN_PATH = "/opt/groundlight/device/"
 DEVICE_ID_FILE = f"{WELL_KNOWN_PATH}/deviceid.txt"
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 def _save_new_device_id() -> str:
     device_id = prefixed_ksuid("device")
     logger.info(f"Generating and saving new device ID: {device_id}")
-    os.makedirs(os.path.dirname(WELL_KNOWN_PATH), exist_ok=True)
+    os.makedirs(WELL_KNOWN_PATH, exist_ok=True)
     with open(DEVICE_ID_FILE, "w") as f:
         f.write(device_id)
     return device_id
