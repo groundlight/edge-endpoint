@@ -1,3 +1,4 @@
+import time
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any, Callable
@@ -175,20 +176,20 @@ def pil_image_to_bytes(img: Image.Image, format: str = "JPEG") -> bytes:
         return buffer.getvalue()
 
 
-class TimestampedTTLCache(cachetools.TTLCache):
-    """TTLCache subclass that tracks when items were added to the cache."""
+class TimestampedCache(cachetools.Cache):
+    """Cache subclass that tracks when items were added to the cache."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.timestamps = {}  # Store timestamps for each key
 
-    def __setitem__(self, key, value, cache_setitem=cachetools.Cache.__setitem__):
+    def __setitem__(self, key, value):
         # Track the current time when setting an item
-        self.timestamps[key] = self.timer()
-        super().__setitem__(key, value, cache_setitem)
+        self.timestamps[key] = time.monotonic()
+        super().__setitem__(key, value)
 
-    def __delitem__(self, key, cache_delitem=cachetools.Cache.__delitem__):
-        super().__delitem__(key, cache_delitem)
+    def __delitem__(self, key):
+        super().__delitem__(key)
         self.timestamps.pop(key, None)
 
     def get_timestamp(self, key) -> float | None:

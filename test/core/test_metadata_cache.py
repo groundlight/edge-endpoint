@@ -5,12 +5,12 @@ from app.core.app_state import (
     get_detector_metadata,
     refresh_detector_metadata_if_needed,
 )
-from app.core.utils import TimestampedTTLCache
+from app.core.utils import TimestampedCache
 
 
 class MockTimer:
     """
-    Mock timer for testing the TimestampedTTLCache class.
+    Mock timer for testing the TimestampedCache class.
     Modified from cachetools _TimedCache._Timer class. Must implement these methods to be compatible with the cache.
     """
 
@@ -42,8 +42,8 @@ class MockTimer:
 
 
 def test_timestamped_ttl_cache():
-    """Test basic functionality of the TimestampedTTLCache class."""
-    cache = TimestampedTTLCache(maxsize=100, ttl=600)
+    """Test basic functionality of the TimestampedCache class."""
+    cache = TimestampedCache(maxsize=100)
     cache["key1"] = "value1"
     assert cache["key1"] == "value1"
     key1_timestamp = cache.get_timestamp("key1")
@@ -70,7 +70,7 @@ def test_refresh_detector_metadata_if_needed():
     mock_timer = MockTimer()
 
     with (
-        patch("app.core.utils.TimestampedTTLCache.timer", new=mock_timer),  # Enable control over the cache's timer
+        patch("app.core.utils.time.monotonic", new=mock_timer),  # Enable control over the cache's timer
         patch("app.core.app_state.safe_call_sdk", return_value=MagicMock()) as mock_sdk_call,
     ):
         # First call to populate cache

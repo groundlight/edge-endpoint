@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from functools import lru_cache
 
 import cachetools
@@ -12,13 +13,12 @@ from .configs import EdgeInferenceConfig, RootEdgeConfig
 from .database import DatabaseManager
 from .edge_inference import EdgeInferenceManager
 from .file_paths import DEFAULT_EDGE_CONFIG_PATH
-from .utils import TimestampedTTLCache, safe_call_sdk
+from .utils import TimestampedCache, safe_call_sdk
 
 logger = logging.getLogger(__name__)
 
 MAX_SDK_INSTANCES_CACHE_SIZE = 1000
-MAX_DETECTOR_IDS_TTL_CACHE_SIZE = 1000
-TTL_TIME_SEC = 60 * 10  # 10 minutes
+MAX_DETECTOR_IDS_CACHE_SIZE = 1000
 STALE_METADATA_THRESHOLD_SEC = 30  # 30 seconds
 
 
@@ -99,10 +99,10 @@ def get_groundlight_sdk_instance(request: Request):
 
 def refresh_detector_metadata_if_needed(detector_id: str, gl: Groundlight) -> None:
     """Check if detector metadata needs refreshing based on age of cached value and refresh it if it's too old."""
-    metadata_cache: TimestampedTTLCache = get_detector_metadata.cache
+    metadata_cache: TimestampedCache = get_detector_metadata.cache
     cached_value_timestamp = metadata_cache.get_timestamp(detector_id)
     if cached_value_timestamp is not None:
-        cached_value_age = metadata_cache.timer() - cached_value_timestamp
+        cached_value_age = time.monotonic() - cached_value_timestamp
         if cached_value_age > STALE_METADATA_THRESHOLD_SEC:
             logger.info(f"Detector metadata for {detector_id=} is stale. Refreshing...")
             metadata_cache.pop(detector_id, None)
@@ -111,7 +111,7 @@ def refresh_detector_metadata_if_needed(detector_id: str, gl: Groundlight) -> No
 
 
 @cachetools.cached(
-    cache=TimestampedTTLCache(maxsize=MAX_DETECTOR_IDS_TTL_CACHE_SIZE, ttl=TTL_TIME_SEC),
+    cache=TimestampedCache(maxsize=MAX_DETECTOR_IDS_CACHE_SIZE),
     key=lambda detector_id, gl: detector_id,
 )
 def get_detector_metadata(detector_id: str, gl: Groundlight) -> Detector:
