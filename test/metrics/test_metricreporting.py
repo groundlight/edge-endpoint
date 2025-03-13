@@ -1,5 +1,5 @@
-
 from app.metrics.metricreporting import _metrics_payload
+
 
 def test_metrics_payload():
     payload = _metrics_payload()
