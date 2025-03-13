@@ -83,9 +83,9 @@ This section is where you define your detectors, along with the edge inference c
 ```
 detectors:
     - detector_id: "det_abc"
-        edge_inference_config: "default"
+      edge_inference_config: "default"
     - detector_id: "det_xyz"
-        edge_inference_config: "my_custom_config"
+      edge_inference_config: "my_custom_config"
 ```
 Add a new entry for each detector that you want to configure. Each entry must include the detector ID and the edge inference config you want the detector to use. You can select one of the predefined edge inference configs or define a new one to achieve your desired behavior. 
 
