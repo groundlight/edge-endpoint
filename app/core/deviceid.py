@@ -1,7 +1,15 @@
-"""Extremely simple device ID management.
+"""Simple device ID management.
 We need a way to identify the device, and we need to be able to generate a new one if needed.
+The device ID is stored in a JSON file, normally at /opt/groundlight/device/id.json
+When we generate it, it has a few fields:
+- uuid: The unique device ID
+- friendly_name: A friendly name for the device
+- created_at: The date and time the device ID was created
 
-For this to work properly in a containerized environment, we want the WELL_KNOWN_PATH to be
+UUID is the only required field.  Customers are encouraged to update the friendly name, and 
+even add extra fields if they want.
+
+For this to work robustly in a containerized environment, we need /opt/groundlight/device/
 mounted on the host using hostPath.
 """
 
@@ -9,7 +17,6 @@ import json
 import logging
 import os
 from datetime import datetime
-from dataclasses import dataclass
 
 from app.core.utils import prefixed_ksuid
 
@@ -19,35 +26,31 @@ DEVICE_ID_FILE = f"{WELL_KNOWN_PATH}/id.json"
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class DeviceIdRecord:
-    uuid: str
-    friendly_name: str
-    created_at: str
-
-
-def _generate_deviceid_record() -> DeviceIdRecord:
+def _generate_deviceid_dict() -> dict:
+    """Generate a new device ID dictionary with default fields."""
     unique_id = prefixed_ksuid("device")
     friendly_name = f"Device-{unique_id[-5:]}"
-    return DeviceIdRecord(uuid=unique_id, 
-        friendly_name=friendly_name,
-        created_at=datetime.now().isoformat()
-    )
+    return {
+        "uuid": unique_id,
+        "friendly_name": friendly_name,
+        "created_at": datetime.now().isoformat()
+    }
 
 
-def _save_new_device_id() -> DeviceIdRecord:
-    """Generate and save a new device ID record to the JSON file."""
-    device_record = _generate_deviceid_record()
-    logger.info(f"Generating and saving new device ID: {device_record.uuid}")
+def _save_new_deviceid_dict() -> dict:
+    """Generate and save a new device ID data to the JSON file."""
+    deviceid_dict = _generate_deviceid_dict()
+    logger.info(f"Generating and saving new device ID: {deviceid_dict['uuid']}")
     os.makedirs(WELL_KNOWN_PATH, exist_ok=True)
     with open(DEVICE_ID_FILE, "w") as f:
-        json.dump(device_record.__dict__, f, indent=2)
-    return device_record
+        json.dump(deviceid_dict, f, indent=2)
+    return deviceid_dict
 
 
-def _load_device_id() -> DeviceIdRecord | None:
+def _load_deviceid_dict() -> dict | None:
     """Tries to load the device ID record from the JSON file.
-    If the file does not exist, or doesn't look like a valid device ID record, returns None.
+    Returns a dictionary with the device data, or None if invalid/not found.
+    The only required field is 'uuid'.
     """
     if not os.path.exists(DEVICE_ID_FILE):
         return None
@@ -55,24 +58,49 @@ def _load_device_id() -> DeviceIdRecord | None:
         with open(DEVICE_ID_FILE, "r") as f:
             data = json.load(f)
         
-        # Validate that we have the expected fields
-        if "uuid" in data and data["uuid"].startswith("device_"):
-            return DeviceIdRecord(**data)
-        logger.warning(f"Device ID file {DEVICE_ID_FILE} exists but appears invalid. Generating new one.")
+        if "uuid" in data:
+            return data
+        logger.warning(f"Device ID file {DEVICE_ID_FILE} exists but is missing uuid. Generating new one.")
     except (json.JSONDecodeError, KeyError) as e:
-        logger.warning(f"Failed to parse device ID file: {e}. Generating new one.")
+        logger.warning(f"Failed to parse device ID file: {e}. Generating new one.", exc_info=True)
     
     return None
 
 
-def get_device_id_record() -> DeviceIdRecord:
-    """Get the device ID record, generating a new one if needed."""
-    record = _load_device_id()
-    if record is None:
-        record = _save_new_device_id()
-    return record
+def get_deviceid_dict() -> dict:
+    """Get the device ID data dictionary, generating a new one if needed.
+    
+    Returns:
+        dict: A dictionary containing at least 'uuid', 'friendly_name', and 'created_at'.
+              May contain additional fields added by users.
+    """
+    data = _load_deviceid_dict()
+    if data is None:
+        data = _save_new_deviceid_dict()
+    return data
 
 
-def get_device_id() -> str:
+def get_device_id_record() -> dict:
+    """Get the device ID record as a dictionary, generating a new one if needed.
+    
+    Deprecated: This is maintained for backward compatibility.
+    Prefer get_deviceid_dict() for direct access.
+    
+    Returns:
+        dict: A dictionary with the standard device ID fields.
+    """
+    return get_deviceid_dict()
+
+
+def get_deviceid_str() -> str:
     """Get the unique device ID string."""
-    return get_device_id_record().uuid
+    return get_deviceid_dict()["uuid"]
+
+
+# For backward compatibility
+def get_device_id() -> str:
+    """Get the unique device ID string.
+    
+    Deprecated: Use get_deviceid_str() instead.
+    """
+    return get_deviceid_str()
