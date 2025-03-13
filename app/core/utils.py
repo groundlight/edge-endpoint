@@ -200,8 +200,8 @@ class TimestampedCache(cachetools.Cache):
         self.timestamps.pop(key, None)
 
     def get_timestamp(self, key) -> float | None:
-        """Get the timestamp of when an item was added to the cache."""
-        return self.timestamps.get(key)
+        """Get the timestamp of when an item was added to the cache. Returns None if the key is not in the cache."""
+        return self.timestamps.get(key, None)
 
     def suspend_cached_value(self, key) -> bool:
         """

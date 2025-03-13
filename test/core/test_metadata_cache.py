@@ -46,6 +46,8 @@ class MockTimer:
 def test_timestamped_cache_basic():
     """Test basic functionality of the TimestampedCache class."""
     cache = TimestampedCache(maxsize=100)
+
+    # Can set and get a value with its timestamp
     cache["key1"] = "value1"
     assert cache["key1"] == "value1"
     key1_timestamp = cache.get_timestamp("key1")
@@ -56,14 +58,19 @@ def test_timestamped_cache_basic():
     key2_timestamp = cache.get_timestamp("key2")
     assert key2_timestamp is not None
 
+    # Timestamp ordering is correct
     assert key1_timestamp < key2_timestamp
 
+    # Updating a value updates the timestamp
     cache["key1"] = "value1_updated"
     assert cache["key1"] == "value1_updated"
-    assert cache.get_timestamp("key1") is not None
     key1_timestamp_updated = cache.get_timestamp("key1")
     assert key1_timestamp_updated is not None
     assert key1_timestamp_updated > key1_timestamp
+
+    # Deleting an entry removes the timestamp and get_timestamp for the removed key returns None
+    cache.pop("key1")
+    assert cache.get_timestamp("key1") is None
 
 
 def test_timestamped_cache_suspended_values():

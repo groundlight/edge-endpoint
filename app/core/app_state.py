@@ -98,18 +98,23 @@ def get_groundlight_sdk_instance(request: Request):
 
 
 def refresh_detector_metadata_if_needed(detector_id: str, gl: Groundlight) -> None:
-    """Check if detector metadata needs refreshing based on age of cached value and refresh it if it's too old."""
+    """
+    Check if detector metadata needs refreshing based on age of cached value and refresh it if it's too old.
+    If the refresh fails, the stale cached metadata is restored.
+    """
     metadata_cache: TimestampedCache = get_detector_metadata.cache
     cached_value_timestamp = metadata_cache.get_timestamp(detector_id)
     if cached_value_timestamp is not None:
         cached_value_age = time.monotonic() - cached_value_timestamp
         if cached_value_age > STALE_METADATA_THRESHOLD_SEC:
-            logger.info(f"Detector metadata for {detector_id=} is stale. Refreshing...")
+            logger.info(f"Detector metadata for {detector_id=} is stale. Attempting to refresh...")
             metadata_cache.suspend_cached_value(detector_id)
+
             try:
                 # Repopulate the cache with fresh metadata
                 get_detector_metadata(detector_id=detector_id, gl=gl)
                 metadata_cache.delete_suspended_value(detector_id)
+                logger.info(f"Detector metadata for {detector_id=} refreshed successfully.")
             except Exception as e:
                 logger.error(
                     f"Failed to refresh detector metadata for {detector_id=}: {e}. Restoring stale cached metadata."
