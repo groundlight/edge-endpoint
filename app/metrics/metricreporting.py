@@ -31,16 +31,11 @@ def _metrics_payload() -> dict:
 def report_metrics():
     """Reports metrics to the cloud API."""
     payload = _metrics_payload()
-    logger.info(f"Reporting metrics: {payload}")
 
-    # Send the payload to the "/edge-metrics" endpoint in the cloud API
-    # using the Groundlight SDK client.
     logger.info(f"Reporting metrics to the cloud API: {payload}")
-    
     sdk = _groundlight_client()
-
     # TODO: replace this with a proper SDK call when available.
-    headers = sdk.api_client._headers()  # API-token, user-agent, etc.
+    headers = sdk.api_client._headers()
     response = sdk.api_client.call_api(
         resource_path="report-edge-metrics",  # The endpoint path
         method="POST",                 # HTTP method
