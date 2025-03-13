@@ -146,13 +146,8 @@ This is the recommended approach moving forward.
 
 ### Installation with Helm
 
-1. Create a namespace for the deployment:
-
-```bash
-kubectl create namespace edge
-```
-
-2. Deploy using the Helm chart:
+To deploy using the Helm chart, you should _not_ create the namespace beforehand. The Helm chart 
+will create the namespace for you.  You can invoke helm directly with the following command:
 
 ```bash
 helm upgrade -i edge-endpoint deploy/helm/groundlight-edge-endpoint \
