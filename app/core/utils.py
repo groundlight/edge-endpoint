@@ -223,6 +223,7 @@ class TimestampedCache(cachetools.Cache):
     def restore_suspended_value(self, key: Any) -> bool:
         """
         Restore a suspended value to the cache.
+        If the key is already in the cache, the existing value will be overwritten.
 
         Returns True if the value was successfully restored.
         Raises KeyError if the key is not in the suspended values.

@@ -115,6 +115,12 @@ def refresh_detector_metadata_if_needed(detector_id: str, gl: Groundlight) -> No
                 get_detector_metadata(detector_id=detector_id, gl=gl)
                 metadata_cache.delete_suspended_value(detector_id)
                 logger.info(f"Detector metadata for {detector_id=} refreshed successfully.")
+            except KeyError:
+                # This shouldn't happen, but if we fail to delete the suspended value we don't want to try to restore it
+                logger.warning(
+                    f"After fetching new metadata, did not successfully delete suspended value for {detector_id=}. "
+                    "This is unexpected."
+                )
             except Exception as e:
                 logger.error(
                     f"Failed to refresh detector metadata for {detector_id=}: {e}. Restoring stale cached metadata."

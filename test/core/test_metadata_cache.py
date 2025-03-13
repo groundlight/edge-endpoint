@@ -137,7 +137,6 @@ def test_timestamped_cache_restore_overwrites_existing():
 
     cache["key3"] = "value3_updated"
     cache.restore_suspended_value("key3")
-    # TODO is this the desired behavior?
     assert cache.get("key3", None) == "value3"  # Restored value overwrites the updated value
 
 
