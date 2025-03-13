@@ -89,6 +89,15 @@ def test_timestamped_cache_suspended_values():
     with pytest.raises(KeyError):
         cache.restore_suspended_value("key2")  # Can't restore a deleted suspended value
 
+    # Restoring a suspended value overrides the existing value in the cache
+    # TODO is this the desired behavior?
+    cache["key3"] = "value3"
+    cache.suspend_cached_value("key3")
+    assert cache.get("key3", None) is None
+    cache["key3"] = "value3_updated"
+    cache.restore_suspended_value("key3")
+    assert cache.get("key3", None) == "value3"
+
     with pytest.raises(KeyError):
         cache.suspend_cached_value("not_in_cache")  # Can't suspend a value that's not in the cache
     with pytest.raises(KeyError):

@@ -1,3 +1,4 @@
+import logging
 import time
 from datetime import datetime, timezone
 from io import BytesIO
@@ -22,6 +23,8 @@ from PIL import Image
 from pydantic import BaseModel, ValidationError
 
 from app.core import constants
+
+logger = logging.getLogger(__name__)
 
 
 def create_iq(  # noqa: PLR0913
@@ -222,11 +225,11 @@ class TimestampedCache(cachetools.Cache):
         Returns True if the value was successfully restored.
         Raises KeyError if the key is not in the suspended values.
         """
-        # TODO what should the behavior be if the key is already in the cache?
-
         item = self.suspended_values.pop(key, None)
         timestamp = self.suspended_timestamps.pop(key, None)
         if item is not None and timestamp is not None:
+            if key in self:
+                logger.warning(f"Key {key} already in cache, overwriting with suspended value")
             self.__setitem__(key, item, timestamp=timestamp)
             return True
         raise KeyError(f"Key {key} not found in suspended values")
