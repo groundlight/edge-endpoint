@@ -142,24 +142,25 @@ This is the recommended approach moving forward.
 - Kubernetes cluster running (you can still use the k3s setup instructions above)
 - [Helm](https://helm.sh/docs/intro/install/) installed
 - Groundlight API token, set as an environment variable `GROUNDLIGHT_API_TOKEN`
-- AWS credentials, set as environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
 
 ### Installation with Helm
 
-To deploy using the Helm chart, you should _not_ create the namespace beforehand. The Helm chart 
-will create the namespace for you.  You can invoke helm directly with the following command:
+*Namespace:* To deploy using the Helm chart, you should _not_ create the namespace beforehand. The Helm chart 
+will create the namespace for you.  In fact, if your `kubectl` context is set to the target namespace, 
+the helm chart will fail confusingly.  So you might want to point your `kubectl` context to the `default` 
+namespace before installing the helm chart.  (`kubectl config set-context --current --namespace=default`)
+
+Now you can invoke helm directly with the following command:
 
 ```bash
-helm upgrade -i edge-endpoint deploy/helm/groundlight-edge-endpoint \
-  --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}" \
-  --set awsAccessKeyId="${AWS_ACCESS_KEY_ID}" \
-  --set awsSecretAccessKey="${AWS_SECRET_ACCESS_KEY}"
+helm install edge-endpoint deploy/helm/groundlight-edge-endpoint \
+  --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}"
 ```
 
 Alternatively, you can use the convenience make target:
 
 ```bash
-make helm-install HELM_ARGS="--set groundlightApiToken=${GROUNDLIGHT_API_TOKEN} --set awsAccessKeyId=${AWS_ACCESS_KEY_ID} --set awsSecretAccessKey=${AWS_SECRET_ACCESS_KEY}"
+make helm-install HELM_ARGS="--set groundlightApiToken=${GROUNDLIGHT_API_TOKEN}"
 ```
 
 ### Helm Configuration Options
@@ -179,9 +180,7 @@ Example with custom namespace and CPU inference:
 helm upgrade -i edge-endpoint deploy/helm/groundlight-edge-endpoint \
   --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}" \
   --set namespace="my-edge-endpoint" \
-  --set inferenceFlavor="cpu" \
-  --set awsAccessKeyId="${AWS_ACCESS_KEY_ID}" \
-  --set awsSecretAccessKey="${AWS_SECRET_ACCESS_KEY}"
+  --set inferenceFlavor="cpu"
 ```
 
 ### Verifying the Helm Installation
