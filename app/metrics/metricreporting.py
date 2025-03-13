@@ -19,8 +19,11 @@ def _groundlight_client() -> Groundlight:
 
 def _metrics_payload() -> dict:
     """Returns a dictionary of metrics to be sent to the cloud API."""
+    deviceid_dict = deviceid.get_deviceid_dict()
+    deviceid_str = deviceid_dict["uuid"]
     return {
-        "device_id": deviceid.get_device_id(),
+        "device_id": deviceid_str,
+        "device_metadata": deviceid_dict,
         "now": datetime.now().isoformat(),
         "cpucores": os.cpu_count(),
         #"gpucount": "",
@@ -37,12 +40,19 @@ def report_metrics():
     # TODO: replace this with a proper SDK call when available.
     headers = sdk.api_client._headers()
     response = sdk.api_client.call_api(
-        resource_path="report-edge-metrics",  # The endpoint path
-        method="POST",                 # HTTP method
-        header_params=headers,         # Custom headers
-        body=payload,                  # Your JSON payload
-        async_req=False,               # Make synchronous request
-        _return_http_data_only=True    # Optional: return just the response data
+        # We have to do this in order because it analyzes *args.  Grrr.
+        "/v1/edge/report-metrics",  # The endpoint path
+        "POST",                 # HTTP method
+        None,            # path_params
+        None,           # query_params
+        headers,         # header_params
+        payload,                  # body
+        async_req=False,               # async_req
+        _return_http_data_only=True    # _return_http_data_only
     )
     logger.debug(f"Report edge metrics: {response}")
 
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
+    report_metrics()
