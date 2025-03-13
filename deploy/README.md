@@ -1,4 +1,3 @@
-
 # Setting up the Edge Endpoint
 
 The edge endpoint runs under kubernetes, typically on a single-node cluster, which could be just a raspberry pi, or a powerful GPU server.  But if you have a lot of detectors to run locally, it will scale out to a large multi-node cluster as well with basically zero changes except to the k8 cluster setup. 
@@ -118,7 +117,6 @@ to resolve this, simply run the script `deploy/bin/fix-g4-routing.sh`.
 
 The issue should be permanently resolved at this point. You shouldn't need to run the script again on that node, 
 even after rebooting.
-
 ## Pushing/Pulling Images from Elastic Container Registry (ECR)
 
 We currently have a hard-coded docker image in our k3s deployment, which is not ideal.
@@ -132,3 +130,85 @@ Follow the following steps:
 # Build and push image to ECR
 > ./deploy/bin/build-push-edge-endpoint-image.sh
 ```
+
+## Setting up with Helm
+
+As an alternative to the manual setup above, you can use Helm to deploy the Edge Endpoint. This 
+approach provides a more streamlined management experience and standardized deployment.
+This is the recommended approach moving forward.
+
+### Prerequisites for Helm Installation
+
+- Kubernetes cluster running (you can still use the k3s setup instructions above)
+- [Helm](https://helm.sh/docs/intro/install/) installed
+- Groundlight API token, set as an environment variable `GROUNDLIGHT_API_TOKEN`
+- AWS credentials, set as environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
+
+### Installation with Helm
+
+1. Create a namespace for the deployment:
+
+```bash
+kubectl create namespace edge
+```
+
+2. Deploy using the Helm chart:
+
+```bash
+helm upgrade -i edge-endpoint deploy/helm/groundlight-edge-endpoint \
+  --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}" \
+  --set awsAccessKeyId="${AWS_ACCESS_KEY_ID}" \
+  --set awsSecretAccessKey="${AWS_SECRET_ACCESS_KEY}"
+```
+
+Alternatively, you can use the convenience make target:
+
+```bash
+make helm-install HELM_ARGS="--set groundlightApiToken=${GROUNDLIGHT_API_TOKEN} --set awsAccessKeyId=${AWS_ACCESS_KEY_ID} --set awsSecretAccessKey=${AWS_SECRET_ACCESS_KEY}"
+```
+
+### Helm Configuration Options
+
+The Helm chart supports various configuration options, which can be set using `--set` flags:
+
+- `namespace`: Kubernetes namespace for deployment (default: "edge")
+- `imageTag`: Tag for container images (default: "latest")
+- `edgeEndpointPort`: Port exposed on the host (default: 30101)
+- `inferenceFlavor`: Choose "gpu" or "cpu" (default: "gpu")
+- `groundlightApiToken`: Your Groundlight API token (required)
+- `groundlightEndpoint`: API endpoint (default: "https://api.groundlight.ai")
+
+Example with custom namespace and CPU inference:
+
+```bash
+helm upgrade -i edge-endpoint deploy/helm/groundlight-edge-endpoint \
+  --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}" \
+  --set namespace="my-edge-endpoint" \
+  --set inferenceFlavor="cpu" \
+  --set awsAccessKeyId="${AWS_ACCESS_KEY_ID}" \
+  --set awsSecretAccessKey="${AWS_SECRET_ACCESS_KEY}"
+```
+
+### Verifying the Helm Installation
+
+After installation, verify your pods are running:
+
+```bash
+kubectl get pods -n edge
+```
+
+You should see output similar to:
+
+```
+NAME                             READY   STATUS    RESTARTS   AGE
+edge-endpoint-6d7b9c4b59-wdp8f   2/2     Running   0          2m
+```
+
+### Uninstalling Edge Endpoint with Helm
+
+To remove the Edge Endpoint deployed with Helm:
+
+```bash
+helm uninstall edge-endpoint
+```
+
