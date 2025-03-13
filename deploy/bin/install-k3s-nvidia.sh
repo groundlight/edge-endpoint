@@ -95,7 +95,7 @@ while [ "$elapsed" -lt "$timeout_sec" ]; do
 done
 
 echo
-if [ "$capacity" = "1" ]; then
+if [ "$capacity" -gt 0 ]; then
   echo "GPU capacity successfully added"
 else
   echo "WARNING: No GPU capacity on node after install!!"
