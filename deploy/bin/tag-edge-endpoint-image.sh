@@ -40,15 +40,9 @@ aws ecr get-login-password --region ${ECR_REGION} | docker login \
                   --username AWS \
                   --password-stdin  ${ECR_URL}
 
-echo "📥 Pulling image: $ECR_REPO:$GIT_TAG"
-docker pull $ECR_REPO:$GIT_TAG
 
 # Tag the image with the new tag
-echo "🏷️ Tagging image as: $ECR_REPO:$NEW_TAG"
-docker tag $ECR_REPO:$GIT_TAG $ECR_REPO:$NEW_TAG
+echo "🏷️ Tagging image $ECR_REPO:$GIT_TAG with tag $NEW_TAG"
+docker buildx imagetools create --tag $ECR_REPO:$NEW_TAG $ECR_REPO:$GIT_TAG
 
-# Push the newly tagged image
-echo "🚀 Pushing image: $ECR_REPO:$NEW_TAG"
-docker push $ECR_REPO:$NEW_TAG
-
-echo "✅ Image successfully retagged and pushed: $ECR_REPO:$NEW_TAG"
+echo "✅ Image successfully tagged: $ECR_REPO:$NEW_TAG"
