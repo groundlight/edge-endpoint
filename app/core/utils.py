@@ -184,49 +184,51 @@ class TimestampedCache(cachetools.Cache):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.timestamps: dict[Any, float] = {}  # Store timestamps for each key
-        self.suspended_values: dict[Any, Any] = {}
-        self.suspended_timestamps: dict[Any, float] = {}
+        self._timestamps: dict[Any, float] = {}  # Store timestamps for each key
+        self._suspended_values: dict[Any, Any] = {}
+        self._suspended_timestamps: dict[Any, float] = {}
 
     def __setitem__(self, key, value, timestamp: float | None = None):
-        # Track the current time when setting an item
+        """Overrides the __setitem__ method to track the timestamp of when an item was added to the cache."""
+        # Track the time when setting an item. If no timestamp is provided, use the current time.
         if timestamp is None:
             timestamp = time.monotonic()
-        self.timestamps[key] = timestamp
+        self._timestamps[key] = timestamp
         super().__setitem__(key, value)
 
     def __delitem__(self, key):
+        """Overrides the __delitem__ method to remove the timestamp of when an item was added to the cache."""
         super().__delitem__(key)
-        self.timestamps.pop(key, None)
+        self._timestamps.pop(key, None)
 
-    def get_timestamp(self, key) -> float | None:
+    def get_timestamp(self, key: Any) -> float | None:
         """Get the timestamp of when an item was added to the cache. Returns None if the key is not in the cache."""
-        return self.timestamps.get(key, None)
+        return self._timestamps.get(key, None)
 
-    def suspend_cached_value(self, key) -> bool:
+    def suspend_cached_value(self, key: Any) -> bool:
         """
         Suspend a value from the cache such that it can be restored later.
 
         Returns True if the value was successfully suspended.
         Raises KeyError if the key is not in the cache.
         """
-        timestamp = self.timestamps.get(key, None)
+        timestamp = self._timestamps.get(key, None)
         item = self.pop(key, None)
         if item is not None and timestamp is not None:
-            self.suspended_values[key] = item
-            self.suspended_timestamps[key] = timestamp
+            self._suspended_values[key] = item
+            self._suspended_timestamps[key] = timestamp
             return True
         raise KeyError(f"Key {key} not found in cache")
 
-    def restore_suspended_value(self, key) -> bool:
+    def restore_suspended_value(self, key: Any) -> bool:
         """
         Restore a suspended value to the cache.
 
         Returns True if the value was successfully restored.
         Raises KeyError if the key is not in the suspended values.
         """
-        item = self.suspended_values.pop(key, None)
-        timestamp = self.suspended_timestamps.pop(key, None)
+        item = self._suspended_values.pop(key, None)
+        timestamp = self._suspended_timestamps.pop(key, None)
         if item is not None and timestamp is not None:
             if key in self:
                 logger.warning(f"Key {key} already in cache, overwriting with suspended value")
@@ -234,15 +236,15 @@ class TimestampedCache(cachetools.Cache):
             return True
         raise KeyError(f"Key {key} not found in suspended values")
 
-    def delete_suspended_value(self, key) -> bool:
+    def delete_suspended_value(self, key: Any) -> bool:
         """
         Delete a suspended value.
 
         Returns True if the value was successfully deleted.
         Raises KeyError if the key is not in the suspended values.
         """
-        item = self.suspended_values.pop(key, None)
-        timestamp = self.suspended_timestamps.pop(key, None)
+        item = self._suspended_values.pop(key, None)
+        timestamp = self._suspended_timestamps.pop(key, None)
         if item is not None and timestamp is not None:
             return True
         raise KeyError(f"Key {key} not found in suspended values")

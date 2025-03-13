@@ -43,8 +43,8 @@ class MockTimer:
         self.current_time += seconds
 
 
-def test_timestamped_cache_basic():
-    """Test basic functionality of the TimestampedCache class."""
+def test_timestamped_cache_set_and_get():
+    """Test setting and getting values with timestamps in the TimestampedCache."""
     cache = TimestampedCache(maxsize=100)
 
     # Can set and get a value with its timestamp
@@ -58,57 +58,113 @@ def test_timestamped_cache_basic():
     key2_timestamp = cache.get_timestamp("key2")
     assert key2_timestamp is not None
 
-    # Timestamp ordering is correct
+
+def test_timestamped_cache_timestamp_ordering():
+    """Test that timestamps are ordered correctly in TimestampedCache."""
+    cache = TimestampedCache(maxsize=100)
+
+    cache["key1"] = "value1"
+    key1_timestamp = cache.get_timestamp("key1")
+
+    cache["key2"] = "value2"
+    key2_timestamp = cache.get_timestamp("key2")
+
     assert key1_timestamp < key2_timestamp
 
-    # Updating a value updates the timestamp
+
+def test_timestamped_cache_update_changes_timestamp():
+    """Test that updating a value updates its timestamp."""
+    cache = TimestampedCache(maxsize=100)
+
+    cache["key1"] = "value1"
+    key1_timestamp = cache.get_timestamp("key1")
+
     cache["key1"] = "value1_updated"
     assert cache["key1"] == "value1_updated"
     key1_timestamp_updated = cache.get_timestamp("key1")
     assert key1_timestamp_updated is not None
     assert key1_timestamp_updated > key1_timestamp
 
-    # Deleting an entry removes the timestamp and get_timestamp for the removed key returns None
+
+def test_timestamped_cache_delete_removes_timestamp():
+    """Test that deleting an entry removes its timestamp."""
+    cache = TimestampedCache(maxsize=100)
+
+    cache["key1"] = "value1"
+    assert cache.get_timestamp("key1") is not None
+
     cache.pop("key1")
     assert cache.get_timestamp("key1") is None
 
 
-def test_timestamped_cache_suspended_values():
-    """Test that the suspended value functionality of the TimestampedCache class works."""
+def test_timestamped_cache_suspend_and_restore():
+    """Test suspending and restoring a value with timestamp preservation."""
     cache = TimestampedCache(maxsize=100)
 
-    # Can suspend and restore a value, and it retains the original timestamp
     cache["key1"] = "value1"
     key1_timestamp = cache.get_timestamp("key1")
     assert key1_timestamp is not None
+
     cache.suspend_cached_value("key1")
     assert cache.get("key1", None) is None
     assert cache.get_timestamp("key1") is None
+
     assert cache.restore_suspended_value("key1")
     assert cache.get("key1", None) == "value1"
     assert cache.get_timestamp("key1") == key1_timestamp
 
-    # Can delete a suspended value
+
+def test_timestamped_cache_delete_suspended_value():
+    """Test deleting a suspended value."""
+    cache = TimestampedCache(maxsize=100)
+
     cache["key2"] = "value2"
     cache.suspend_cached_value("key2")
     assert cache.get("key2", None) is None
+
     assert cache.delete_suspended_value("key2")
     with pytest.raises(KeyError):
         cache.restore_suspended_value("key2")  # Can't restore a deleted suspended value
 
-    # Restoring a suspended value overrides the existing value in the cache
-    # TODO is this the desired behavior?
+
+def test_timestamped_cache_restore_overwrites_existing():
+    """Test that restoring a suspended value overwrites any existing value in the cache."""
+    cache = TimestampedCache(maxsize=100)
+
     cache["key3"] = "value3"
     cache.suspend_cached_value("key3")
     assert cache.get("key3", None) is None
+
     cache["key3"] = "value3_updated"
     cache.restore_suspended_value("key3")
-    assert cache.get("key3", None) == "value3"
+    # TODO is this the desired behavior?
+    assert cache.get("key3", None) == "value3"  # Restored value overwrites the updated value
+
+
+def test_timestamped_cache_suspend_multiple_times():
+    """Test suspending a value multiple times."""
+    cache = TimestampedCache(maxsize=100)
+
+    cache["key4"] = "value4"
+    cache.suspend_cached_value("key4")
+
+    cache["key4"] = "value4_updated"
+    cache.suspend_cached_value("key4")
+
+    cache.restore_suspended_value("key4")
+    assert cache.get("key4", None) == "value4_updated"
+
+
+def test_timestamped_cache_error_cases():
+    """Test error cases for suspended value operations."""
+    cache = TimestampedCache(maxsize=100)
 
     with pytest.raises(KeyError):
         cache.suspend_cached_value("not_in_cache")  # Can't suspend a value that's not in the cache
+
     with pytest.raises(KeyError):
         cache.restore_suspended_value("not_in_cache")  # Can't restore a value that hasn't been suspended
+
     with pytest.raises(KeyError):
         cache.delete_suspended_value("not_in_cache")  # Can't delete a value that hasn't been suspended
 
@@ -159,14 +215,14 @@ def test_refresh_detector_metadata_if_needed_error():
 
         # Move timer forward past the stale threshold
         mock_timer.advance(STALE_METADATA_THRESHOLD_SEC + 1)
-        # Mock the call to fetch new metadata to fail
+        # Cause the call to fetch new metadata to fail
         mock_sdk_call.side_effect = Exception("Error fetching metadata")
 
         with patch.object(
             metadata_cache, "restore_suspended_value", wraps=metadata_cache.restore_suspended_value
         ) as restore_suspended_value_spy:
             refresh_detector_metadata_if_needed(detector_id, mock_gl)
-            assert mock_sdk_call.call_count == 2
+            assert mock_sdk_call.call_count == 2  # Verify that it tried to refresh the metadata
             # Verify the cache was restored
             assert "test-detector-2" in metadata_cache
             assert metadata_cache["test-detector-2"] == mock_metadata
