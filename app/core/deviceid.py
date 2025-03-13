@@ -80,27 +80,7 @@ def get_deviceid_dict() -> dict:
     return data
 
 
-def get_device_id_record() -> dict:
-    """Get the device ID record as a dictionary, generating a new one if needed.
-    
-    Deprecated: This is maintained for backward compatibility.
-    Prefer get_deviceid_dict() for direct access.
-    
-    Returns:
-        dict: A dictionary with the standard device ID fields.
-    """
-    return get_deviceid_dict()
-
-
 def get_deviceid_str() -> str:
     """Get the unique device ID string."""
     return get_deviceid_dict()["uuid"]
 
-
-# For backward compatibility
-def get_device_id() -> str:
-    """Get the unique device ID string.
-    
-    Deprecated: Use get_deviceid_str() instead.
-    """
-    return get_deviceid_str()
