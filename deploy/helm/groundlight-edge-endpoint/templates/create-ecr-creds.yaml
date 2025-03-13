@@ -1,0 +1,12 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-ecr-creds
+  namespace: "{{ .Values.namespace }}"
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+spec:
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+    {{- include "edge-endpoint.registry-credentials.podSpec" . | nindent 6 }}
