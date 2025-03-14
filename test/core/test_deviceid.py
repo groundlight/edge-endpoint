@@ -2,7 +2,6 @@
 
 import json
 from unittest.mock import patch
-from datetime import datetime
 
 from app.core import deviceid
 
@@ -16,14 +15,10 @@ def test_load_device_id_file_exists(monkeypatch, tmp_path):
     test_device_id = "device_testid123456789"
     test_friendly_name = "Device-56789"
     test_created_at = "2023-01-01T12:00:00"
-    
+
     # Create a valid device record JSON
-    device_record = {
-        "uuid": test_device_id,
-        "friendly_name": test_friendly_name,
-        "created_at": test_created_at
-    }
-    
+    device_record = {"uuid": test_device_id, "friendly_name": test_friendly_name, "created_at": test_created_at}
+
     with open(test_device_id_file, "w") as f:
         json.dump(device_record, f)
 
@@ -59,7 +54,7 @@ def test_load_device_id_invalid_content(monkeypatch, tmp_path):
     test_device_path = tmp_path / "device"
     test_device_path.mkdir()
     test_device_id_file = test_device_path / "id.json"
-    
+
     # Write invalid JSON
     test_device_id_file.write_text("invalid_json_format")
 
@@ -77,13 +72,10 @@ def test_load_device_id_missing_uuid(monkeypatch, tmp_path):
     test_device_path = tmp_path / "device"
     test_device_path.mkdir()
     test_device_id_file = test_device_path / "id.json"
-    
+
     # Create invalid device record JSON (missing uuid)
-    device_record = {
-        "friendly_name": "Test-Device",
-        "created_at": "2023-01-01T12:00:00"
-    }
-    
+    device_record = {"friendly_name": "Test-Device", "created_at": "2023-01-01T12:00:00"}
+
     with open(test_device_id_file, "w") as f:
         json.dump(device_record, f)
 
@@ -112,12 +104,8 @@ def test_save_new_device_id(monkeypatch, tmp_path):
     test_device_id = "device_testid123456789"
     test_friendly_name = "Device-56789"
     test_created_at = "2023-01-01T12:00:00"
-    
-    mock_record = {
-        "uuid": test_device_id,
-        "friendly_name": test_friendly_name,
-        "created_at": test_created_at
-    }
+
+    mock_record = {"uuid": test_device_id, "friendly_name": test_friendly_name, "created_at": test_created_at}
 
     # Mock the generate function to return a predictable record
     with patch("app.core.deviceid._generate_deviceid_dict", return_value=mock_record):
@@ -128,14 +116,14 @@ def test_save_new_device_id(monkeypatch, tmp_path):
     assert device_record["uuid"] == test_device_id
     assert device_record["friendly_name"] == test_friendly_name
     assert device_record["created_at"] == test_created_at
-    
+
     # Check that get_deviceid_str returns just the uuid string
     assert device_id == test_device_id
-    
+
     # Check that the file was created with the correct content
     with open(test_device_id_file, "r") as f:
         saved_data = json.load(f)
-    
+
     assert saved_data["uuid"] == test_device_id
     assert saved_data["friendly_name"] == test_friendly_name
     assert saved_data["created_at"] == test_created_at
@@ -148,18 +136,14 @@ def test_get_device_id_existing(monkeypatch, tmp_path):
     test_device_path = tmp_path / "device"
     test_device_path.mkdir()
     test_device_id_file = test_device_path / "id.json"
-    
+
     # Create a valid device record JSON
     test_device_id = "device_testid123456789"
     test_friendly_name = "Device-56789"
     test_created_at = "2023-01-01T12:00:00"
-    
-    device_record = {
-        "uuid": test_device_id,
-        "friendly_name": test_friendly_name,
-        "created_at": test_created_at
-    }
-    
+
+    device_record = {"uuid": test_device_id, "friendly_name": test_friendly_name, "created_at": test_created_at}
+
     with open(test_device_id_file, "w") as f:
         json.dump(device_record, f)
 
@@ -169,7 +153,7 @@ def test_get_device_id_existing(monkeypatch, tmp_path):
 
     # Check that get_deviceid_str returns just the uuid string
     assert deviceid.get_deviceid_str() == test_device_id
-    
+
     # Check that get_deviceid_dict returns the full record
     record = deviceid.get_deviceid_dict()
     assert record["uuid"] == test_device_id
@@ -191,12 +175,8 @@ def test_get_device_id_new(monkeypatch, tmp_path):
     test_device_id = "device_testid123456789"
     test_friendly_name = "Device-56789"
     test_created_at = "2023-01-01T12:00:00"
-    
-    mock_record = {
-        "uuid": test_device_id,
-        "friendly_name": test_friendly_name,
-        "created_at": test_created_at
-    }
+
+    mock_record = {"uuid": test_device_id, "friendly_name": test_friendly_name, "created_at": test_created_at}
 
     # Mock the generate function to return a predictable record
     with patch("app.core.deviceid._generate_deviceid_dict", return_value=mock_record):
@@ -204,11 +184,11 @@ def test_get_device_id_new(monkeypatch, tmp_path):
 
     # Check that the function returns the new ID
     assert device_id == test_device_id
-    
+
     # Check that the file was created with the correct content
     with open(test_device_id_file, "r") as f:
         saved_data = json.load(f)
-    
+
     assert saved_data["uuid"] == test_device_id
     assert saved_data["friendly_name"] == test_friendly_name
     assert saved_data["created_at"] == test_created_at

@@ -57,7 +57,6 @@ async def startup_event():
     logging.info("Application is ready to serve requests.")
 
 
-
 @app.on_event("shutdown")
 async def shutdown_event():
     """Lifecycle event that is triggered when the application is shutting down."""
