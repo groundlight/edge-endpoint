@@ -1,3 +1,7 @@
+"""Report metrics to the cloud API.
+Is called by the main edge-endpoint web server.
+Can also be run directly as a script.
+"""
 import logging
 import os
 from datetime import datetime
@@ -26,10 +30,9 @@ def _metrics_payload() -> dict:
         "device_metadata": deviceid_dict,
         "now": datetime.now().isoformat(),
         "cpucores": os.cpu_count(),
-        # "gpucount": "",
-        # "local_models": "TODO",
-        # "last_image_processed": "TODO",
+        "last_image_processed": iqactivity.last_activity_time(),
     }
+    # TODO: add metrics like GPU count, how many local models, 
 
 
 def report_metrics():
