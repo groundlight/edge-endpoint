@@ -44,13 +44,13 @@ def report_metrics():
     response = sdk.api_client.call_api(
         # We have to do this in order because it analyzes *args.  Grrr.
         "/v1/edge/report-metrics",  # The endpoint path
-        "POST",                 # HTTP method
-        None,            # path_params
-        None,           # query_params
-        headers,         # header_params
-        payload,                  # body
-        async_req=False,               # async_req
-        _return_http_data_only=True    # _return_http_data_only
+        "POST",  # HTTP method
+        None,  # path_params
+        None,  # query_params
+        headers,  # header_params
+        payload,  # body
+        async_req=False,  # async_req
+        _return_http_data_only=True,  # _return_http_data_only
     )
     logger.debug(f"Report edge metrics: {response}")
 

@@ -6,7 +6,7 @@ When we generate it, it has a few fields:
 - friendly_name: A friendly name for the device
 - created_at: The date and time the device ID was created
 
-UUID is the only required field.  Customers are encouraged to update the friendly name, and 
+UUID is the only required field.  Customers are encouraged to update the friendly name, and
 even add extra fields if they want.
 
 For this to work robustly in a containerized environment, we need /opt/groundlight/device/
@@ -30,11 +30,7 @@ def _generate_deviceid_dict() -> dict:
     """Generate a new device ID dictionary with default fields."""
     unique_id = prefixed_ksuid("device")
     friendly_name = f"Device-{unique_id[-5:]}"
-    return {
-        "uuid": unique_id,
-        "friendly_name": friendly_name,
-        "created_at": datetime.now().isoformat()
-    }
+    return {"uuid": unique_id, "friendly_name": friendly_name, "created_at": datetime.now().isoformat()}
 
 
 def _save_new_deviceid_dict() -> dict:
@@ -57,19 +53,19 @@ def _load_deviceid_dict() -> dict | None:
     try:
         with open(DEVICE_ID_FILE, "r") as f:
             data = json.load(f)
-        
+
         if "uuid" in data:
             return data
         logger.warning(f"Device ID file {DEVICE_ID_FILE} exists but is missing uuid. Generating new one.")
     except (json.JSONDecodeError, KeyError) as e:
         logger.warning(f"Failed to parse device ID file: {e}. Generating new one.", exc_info=True)
-    
+
     return None
 
 
 def get_deviceid_dict() -> dict:
     """Get the device ID data dictionary, generating a new one if needed.
-    
+
     Returns:
         dict: A dictionary containing at least 'uuid', 'friendly_name', and 'created_at'.
               May contain additional fields added by users.
@@ -83,4 +79,3 @@ def get_deviceid_dict() -> dict:
 def get_deviceid_str() -> str:
     """Get the unique device ID string."""
     return get_deviceid_dict()["uuid"]
-
