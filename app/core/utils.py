@@ -1,3 +1,5 @@
+import logging
+import time
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any, Callable
@@ -21,6 +23,8 @@ from PIL import Image
 from pydantic import BaseModel, ValidationError
 
 from app.core import constants
+
+logger = logging.getLogger(__name__)
 
 
 def create_iq(  # noqa: PLR0913
@@ -175,25 +179,76 @@ def pil_image_to_bytes(img: Image.Image, format: str = "JPEG") -> bytes:
         return buffer.getvalue()
 
 
-class TimestampedTTLCache(cachetools.TTLCache):
-    """TTLCache subclass that tracks when items were added to the cache."""
+class TimestampedCache(cachetools.Cache):
+    """Cache subclass that tracks when items were added to the cache, and supports suspending and restoring values."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.timestamps = {}  # Store timestamps for each key
+        self._timestamps: dict[Any, float] = {}  # Store timestamps for each key
+        self._suspended_values: dict[Any, Any] = {}
+        self._suspended_timestamps: dict[Any, float] = {}
 
-    def __setitem__(self, key, value, cache_setitem=cachetools.Cache.__setitem__):
-        # Track the current time when setting an item
-        self.timestamps[key] = self.timer()
-        super().__setitem__(key, value, cache_setitem)
+    def __setitem__(self, key, value, timestamp: float | None = None):
+        """Overrides the __setitem__ method to track the timestamp of when an item was added to the cache."""
+        # Track the time when setting an item. If no timestamp is provided, use the current time.
+        if timestamp is None:
+            timestamp = time.monotonic()
+        self._timestamps[key] = timestamp
+        super().__setitem__(key, value)
 
-    def __delitem__(self, key, cache_delitem=cachetools.Cache.__delitem__):
-        super().__delitem__(key, cache_delitem)
-        self.timestamps.pop(key, None)
+    def __delitem__(self, key):
+        """Overrides the __delitem__ method to remove the timestamp of when an item was added to the cache."""
+        super().__delitem__(key)
+        self._timestamps.pop(key, None)
 
-    def get_timestamp(self, key) -> float | None:
-        """Get the timestamp when an item was added to the cache."""
-        return self.timestamps.get(key)
+    def get_timestamp(self, key: Any) -> float | None:
+        """Get the timestamp of when an item was added to the cache. Returns None if the key is not in the cache."""
+        return self._timestamps.get(key, None)
+
+    def suspend_cached_value(self, key: Any) -> bool:
+        """
+        Suspend a value from the cache such that it can be restored later.
+
+        Returns True if the value was successfully suspended.
+        Raises KeyError if the key is not in the cache.
+        """
+        timestamp = self._timestamps.get(key, None)
+        item = self.pop(key, None)
+        if item is not None and timestamp is not None:
+            self._suspended_values[key] = item
+            self._suspended_timestamps[key] = timestamp
+            return True
+        raise KeyError(f"Key {key} not found in cache")
+
+    def restore_suspended_value(self, key: Any) -> bool:
+        """
+        Restore a suspended value to the cache.
+        If the key is already in the cache, the existing value will be overwritten.
+
+        Returns True if the value was successfully restored.
+        Raises KeyError if the key is not in the suspended values.
+        """
+        item = self._suspended_values.pop(key, None)
+        timestamp = self._suspended_timestamps.pop(key, None)
+        if item is not None and timestamp is not None:
+            if key in self:
+                logger.warning(f"Key {key} already in cache, overwriting with suspended value")
+            self.__setitem__(key, item, timestamp=timestamp)
+            return True
+        raise KeyError(f"Key {key} not found in suspended values")
+
+    def delete_suspended_value(self, key: Any) -> bool:
+        """
+        Delete a suspended value.
+
+        Returns True if the value was successfully deleted.
+        Raises KeyError if the key is not in the suspended values.
+        """
+        item = self._suspended_values.pop(key, None)
+        timestamp = self._suspended_timestamps.pop(key, None)
+        if item is not None and timestamp is not None:
+            return True
+        raise KeyError(f"Key {key} not found in suspended values")
 
 
 # Utilities for parsing the fetch models response
