@@ -67,7 +67,7 @@ def get_deviceid_dict() -> dict:
     """Get the device ID data dictionary, generating a new one if needed.
 
     Returns:
-        dict: A dictionary containing at least 'uuid', 'friendly_name', and 'created_at'.
+        dict: A dictionary containing at least 'uuid', and probably 'friendly_name' and 'created_at'.
               May contain additional fields added by users.
     """
     data = _load_deviceid_dict()
