@@ -3,15 +3,17 @@ Is called by the main edge-endpoint web server.
 Can also be run directly as a script.
 """
 
+import json
 import logging
 import os
 from datetime import datetime
 from functools import lru_cache
+from typing import Any, Callable
 
 from groundlight import Groundlight
 
 from app.core import deviceid
-
+from app.metrics import iqactivity
 logger = logging.getLogger(__name__)
 
 
@@ -22,18 +24,38 @@ def _groundlight_client() -> Groundlight:
     return Groundlight()
 
 
+class SafeMetricsDict:
+    """Utility class that makes it easy to call possibly-unreliable functions for metrics,
+    and not worry about the entire payload failing to report because of one
+    function throwing an exception or returning bad data.  (Seen this too many times.)
+    """
+
+    def __init__(self):
+        self.data = {}
+
+    def add(self, key: str, lambda_fn: Callable[[], Any]):
+        try:
+            value = lambda_fn()
+            json.dumps(value)  # don't add non-JSON-serializable values
+            self.data[key] = value
+        except Exception as e:
+            logger.error(f"Error adding metric {key}: {e}", exc_info=True)
+            self.data[key] = {"error": str(e)}
+
+    def as_dict(self) -> dict:
+        return self.data
+
+
 def _metrics_payload() -> dict:
     """Returns a dictionary of metrics to be sent to the cloud API."""
-    deviceid_dict = deviceid.get_deviceid_dict()
-    deviceid_str = deviceid_dict["uuid"]
-    return {
-        "device_id": deviceid_str,
-        "device_metadata": deviceid_dict,
-        "now": datetime.now().isoformat(),
-        "cpucores": os.cpu_count(),
-        "last_image_processed": iqactivity.last_activity_time(),
-    }
-    # TODO: add metrics like GPU count, how many local models,
+    out = SafeMetricsDict()
+    out.add("device_id", lambda: deviceid.get_deviceid_str())
+    out.add("device_metadata", lambda: deviceid.get_deviceid_dict())
+    out.add("now", lambda: datetime.now().isoformat())
+    out.add("cpucores", lambda: os.cpu_count())
+    out.add("last_image_processed", lambda: iqactivity.last_activity_time())
+    # TODO: add metrics like GPU count, how many local models, etc
+    return out.as_dict()
 
 
 def report_metrics():
