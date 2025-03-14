@@ -14,6 +14,7 @@ from groundlight import Groundlight
 
 from app.core import deviceid
 from app.metrics import iqactivity
+
 logger = logging.getLogger(__name__)
 
 
