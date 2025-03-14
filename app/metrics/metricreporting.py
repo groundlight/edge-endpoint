@@ -2,6 +2,7 @@
 Is called by the main edge-endpoint web server.
 Can also be run directly as a script.
 """
+
 import logging
 import os
 from datetime import datetime
@@ -32,7 +33,7 @@ def _metrics_payload() -> dict:
         "cpucores": os.cpu_count(),
         "last_image_processed": iqactivity.last_activity_time(),
     }
-    # TODO: add metrics like GPU count, how many local models, 
+    # TODO: add metrics like GPU count, how many local models,
 
 
 def report_metrics():
