@@ -25,6 +25,9 @@ test-with-k3s:
 validate-setup-ee:
 	test/validate_setup_ee.sh
 	
+validate-setup-helm:
+	test/validate_setup_helm.sh
+
 # Adjust which paths we lint
 LINT_PATHS="app test"
 
