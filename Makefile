@@ -38,8 +38,11 @@ format: install-lint  ## Run standard python formatting
 # For example, `make helm-install HELM_ARGS="--set groundlightApiToken=api_2hRQVo...."` to set your token.
 HELM_ARGS =
 
+# Note that the namespace we specify here is the namespace where we keep the helm history (always "default") not
+# the namespace where the resources are deployed. The namespace where the resources are deployed is 
+# specified in the values.yaml file (default is "edge").
 helm-install:
-	helm upgrade -i ${HELM_ARGS} edge-endpoint deploy/helm/groundlight-edge-endpoint 
+	helm upgrade -i -n default ${HELM_ARGS} edge-endpoint deploy/helm/groundlight-edge-endpoint 
 
 helm-package:
 	helm package deploy/helm/groundlight-edge-endpoint
