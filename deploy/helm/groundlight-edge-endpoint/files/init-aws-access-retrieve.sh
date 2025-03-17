@@ -10,8 +10,60 @@
 #    be used to create a registry secret in k8s.
 # 3. /shared/done: A marker file to indicate that the script has completed successfully.
 
+#!/bin/bash
+
+sanitize_endpoint_url() {
+    local endpoint="${1:-$GROUNDLIGHT_ENDPOINT}"
+
+    # If empty, set default
+    if [[ -z "$endpoint" ]]; then
+        endpoint="https://api.groundlight.ai/"
+    fi
+
+    # Parse URL scheme and the rest
+    if [[ "$endpoint" =~ ^(https?)://([^/]+)(/.*)?$ ]]; then
+        scheme="${BASH_REMATCH[1]}"
+        netloc="${BASH_REMATCH[2]}"
+        path="${BASH_REMATCH[3]}"
+    else
+        echo "Invalid API endpoint: $endpoint. Must be a valid URL with http or https scheme." >&2
+        exit 1
+    fi
+
+    # Ensure path is properly initialized
+    if [[ -z "$path" ]]; then
+        path="/"
+    fi
+
+    # Ensure path ends with "/"
+    if [[ "${path: -1}" != "/" ]]; then
+        path="$path/"
+    fi
+
+    # Set default path if just "/"
+    if [[ "$path" == "/" ]]; then
+        path="/device-api/"
+    fi
+
+    # Allow only specific paths
+    case "$path" in
+        "/device-api/"|"/v1/"|"/v2/"|"/v3/")
+            ;;
+        *)
+            echo "Warning: Configured endpoint $endpoint does not look right - path '$path' seems wrong." >&2
+            ;;
+    esac
+
+    # Remove trailing slash for output
+    sanitized_endpoint="${scheme}://${netloc}${path%/}"
+    echo "$sanitized_endpoint"
+}
+
+sanitized_url=$(sanitize_endpoint_url "${GROUNDLIGHT_ENDPOINT}")
+echo "Sanitized URL: $sanitized_url"
+
 echo "Fetching temporary AWS credentials from Janzu..."
-curl --fail-with-body -sS -L --header "x-api-token: ${GROUNDLIGHT_API_TOKEN}" ${GROUNDLIGHT_ENDPOINT}/device-api/reader-credentials > /tmp/credentials.json
+curl --fail-with-body -sS -L --header "x-api-token: ${GROUNDLIGHT_API_TOKEN}" ${sanitized_url}/reader-credentials > /tmp/credentials.json
 
 if [ $? -ne 0 ]; then
   echo "Failed to fetch credentials from Janzu"
