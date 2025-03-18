@@ -53,8 +53,6 @@ check_nvidia_drivers_and_container_runtime
 $SCRIPT_DIR/install-k3s.sh
 
 $K apply -f ${SCRIPT_DIR}/helm-nvidia-operator.yaml
-
-
 echo "NVIDIA GPU Operator installation completed."
 
 # Verify that we actually added GPU capacity to the node
@@ -95,10 +93,15 @@ while [ "$elapsed" -lt "$timeout_sec" ]; do
 done
 
 echo
-if [ "$capacity" = "1" ]; then
+if [ "$capacity" -gt 0 ]; then
   echo "GPU capacity successfully added"
 else
-  echo "WARNING: No GPU capacity on node after install!!"
+  echo "WARNING: k3s sees no GPU capacity on node after install!!"
+  if ! nvidia-smi &> /dev/null; then
+    echo "Running nvidia-smi failed, so NVIDIA drivers are probably not working."
+    echo "Rebooting might help."
+  fi
+  exit 1
 fi
 
 # In addition, you can also check that the nvidia-device-plugin-ds pod
