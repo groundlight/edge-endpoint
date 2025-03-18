@@ -135,7 +135,7 @@ Follow the following steps:
 
 As an alternative to the manual setup above, you can use Helm to deploy the Edge Endpoint. This 
 approach provides a more streamlined management experience and standardized deployment.
-This is the recommended approach moving forward.
+This will be the recommended approach moving forward.
 
 ### Prerequisites for Helm Installation
 
@@ -145,15 +145,14 @@ This is the recommended approach moving forward.
 
 ### Installation with Helm
 
-*Namespace:* To deploy using the Helm chart, you should _not_ create the namespace beforehand. The Helm chart 
-will create the namespace for you.  In fact, if your `kubectl` context is set to the target namespace, 
-the helm chart will fail confusingly.  So you might want to point your `kubectl` context to the `default` 
-namespace before installing the helm chart.  (`kubectl config set-context --current --namespace=default`)
+*Namespace:* To deploy using the Helm chart, you should _not_ create the namespace beforehand. The Helm chart will create the namespace for you.  By default, the helm chart will install the edge-endpoint in the `edge` namespace. We recommend that you use that default.
+
+```bash
 
 Now you can invoke helm directly with the following command:
 
 ```bash
-helm install edge-endpoint deploy/helm/groundlight-edge-endpoint \
+helm install -n default edge-endpoint deploy/helm/groundlight-edge-endpoint \
   --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}"
 ```
 
@@ -165,14 +164,8 @@ make helm-install HELM_ARGS="--set groundlightApiToken=${GROUNDLIGHT_API_TOKEN}"
 
 ### Helm Configuration Options
 
-The Helm chart supports various configuration options, which can be set using `--set` flags:
-
-- `namespace`: Kubernetes namespace for deployment (default: "edge")
-- `imageTag`: Tag for container images (default: "latest")
-- `edgeEndpointPort`: Port exposed on the host (default: 30101)
-- `inferenceFlavor`: Choose "gpu" or "cpu" (default: "gpu")
-- `groundlightApiToken`: Your Groundlight API token (required)
-- `groundlightEndpoint`: API endpoint (default: "https://api.groundlight.ai")
+The Helm chart supports various configuration options which can be set using `--set` flags. For 
+the full list, with default values and , see the [values.yaml](helm/groundlight-edge-endpoint/values.yaml) file.
 
 Example with custom namespace and CPU inference:
 
@@ -182,6 +175,8 @@ helm upgrade -i edge-endpoint deploy/helm/groundlight-edge-endpoint \
   --set namespace="my-edge-endpoint" \
   --set inferenceFlavor="cpu"
 ```
+
+In most cases, you will only need to set the `groundlightApiToken` value.
 
 ### Verifying the Helm Installation
 
@@ -203,6 +198,6 @@ edge-endpoint-6d7b9c4b59-wdp8f   2/2     Running   0          2m
 To remove the Edge Endpoint deployed with Helm:
 
 ```bash
-helm uninstall edge-endpoint
+helm uninstall -n default edge-endpoint
 ```
 

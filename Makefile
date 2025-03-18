@@ -19,12 +19,18 @@ test-with-docker: install  ## Run tests that require a live edge-endpoint server
 test-all: test test-with-docker  ## Run all tests in one make command
 	@echo "All tests completed."
 
-test-with-k3s:
-	. test/integration/setup_and_run_tests.sh
+test-with-k3s-setup-ee:
+	. test/integration/setup_and_run_tests_setup_ee.sh
+
+test-with-k3s-helm:
+	. test/integration/setup_and_run_tests_helm.sh
 
 validate-setup-ee:
 	test/validate_setup_ee.sh
 	
+validate-setup-helm:
+	test/validate_setup_helm.sh
+
 # Adjust which paths we lint
 LINT_PATHS="app test"
 
@@ -38,8 +44,11 @@ format: install-lint  ## Run standard python formatting
 # For example, `make helm-install HELM_ARGS="--set groundlightApiToken=api_2hRQVo...."` to set your token.
 HELM_ARGS =
 
+# Note that the namespace we specify here is the namespace where we keep the helm history (always "default") not
+# the namespace where the resources are deployed. The namespace where the resources are deployed is 
+# specified in the values.yaml file (default is "edge").
 helm-install:
-	helm upgrade -i ${HELM_ARGS} edge-endpoint deploy/helm/groundlight-edge-endpoint 
+	helm upgrade -i -n default ${HELM_ARGS} edge-endpoint deploy/helm/groundlight-edge-endpoint 
 
 helm-package:
 	helm package deploy/helm/groundlight-edge-endpoint
