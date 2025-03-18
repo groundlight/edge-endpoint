@@ -9,7 +9,7 @@ namespace: "edge"
 
 # The tag to use for the images. The value of `imageTag` is used for both the edge-endpoint and
 # inference images, unless you add a specific tag for one or the other image
-imageTag: "latest"
+imageTag: "release"
 edgeEndpointTag: ""
 inferenceTag: ""
 
