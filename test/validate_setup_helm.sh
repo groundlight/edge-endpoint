@@ -28,8 +28,7 @@ helm install -n default ${HELM_RELEASE_NAME} deploy/helm/groundlight-edge-endpoi
     --set groundlightApiToken=$GROUNDLIGHT_API_TOKEN \
     --set inferenceFlavor=$INFERENCE_FLAVOR \
     --set edgeEndpointPort=$EDGE_ENDPOINT_PORT \
-    --set namespace=$DEPLOYMENT_NAMESPACE \
-    --set imagePullPolicy=Never
+    --set namespace=$DEPLOYMENT_NAMESPACE
 
 
 echo "Waiting for edge-endpoint pods to rollout in namespace $DEPLOYMENT_NAMESPACE..."
@@ -37,7 +36,7 @@ echo "Waiting for edge-endpoint pods to rollout in namespace $DEPLOYMENT_NAMESPA
 if ! kubectl rollout status deployment/edge-endpoint -n $DEPLOYMENT_NAMESPACE --timeout=5m; then
     echo "Error: edge-endpoint pods failed to rollout within the timeout period."
     
-    # Debugging
+    echo Debugging information:
     set -x
     kubectl get pods -n $DEPLOYMENT_NAMESPACE
     kubectl describe -n $DEPLOYMENT_NAMESPACE $(kubectl get -n $DEPLOYMENT_NAMESPACE pods -o name | grep edge-endpoint)
