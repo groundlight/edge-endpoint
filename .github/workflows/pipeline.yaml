@@ -215,6 +215,14 @@ jobs:
         run: |
           ./deploy/bin/install-k3s.sh
 
+      - name: Install poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: ${{ env.POETRY_VERSION }}
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: true
+
       - name: Install edge-endpoint's python dependencies
         run: |
           poetry install --no-interaction --no-root
@@ -223,14 +231,6 @@ jobs:
         run: |
           poetry cache clear pypi --all
           poetry cache clear virtualenvs --all
-
-      - name: Install poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          installer-parallel: true
 
       - name: Run tests with k3s
         run: |

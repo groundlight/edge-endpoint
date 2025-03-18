@@ -39,7 +39,7 @@ cp deploy/helm/groundlight-edge-endpoint/files/default-edge-config.yaml $EDGE_CO
 sed -i "s/detector_id: \"\"/detector_id: \"$DETECTOR_ID\"/" $EDGE_CONFIG_FILE
 sed -i "s/refresh_rate: 60/refresh_rate: $REFRESH_RATE/" $EDGE_CONFIG_FILE
 
-#trap 'rm -rf "$EDGE_CONFIG_FILE"' EXIT
+trap 'rm -rf "$EDGE_CONFIG_FILE"' EXIT
 
 export DEPLOYMENT_NAMESPACE="test-with-k3s-helm"
 if [ -n "$(kubectl get namespace $DEPLOYMENT_NAMESPACE --ignore-not-found)" ]; then
