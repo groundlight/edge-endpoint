@@ -3,7 +3,7 @@
 # This script will setup the k3s testing environment. Once you've run them you can run the
 # live tests, which will hit the API service that got setup
 # Altogether, you can run everything with:
-# > make test-with-k3s
+# > make test-with-k3s-setup-ee
 set -e
 set -x
 

@@ -28,7 +28,8 @@ helm install -n default ${HELM_RELEASE_NAME} deploy/helm/groundlight-edge-endpoi
     --set groundlightApiToken=$GROUNDLIGHT_API_TOKEN \
     --set inferenceFlavor=$INFERENCE_FLAVOR \
     --set edgeEndpointPort=$EDGE_ENDPOINT_PORT \
-    --set namespace=$DEPLOYMENT_NAMESPACE
+    --set namespace=$DEPLOYMENT_NAMESPACE \
+    --set imagePullPolicy=Never
 
 
 echo "Waiting for edge-endpoint pods to rollout in namespace $DEPLOYMENT_NAMESPACE..."
