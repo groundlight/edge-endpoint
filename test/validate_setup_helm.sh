@@ -36,6 +36,13 @@ echo "Waiting for edge-endpoint pods to rollout in namespace $DEPLOYMENT_NAMESPA
 
 if ! kubectl rollout status deployment/edge-endpoint -n $DEPLOYMENT_NAMESPACE --timeout=5m; then
     echo "Error: edge-endpoint pods failed to rollout within the timeout period."
+    
+    # Debugging
+    set -x
+    kubectl get pods -n $DEPLOYMENT_NAMESPACE
+    kubectl describe -n $DEPLOYMENT_NAMESPACE $(kubectl get -n $DEPLOYMENT_NAMESPACE pods -o name | grep edge-endpoint)
+    kubectl logs -n $DEPLOYMENT_NAMESPACE deployment/edge-endpoint
+
     helm uninstall ${HELM_RELEASE_NAME} -n default
     exit 1
 fi
