@@ -56,6 +56,6 @@ helm-package:
 # TODO: update this with inference server support
 helm-local:
 	# We want k3s to error out if the :dev image hasn't been pushed to it already, so we set imagePullPolicy=Never
-	helm upgrade -i ${HELM_ARGS} --set=edgeEndpointTag=dev --set=imagePullPolicy=Never edge-endpoint deploy/helm/groundlight-edge-endpoint 
+	helm upgrade -i -n default ${HELM_ARGS} --set=edgeEndpointTag=dev --set=imagePullPolicy=Never edge-endpoint deploy/helm/groundlight-edge-endpoint 
 	# Restart any deployments so that they pick up the new image
-	kubectl rollout restart deployment -n $$(helm get values edge-endpoint --all -o json | jq -r '.namespace') edge-endpoint
+	kubectl rollout restart deployment -n $$(helm get -n default values edge-endpoint --all -o json | jq -r '.namespace') edge-endpoint
