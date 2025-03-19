@@ -27,15 +27,15 @@ async def startup_event():
     logging.info("Will report metrics to cloud every %d seconds", STATUS_REPORT_INTERVAL)
     scheduler.start()
 
-@app.get("/metrics.json")
+@app.get("/status/metrics.json")
 async def get_metrics():
     """Return system metrics as JSON."""
     return metrics_payload()
 
-@app.get("/")
-async def get_index():
+@app.get("/status")
+async def get_status():
     """Serve the status monitoring HTML page."""
-    html_path = Path(__file__).parent / "static" / "index.html"
+    html_path = Path(__file__).parent / "static" / "status.html"
     with open(html_path, "r") as f:
         html_content = f.read()
     return HTMLResponse(content=html_content)
