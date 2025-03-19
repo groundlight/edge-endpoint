@@ -59,7 +59,7 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            fetch('/metrics.json')
+            fetch('/status/metrics.json')
                 .then(response => {
                     if (!response.ok) {
                         throw new Error('Network response was not ok');
