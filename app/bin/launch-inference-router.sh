@@ -1,7 +1,7 @@
 #!/bin/bash
 
-cd $(dirname $0)  # script is in app/ dir
-cd ..  
+cd $(dirname $0)  # script is in app/bin/ dir
+cd ../..
 
 # TODO: We should move nginx to its own container
 nginx 

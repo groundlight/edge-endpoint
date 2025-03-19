@@ -47,7 +47,7 @@ class SafeMetricsDict:
         return self.data
 
 
-def _metrics_payload() -> dict:
+def metrics_payload() -> dict:
     """Returns a dictionary of metrics to be sent to the cloud API."""
     out = SafeMetricsDict()
     out.add("device_id", lambda: deviceid.get_deviceid_str())
@@ -59,9 +59,9 @@ def _metrics_payload() -> dict:
     return out.as_dict()
 
 
-def report_metrics():
+def report_metrics_to_cloud():
     """Reports metrics to the cloud API."""
-    payload = _metrics_payload()
+    payload = metrics_payload()
 
     logger.info(f"Reporting metrics to the cloud API: {payload}")
 
@@ -84,4 +84,4 @@ def report_metrics():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    report_metrics()
+    report_metrics_to_cloud()
