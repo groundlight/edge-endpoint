@@ -4,6 +4,7 @@ The inference router handles specific SDK/API requests like submit_image_query
 by routing them to an inference_deployment if one is available for the detector.
 It is behind nginx, which forwards any request to the cloud if this doesn't handle it.
 """
+
 import logging
 import os
 
