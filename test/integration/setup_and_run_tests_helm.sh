@@ -85,6 +85,12 @@ kubectl describe pod -l app=inferencemodel-primary-$DETECTOR_ID_WITH_DASHES -n $
 echo "Describing the inferencemodel pod (inferencemodel-oodd-$DETECTOR_ID_WITH_DASHES)..."
 kubectl describe pod -l app=inferencemodel-oodd-$DETECTOR_ID_WITH_DASHES -n $DEPLOYMENT_NAMESPACE
 
+echo; echo "Show the inference model updater logs..."
+kubectl logs deployments/edge-endpoint inference-model-updater -n $DEPLOYMENT_NAMESPACE
+
+echo; echo "Show the edge config file..."
+kubectl get cm edge-config -o yaml -n $DEPLOYMENT_NAMESPACE
+
 # Run both rollout checks in parallel
 kubectl rollout status deployment/inferencemodel-primary-$DETECTOR_ID_WITH_DASHES \
     -n $DEPLOYMENT_NAMESPACE --timeout=5m &
