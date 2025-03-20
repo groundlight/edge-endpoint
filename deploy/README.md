@@ -116,11 +116,11 @@ This will install the Edge Endpoint doing GPU-based inference in the `edge` name
 
 You might want to customize the [edge config file](../deploy/helm/groundlight-edge-endpoint/files/default-edge-config.yaml) to include the detector ID's you want to run. See [the guide to configuring detectors](/CONFIGURING-DETECTORS.md) for more information. Adding detector ID's to the config file will cause inference pods to be initialized automatically for each detector and provides you finer-grained control over each detector's behavior. Even if detectors aren't configured in the config file, edge inference will be set up for each detector ID for which the Groundlight service receives requests (note that it takes some time for each inference pod to become available for the first time).
 
-To use a custom edge config file, you can set the `edgeConfig` Helm value to the path of the file:
+To use a custom edge config file, you can set the `configFile` Helm value to the path of the file:
 
 ```shell
 helm install -n default edge-endpoint deploy/helm/groundlight-edge-endpoint \
-  --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}" --set-file edgeConfig=/path/to/your/edge-config.yaml
+  --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}" --set-file configFile=/path/to/your/edge-config.yaml
 ```
 #### Variation: CPU Mode Inference
 
