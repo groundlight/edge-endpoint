@@ -1,0 +1,18 @@
+# A simple test to see if the edge-endpoint service is responding to readiness probes
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "test-ee-local-connection"
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: wget
+      image: busybox
+      command: ['wget']
+      # Note that we use port 30101 here which is the internal port and not the port exposed to the host
+      args: ['-O', '-', '{{ include "groundlight-edge-endpoint.fullname" . }}-service:30101/health/ready']
+  restartPolicy: Never

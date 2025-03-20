@@ -1,0 +1,44 @@
+{{- define "edge-endpoint.registry-credentials.podSpec" -}}
+restartPolicy: Never
+serviceAccountName: edge-endpoint-service-account
+
+containers:
+  - name: aws-cli
+    image: amazon/aws-cli:latest
+    command:
+      - /bin/sh
+      - /app/init-aws-access-retrieve.sh
+    env:
+      - name: GROUNDLIGHT_ENDPOINT
+        value: "{{ .Values.groundlightEndpoint }}"
+      - name: GROUNDLIGHT_API_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: groundlight-api-token
+            key: GROUNDLIGHT_API_TOKEN
+
+    volumeMounts:
+      - name: shared-volume
+        mountPath: /shared
+      - name: init-aws-access
+        mountPath: /app/init-aws-access-retrieve.sh
+        subPath: init-aws-access-retrieve.sh
+
+  - name: kubectl
+    image: bitnami/kubectl:latest
+    command:
+      - /bin/sh
+      - /app/init-aws-access-apply.sh
+    volumeMounts:
+      - name: shared-volume
+        mountPath: /shared
+      - name: init-aws-access
+        mountPath: /app/init-aws-access-apply.sh
+        subPath: init-aws-access-apply.sh
+volumes:
+  - name: init-aws-access
+    configMap:
+      name: init-aws-access
+  - name: shared-volume
+    emptyDir: {}
+{{- end }}
