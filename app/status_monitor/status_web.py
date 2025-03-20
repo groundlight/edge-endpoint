@@ -9,20 +9,19 @@ from fastapi.responses import HTMLResponse
 from app.metrics.metricreporting import metrics_payload, report_metrics_to_cloud
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+# Environment variable lets us speed up testing
 STATUS_REPORT_INTERVAL = int(os.environ.get("STATUS_REPORT_INTERVAL", 3600))
 
-logging.basicConfig(
-    level=LOG_LEVEL, format="%(asctime)s.%(msecs)03d %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-)
 
 app = FastAPI(title="status-monitor")
-
 scheduler = AsyncIOScheduler()
-
 
 @app.on_event("startup")
 async def startup_event():
     """Lifecycle event that is triggered when the application starts."""
+    logging.basicConfig(
+        level=LOG_LEVEL, format="%(asctime)s.%(msecs)03d %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+    )
     logging.info("Starting status-monitor server...")
     scheduler.add_job(report_metrics_to_cloud, "interval", seconds=STATUS_REPORT_INTERVAL)
     logging.info("Will report metrics to cloud every %d seconds", STATUS_REPORT_INTERVAL)
