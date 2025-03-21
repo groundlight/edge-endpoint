@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Builds and imports the image into a local k3s cluster.
+# This is useful for development purposes, where you don't want to push the image to ECR.
+# Applies the tag "dev" to the image.
+
 set -e
 
 cd "$(dirname "$0")"

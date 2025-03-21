@@ -2,6 +2,7 @@ DEFAULT_EDGE_CONFIG_PATH = "/etc/groundlight/edge-config/edge-config.yaml"
 INFERENCE_DEPLOYMENT_TEMPLATE_PATH = "/etc/groundlight/inference-deployment/inference_deployment_template.yaml"
 
 # A file with the namespace to be operating within
+# TODO: this should just be an environment variable
 KUBERNETES_NAMESPACE_PATH = "/etc/groundlight/kubernetes-namespace/namespace"
 
 # Path to the database file.
