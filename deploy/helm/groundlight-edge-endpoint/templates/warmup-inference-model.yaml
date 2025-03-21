@@ -1,0 +1,38 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: warmup-inference-model
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+spec:
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      imagePullSecrets:
+      - name: registry-credentials
+      containers:
+      - name: image-puller
+        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:{{ include "groundlight-edge-endpoint.inferenceTag" . }}
+        command: ["echo", "Successfully pulled image to warm cache"]
+      - name: sync-pinamod
+        image: amazon/aws-cli:latest
+        # Sync models from S3 to the local hostmapped filesystem.
+        command: ['sh', '-c', 'mkdir -p $PINAMOD_DIR; aws s3 sync s3://pinamod-artifacts-public/pinamod $PINAMOD_DIR --delete']
+        env:
+        - name: PINAMOD_DIR
+          value: /opt/models/pinamod-public/pinamod
+        volumeMounts:
+        - name: pina-models
+          mountPath: /opt/models
+        - name: aws-credentials
+          mountPath: /root/.aws
+      volumes:
+      - name: pina-models
+        persistentVolumeClaim:
+          claimName: edge-endpoint-pvc
+      - name: aws-credentials
+        secret:
+          secretName: aws-credentials-file
+  backoffLimit: 2

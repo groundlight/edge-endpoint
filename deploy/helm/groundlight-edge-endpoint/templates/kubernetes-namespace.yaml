@@ -1,0 +1,10 @@
+{{/* TODO: convert this to an environment variable */}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubernetes-namespace
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+data:
+  namespace: {{ .Values.namespace }}

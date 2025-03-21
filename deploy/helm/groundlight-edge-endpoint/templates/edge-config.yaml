@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: edge-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+data:
+  edge-config.yaml: |
+    {{- include "groundlight-edge-endpoint.edgeConfig" . | nindent 4 }}
