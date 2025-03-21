@@ -88,3 +88,16 @@ Create the name of the service account to use
 {{- .Values.inferenceTag | default .Values.imageTag }}
 {{- end }}
 
+{{/*
+  Get the edge-config.yaml file. If the user supplies one via `--set-file configFile=...yaml`
+  then use that. Otherwise, use the default version in the `files/` directory. We define this
+  as a function so that we can use it as a nonce to restart the pod when the config changes.
+*/}}
+{{- define "groundlight-edge-endpoint.edgeConfig" -}}
+{{- if .Values.configFile }}
+{{- .Values.configFile }}
+{{- else }}
+{{- .Files.Get "files/default-edge-config.yaml" }}
+{{- end }}
+{{- end }}
+

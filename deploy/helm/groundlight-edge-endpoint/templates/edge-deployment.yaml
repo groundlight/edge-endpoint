@@ -44,6 +44,8 @@ spec:
     metadata:
       labels:
         app: edge-logic-server
+      annotations:
+        checksum/config: {{ include "groundlight-edge-endpoint.edgeConfig" . | sha256sum }}
     spec:
       # This service account is used by the edge logic to access the Kubernetes API
       # from within the pod. See templates/service_account.yaml for more details
