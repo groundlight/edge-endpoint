@@ -16,6 +16,7 @@ STATUS_REPORT_INTERVAL = int(os.environ.get("STATUS_REPORT_INTERVAL", 3600))
 app = FastAPI(title="status-monitor")
 scheduler = AsyncIOScheduler()
 
+
 @app.on_event("startup")
 async def startup_event():
     """Lifecycle event that is triggered when the application starts."""
@@ -27,10 +28,12 @@ async def startup_event():
     logging.info("Will report metrics to cloud every %d seconds", STATUS_REPORT_INTERVAL)
     scheduler.start()
 
+
 @app.get("/status/metrics.json")
 async def get_metrics():
     """Return system metrics as JSON."""
     return metrics_payload()
+
 
 @app.get("/status")
 async def get_status():
