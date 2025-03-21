@@ -1,0 +1,20 @@
+# Cron job to refresh our local credentials
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: refresh-ecr-creds
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+spec:
+  schedule: "0 * * * *"  # Every 2 hours
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 3600
+      backoffLimit: 3
+      template:
+        metadata:
+          labels:
+            app: refresh-ecr-creds
+        spec:
+        {{- include "edge-endpoint.registry-credentials.podSpec" . | nindent 10 }}

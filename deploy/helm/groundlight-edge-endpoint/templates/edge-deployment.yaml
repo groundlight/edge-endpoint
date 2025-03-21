@@ -1,0 +1,194 @@
+{{- if and (eq .Values.inferenceFlavor "gpu") (not (lookup "node.k8s.io/v1" "RuntimeClass" "" "nvidia")) }}
+# Required runtime class for GPU use in k3s
+# Pods must have `runtimeClassName: nvidia` set to access GPU
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: nvidia
+  annotations:
+    "helm.sh/resource-policy": keep
+handler: nvidia
+---
+{{- end }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: edge-endpoint-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: edge-logic-server
+  ports:
+  - protocol: TCP
+    # Service port for NGINX
+    port: 30101
+    nodePort: {{ .Values.edgeEndpointPort }}
+  type: NodePort
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge-endpoint
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: edge-endpoint
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edge-logic-server
+  template:
+    metadata:
+      labels:
+        app: edge-logic-server
+      annotations:
+        checksum/config: {{ include "groundlight-edge-endpoint.edgeConfig" . | sha256sum }}
+    spec:
+      # This service account is used by the edge logic to access the Kubernetes API
+      # from within the pod. See templates/service_account.yaml for more details
+      serviceAccountName: edge-endpoint-service-account
+      initContainers:
+      - name: database-prep
+        image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        volumeMounts:
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/sqlite
+        command: ["/bin/bash", "/groundlight-edge/deploy/bin/setup_db.sh"]
+
+      containers:
+      - name: inference-router
+        image: *edgeEndpointImage
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        ports:
+        - containerPort: 30101
+        env:
+        - name: LOG_LEVEL
+          value: "INFO"
+        # We need this feature flag since we run the edge logic server in two separate environments:
+        # 1. In docker (on the GitHub Actions runner) for testing
+        # 2. In kubernetes (currently a dedicated EC2 instance)
+        # This feature flag is basically good for knowing when to use the python kubernetes API
+        # (i.e., creating deployments, etc.). We don't want to use the python kubernetes API
+        # if we are only running the edge logic server in docker.
+        # TODO: Once we have kubernetes-based tests, we can remove this feature flag.
+        - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
+          value: "1"
+        - name: GROUNDLIGHT_ENDPOINT
+          value: "{{ .Values.groundlightEndpoint }}"
+        volumeMounts:
+        - name: edge-config-volume
+          mountPath: /etc/groundlight/edge-config
+        - name: nginx-config-volume
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/sqlite
+        startupProbe:
+          httpGet:
+            path: /health/live  # Checks if the server is up
+            port: 30101
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 6  # Wait for up to 1 min
+        readinessProbe:
+          httpGet:
+            path: /health/ready  # Checks if the server is ready to serve requests
+            port: 30101
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 2  # after 20 seconds of failure, stop sending traffic to the pod
+        livenessProbe:
+          httpGet:
+            path: /health/ready
+            port: 30101
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 4  # after 40 seconds of failure, restart the pod
+
+      - name: status-monitor
+        image: *edgeEndpointImage
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        ports:
+        - containerPort: 8123
+        command: ["./app/bin/launch-status-monitor.sh"]
+        env:
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: GROUNDLIGHT_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: groundlight-api-token
+              key: GROUNDLIGHT_API_TOKEN
+              optional: true
+        volumeMounts:
+          - name: edge-config-volume
+            mountPath: /etc/groundlight/edge-config
+          - name: device-info-volume
+            mountPath: /opt/groundlight/device
+
+      - name: inference-model-updater
+        image: *edgeEndpointImage
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        command: ["/bin/bash", "-c"]
+        args: ["poetry run python -m app.model_updater.update_models"]
+        env:
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
+          value: "1"
+        - name: GROUNDLIGHT_ENDPOINT
+          value: "{{ .Values.groundlightEndpoint }}"
+        - name: GROUNDLIGHT_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: groundlight-api-token
+              key: GROUNDLIGHT_API_TOKEN
+        volumeMounts:
+        - name: edge-config-volume
+          mountPath: /etc/groundlight/edge-config
+        - name: nginx-config-volume
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+        - name: kubernetes-namespace
+          mountPath: /etc/groundlight/kubernetes-namespace
+
+        - name: inference-deployment-template-volume
+          mountPath: /etc/groundlight/inference-deployment
+
+        # In this setup the edge-endpoint-persistent-volume is mounted to
+        # two different paths in the inference-model-updater container.
+        # This allows the container to access both the sqlite database and
+        # the path to the model repository without needing to create an extra PV and PVC.
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/sqlite
+
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/serving/model-repo
+
+      imagePullSecrets:
+      - name: registry-credentials
+
+      volumes:
+      - name: edge-config-volume
+        configMap:
+          name: edge-config
+      - name: nginx-config-volume
+        configMap:
+          name: nginx-config
+      - name: kubernetes-namespace
+        configMap:
+          name: kubernetes-namespace
+      - name: inference-deployment-template-volume
+        configMap:
+          name: inference-deployment-template
+      - name: edge-endpoint-persistent-volume
+        persistentVolumeClaim:
+          claimName: edge-endpoint-pvc
+      - name: device-info-volume
+        hostPath:
+          path: /opt/groundlight/device
+          type: DirectoryOrCreate
