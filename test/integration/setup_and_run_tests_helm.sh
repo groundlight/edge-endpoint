@@ -110,7 +110,7 @@ echo "Inference deployment for detector $DETECTOR_ID has successfully rolled out
 
 echo "Running the Helm tests..."
 
-helm test -n default ${HELM_RELEASE_NAME}
+helm test -n default ${HELM_RELEASE_NAME} --hide-notes
 
 echo "Helm tests completed successfully."
 
