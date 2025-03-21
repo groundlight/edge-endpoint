@@ -108,7 +108,11 @@ fi
 
 echo "Inference deployment for detector $DETECTOR_ID has successfully rolled out."
 
-export EDGE_SETUP=1
+echo "Running the Helm tests..."
+
+helm test -n default ${HELM_RELEASE_NAME}
+
+echo "Helm tests completed successfully."
 
 ./test/integration/run_tests.sh
 
