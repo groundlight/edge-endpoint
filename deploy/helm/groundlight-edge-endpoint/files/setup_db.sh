@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Sets up the SQLite database for the edge endpoint.
-# This script is invoked by an initContainer in the edge endpoint deployment.
+# This script is invoked by an initContainer in the `edge-endpoint` deployment.
 
 set -ex
 

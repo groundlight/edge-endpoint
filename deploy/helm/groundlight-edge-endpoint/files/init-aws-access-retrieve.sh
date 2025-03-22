@@ -12,6 +12,7 @@
 
 #!/bin/bash
 
+# This function replicates the Groundlight SDK's logic to clean up user-supplied endpoint URLs 
 sanitize_endpoint_url() {
     local endpoint="${1:-$GROUNDLIGHT_ENDPOINT}"
 
