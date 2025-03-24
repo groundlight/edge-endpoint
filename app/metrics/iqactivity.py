@@ -10,7 +10,7 @@ from pathlib import Path
 
 class FilesystemActivityTrackingHelper:
     """Helper class to support tracking image-query activity using the filesystem.
-    This is just a skeleton and only supports timestamps right now.  But 
+    This is just a skeleton and only supports timestamps right now.  But
     we will expand this to support counting metrics, etc."""
 
     def __init__(self, base_dir: str):
