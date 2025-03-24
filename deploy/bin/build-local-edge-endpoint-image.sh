@@ -1,8 +1,25 @@
 #!/bin/bash
 
-# Builds and imports the image into a local k3s cluster.
-# This is useful for development purposes, where you don't want to push the image to ECR.
-# Applies the tag "dev" to the image.
+# This script will build the edge-endpoint image and add it to the local k3s cluster
+# for development and testing. If the image already exists in the k3s cluster, it will
+# skip the upload step.
+#
+# It creates a single-platform image with the full ECR-style name, but it always uses 
+# the 'dev' tag. When deploying application to your local test k3s cluster, add the
+# following Helm values:
+# `--set edgeEndpointTag=dev --set imagePullPolicy=Never` (or add them to your values.yaml file)
+
+# This works by:
+# 1. Building the image with the local Docker daemon
+# 2. Checking the image SHA in the local Docker daemon and in k3s
+# 3. If they are the same, exit successfully
+# 4. If they are different, export the image to stdout (it's a compressed tarball)
+#    and pipe it to import it into k3s using the containerd CLI connectied to k3s's
+#    containerd.
+# The last step is kind of slow.
+#
+# Note than when you use the image in your Kubernetes app, you need to set
+# imagePullPolicy=Never so K8s doesn't try to pull the image from ECR.
 
 set -e
 

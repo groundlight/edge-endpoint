@@ -78,7 +78,7 @@ spec:
         - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
           value: "1"
         - name: GROUNDLIGHT_ENDPOINT
-          value: "{{ .Values.groundlightEndpoint }}"
+          value: "{{ .Values.upstreamEndpoint }}"
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
@@ -141,7 +141,7 @@ spec:
         - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
           value: "1"
         - name: GROUNDLIGHT_ENDPOINT
-          value: "{{ .Values.groundlightEndpoint }}"
+          value: "{{ .Values.upstreamEndpoint }}"
         - name: GROUNDLIGHT_API_TOKEN
           valueFrom:
             secretKeyRef:

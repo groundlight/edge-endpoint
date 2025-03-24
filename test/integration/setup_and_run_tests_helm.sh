@@ -26,7 +26,10 @@ export DETECTOR_ID=$(poetry run python test/integration/integration.py --mode cr
 echo "created detector with id: $DETECTOR_ID"
 
 # set some other environment variables
+# We put the tests on port 30108 and in a different namespace so that it doesn't require any
+# extra configuration to run them alongside a "default" deployment while you're developing.
 export EDGE_ENDPOINT_PORT="30108"
+export DEPLOYMENT_NAMESPACE="test-with-k3s-helm"
 export INFERENCE_FLAVOR="CPU"
 export LIVE_TEST_ENDPOINT="http://localhost:$EDGE_ENDPOINT_PORT"
 export REFRESH_RATE=60 # not actually different than the default, but we may want to tweak this
@@ -41,7 +44,6 @@ sed -i "s/refresh_rate: 60/refresh_rate: $REFRESH_RATE/" $EDGE_CONFIG_FILE
 
 trap 'rm -rf "$EDGE_CONFIG_FILE"' EXIT
 
-export DEPLOYMENT_NAMESPACE="test-with-k3s-helm"
 if [ -n "$(kubectl get namespace $DEPLOYMENT_NAMESPACE --ignore-not-found)" ]; then
     echo "Namespace $DEPLOYMENT_NAMESPACE already exists. Delete it before running this script."
     exit 1
@@ -110,7 +112,7 @@ echo "Inference deployment for detector $DETECTOR_ID has successfully rolled out
 
 echo "Running the Helm tests..."
 
-helm test -n default ${HELM_RELEASE_NAME}
+helm test -n default ${HELM_RELEASE_NAME} --hide-notes
 
 echo "Helm tests completed successfully."
 

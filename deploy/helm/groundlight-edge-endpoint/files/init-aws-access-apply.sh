@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Part two of getting AWS credentials set up. 
-# This script runs in a kubectl container and applies the credentials to the cluster.
+# This script runs in a minimal container with just kubectl, and applies the credentials to the cluster.
 
 # We do two things:
 # 1. Create a secret with an AWS credentials file. We use a file instead of environment variables
