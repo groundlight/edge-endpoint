@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Edge Endpoint Helm Repository</title>
+</head>
+<body>
+  <h1>Edge Endpoint Helm Repository</h1>
+
+  <p>
+    We use GitHub Pages to host our Helm repository. This repository only contains 
+    the Helm chart for the Edge-endpoint project — 
+    named <code>groundlight-edge-endpoint</code>.
+  </p>
+
+  <p>
+    The repo is automatically updated by the CI/CD pipeline whenever 
+    the <code>main</code> branch is deployed as a "release".
+  </p>
+
+  <h2>Usage</h2>
+
+  <p>To install the edge-endpoint chart, add the repository to your Helm configuration:</p>
+
+  <pre><code>helm repo add edge-endpoint http://code.groundlight.ai/edge-endpoint/
+</code></pre>
+
+  <p>Then you can install the chart:</p>
+
+  <pre><code>helm install edge-endpoint groundlight-edge-endpoint
+</code></pre>
+</body>
+</html>
