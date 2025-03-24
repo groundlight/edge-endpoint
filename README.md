@@ -9,7 +9,7 @@ The repo is automatically updated by the CI/CD pipeline whenever the main branch
 To install the edge-endpoint chart, add the repository to your Helm configuration:
 
 ```bash
-helm repo add edge-endpoint  http://code.groundlight.ai/edge-endpoint/
+helm repo add edge-endpoint https://code.groundlight.ai/edge-endpoint/
 ```
 
 Then you can install the chart:
