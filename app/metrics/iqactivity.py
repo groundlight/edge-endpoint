@@ -8,8 +8,10 @@ from functools import lru_cache
 from pathlib import Path
 
 
-class FilesystemActivityTracker:
-    """Tracks image-query activity using the filesystem."""
+class FilesystemActivityTrackingHelper:
+    """Helper class to support tracking image-query activity using the filesystem.
+    This is just a skeleton and only supports timestamps right now.  But 
+    we will expand this to support counting metrics, etc."""
 
     def __init__(self, base_dir: str):
         self.base_dir = base_dir
@@ -17,18 +19,19 @@ class FilesystemActivityTracker:
         os.makedirs(self.base_dir, exist_ok=True)
 
     def file(self, name: str) -> Path:
-        """Get the path to the file for a given detector."""
+        """Get the path to a file which is used to track something.  Could be specific to a detector,
+        or something system-wide like number of active models, or the last image query."
         return Path(self.base_dir, name)
 
 
 @lru_cache(maxsize=1)  # Singleton
-def _tracker() -> FilesystemActivityTracker:
+def _tracker() -> FilesystemActivityTrackingHelper:
     """Get the activity tracker."""
-    return FilesystemActivityTracker(base_dir="/opt/groundlight/edge-metrics")
+    return FilesystemActivityTrackingHelper(base_dir="/opt/groundlight/edge-metrics")
 
 
 def record_iq_activity(detector_id: str):
-    """Currently just records that something happened."""
+    """Currently just records that something happened on the detector."""
     # TODO: Lots of obvious improvements here.  Number of active detectors,
     # how many images were processed, etc etc.
     f = _tracker().file("last_iq")
