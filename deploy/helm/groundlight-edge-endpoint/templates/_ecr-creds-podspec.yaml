@@ -10,7 +10,7 @@ containers:
       - /app/init-aws-access-retrieve.sh
     env:
       - name: GROUNDLIGHT_ENDPOINT
-        value: "{{ .Values.groundlightEndpoint }}"
+        value: "{{ .Values.upstreamEndpoint }}"
       - name: GROUNDLIGHT_API_TOKEN
         valueFrom:
           secretKeyRef:

@@ -39,8 +39,11 @@ inferenceFlavor: "gpu"
 # The user must provide the Groundlight API token as input or the deployment will fail
 groundlightApiToken: ""
 
-# If you want to override the default Groundlight API URL, you can do so here
-groundlightEndpoint: "https://api.groundlight.ai"
+# For escalations and audits and calls that aren't handled by the Edge Endpoint, we forward
+# to the Groundlight service in the cloud. If you're testing against another version
+# of the Groundlight service (e.g., your own dev environment or the integ environment),
+# you can override this value.
+upstreamEndpoint: "https://api.groundlight.ai"
 
 # TODO: remove these values once we retrieve them from Janzu
 # The user must provide the AWS Access Key Id as input or the deployment will fail
