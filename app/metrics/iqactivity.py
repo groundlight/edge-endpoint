@@ -20,7 +20,7 @@ class FilesystemActivityTrackingHelper:
 
     def file(self, name: str) -> Path:
         """Get the path to a file which is used to track something.  Could be specific to a detector,
-        or something system-wide like number of active models, or the last image query."
+        or something system-wide like number of active models, or the last image query."""
         return Path(self.base_dir, name)
 
 
