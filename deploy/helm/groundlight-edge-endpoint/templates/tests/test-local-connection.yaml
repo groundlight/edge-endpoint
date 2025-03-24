@@ -13,6 +13,10 @@ spec:
     - name: wget
       image: busybox
       command: ['wget']
-      # Note that we use port 30101 here which is the internal port and not the port exposed to the host
+      # Note that we use the constant port 30101 here because we're connecting to the service
+      # inside the k3s cluster and it's always 30101 with the k3s service name. This is
+      # different from when you call from outside the cluster and use the NodePort which
+      # is flexibly defined using the setting `.Values.edgeEndpointPort`. (Though by default
+      # the port numbers are the same.)
       args: ['-O', '-', '{{ include "groundlight-edge-endpoint.fullname" . }}-service:30101/health/ready']
   restartPolicy: Never
