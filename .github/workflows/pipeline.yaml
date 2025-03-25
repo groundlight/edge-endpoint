@@ -400,7 +400,7 @@ jobs:
           uv run pulumi config set ee-cicd:targetCommit ${COMMIT_TO_TEST}
 
           # Inject the API token into the pulumi stack
-          uv run pulumi config set ee-cicd:groundlightApiToken ${GROUNDLIGHT_API_TOKEN}
+          uv run pulumi config set ee-cicd:groundlightApiToken ${GROUNDLIGHT_API_TOKEN} --secret
 
       - name: Create the EEUT instance
         run: |
