@@ -88,6 +88,8 @@ echo "alias k='kubectl'" >> /home/${TARGET_USER}/.bashrc
 echo "source <(kubectl completion bash)" >> /home/${TARGET_USER}/.bashrc
 echo "complete -F __start_kubectl k" >> /home/${TARGET_USER}/.bashrc
 echo "set -o vi" >> /home/${TARGET_USER}/.bashrc
+echo "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml" >> /home/${TARGET_USER}/.bashrc
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
 # This should get substituted by the launching script
 export GROUNDLIGHT_API_TOKEN="__GROUNDLIGHTAPITOKEN__"
