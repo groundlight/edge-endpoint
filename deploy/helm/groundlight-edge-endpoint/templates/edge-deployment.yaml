@@ -60,7 +60,7 @@ spec:
         command: ["/bin/bash", "/groundlight-edge/deploy/bin/setup_db.sh"]
 
       containers:
-      - name: inference-router
+      - name: logic-server
         image: *edgeEndpointImage
         imagePullPolicy: {{ .Values.imagePullPolicy }}
         ports:
