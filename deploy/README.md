@@ -71,7 +71,7 @@ If you don't have [k3s](https://docs.k3s.io/) installed, there are two scripts w
 ./deploy/bin/install-k3s-nvidia.sh
 ```
 
-These scripts will install the k3s Kubernetes distribution on your machine.  If you have a CUDA GPU, the second script will also install the NVIDIA GPU plugin for Kubernetes. They will also install Helm, which is used to deploy the edge-endpoint and the Linux utilities `curl` and `jq`, if you don't already have them.
+These scripts will install the k3s Kubernetes distribution on your machine.  If you have a CUDA GPU, the second script will also install the NVIDIA GPU plugin for Kubernetes. They will also install Helm, which is used to deploy the edge-endpoint, and the Linux utilities `curl` and `jq`, if you don't already have them.
 
 ### Set the Groundlight API Token
 
