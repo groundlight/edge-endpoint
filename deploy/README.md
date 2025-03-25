@@ -110,7 +110,7 @@ helm install -n default edge-endpoint deploy/helm/groundlight-edge-endpoint \
   --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}"
 ```
 
-This will install the Edge Endpoint doing GPU-based inference in the `edge` namespace in your k3s cluster and expose it on port 30101 on your local node.
+This will install the Edge Endpoint doing GPU-based inference in the `edge` namespace in your k3s cluster and expose it on port 30101 on your local node. Helm will keep a history of the installation in the `default` namespace (signified by the `-n default` flag).
 
 #### Variation: Custom Edge Endpoint Configuration
 
