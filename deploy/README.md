@@ -112,6 +112,13 @@ helm install -n default edge-endpoint deploy/helm/groundlight-edge-endpoint \
 
 This will install the Edge Endpoint doing GPU-based inference in the `edge` namespace in your k3s cluster and expose it on port 30101 on your local node. Helm will keep a history of the installation in the `default` namespace (signified by the `-n default` flag).
 
+To change values that you've customized after you've installed the Edge Endpoint or to install an updated chart, you can use the `helm upgrade` command. For example, to change the `groundlightApiToken` value, you can run:
+
+```shell
+helm upgrade -n default edge-endpoint deploy/helm/groundlight-edge-endpoint \
+  --set groundlightApiToken="<new groundlight api token>"
+```
+
 #### Variation: Custom Edge Endpoint Configuration
 
 You might want to customize the [edge config file](../deploy/helm/groundlight-edge-endpoint/files/default-edge-config.yaml) to include the detector ID's you want to run. See [the guide to configuring detectors](/CONFIGURING-DETECTORS.md) for more information. Adding detector ID's to the config file will cause inference pods to be initialized automatically for each detector and provides you finer-grained control over each detector's behavior. Even if detectors aren't configured in the config file, edge inference will be set up for each detector ID for which the Groundlight service receives requests (note that it takes some time for each inference pod to become available for the first time).
@@ -236,7 +243,7 @@ If you have an existing edge-endpoint deployment set up with `setup-ee.sh` and w
 
 1. Uninstall the existing edge-endpoint deployment:
 ```shell
-./deploy/bin/delete-old-deployment.sh
+DEPLOYMENT_NAMESPACE=<namespace-you-deployed-to> ./deploy/bin/delete-old-deployment.sh
 ```
 2. Follow the instructions in the [Setting up for Helm](#setting-up-for-helm) section to set up Helm.
 3. That's it
