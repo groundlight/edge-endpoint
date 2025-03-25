@@ -436,14 +436,9 @@ jobs:
         run: |
           EEUT_IP=$(uv run pulumi stack output eeut_private_ip)
           echo "If the tests failed, the EEUT (edge endpoint under test) is still running."
-          echo "The sweeper will remove it in an hour or so."
-          echo "You can connect to it via ssh using the following command:"
-          echo "ssh ubuntu@${EEUT_IP}"
-          echo "(Assuming you have the private key and are coming from the right subnet.)"
-          echo ""
-          echo "If the machine was put to sleep and you want it back, run:"
-          echo "wake-ec2 eeut-${STACK_NAME}"
-          echo "In the GL_Public account."
+          echo "To connect to it, see the Debugging EEUT runbook.  You'll want to know:"
+          echo "export EEUT_IP=${EEUT_IP}"
+          echo "export EEUT_STACK_NAME=${STACK_NAME}"
 
   build-push-edge-endpoint-multiplatform:
     if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
