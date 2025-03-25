@@ -68,7 +68,9 @@ if [ -n "$SPECIFIC_COMMIT" ]; then
     # because that would be substituted too!
     if [ "${SPECIFIC_COMMIT:0:11}" != "__EE_COMMIT" ]; then
         echo "Checking out commit ${SPECIFIC_COMMIT}"
-        git checkout ${SPECIFIC_COMMIT}
+        # This might be a merge commit, so we need to fetch it deliberately.
+        git fetch origin $SPECIFIC_COMMIT
+        git checkout $SPECIFIC_COMMIT
     else
         echo "It appears the commit hash was not substituted.  Staying on main."
     fi

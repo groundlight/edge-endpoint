@@ -390,24 +390,14 @@ jobs:
 
       - name: Pick which commit we will test
         run: |
-          echo "This is a bit subtle."
-          echo "We can't just test on 'main' for fairly obvious reasons - we"
-          echo "want to test the code in this PR's branch. The current commit"
-          echo "right here is ${GITHUB_SHA}, which is likely a merge commit."
-          echo "Merge commits are challenging. They are what would happen if"
-          echo "this PR were to be merged into its base branch. But they are"
-          echo "ephemeral things and not available in the public repo. So the"
-          echo "EEUT can't just check them out. Making them available to the"
-          echo "EEUT would require pushing them and polluting the repo. So,"
-          echo "for now, we are going to use the PR's head ref"
-          echo "${{ github.event.pull_request.head.ref }}, which is the commit"
-          echo "that was used to create the PR. Recognizing that this doesn't"
-          echo "reflect what will happen after merge. But it's simpler."
+          # We want to test the exact code that GitHub is running right now
+          # For PR runs, this is the merge commit that GitHub creates
+          # For main branch runs, this is the latest commit on main
+          # Either way, GITHUB_SHA gives us exactly what we need.
+          # This is a proper commit in the repo, you just have to fetch it deliberately.
+          # It doesn't show up with a normal `git clone`
 
-          # TODO: test on the merge commit by pushing it to the repo with a temporary
-          # branch, and then clean up the branch later.
-
-          COMMIT_TO_TEST=${{ github.event.pull_request.head.ref }}
+          COMMIT_TO_TEST=${GITHUB_SHA}
           uv run pulumi config set ee-cicd:targetCommit ${COMMIT_TO_TEST}
 
       - name: Create the EEUT instance
