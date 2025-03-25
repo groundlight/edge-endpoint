@@ -388,27 +388,19 @@ jobs:
           uv run pulumi stack init ${STACK_NAME}
           uv run pulumi config
 
-      - name: Pick which commit we will test
+      - name: Configure pulumi
         run: |
-          echo "This is a bit subtle."
-          echo "We can't just test on 'main' for fairly obvious reasons - we"
-          echo "want to test the code in this PR's branch. The current commit"
-          echo "right here is ${GITHUB_SHA}, which is likely a merge commit."
-          echo "Merge commits are challenging. They are what would happen if"
-          echo "this PR were to be merged into its base branch. But they are"
-          echo "ephemeral things and not available in the public repo. So the"
-          echo "EEUT can't just check them out. Making them available to the"
-          echo "EEUT would require pushing them and polluting the repo. So,"
-          echo "for now, we are going to use the PR's head ref"
-          echo "${{ github.event.pull_request.head.ref }}, which is the commit"
-          echo "that was used to create the PR. Recognizing that this doesn't"
-          echo "reflect what will happen after merge. But it's simpler."
-
-          # TODO: test on the merge commit by pushing it to the repo with a temporary
-          # branch, and then clean up the branch later.
-
-          COMMIT_TO_TEST=${{ github.event.pull_request.head.ref }}
+          # We want to test the exact code that GitHub is running right now
+          # For PR runs, this is the merge commit that GitHub creates
+          # For main branch runs, this is the latest commit on main
+          # Either way, GITHUB_SHA gives us exactly what we need.
+          # This is a proper commit in the repo, you just have to fetch it deliberately.
+          # It doesn't show up with a normal `git clone`
+          COMMIT_TO_TEST=${GITHUB_SHA}
           uv run pulumi config set ee-cicd:targetCommit ${COMMIT_TO_TEST}
+
+          # Inject the API token into the pulumi stack
+          uv run pulumi config set ee-cicd:groundlightApiToken ${GROUNDLIGHT_API_TOKEN} --secret
 
       - name: Create the EEUT instance
         run: |
@@ -444,13 +436,9 @@ jobs:
         run: |
           EEUT_IP=$(uv run pulumi stack output eeut_private_ip)
           echo "If the tests failed, the EEUT (edge endpoint under test) is still running."
-          echo "You can connect to it via ssh using the following command:"
-          echo "ssh ubuntu@${EEUT_IP}"
-          echo "(Assuming you have the private key and are coming from the right subnet.)"
-          echo ""
-          echo "If the machine was put to sleep and you want it back, run:"
-          echo "wake-ec2 eeut-${STACK_NAME}"
-          echo "In the GL_Public account."
+          echo "To connect to it, see the Debugging EEUT runbook.  You'll want to know:"
+          echo "export EEUT_IP=${EEUT_IP}"
+          echo "export EEUT_STACK_NAME=${STACK_NAME}"
 
   build-push-edge-endpoint-multiplatform:
     if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
