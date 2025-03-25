@@ -51,7 +51,7 @@ spec:
           command: ["/bin/bash", "/scripts/setup_db.sh"]
 
       containers:
-        - name: logic-server
+        - name: edge-endpoint
           image: *edgeEndpointImage
           imagePullPolicy: Always
           ports:

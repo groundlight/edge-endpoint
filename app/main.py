@@ -24,7 +24,7 @@ logging.basicConfig(
 )
 
 
-app = FastAPI(title="logic-server")
+app = FastAPI(title="edge-endpoint")
 app.include_router(router=api_router, prefix=API_BASE_PATH)
 app.include_router(router=ping_router)
 app.include_router(router=health_router)
