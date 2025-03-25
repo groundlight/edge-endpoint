@@ -48,6 +48,7 @@ sudo apt install -y \
     git \
     vim \
     tmux \
+    make \
     htop \
     curl \
     wget \
@@ -68,7 +69,7 @@ if [ -n "$SPECIFIC_COMMIT" ]; then
     # because that would be substituted too!
     if [ "${SPECIFIC_COMMIT:0:11}" != "__EE_COMMIT" ]; then
         echo "Checking out commit ${SPECIFIC_COMMIT}"
-        # This might be a merge commit, so we need to fetch it deliberately.
+        # This is probably a merge commit, so we need to fetch it deliberately.
         git fetch origin $SPECIFIC_COMMIT
         git checkout $SPECIFIC_COMMIT
     else
@@ -88,16 +89,17 @@ echo "source <(kubectl completion bash)" >> /home/${TARGET_USER}/.bashrc
 echo "complete -F __start_kubectl k" >> /home/${TARGET_USER}/.bashrc
 echo "set -o vi" >> /home/${TARGET_USER}/.bashrc
 
-# Configure the edge-endpoint with environment variables
-export DEPLOYMENT_NAMESPACE="gl-edge"
-export INFERENCE_FLAVOR="GPU"
-export GROUNDLIGHT_API_TOKEN="api_token_not_set"
+# This should get substituted by the launching script
+export GROUNDLIGHT_API_TOKEN="__GROUNDLIGHTAPITOKEN__"
 
-# Install the edge-endpoint
-kubectl create namespace gl-edge
-kubectl config set-context edge --namespace=gl-edge --cluster=default --user=default
+# Build the image and push it directly into k3s
+./deploy/bin/build-local-edge-endpoint-image.sh
+# tell helm to setup the EE using the local image
+make helm-local HELM_ARGS="--set groundlightApiToken=${GROUNDLIGHT_API_TOKEN}"
+
+# Configure kubectl to use the namespace where the EE is installed
+kubectl config set-context edge --namespace=edge --cluster=default --user=default
 kubectl config use-context edge
-./deploy/bin/setup-ee.sh
 
 # Indicate that setup is complete
 SETUP_COMPLETE=1

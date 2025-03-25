@@ -388,7 +388,7 @@ jobs:
           uv run pulumi stack init ${STACK_NAME}
           uv run pulumi config
 
-      - name: Pick which commit we will test
+      - name: Configure pulumi
         run: |
           # We want to test the exact code that GitHub is running right now
           # For PR runs, this is the merge commit that GitHub creates
@@ -396,9 +396,11 @@ jobs:
           # Either way, GITHUB_SHA gives us exactly what we need.
           # This is a proper commit in the repo, you just have to fetch it deliberately.
           # It doesn't show up with a normal `git clone`
-
           COMMIT_TO_TEST=${GITHUB_SHA}
           uv run pulumi config set ee-cicd:targetCommit ${COMMIT_TO_TEST}
+
+          # Inject the API token into the pulumi stack
+          uv run pulumi config set ee-cicd:groundlightApiToken ${GROUNDLIGHT_API_TOKEN}
 
       - name: Create the EEUT instance
         run: |
@@ -434,6 +436,7 @@ jobs:
         run: |
           EEUT_IP=$(uv run pulumi stack output eeut_private_ip)
           echo "If the tests failed, the EEUT (edge endpoint under test) is still running."
+          echo "The sweeper will remove it in an hour or so."
           echo "You can connect to it via ssh using the following command:"
           echo "ssh ubuntu@${EEUT_IP}"
           echo "(Assuming you have the private key and are coming from the right subnet.)"

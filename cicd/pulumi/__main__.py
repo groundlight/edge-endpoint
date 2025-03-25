@@ -51,6 +51,14 @@ def load_user_data_script() -> str:
         user_data_script = file.read()
     target_commit = get_target_commit()
     user_data_script = user_data_script.replace("__EE_COMMIT_HASH__", target_commit)
+    
+    # Substitute the API token into the user data script.
+    api_token_object = config.require_secret("groundlightApiToken")
+    api_token_value = api_token_object.apply(lambda v: v)
+    user_data_script = pulumi.Output.all(api_token_value).apply(
+        lambda values: user_data_script.replace("__GROUNDLIGHTAPITOKEN__", values[0])
+    )
+
     return user_data_script
 
 instance_profile_name = get_instance_profile_by_tag("Name", "edge-device-instance-profile")
