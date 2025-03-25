@@ -14,9 +14,8 @@ edgeEndpointTag: ""
 inferenceTag: ""
 
 # The image pull policy for the containers.
-# TODO: This is curently set to Always to make sure that the latest image is always pulled, but
-# that will be unnecessarily costly. We need to develop a strategy for managing the image pull
-# that only gets new images when there's a new version available.
+# The default value is "Always" which means that Kubernetes will always check to see if there's 
+# a new version of the image with the requested tag available when starting containers.
 imagePullPolicy: "Always"
 
 # The port that the Edge Endpoint will listen on on the host. 

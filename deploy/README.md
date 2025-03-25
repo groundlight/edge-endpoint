@@ -71,7 +71,7 @@ If you don't have [k3s](https://docs.k3s.io/) installed, there are two scripts w
 ./deploy/bin/install-k3s-nvidia.sh
 ```
 
-These scripts will install the k3s Kubernetes distribution on your machine.  If you have a CUDA GPU, the second script will also install the NVIDIA GPU plugin for Kubernetes. They will also install Helm, which is used to deploy the edge-endpoint and the Linux utilities `curl` and `jq`, if you don't already have them.
+These scripts will install the k3s Kubernetes distribution on your machine.  If you have a CUDA GPU, the second script will also install the NVIDIA GPU plugin for Kubernetes. They will also install Helm, which is used to deploy the edge-endpoint, and the Linux utilities `curl` and `jq`, if you don't already have them.
 
 ### Set the Groundlight API Token
 
@@ -110,7 +110,7 @@ helm install -n default edge-endpoint deploy/helm/groundlight-edge-endpoint \
   --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}"
 ```
 
-This will install the Edge Endpoint doing GPU-based inference in the `edge` namespace in your k3s cluster and expose it on port 30101 on your local node.
+This will install the Edge Endpoint doing GPU-based inference in the `edge` namespace in your k3s cluster and expose it on port 30101 on your local node. Helm will keep a history of the installation in the `default` namespace (signified by the `-n default` flag).
 
 #### Variation: Custom Edge Endpoint Configuration
 
