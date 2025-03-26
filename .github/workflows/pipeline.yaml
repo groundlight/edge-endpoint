@@ -146,6 +146,23 @@ jobs:
         run: |
           make validate-setup-ee
 
+      - name: Diagnose failure
+        if: failure()
+        env:
+          # Namespace is set in validate_setup_ee.sh
+          NAMESPACE: validate-setup-ee
+        run: |
+          set -x
+          set +e
+          df -h
+          kubectl config set-context --current --namespace=$NAMESPACE
+          kubectl get all
+          kubectl describe deployment edge-endpoint
+          kubectl describe pod edge-endpoint
+          kubectl logs deployment/edge-endpoint -c edge-endpoint
+          kubectl logs deployment/edge-endpoint -c status-monitor
+          kubectl logs deployment/edge-endpoint -c inference-model-updater
+
   validate-setup-helm:
     runs-on: ubuntu-22.04-8core
     env:
