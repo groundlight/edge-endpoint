@@ -1,0 +1,44 @@
+name: diskcheck
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    # This allows it to be triggered manually in the github console
+    # You could put inputs here, but we don't need them.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # This causes it to cancel previous in-progress actions in the same PR
+  cancel-in-progress: true
+jobs:
+  check-gha-disk-space:
+    strategy:
+      matrix:
+        runner:
+          [
+            ubuntu-22.04,
+            ubuntu-22.04-8core,
+            ubuntu-latest,
+            ubuntu-latest-4-cores,
+            ubuntu-latest-8-cores,
+          ]
+      fail-fast: false
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Report disk space
+        run: |
+          df -h
+          echo "Workspace: $(du -sh $GITHUB_WORKSPACE) || true"
+
+      - name: Clean up MSFTBS
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+
+      - name: Report disk space
+        run: |
+          df -h
+          echo "Workspace: $(du -sh $GITHUB_WORKSPACE) || true"
