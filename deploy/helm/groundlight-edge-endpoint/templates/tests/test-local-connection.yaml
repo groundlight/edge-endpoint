@@ -1,0 +1,22 @@
+# A simple test to see if the edge-endpoint service is responding to readiness probes
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "test-ee-local-connection"
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: wget
+      image: busybox
+      command: ['wget']
+      # Note that we use the constant port 30101 here because we're connecting to the service
+      # inside the k3s cluster and it's always 30101 with the k3s service name. This is
+      # different from when you call from outside the cluster and use the NodePort which
+      # is flexibly defined using the setting `.Values.edgeEndpointPort`. (Though by default
+      # the port numbers are the same.)
+      args: ['-O', '-', '{{ include "groundlight-edge-endpoint.fullname" . }}-service:30101/health/ready']
+  restartPolicy: Never

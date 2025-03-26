@@ -52,3 +52,13 @@ fi
 
 # Set up kubeconfig for the current user
 ./add-k3s-cluster-to-config.sh
+
+echo "You might want to set KUBECONFIG as follows:"
+echo "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml"
+
+# Install helm
+echo "Installing helm..."
+curl -fsSL -o /tmp/get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
+chmod 700 /tmp/get_helm.sh
+/tmp/get_helm.sh
+

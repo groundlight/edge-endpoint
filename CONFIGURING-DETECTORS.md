@@ -16,7 +16,13 @@ Configuring detectors for the edge endpoint allows you to provide fine-grained c
 
 Detector configurations are specified in [edge-config.yaml](configs/edge-config.yaml). The file has three sections: `global_config`, `edge_inference_configs`, and `detectors`. 
 
-NOTE: After modifying the config file, you'll have to re-run [setup-ee.sh](deploy/bin/setup-ee.sh) for your changes to be reflected.
+NOTE: After modifying the config file, you'll have to re-run helm to change the configuration:
+```shell
+helm install -n default edge-endpoint deploy/helm/groundlight-edge-endpoint \
+  --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}" --set-file configFile=./configs/edge-config.yaml
+```
+
+See the [deployment README file](deploy/README.md) for more information on installation and configuration options.
 
 ### `global_config`
 
