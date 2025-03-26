@@ -107,7 +107,8 @@ jobs:
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
   validate-setup-ee:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-22.04-8core
+    # Use 8-core to get more disk space
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -140,7 +141,8 @@ jobs:
           make validate-setup-ee
 
   validate-setup-helm:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-22.04-8core
+    # Use 8-core to get more disk space
     env:
       # associated with roxanne+test_edge account since for some reason it was failing with
       # prod biggies
