@@ -107,8 +107,15 @@ jobs:
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
   validate-setup-ee:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-22.04-8core
+    # We'd prefer like to use ubuntu-latest-4-cores, but they're not working.
+    # Standard 2 core doesn't have enough disk space.  (73GB total, 21GB available)
+    # 8core has tons (290GB, 243GB available)
     steps:
+      - name: Show free disk space
+        run: |
+          df -h
+
       - name: Check out code
         uses: actions/checkout@v3
 
@@ -139,8 +146,24 @@ jobs:
         run: |
           make validate-setup-ee
 
+      - name: Diagnose failure
+        if: failure()
+        env:
+          # Namespace is set in validate_setup_ee.sh
+          NAMESPACE: validate-setup-ee
+        run: |
+          set -x
+          set +e
+          df -h
+          kubectl config set-context --current --namespace=$NAMESPACE
+          kubectl get all
+          kubectl describe deployment edge-endpoint
+          kubectl describe pod edge-endpoint
+          kubectl logs deployment/edge-endpoint -c edge-endpoint
+          kubectl logs deployment/edge-endpoint -c inference-model-updater
+
   validate-setup-helm:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-22.04-8core
     env:
       # associated with roxanne+test_edge account since for some reason it was failing with
       # prod biggies
@@ -156,6 +179,22 @@ jobs:
       - name: Validate setup edge endpoint
         run: |
           make validate-setup-helm
+
+      - name: Diagnose failure
+        if: failure()
+        env:
+          # Namespace is set in validate_setup_helm.sh
+          NAMESPACE: validate-setup-helm
+        run: |
+          set -x
+          set +e
+          df -h
+          kubectl config set-context --current --namespace=$NAMESPACE
+          kubectl get all
+          kubectl describe deployment edge-endpoint
+          kubectl describe pod edge-endpoint
+          kubectl logs deployment/edge-endpoint -c edge-endpoint
+          kubectl logs deployment/edge-endpoint -c inference-model-updater
 
   # we run this separately from validate-setup-ee since we run out of disk space doing
   # both of them on the same runner and they can be slow so its best to do them in parallel
