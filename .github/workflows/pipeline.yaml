@@ -496,8 +496,8 @@ jobs:
       - name: Update GLHub
         run: |
           cd glhub
-          git config --global user.email "roxanne+gh_bot@groundlight.ai"
-          git config --global user.name "edge-glhub-bot"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git submodule update --init --recursive
           git submodule update --remote edge-endpoint
           git add .
@@ -535,3 +535,40 @@ jobs:
         run: |-
           ./deploy/bin/tag-edge-endpoint-image.sh latest
           ./deploy/bin/tag-edge-endpoint-image.sh release
+
+  publish-chart:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v3
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create deploy worktree
+        run: |
+          git fetch origin gh-pages
+          git worktree add .deploy gh-pages
+
+      - name: Package chart into .deploy
+        run: |
+          helm package ./my-chart --destination .deploy
+
+      - name: Update Helm index.yaml
+        run: |
+          helm repo index .deploy \
+            --url https://code.groundlight.ai/edge-endpoint/ \
+            --merge .deploy/index.yaml
+
+      - name: Commit and push to gh-pages
+        run: |
+          cd .deploy
+          git add .
+          git commit -m "Publish Helm chart $(date -u +'%Y-%m-%d %H:%M:%S UTC')" || echo "Nothing to commit"
+          git push origin gh-pages
