@@ -139,6 +139,23 @@ jobs:
         run: |
           make validate-setup-ee
 
+  check-gha-disk-space:
+    runs-on: ubuntu-22.04-8core
+    steps:
+      - name: Report disk space
+        run: |
+          df -h
+          echo "Workspace: $(du -sh $GITHUB_WORKSPACE) || true"
+
+      - name: Clean up MSFTBS
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+
+      - name: Report disk space
+        run: |
+          df -h
+          echo "Workspace: $(du -sh $GITHUB_WORKSPACE) || true"
+
   validate-setup-helm:
     runs-on: ubuntu-22.04
     env:
@@ -146,6 +163,20 @@ jobs:
       # prod biggies
       GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
     steps:
+      - name: Report disk space
+        run: |
+          df -h
+          echo "Workspace: $(du -sh $GITHUB_WORKSPACE) || true"
+
+      - name: Clean up MSFTBS
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+
+      - name: Report disk space
+        run: |
+          df -h
+          echo "Workspace: $(du -sh $GITHUB_WORKSPACE) || true"
+
       - name: Check out code
         uses: actions/checkout@v3
 
@@ -156,6 +187,11 @@ jobs:
       - name: Validate setup edge endpoint
         run: |
           make validate-setup-helm
+
+      - name: Report disk space
+        run: |
+          df -h
+          echo "Workspace: $(du -sh $GITHUB_WORKSPACE) || true"
 
   # we run this separately from validate-setup-ee since we run out of disk space doing
   # both of them on the same runner and they can be slow so its best to do them in parallel
