@@ -51,7 +51,7 @@ def metrics_payload() -> dict:
     """Returns a dictionary of metrics to be sent to the cloud API."""
     out = SafeMetricsDict()
     out.add("device_id", lambda: deviceid.get_deviceid_str())
-    out.add("device_metadata", lambda: deviceid.get_deviceid_dict())
+    out.add("device_metadata", lambda: deviceid.get_deviceid_metadata_dict())
     out.add("now", lambda: datetime.now().isoformat())
     out.add("cpucores", lambda: os.cpu_count())
     out.add("last_image_processed", lambda: iqactivity.last_activity_time())

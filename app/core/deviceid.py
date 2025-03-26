@@ -56,14 +56,14 @@ def _load_deviceid_dict() -> dict | None:
 
         if "uuid" in data:
             return data
-        logger.warning(f"Device ID file {DEVICE_ID_FILE} exists but is missing uuid. Generating new one.")
+        logger.warning(f"Device ID file {DEVICE_ID_FILE} exists but is missing uuid. Generating new id.")
     except (json.JSONDecodeError, KeyError) as e:
-        logger.warning(f"Failed to parse device ID file: {e}. Generating new one.", exc_info=True)
+        logger.warning(f"Failed to parse device ID file: {e}. Generating new id.", exc_info=True)
 
     return None
 
 
-def get_deviceid_dict() -> dict:
+def get_deviceid_metadata_dict() -> dict:
     """Get the device ID data dictionary, generating a new one if needed.
 
     Returns:
@@ -78,4 +78,4 @@ def get_deviceid_dict() -> dict:
 
 def get_deviceid_str() -> str:
     """Get the unique device ID string."""
-    return get_deviceid_dict()["uuid"]
+    return get_deviceid_metadata_dict()["uuid"]

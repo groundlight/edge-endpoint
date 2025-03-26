@@ -109,7 +109,7 @@ def test_save_new_device_id(monkeypatch, tmp_path):
 
     # Mock the generate function to return a predictable record
     with patch("app.core.deviceid._generate_deviceid_dict", return_value=mock_record):
-        device_record = deviceid.get_deviceid_dict()
+        device_record = deviceid.get_deviceid_metadata_dict()
         device_id = deviceid.get_deviceid_str()
 
     # Check that we got the expected record
@@ -155,7 +155,7 @@ def test_get_device_id_existing(monkeypatch, tmp_path):
     assert deviceid.get_deviceid_str() == test_device_id
 
     # Check that get_deviceid_dict returns the full record
-    record = deviceid.get_deviceid_dict()
+    record = deviceid.get_deviceid_metadata_dict()
     assert record["uuid"] == test_device_id
     assert record["friendly_name"] == test_friendly_name
     assert record["created_at"] == test_created_at

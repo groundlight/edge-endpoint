@@ -107,9 +107,10 @@ jobs:
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
   validate-setup-ee:
-    runs-on: ubuntu-22.04-4core
+    runs-on: ubuntu-latest-4-cores
     # Use 4-core to get more disk space.  Standard (2-core) runners have 73GB disks,
     # but only 21GB is available for use.
+    # (Note that 4-core is only available on "latest" not 22.04)
     steps:
       - name: Show free disk space
         run: |
@@ -146,7 +147,7 @@ jobs:
           make validate-setup-ee
 
   validate-setup-helm:
-    runs-on: ubuntu-22.04-4core
+    runs-on: ubuntu-latest-4-cores
     # Use 4-core to get more disk space
     env:
       # associated with roxanne+test_edge account since for some reason it was failing with
@@ -167,7 +168,7 @@ jobs:
   # we run this separately from validate-setup-ee since we run out of disk space doing
   # both of them on the same runner and they can be slow so its best to do them in parallel
   test-with-k3s-setup-ee:
-    runs-on: ubuntu-22.04-4core
+    runs-on: ubuntu-latest-4-cores
     env:
       # associated with roxanne+test_edge account since for some reason it was failing with
       # prod biggies
@@ -209,7 +210,7 @@ jobs:
           make test-with-k3s-setup-ee
 
   test-with-k3s-helm:
-    runs-on: ubuntu-22.04-4core
+    runs-on: ubuntu-latest-4-cores
     env:
       # associated with roxanne+test_edge account since for some reason it was failing with
       # prod biggies
