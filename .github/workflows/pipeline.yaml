@@ -537,6 +537,9 @@ jobs:
           ./deploy/bin/tag-edge-endpoint-image.sh release
 
   publish-chart:
+    if: github.ref == 'refs/heads/main'
+    needs:
+      - tag-release
     runs-on: ubuntu-latest
 
     steps:
