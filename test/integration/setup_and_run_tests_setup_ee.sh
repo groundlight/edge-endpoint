@@ -90,15 +90,20 @@ kubectl rollout status deployment/inferencemodel-oodd-$DETECTOR_ID_WITH_DASHES \
     -n $DEPLOYMENT_NAMESPACE --timeout=10m &
 oodd_pid=$!
 
-# Wait for both background jobs to finish and capture their exit statuses
+set +e  # Temporarily disable exit on error to wait for both background jobs to finish
 wait $primary_pid
 primary_status=$?
-
 wait $oodd_pid
 oodd_status=$?
+set -e  # Re-enable exit on error
 
 if [ $primary_status -ne 0 ] || [ $oodd_status -ne 0 ]; then
     echo "Error: One or both inference deployments for detector $DETECTOR_ID failed to rollout within the timeout period."
+    echo "Dumping a bunch of diagnostic information..."
+    kubectl describe deployment/inferencemodel-primary-$DETECTOR_ID_WITH_DASHES
+    kubectl logs deployment/inferencemodel-primary-$DETECTOR_ID_WITH_DASHES
+    kubectl describe deployment/inferencemodel-oodd-$DETECTOR_ID_WITH_DASHES
+    kubectl logs deployment/inferencemodel-oodd-$DETECTOR_ID_WITH_DASHES
     exit 1
 fi
 
