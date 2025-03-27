@@ -101,10 +101,10 @@ if [ $primary_status -ne 0 ] || [ $oodd_status -ne 0 ]; then
     set +e  # Disable exit on error so all the diagnostic information available gets printed
     echo "Error: One or both inference deployments for detector $DETECTOR_ID failed to rollout within the timeout period."
     echo "Dumping a bunch of diagnostic information..."
-    kubectl describe deployment/inferencemodel-primary-$DETECTOR_ID_WITH_DASHES
-    kubectl logs deployment/inferencemodel-primary-$DETECTOR_ID_WITH_DASHES
-    kubectl describe deployment/inferencemodel-oodd-$DETECTOR_ID_WITH_DASHES
-    kubectl logs deployment/inferencemodel-oodd-$DETECTOR_ID_WITH_DASHES
+    kubectl -n $DEPLOYMENT_NAMESPACE describe deployment/inferencemodel-primary-$DETECTOR_ID_WITH_DASHES
+    kubectl -n $DEPLOYMENT_NAMESPACE logs deployment/inferencemodel-primary-$DETECTOR_ID_WITH_DASHES
+    kubectl -n $DEPLOYMENT_NAMESPACE describe deployment/inferencemodel-oodd-$DETECTOR_ID_WITH_DASHES
+    kubectl -n $DEPLOYMENT_NAMESPACE logs deployment/inferencemodel-oodd-$DETECTOR_ID_WITH_DASHES
     exit 1
 fi
 
