@@ -111,6 +111,8 @@ jobs:
     # We'd prefer like to use ubuntu-latest-4-cores, but they're not working.
     # Standard 2 core doesn't have enough disk space.  (73GB total, 21GB available)
     # 8core has tons (290GB, 243GB available)
+    needs:
+      - build-push-edge-endpoint-multiplatform
     steps:
       - name: Check out code
         uses: actions/checkout@v4
@@ -150,6 +152,8 @@ jobs:
 
   validate-setup-helm:
     runs-on: ubuntu-22.04-8core
+    needs:
+      - build-push-edge-endpoint-multiplatform
     env:
       # associated with roxanne+test_edge account since for some reason it was failing with
       # prod biggies
@@ -175,6 +179,8 @@ jobs:
   # both of them on the same runner and they can be slow so its best to do them in parallel
   test-with-k3s-setup-ee:
     runs-on: ubuntu-22.04-8core
+    needs:
+      - build-push-edge-endpoint-multiplatform
     env:
       # associated with roxanne+test_edge account since for some reason it was failing with
       # prod biggies
@@ -222,6 +228,8 @@ jobs:
 
   test-with-k3s-helm:
     runs-on: ubuntu-22.04-8core
+    needs:
+      - build-push-edge-endpoint-multiplatform
     env:
       # associated with roxanne+test_edge account since for some reason it was failing with
       # prod biggies
@@ -352,6 +360,7 @@ jobs:
     # Run this on any PR.
     # Question: Should we wait until the other tests pass before running this?
     # No - it's pretty fast and fairly cheap.
+    # This currently uses `helm-local` so it doesn't needs: build-push-edge-endpoint-multiplatform
 
     env:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
