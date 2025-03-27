@@ -88,7 +88,7 @@ jobs:
             -e EDGE_CONFIG \
             -d -p 30101:30101 \
             groundlight-edge)
-          echo "::set-output name=container_id::$container_id"
+          echo "container_id=$container_id" >> $GITHUB_OUTPUT
 
       - name: Run Unit Tests (that do require docker)
         run: |
@@ -301,7 +301,7 @@ jobs:
             -e EDGE_CONFIG \
             -d -p 30101:30101 \
             groundlight-edge)
-          echo "::set-output name=container_id::$container_id"
+          echo "container_id=$container_id" >> $GITHUB_OUTPUT
 
       - name: Install poetry
         uses: snok/install-poetry@v1
@@ -467,9 +467,20 @@ jobs:
           echo "export EEUT_IP=${EEUT_IP}"
           echo "export EEUT_STACK_NAME=${STACK_NAME}"
 
+  pick-ecr-image-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Pick the ECR image tag
+        run: |
+          ECR_IMAGE_TAG=$(./deploy/bin/git-tag-name)
+          echo "ecr_image_tag=$ECR_IMAGE_TAG" >> $GITHUB_OUTPUT
+
   build-push-edge-endpoint-multiplatform:
-    if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
-    # We only run this action if all the prior test actions succeed
+    # This used to be later in the pipeline, but now we run this on every PR.
+    # Because the various full k3s tests rely on a current image in ECR to test against.
     needs:
       - test-general-edge-endpoint
       - test-sdk
