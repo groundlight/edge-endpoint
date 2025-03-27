@@ -491,8 +491,9 @@ jobs:
         timeout-minutes: 45
         run: ./deploy/bin/build-push-edge-endpoint-image.sh
 
-  tag-as-pre-release:
-    runs-on: ubuntu-22.04
+  main-tests-pass:
+    runs-on: ubuntu-latest
+    # This is a dummy step to avoid repeating the list of tests
     needs:
       - test-general-edge-endpoint
       - test-sdk
@@ -502,6 +503,14 @@ jobs:
       - validate-setup-helm
       - G4-end-to-end
     steps:
+      - name: declare success
+        run: echo "Main suite of tests all pass."
+
+  tag-pre-release:
+    runs-on: ubuntu-22.04
+    needs:
+      - main-tests-pass
+    steps:
       - name: Tag main images with the "pre-release" tag after all the tests pass
         if: github.ref == 'refs/heads/main'
         run: ./deploy/bin/tag-edge-endpoint-image.sh pre-release
@@ -509,12 +518,7 @@ jobs:
   update-glhub:
     if: github.ref == 'refs/heads/main'
     needs:
-      - test-general-edge-endpoint
-      - validate-setup-ee
-      - validate-setup-helm
-      - test-sdk
-      - test-with-k3s-setup-ee
-      - test-with-k3s-helm
+      - main-tests-pass
     runs-on: ubuntu-latest
     environment: live
 
@@ -548,7 +552,7 @@ jobs:
     # This will run (after manual approval) if a commit is pushed to the `main` branch
     if: github.ref == 'refs/heads/main'
     needs:
-      - build-push-edge-endpoint-multiplatform
+      - main-tests-pass
     runs-on: ubuntu-22.04
     steps:
       - name: Configure AWS credentials
