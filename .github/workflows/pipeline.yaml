@@ -107,10 +107,9 @@ jobs:
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
   validate-setup-ee:
-    runs-on: ubuntu-22.04-8core
-    # We'd prefer like to use ubuntu-latest-4-cores, but they're not working.
-    # Standard 2 core doesn't have enough disk space.  (73GB total, 21GB available)
-    # 8core has tons (290GB, 243GB available)
+    runs-on: ubuntu-latest-4-cores
+    # We need more disk space than the default (2 core) runners have.
+    # They have 73GB total, 21GB available.  4-cores has 145GB raw, 93 GB available.
     needs:
       - build-push-edge-endpoint-multiplatform
     steps:
@@ -151,7 +150,7 @@ jobs:
           NAMESPACE=validate-setup-ee ./deploy/bin/diagnose-k8-failure.sh
 
   validate-setup-helm:
-    runs-on: ubuntu-22.04-8core
+    runs-on: ubuntu-latest-4-cores
     needs:
       - build-push-edge-endpoint-multiplatform
     env:
@@ -178,7 +177,7 @@ jobs:
   # we run this separately from validate-setup-ee since we run out of disk space doing
   # both of them on the same runner and they can be slow so its best to do them in parallel
   test-with-k3s-setup-ee:
-    runs-on: ubuntu-22.04-8core
+    runs-on: ubuntu-latest-4-cores
     needs:
       - build-push-edge-endpoint-multiplatform
     env:
@@ -227,7 +226,7 @@ jobs:
           NAMESPACE=test-with-k3s ./deploy/bin/diagnose-k8-failure.sh
 
   test-with-k3s-helm:
-    runs-on: ubuntu-22.04-8core
+    runs-on: ubuntu-latest-4-cores
     needs:
       - build-push-edge-endpoint-multiplatform
     env:
@@ -357,10 +356,10 @@ jobs:
     # for the run.  How much we want to do this is TBD.
     runs-on: self-hosted
 
-    # Run this on any PR.
-    # Question: Should we wait until the other tests pass before running this?
-    # No - it's pretty fast and fairly cheap.
-    # This currently uses `helm-local` so it doesn't needs: build-push-edge-endpoint-multiplatform
+    # TODO: switch this to use the ECR image like the other tests.
+    # Wait for Tom's "clone free" helm install to do this.
+    #needs:
+    #  - build-push-edge-endpoint-multiplatform
 
     env:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
