@@ -112,10 +112,6 @@ jobs:
     # Standard 2 core doesn't have enough disk space.  (73GB total, 21GB available)
     # 8core has tons (290GB, 243GB available)
     steps:
-      - name: Show free disk space
-        run: |
-          df -h
-
       - name: Check out code
         uses: actions/checkout@v4
 
@@ -144,6 +140,7 @@ jobs:
 
       - name: Validate setup edge endpoint
         run: |
+          export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
           make validate-setup-ee
 
       - name: Diagnose failure
