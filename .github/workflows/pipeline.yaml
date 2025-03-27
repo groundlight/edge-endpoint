@@ -28,7 +28,7 @@ jobs:
       GROUNDLIGHT_ENDPOINT: http://localhost:30101
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up python
         id: setup_python
@@ -117,7 +117,7 @@ jobs:
           df -h
 
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install k3s
         run: |
@@ -159,7 +159,7 @@ jobs:
       GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install k3s
         run: |
@@ -184,7 +184,7 @@ jobs:
       GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install k3s
         run: |
@@ -231,7 +231,7 @@ jobs:
       GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install k3s
         run: |
@@ -271,7 +271,7 @@ jobs:
       GROUNDLIGHT_ENDPOINT: http://localhost:30101
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up python
         uses: actions/setup-python@v5
@@ -321,7 +321,7 @@ jobs:
       # Note that we're pulling the latest main from the SDK repo
       # This might be ahead of what's published to pypi, but it's useful to test things before they're released.
       - name: Checkout Groundlight SDK
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: groundlight/python-sdk
           path: groundlight-sdk
@@ -354,12 +354,7 @@ jobs:
 
     # Run this on any PR.
     # Question: Should we wait until the other tests pass before running this?
-    #needs:
-    #  - validate-setup-ee
-    #  - validate-setup-helm
-    #  - test-with-k3s-setup-ee
-    #  - test-with-k3s-helm
-    #  - test-sdk
+    # No - it's pretty fast and fairly cheap.
 
     env:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
@@ -369,7 +364,7 @@ jobs:
         working-directory: cicd/pulumi
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Name the stack
         run: |
@@ -467,28 +462,9 @@ jobs:
           echo "export EEUT_IP=${EEUT_IP}"
           echo "export EEUT_STACK_NAME=${STACK_NAME}"
 
-  pick-ecr-image-tag:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v3
-
-      - name: Pick the ECR image tag
-        run: |
-          ECR_IMAGE_TAG=$(./deploy/bin/git-tag-name)
-          echo "ecr_image_tag=$ECR_IMAGE_TAG" >> $GITHUB_OUTPUT
-
   build-push-edge-endpoint-multiplatform:
     # This used to be later in the pipeline, but now we run this on every PR.
     # Because the various full k3s tests rely on a current image in ECR to test against.
-    needs:
-      - test-general-edge-endpoint
-      - test-sdk
-      - test-with-k3s-setup-ee
-      - test-with-k3s-helm
-      - validate-setup-ee
-      - validate-setup-helm
-      - G4-end-to-end
     runs-on: ubuntu-22.04
     steps:
       - name: Configure AWS credentials
@@ -505,9 +481,22 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
       - name: Build and Push Multiplatform edge-endpoint Image to ECR
+        # This is actually only taking about 4 minutes right now.
         timeout-minutes: 45
         run: ./deploy/bin/build-push-edge-endpoint-image.sh
-      - name: Tag main images with the "pre-release" tag
+
+  tag-as-pre-release:
+    runs-on: ubuntu-22.04
+    needs:
+      - test-general-edge-endpoint
+      - test-sdk
+      - test-with-k3s-setup-ee
+      - test-with-k3s-helm
+      - validate-setup-ee
+      - validate-setup-helm
+      - G4-end-to-end
+    steps:
+      - name: Tag main images with the "pre-release" tag after all the tests pass
         if: github.ref == 'refs/heads/main'
         run: ./deploy/bin/tag-edge-endpoint-image.sh pre-release
 
