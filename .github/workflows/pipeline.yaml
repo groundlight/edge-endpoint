@@ -357,10 +357,10 @@ jobs:
     # for the run.  How much we want to do this is TBD.
     runs-on: self-hosted
 
-    # Run this on any PR.
-    # Question: Should we wait until the other tests pass before running this?
-    # No - it's pretty fast and fairly cheap.
-    # This currently uses `helm-local` so it doesn't needs: build-push-edge-endpoint-multiplatform
+    # TODO: switch this to use the ECR image like the other tests.
+    # Wait for Tom's "clone free" helm install to do this.
+    #needs:
+    #  - build-push-edge-endpoint-multiplatform
 
     env:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
