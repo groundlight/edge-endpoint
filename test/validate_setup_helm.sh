@@ -9,8 +9,6 @@ export EDGE_ENDPOINT_PORT="30106"
 
 export HELM_RELEASE_NAME="$DEPLOYMENT_NAMESPACE"
 
-export TAG=$(./deploy/bin/git-tag-name.sh)
-
 if [ -z "${GROUNDLIGHT_API_TOKEN}" ]; then
     echo "Error: GROUNDLIGHT_API_TOKEN environment variable must be set."
     exit 1
@@ -23,6 +21,8 @@ fi
 
 # Run from the root of the repo
 cd $(dirname $0)/.. 
+
+export TAG=$(./deploy/bin/git-tag-name.sh)
 
 echo "Installing edge-endpoint helm chart..."
 echo "INFERENCE_FLAVOR: $INFERENCE_FLAVOR"
