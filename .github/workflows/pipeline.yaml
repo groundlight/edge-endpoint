@@ -148,19 +148,8 @@ jobs:
 
       - name: Diagnose failure
         if: failure()
-        env:
-          # Namespace is set in validate_setup_ee.sh
-          NAMESPACE: validate-setup-ee
         run: |
-          set -x
-          set +e
-          df -h
-          kubectl config set-context --current --namespace=$NAMESPACE
-          kubectl get all
-          kubectl describe deployment edge-endpoint
-          kubectl describe pod edge-endpoint
-          kubectl logs deployment/edge-endpoint -c edge-endpoint
-          kubectl logs deployment/edge-endpoint -c inference-model-updater
+          NAMESPACE=validate-setup-ee ./deploy/bin/diagnose-k8-failure.sh
 
   validate-setup-helm:
     runs-on: ubuntu-22.04-8core
@@ -182,19 +171,8 @@ jobs:
 
       - name: Diagnose failure
         if: failure()
-        env:
-          # Namespace is set in validate_setup_helm.sh
-          NAMESPACE: validate-setup-helm
         run: |
-          set -x
-          set +e
-          df -h
-          kubectl config set-context --current --namespace=$NAMESPACE
-          kubectl get all
-          kubectl describe deployment edge-endpoint
-          kubectl describe pod edge-endpoint
-          kubectl logs deployment/edge-endpoint -c edge-endpoint
-          kubectl logs deployment/edge-endpoint -c inference-model-updater
+          NAMESPACE=validate-setup-helm ./deploy/bin/diagnose-k8-failure.sh
 
   # we run this separately from validate-setup-ee since we run out of disk space doing
   # both of them on the same runner and they can be slow so its best to do them in parallel
@@ -240,6 +218,11 @@ jobs:
         run: |
           make test-with-k3s-setup-ee
 
+      - name: Diagnose failure
+        if: failure()
+        run: |
+          NAMESPACE=test-with-k3s ./deploy/bin/diagnose-k8-failure.sh
+
   test-with-k3s-helm:
     runs-on: ubuntu-22.04-8core
     env:
@@ -274,6 +257,11 @@ jobs:
       - name: Run tests with k3s
         run: |
           make test-with-k3s-helm
+
+      - name: Diagnose failure
+        if: failure()
+        run: |
+          NAMESPACE=test-with-k3s-helm ./deploy/bin/diagnose-k8-failure.sh
 
   # Run Groundlight SDK tests against the edge proxy endpoint
   test-sdk:
