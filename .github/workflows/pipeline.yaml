@@ -468,8 +468,8 @@ jobs:
           echo "export EEUT_STACK_NAME=${STACK_NAME}"
 
   build-push-edge-endpoint-multiplatform:
-    # This used to be later in the pipeline, but now we run this on every PR.
-    # Because the various full k3s tests rely on a current image in ECR to test against.
+    # We run this at the beginning of every PR so that the various full k3s tests
+    # can use this image
     runs-on: ubuntu-22.04
     steps:
       - name: Configure AWS credentials
@@ -506,12 +506,12 @@ jobs:
         run: echo "Main suite of tests all pass."
 
   tag-pre-release:
-    runs-on: ubuntu-22.04
+    if: github.ref == 'refs/heads/main'
     needs:
       - main-tests-pass
+    runs-on: ubuntu-latest
     steps:
       - name: Tag main images with the "pre-release" tag after all the tests pass
-        if: github.ref == 'refs/heads/main'
         run: ./deploy/bin/tag-edge-endpoint-image.sh pre-release
 
   update-glhub:
@@ -552,6 +552,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     needs:
       - main-tests-pass
+      - tag-pre-release
     runs-on: ubuntu-22.04
     steps:
       - name: Configure AWS credentials
