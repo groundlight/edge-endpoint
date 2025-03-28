@@ -55,6 +55,8 @@ def metrics_payload() -> dict:
     out.add("now", lambda: datetime.now().isoformat())
     out.add("cpucores", lambda: os.cpu_count())
     out.add("last_image_processed", lambda: iqactivity.last_activity_time())
+    out.add("num_detectors_lifetime", lambda: iqactivity.num_detectors_lifetime())
+    out.add("num_detectors_active", lambda: iqactivity.num_detectors_active())
     # TODO: Add pod.status.containerStatuses[].imageId
     # TODO: add metrics like GPU count, how many local models, etc
     return out.as_dict()
