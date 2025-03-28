@@ -65,7 +65,6 @@ helm install -n default ${HELM_RELEASE_NAME} deploy/helm/groundlight-edge-endpoi
     --set edgeEndpointPort=$EDGE_ENDPOINT_PORT \
     --set namespace=$DEPLOYMENT_NAMESPACE \
     --set edgeEndpointTag=$IMAGE_TAG \
-    --set imagePullPolicy=Never \
     --set-file configFile=$EDGE_CONFIG_FILE
 
 echo "Waiting for edge-endpoint pods to rollout..."

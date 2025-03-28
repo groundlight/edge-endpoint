@@ -43,7 +43,7 @@ class FilesystemActivityTrackingHelper:
 @lru_cache(maxsize=1)  # Singleton
 def _tracker() -> FilesystemActivityTrackingHelper:
     """Get the activity tracker."""
-    return FilesystemActivityTrackingHelper(base_dir="/opt/groundlight/edge-metrics")
+    return FilesystemActivityTrackingHelper(base_dir="/opt/groundlight/device/edge-metrics")
 
 
 def record_iq_activity(detector_id: str):

@@ -87,6 +87,8 @@ spec:
           subPath: nginx.conf
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/sqlite
+        - name: device-info-volume
+          mountPath: /opt/groundlight/device
         startupProbe:
           httpGet:
             path: /health/live  # Checks if the server is up
@@ -168,6 +170,9 @@ spec:
 
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/serving/model-repo
+
+        - name: device-info-volume
+          mountPath: /opt/groundlight/device
 
       imagePullSecrets:
       - name: registry-credentials
