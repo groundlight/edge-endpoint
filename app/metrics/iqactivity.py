@@ -26,12 +26,24 @@ class FilesystemActivityTrackingHelper:
         self.base_dir = base_dir
         # Ensure the base directory exists
         os.makedirs(self.base_dir, exist_ok=True)
+        # Ensure the detectors directory exists
+        os.makedirs(Path(self.base_dir, "detectors"), exist_ok=True)
 
     def file(self, name: str) -> Path:
-        """Get the path to a file which is used to track something.  Could be specific to a detector,
-        or something system-wide like number of active models, or the last image query."""
+        """Get the path to a file which is used to track something across the whole edge-endpoint (like number of
+        active models, or the last image query)"""
         return Path(self.base_dir, name)
 
+    def detector_folder(self, detector_id: str) -> Path:
+        """Get the path to the folder for a detector's activity metrics. If it doesn't exist, create it."""
+        f = Path(self.base_dir, "detectors", detector_id)
+        f.mkdir(parents=True, exist_ok=True)
+        return f
+
+    def detector_file(self, detector_id: str, name: str) -> Path:
+        """Get the path to a file which is used to track something specific to a detector."""
+        return Path(self.detector_folder(detector_id), name)
+    
     def get_last_file_activity(self, name: str) -> datetime | None:
         """Get the last time a file was modified."""
         f = self.file(name)
@@ -47,20 +59,20 @@ def _tracker() -> FilesystemActivityTrackingHelper:
 
 
 def record_iq_activity(detector_id: str):
-    """Currently just records that something happened on the detector."""
+    """Records metrics about image queries submitted to the edge.
+    
+    Currently records
+     - time of last IQ submission (for the edge-endpoint and this detector)
+    """
     # TODO: Lots of obvious improvements here.  Number of active detectors,
     # how many images were processed, etc etc.
 
-    # Record the time of the last IQ (in general)
+    # Record the time of the last IQ
     f = _tracker().file("last_iq")
     f.touch()
     
-    record_detector_activity(detector_id)
-
-
-def record_detector_activity(detector_id: str):
-    """Records the time of the last IQ for a detector."""
-    f = _tracker().file(Path("detectors", detector_id, "last_iq"))
+    # Record the last IQ time for this detector
+    f = _tracker().detector_file(detector_id, "last_iq")
     f.touch()
 
 
@@ -76,8 +88,8 @@ def num_detectors_lifetime() -> int:
     return len(list(f.iterdir()))
 
 
-def num_detectors_active() -> int:
-    """Get the number of detectors that have had an IQ submitted to them in the last hour."""
+def num_detectors_active(time_period: timedelta) -> int:
+    """Get the number of detectors that have had an IQ submitted to them in the last time period."""
     f = _tracker().file("detectors")
-    active_detectors = [Path(det, "last_iq") for det in f.iterdir() if _tracker().get_last_file_activity(Path(det, "last_iq")) > datetime.now() - timedelta(hours=1)]
+    active_detectors = [Path(det, "last_iq") for det in f.iterdir() if _tracker().get_last_file_activity(Path(det, "last_iq")) > datetime.now() - time_period]
     return len(active_detectors)

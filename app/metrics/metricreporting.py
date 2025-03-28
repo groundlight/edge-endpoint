@@ -6,14 +6,14 @@ Can also be run directly as a script.
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import lru_cache
 from typing import Any, Callable
 
 from groundlight import Groundlight
 
 from app.core import deviceid
-from app.metrics import iqactivity
+from app.metrics import iqactivity, system_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -56,9 +56,14 @@ def metrics_payload() -> dict:
     out.add("cpucores", lambda: os.cpu_count())
     out.add("last_image_processed", lambda: iqactivity.last_activity_time())
     out.add("num_detectors_lifetime", lambda: iqactivity.num_detectors_lifetime())
-    out.add("num_detectors_active", lambda: iqactivity.num_detectors_active())
+    out.add("num_detectors_active_1h", lambda: iqactivity.num_detectors_active(timedelta(hours=1)))
+    out.add("num_detectors_active_24h", lambda: iqactivity.num_detectors_active(timedelta(days=1)))
     # TODO: Add pod.status.containerStatuses[].imageId
     # TODO: add metrics like GPU count, how many local models, etc
+    out.add("cpu_usage", lambda: system_metrics.get_cpu_usage())
+    out.add("memory_usage", lambda: system_metrics.get_memory_usage())
+    out.add("gpu_count", lambda: system_metrics.get_gpu_count())
+    out.add("gpu_usage", lambda: system_metrics.get_gpu_usage())
     return out.as_dict()
 
 

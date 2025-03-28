@@ -17,8 +17,7 @@ from app.core.app_state import (
 )
 from app.core.edge_inference import get_edge_inference_model_name
 from app.core.utils import create_iq, safe_call_sdk
-from app.metrics.iqactivity import record_iq_activity, record_detector_activity
-
+from app.metrics.iqactivity import record_iq_activity
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -118,7 +117,6 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
     # For metrics
     record_iq_activity(detector_id)
-    record_detector_activity(detector_id)
 
     if want_async:  # just submit to the cloud w/ ask_async
         if return_edge_prediction:
