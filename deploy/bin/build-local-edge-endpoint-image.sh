@@ -6,8 +6,8 @@
 #
 # It creates a single-platform image with the full ECR-style name, but it always uses 
 # the 'dev' tag. When deploying application to your local test k3s cluster, add the
-# following Helm values:
-# `--set edgeEndpointTag=dev --set imagePullPolicy=Never` (or add them to your values.yaml file)
+# following Helm value:
+# `--set edgeEndpointTag=dev (or add it to your values.yaml file)
 
 # This works by:
 # 1. Building the image with the local Docker daemon
@@ -18,7 +18,7 @@
 #    containerd.
 # The last step is kind of slow.
 #
-# Note than when you use the image in your Kubernetes app, you need to set
+# Note than when you use an image tagged "dev" in your Kubernetes app, helm will set
 # imagePullPolicy=Never so K8s doesn't try to pull the image from ECR.
 
 set -e
