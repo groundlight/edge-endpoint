@@ -53,7 +53,7 @@ spec:
       initContainers:
       - name: database-prep
         image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
-        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
         volumeMounts:
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/sqlite
@@ -62,7 +62,7 @@ spec:
       containers:
       - name: edge-endpoint
         image: *edgeEndpointImage
-        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
         ports:
         - containerPort: 30101
         env:
@@ -111,7 +111,7 @@ spec:
 
       - name: inference-model-updater
         image: *edgeEndpointImage
-        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
         command: ["/bin/bash", "-c"]
         args: ["poetry run python -m app.model_updater.update_models"]
         env:
