@@ -17,6 +17,7 @@ from app.core.app_state import (
 )
 from app.core.edge_inference import get_edge_inference_model_name
 from app.core.utils import create_iq, safe_call_sdk
+from app.metrics.iqactivity import record_iq_activity
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +115,8 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Human review cannot be required if edge predictions are required.",
         )
+
+    record_iq_activity(detector_id)  # for metrics
 
     if want_async:  # just submit to the cloud w/ ask_async
         if return_edge_prediction:

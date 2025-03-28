@@ -1,3 +1,10 @@
+"""The main entrypoint for the inference router.
+
+The inference router handles specific SDK/API requests like submit_image_query
+by routing them to an inference_deployment if one is available for the detector.
+It is behind nginx, which forwards any request to the cloud if this doesn't handle it.
+"""
+
 import logging
 import os
 
@@ -7,6 +14,7 @@ from fastapi import FastAPI
 from app.api.api import api_router, health_router, ping_router
 from app.api.naming import API_BASE_PATH
 from app.core.app_state import AppState
+from app.metrics.metricreporting import report_metrics_to_cloud
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 DEPLOY_DETECTOR_LEVEL_INFERENCE = bool(int(os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", 0)))
@@ -44,6 +52,8 @@ async def startup_event():
     app.state.app_state.db_manager.reset_database()
 
     logging.info(f"edge_config={app.state.app_state.edge_config}")
+
+    scheduler.add_job(report_metrics_to_cloud, "interval", seconds=3600)
 
     if DEPLOY_DETECTOR_LEVEL_INFERENCE:
         # Add job to periodically update the inference config
