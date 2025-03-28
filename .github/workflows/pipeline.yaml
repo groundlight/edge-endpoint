@@ -28,7 +28,7 @@ jobs:
       GROUNDLIGHT_ENDPOINT: http://localhost:30101
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up python
         id: setup_python
@@ -88,7 +88,7 @@ jobs:
             -e EDGE_CONFIG \
             -d -p 30101:30101 \
             groundlight-edge)
-          echo "::set-output name=container_id::$container_id"
+          echo "container_id=$container_id" >> $GITHUB_OUTPUT
 
       - name: Run Unit Tests (that do require docker)
         run: |
@@ -107,13 +107,14 @@ jobs:
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
   validate-setup-ee:
-    runs-on: ubuntu-22.04-8core
-    # We'd prefer like to use ubuntu-latest-4-cores, but they're not working.
-    # Standard 2 core doesn't have enough disk space.  (73GB total, 21GB available)
-    # 8core has tons (290GB, 243GB available)
+    runs-on: ubuntu-latest-4-cores
+    # We need more disk space than the default (2 core) runners have.
+    # They have 73GB total, 21GB available.  4-cores has 145GB raw, 93 GB available.
+    needs:
+      - build-push-edge-endpoint-multiplatform
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install k3s
         run: |
@@ -140,6 +141,7 @@ jobs:
 
       - name: Validate setup edge endpoint
         run: |
+          export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
           make validate-setup-ee
 
       - name: Diagnose failure
@@ -148,14 +150,16 @@ jobs:
           NAMESPACE=validate-setup-ee ./deploy/bin/diagnose-k8-failure.sh
 
   validate-setup-helm:
-    runs-on: ubuntu-22.04-8core
+    runs-on: ubuntu-latest-4-cores
+    needs:
+      - build-push-edge-endpoint-multiplatform
     env:
       # associated with roxanne+test_edge account since for some reason it was failing with
       # prod biggies
       GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install k3s
         run: |
@@ -173,14 +177,16 @@ jobs:
   # we run this separately from validate-setup-ee since we run out of disk space doing
   # both of them on the same runner and they can be slow so its best to do them in parallel
   test-with-k3s-setup-ee:
-    runs-on: ubuntu-22.04-8core
+    runs-on: ubuntu-latest-4-cores
+    needs:
+      - build-push-edge-endpoint-multiplatform
     env:
       # associated with roxanne+test_edge account since for some reason it was failing with
       # prod biggies
       GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install k3s
         run: |
@@ -220,14 +226,16 @@ jobs:
           NAMESPACE=test-with-k3s ./deploy/bin/diagnose-k8-failure.sh
 
   test-with-k3s-helm:
-    runs-on: ubuntu-22.04-8core
+    runs-on: ubuntu-latest-4-cores
+    needs:
+      - build-push-edge-endpoint-multiplatform
     env:
       # associated with roxanne+test_edge account since for some reason it was failing with
       # prod biggies
       GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install k3s
         run: |
@@ -267,7 +275,7 @@ jobs:
       GROUNDLIGHT_ENDPOINT: http://localhost:30101
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up python
         uses: actions/setup-python@v5
@@ -297,7 +305,7 @@ jobs:
             -e EDGE_CONFIG \
             -d -p 30101:30101 \
             groundlight-edge)
-          echo "::set-output name=container_id::$container_id"
+          echo "container_id=$container_id" >> $GITHUB_OUTPUT
 
       - name: Install poetry
         uses: snok/install-poetry@v1
@@ -317,7 +325,7 @@ jobs:
       # Note that we're pulling the latest main from the SDK repo
       # This might be ahead of what's published to pypi, but it's useful to test things before they're released.
       - name: Checkout Groundlight SDK
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: groundlight/python-sdk
           path: groundlight-sdk
@@ -348,14 +356,10 @@ jobs:
     # for the run.  How much we want to do this is TBD.
     runs-on: self-hosted
 
-    # Run this on any PR.
-    # Question: Should we wait until the other tests pass before running this?
+    # TODO: switch this to use the ECR image like the other tests.
+    # Wait for Tom's "clone free" helm install to do this.
     #needs:
-    #  - validate-setup-ee
-    #  - validate-setup-helm
-    #  - test-with-k3s-setup-ee
-    #  - test-with-k3s-helm
-    #  - test-sdk
+    #  - build-push-edge-endpoint-multiplatform
 
     env:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
@@ -365,7 +369,7 @@ jobs:
         working-directory: cicd/pulumi
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Name the stack
         run: |
@@ -464,16 +468,8 @@ jobs:
           echo "export EEUT_STACK_NAME=${STACK_NAME}"
 
   build-push-edge-endpoint-multiplatform:
-    if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
-    # We only run this action if all the prior test actions succeed
-    needs:
-      - test-general-edge-endpoint
-      - test-sdk
-      - test-with-k3s-setup-ee
-      - test-with-k3s-helm
-      - validate-setup-ee
-      - validate-setup-helm
-      - G4-end-to-end
+    # We run this at the beginning of every PR so that the various full k3s tests
+    # can use this image
     runs-on: ubuntu-22.04
     steps:
       - name: Configure AWS credentials
@@ -490,21 +486,38 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
       - name: Build and Push Multiplatform edge-endpoint Image to ECR
+        # This is actually only taking about 4 minutes right now.
         timeout-minutes: 45
         run: ./deploy/bin/build-push-edge-endpoint-image.sh
-      - name: Tag main images with the "pre-release" tag
-        if: github.ref == 'refs/heads/main'
+
+  main-tests-pass:
+    runs-on: ubuntu-latest
+    # This is a dummy step to avoid repeating the list of tests
+    needs:
+      - test-general-edge-endpoint
+      - test-sdk
+      - test-with-k3s-setup-ee
+      - test-with-k3s-helm
+      - validate-setup-ee
+      - validate-setup-helm
+      - G4-end-to-end
+    steps:
+      - name: declare success
+        run: echo "Main suite of tests all pass."
+
+  tag-pre-release:
+    if: github.ref == 'refs/heads/main'
+    needs:
+      - main-tests-pass
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tag main images with the "pre-release" tag after all the tests pass
         run: ./deploy/bin/tag-edge-endpoint-image.sh pre-release
 
   update-glhub:
     if: github.ref == 'refs/heads/main'
     needs:
-      - test-general-edge-endpoint
-      - validate-setup-ee
-      - validate-setup-helm
-      - test-sdk
-      - test-with-k3s-setup-ee
-      - test-with-k3s-helm
+      - main-tests-pass
     runs-on: ubuntu-latest
     environment: live
 
@@ -538,7 +551,8 @@ jobs:
     # This will run (after manual approval) if a commit is pushed to the `main` branch
     if: github.ref == 'refs/heads/main'
     needs:
-      - build-push-edge-endpoint-multiplatform
+      - main-tests-pass
+      - tag-pre-release
     runs-on: ubuntu-22.04
     steps:
       - name: Configure AWS credentials

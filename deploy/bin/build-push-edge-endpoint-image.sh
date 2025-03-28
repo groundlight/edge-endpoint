@@ -22,6 +22,7 @@ set -ex
 cd "$(dirname "$0")"
 
 TAG=$(./git-tag-name.sh)
+
 EDGE_ENDPOINT_IMAGE=${EDGE_ENDPOINT_IMAGE:-edge-endpoint}  # v0.2.0 (fastapi inference server) compatible images
 ECR_URL="${ECR_ACCOUNT}.dkr.ecr.${ECR_REGION}.amazonaws.com"
 
@@ -30,7 +31,8 @@ aws ecr get-login-password --region ${ECR_REGION} | docker login \
                   --username AWS \
                   --password-stdin  ${ECR_URL}
 
-# TODO: delete this!!!
+# TODO: delete this!!!  (Why?  Because we want to standardize on the multiplatform build I think.
+# But right now this does actually seem useful and not so bad.)
 # Check if the first argument is "dev". If it is, only build the image for the current platform
 if [ "$1" == "dev" ]; then
   docker build --tag ${EDGE_ENDPOINT_IMAGE} ../..

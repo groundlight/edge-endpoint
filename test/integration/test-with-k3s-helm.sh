@@ -51,20 +51,20 @@ fi
 
 export HELM_RELEASE_NAME="$DEPLOYMENT_NAMESPACE"
 
-# Build the Docker image and push it straight to the k3s cluster
-echo "Building the Docker image..."
-export IMAGE_TAG=dev
-./deploy/bin/build-local-edge-endpoint-image.sh
+export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
+echo "Using ECR image tag: $IMAGE_TAG"
 
 # Run the helm chart
 echo "Installing edge-endpoint helm chart..."
+echo "INFERENCE_FLAVOR: $INFERENCE_FLAVOR"
+echo "DEPLOYMENT_NAMESPACE: $DEPLOYMENT_NAMESPACE"
+echo "IMAGE_TAG: $IMAGE_TAG"
 helm install -n default ${HELM_RELEASE_NAME} deploy/helm/groundlight-edge-endpoint \
     --set groundlightApiToken=$GROUNDLIGHT_API_TOKEN \
     --set inferenceFlavor=$INFERENCE_FLAVOR \
     --set edgeEndpointPort=$EDGE_ENDPOINT_PORT \
     --set namespace=$DEPLOYMENT_NAMESPACE \
     --set edgeEndpointTag=$IMAGE_TAG \
-    --set imagePullPolicy=Never \
     --set-file configFile=$EDGE_CONFIG_FILE
 
 echo "Waiting for edge-endpoint pods to rollout..."
