@@ -89,6 +89,29 @@ Create the name of the service account to use
 {{- end }}
 
 {{/*
+  Determine the correct pull policy to use for each container type. If it is 
+  a dev tag, we use "Never" to avoid pulling from the registry. Otherwise,
+  we use the global pull policy.
+*/}}
+{{- define "groundlight-edge-endpoint.edgeEndpointPullPolicy" -}}
+{{- $tag := include "groundlight-edge-endpoint.edgeEndpointTag" . -}}
+{{- if eq $tag "dev" -}}
+Never
+{{- else -}}
+{{- default "IfNotPresent" .Values.imagePullPolicy -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "groundlight-edge-endpoint.inferencePullPolicy" -}}
+{{- $tag := include "groundlight-edge-endpoint.inferenceTag" . -}}
+{{- if eq $tag "dev" -}}
+Never
+{{- else -}}
+{{- default "IfNotPresent" .Values.imagePullPolicy -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
   Get the edge-config.yaml file. If the user supplies one via `--set-file configFile=...yaml`
   then use that. Otherwise, use the default version in the `files/` directory. We define this
   as a function so that we can use it as a nonce to restart the pod when the config changes.
