@@ -1,5 +1,8 @@
 import GPUtil
 import psutil
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def get_cpu_usage():
@@ -15,4 +18,5 @@ def get_gpu_count():
 
 
 def get_gpu_usage():
+    logger.info(f"Getting GPU usage: {GPUtil.getGPUs()}")
     return GPUtil.getGPUs()
