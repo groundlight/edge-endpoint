@@ -51,20 +51,20 @@ fi
 
 export HELM_RELEASE_NAME="$DEPLOYMENT_NAMESPACE"
 
-# Build the Docker image and push it straight to the k3s cluster
-echo "Building the Docker image..."
-export IMAGE_TAG=dev
-./deploy/bin/build-local-edge-endpoint-image.sh
+export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
+echo "Using ECR image tag: $IMAGE_TAG"
 
 # Run the helm chart
 echo "Installing edge-endpoint helm chart..."
+echo "INFERENCE_FLAVOR: $INFERENCE_FLAVOR"
+echo "DEPLOYMENT_NAMESPACE: $DEPLOYMENT_NAMESPACE"
+echo "IMAGE_TAG: $IMAGE_TAG"
 helm install -n default ${HELM_RELEASE_NAME} deploy/helm/groundlight-edge-endpoint \
     --set groundlightApiToken=$GROUNDLIGHT_API_TOKEN \
     --set inferenceFlavor=$INFERENCE_FLAVOR \
     --set edgeEndpointPort=$EDGE_ENDPOINT_PORT \
     --set namespace=$DEPLOYMENT_NAMESPACE \
     --set edgeEndpointTag=$IMAGE_TAG \
-    --set imagePullPolicy=Never \
     --set-file configFile=$EDGE_CONFIG_FILE
 
 echo "Waiting for edge-endpoint pods to rollout..."
@@ -96,15 +96,21 @@ kubectl rollout status deployment/inferencemodel-oodd-$DETECTOR_ID_WITH_DASHES \
     -n $DEPLOYMENT_NAMESPACE --timeout=10m &
 oodd_pid=$!
 
-# Wait for both background jobs to finish and capture their exit statuses
+set +e  # Temporarily disable exit on error to wait for both background jobs to finish
 wait $primary_pid
 primary_status=$?
-
 wait $oodd_pid
 oodd_status=$?
+set -e  # Re-enable exit on error
 
 if [ $primary_status -ne 0 ] || [ $oodd_status -ne 0 ]; then
+    set +e  # Disable exit on error so all the diagnostic information available gets printed
     echo "Error: One or both inference deployments for detector $DETECTOR_ID failed to rollout within the timeout period."
+    echo "Dumping a bunch of diagnostic information..."
+    kubectl -n $DEPLOYMENT_NAMESPACE describe deployment/inferencemodel-primary-$DETECTOR_ID_WITH_DASHES
+    kubectl -n $DEPLOYMENT_NAMESPACE logs deployment/inferencemodel-primary-$DETECTOR_ID_WITH_DASHES
+    kubectl -n $DEPLOYMENT_NAMESPACE describe deployment/inferencemodel-oodd-$DETECTOR_ID_WITH_DASHES
+    kubectl -n $DEPLOYMENT_NAMESPACE logs deployment/inferencemodel-oodd-$DETECTOR_ID_WITH_DASHES
     exit 1
 fi
 

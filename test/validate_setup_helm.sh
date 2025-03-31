@@ -22,12 +22,17 @@ fi
 # Run from the root of the repo
 cd $(dirname $0)/.. 
 
+export TAG=$(./deploy/bin/git-tag-name.sh)
+
 echo "Installing edge-endpoint helm chart..."
-# TODO: which container images do we want to use?
+echo "INFERENCE_FLAVOR: $INFERENCE_FLAVOR"
+echo "DEPLOYMENT_NAMESPACE: $DEPLOYMENT_NAMESPACE"
+echo "TAG: $TAG"
 helm install -n default ${HELM_RELEASE_NAME} deploy/helm/groundlight-edge-endpoint \
     --set groundlightApiToken=$GROUNDLIGHT_API_TOKEN \
     --set inferenceFlavor=$INFERENCE_FLAVOR \
     --set edgeEndpointPort=$EDGE_ENDPOINT_PORT \
+    --set=edgeEndpointTag=$TAG \
     --set namespace=$DEPLOYMENT_NAMESPACE
 
 

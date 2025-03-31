@@ -20,10 +20,10 @@ test-all: test test-with-docker  ## Run all tests in one make command
 	@echo "All tests completed."
 
 test-with-k3s-setup-ee:
-	. test/integration/setup_and_run_tests_setup_ee.sh
+	. test/integration/test-with-k3s-setup-ee.sh
 
 test-with-k3s-helm:
-	. test/integration/setup_and_run_tests_helm.sh
+	. test/integration/test-with-k3s-helm.sh
 
 validate-setup-ee:
 	test/validate_setup_ee.sh
@@ -59,7 +59,6 @@ helm-package:
 
 # TODO: update this with inference server support
 helm-local:
-	# We want k3s to error out if the :dev image hasn't been pushed to it already, so we set imagePullPolicy=Never
-	helm upgrade -i -n default ${HELM_ARGS} --set=edgeEndpointTag=dev --set=imagePullPolicy=Never ${HELM_RELEASE_NAME} deploy/helm/groundlight-edge-endpoint 
+	helm upgrade -i -n default ${HELM_ARGS} --set=edgeEndpointTag=dev ${HELM_RELEASE_NAME} deploy/helm/groundlight-edge-endpoint 
 	# Restart any deployments so that they pick up the new image
 	kubectl rollout restart deployment -n $$(helm get -n default values ${HELM_RELEASE_NAME} --all -o json | jq -r '.namespace') edge-endpoint
