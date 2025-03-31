@@ -1,6 +1,7 @@
+import logging
+
 import GPUtil
 import psutil
-import logging
 
 logger = logging.getLogger(__name__)
 
