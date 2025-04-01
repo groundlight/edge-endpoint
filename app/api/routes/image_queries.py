@@ -116,8 +116,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             detail="Human review cannot be required if edge predictions are required.",
         )
 
-    # For metrics
-    record_iq_activity(detector_id)
+    record_iq_activity(detector_id)  # for metrics
 
     if want_async:  # just submit to the cloud w/ ask_async
         if return_edge_prediction:
