@@ -1,9 +1,9 @@
 import logging
 
-# import os
+import os
 import psutil
 
-# from kubernetes import client, config
+from kubernetes import client, config
 
 logger = logging.getLogger(__name__)
 
@@ -27,18 +27,26 @@ def get_memory_available():
 
 
 def get_deployments():
-    return "none"
-    # # Load in-cluster config
-    # config.load_incluster_config()
+    config.load_incluster_config()
+    v1_apps = client.AppsV1Api()
 
-    # # Create the AppsV1 API client
-    # v1_apps = client.AppsV1Api()
+    # List deployments in current namespace
+    deployments = v1_apps.list_namespaced_deployment(namespace=os.getenv("NAMESPACE", "edge"))
 
-    # # List deployments in current namespace
-    # deployments = v1_apps.list_namespaced_deployment(namespace=os.getenv("NAMESPACE", "edge"))
+    deployment_names = []
+    for dep in deployments.items:
+        logger.info(f"{dep.metadata.namespace}/{dep.metadata.name}")
+        deployment_names.append(f"{dep.metadata.namespace}/{dep.metadata.name}")
+    return f"{deployment_names}"
 
-    # deployment_names = []
-    # for dep in deployments.items:
-    #     logger.info(f"{dep.metadata.namespace}/{dep.metadata.name}")
-    #     deployment_names.append(f"{dep.metadata.namespace}/{dep.metadata.name}")
-    # return f"{deployment_names}"
+def get_pods():
+    config.load_incluster_config()
+    v1_core = client.CoreV1Api()
+    pods = v1_core.list_namespaced_pod(namespace=os.getenv("NAMESPACE", "edge"))
+    pods_dict = {}
+    for pod in pods.items:
+        logger.info(f"{pod.metadata.namespace}/{pod.metadata.name}")
+        logger.info(f"pod.status.phase: {pod.status.phase}")
+        # logger.info(f"pod.status.containerStatuses[].imageId: {pod.status.containerStatuses[0].imageId}")
+        pods_dict[pod.metadata.name] = pod.status.phase
+    return f"{pods_dict}"

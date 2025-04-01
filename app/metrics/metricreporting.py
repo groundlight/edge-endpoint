@@ -63,7 +63,8 @@ def metrics_payload() -> dict:
     out.add("cpu_usage", lambda: system_metrics.get_cpu_usage())
     out.add("percentage_memory_used", lambda: system_metrics.get_percentage_memory_used())
     out.add("memory_available", lambda: system_metrics.get_memory_available())
-    # out.add("deployments_list", lambda: system_metrics.get_deployments())
+    out.add("deployments_list", lambda: system_metrics.get_deployments())
+    out.add("pods_list", lambda: system_metrics.get_pods())
     return out.as_dict()
 
 
