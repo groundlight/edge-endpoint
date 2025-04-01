@@ -105,7 +105,7 @@ RUN rm /etc/nginx/sites-enabled/default
 RUN ln -sf /dev/stdout /var/log/nginx/access.log && \
     ln -sf /dev/stderr /var/log/nginx/error.log
 
-CMD nginx && poetry run uvicorn --workers 8 --host 0.0.0.0 --port ${APP_PORT} --proxy-headers app.main:app
+CMD ["/bin/bash", "-c", "./app/bin/launch-edge-logic-server.sh"]
 
 # Document the exposed port, which is configured in nginx.conf
 EXPOSE ${NGINX_PORT} ${NGINX_PORT_OLD}

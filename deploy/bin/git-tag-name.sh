@@ -26,6 +26,15 @@ which $HASH_FUNC > /dev/null || fail "Can't find SHA utility"
 # Try to get current branch out of GITHUB_REF for CI
 # The ##*/ deletes everything up to /
 CURRENT_BRANCH=${GITHUB_REF##*/}
+
+# If we're in a PR (branch is "merge") and GITHUB_HEAD_REF is available,
+# append the source branch name to make tags more informative
+if [[ "${CURRENT_BRANCH}" == "merge" && ! -z "${GITHUB_HEAD_REF}" ]]; then
+    # Convert any slashes in the source branch name to hyphens
+    SOURCE_BRANCH=$(echo "${GITHUB_HEAD_REF}" | sed -e 's/\//-/g')
+    CURRENT_BRANCH="merge-${SOURCE_BRANCH}"
+fi
+
 # Now generate the short commit
 CURRENT_COMMIT=$(echo $GITHUB_SHA | cut -c -9)
 
