@@ -61,9 +61,9 @@ def metrics_payload() -> dict:
     # TODO: Add pod.status.containerStatuses[].imageId
     # TODO: add metrics like GPU count, how many local models, etc
     out.add("cpu_usage", lambda: system_metrics.get_cpu_usage())
-    out.add("memory_usage", lambda: system_metrics.get_memory_usage())
-    out.add("gpu_count", lambda: system_metrics.get_gpu_count())
-    out.add("gpu_usage", lambda: system_metrics.get_gpu_usage())
+    out.add("percentage_memory_used", lambda: system_metrics.get_percentage_memory_used())
+    out.add("memory_available", lambda: system_metrics.get_memory_available())
+    # out.add("deployments_list", lambda: system_metrics.get_deployments())
     return out.as_dict()
 
 
