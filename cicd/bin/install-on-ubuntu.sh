@@ -72,8 +72,13 @@ if [ -n "$SPECIFIC_COMMIT" ]; then
         # This is probably a merge commit, so we need to fetch it deliberately.
         git fetch origin $SPECIFIC_COMMIT
         git checkout $SPECIFIC_COMMIT
-        EE_IMAGE_TAG=$(./deploy/bin/get-image-tag.sh)
-        echo "Using image tag ${EE_IMAGE_TAG}"
+        EE_IMAGE_TAG="__EEIMAGETAG__"
+        if [ "${EE_IMAGE_TAG:0:12}" != "__EEIMAGETAG" ]; then
+            echo "Using image tag ${EE_IMAGE_TAG}"
+        else
+            echo "ERROR: EEIMAGETAG was not substituted.  Required for specific commit."
+            exit 1
+        fi
     else
         echo "It appears the commit hash was not substituted.  Staying on main."
         EE_IMAGE_TAG="release"
