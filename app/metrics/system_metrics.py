@@ -1,8 +1,7 @@
 import logging
-
 import os
-import psutil
 
+import psutil
 from kubernetes import client, config
 
 logger = logging.getLogger(__name__)
@@ -38,6 +37,7 @@ def get_deployments():
         logger.info(f"{dep.metadata.namespace}/{dep.metadata.name}")
         deployment_names.append(f"{dep.metadata.namespace}/{dep.metadata.name}")
     return f"{deployment_names}"
+
 
 def get_pods():
     config.load_incluster_config()
