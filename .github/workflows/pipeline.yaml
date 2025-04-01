@@ -425,7 +425,7 @@ jobs:
           # You might think the EEUT can just derive the image tag itself by running git-tag-name.sh,
           # but it can't because it's on a merge commit.  So it doesn't know the name of the branch.
           # So it would produce an incorrect tag with a name like `1234567-HEAD` which would not match ECR.
-          EE_IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
+          EE_IMAGE_TAG=$(${GITHUB_WORKSPACE}/deploy/bin/git-tag-name.sh)
           uv run pulumi config set ee-cicd:eeImageTag ${EE_IMAGE_TAG}
 
           # Inject the API token into the pulumi stack
