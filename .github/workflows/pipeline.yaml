@@ -355,11 +355,8 @@ jobs:
     # Note this job can run multiple times in parallel because the stack name is unique
     # for the run.  How much we want to do this is TBD.
     runs-on: self-hosted
-
-    # TODO: switch this to use the ECR image like the other tests.
-    # Wait for Tom's "clone free" helm install to do this.
-    #needs:
-    #  - build-push-edge-endpoint-multiplatform
+    needs:
+      - build-push-edge-endpoint-multiplatform
 
     env:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
