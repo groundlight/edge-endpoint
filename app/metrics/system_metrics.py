@@ -35,7 +35,6 @@ def get_deployments():
 
     deployment_names = []
     for dep in deployments.items:
-        logger.info(f"{dep.metadata.namespace}/{dep.metadata.name}")
         deployment_names.append(f"{dep.metadata.namespace}/{dep.metadata.name}")
     return f"{deployment_names}"
 
@@ -45,8 +44,18 @@ def get_pods():
     pods = v1_core.list_namespaced_pod(namespace=os.getenv("NAMESPACE", "edge"))
     pods_dict = {}
     for pod in pods.items:
-        logger.info(f"{pod.metadata.namespace}/{pod.metadata.name}")
-        logger.info(f"pod.status.phase: {pod.status.phase}")
-        # logger.info(f"pod.status.containerStatuses[].imageId: {pod.status.containerStatuses[0].imageId}")
         pods_dict[pod.metadata.name] = pod.status.phase
     return f"{pods_dict}"
+
+def get_edge_container_images():
+    config.load_incluster_config()
+    v1_core = client.CoreV1Api()
+    pods = v1_core.list_namespaced_pod(namespace=os.getenv("NAMESPACE", "edge"))
+
+    containers_dict = {}
+    for pod in pods.items:
+        for container in pod.status.container_statuses:
+            if pod.metadata.name not in containers_dict:
+                containers_dict[pod.metadata.name] = {}
+            containers_dict[pod.metadata.name][container.name] = container.image_id
+    return f"{containers_dict}"
