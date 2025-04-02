@@ -113,6 +113,9 @@ def adjust_confidence_with_oodd(primary_output_dict: dict, oodd_output_dict: dic
 
     adjusted_output_dict = primary_output_dict.copy()
     adjusted_output_dict["confidence"] = adjusted_confidence
+    # Raw prediction data for troubleshooting purposes
+    adjusted_output_dict["raw_primary_confidence"] = primary_output_dict["confidence"]
+    adjusted_output_dict["raw_oodd_prediction"] = oodd_output_dict.copy()
 
     return adjusted_output_dict
 
