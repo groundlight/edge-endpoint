@@ -66,6 +66,7 @@ def metrics_payload() -> dict:
     out.add("deployments_list", lambda: system_metrics.get_deployments())
     out.add("pods_status", lambda: system_metrics.get_pods())
     out.add("edge_container_images", lambda: system_metrics.get_edge_container_images())
+    out.add("inference_flavor", lambda: system_metrics.get_inference_flavor())
     return out.as_dict()
 
 

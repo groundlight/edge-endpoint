@@ -25,6 +25,10 @@ def get_memory_available():
     total = psutil.virtual_memory().total
     return f"{total / (1024 ** 3):.2f} GB"
 
+def get_inference_flavor():
+    """Get the inference flavor of the system."""
+    inference_flavor = os.getenv("INFERENCE_FLAVOR")
+    return inference_flavor
 
 def get_deployments():
     config.load_incluster_config()
@@ -36,7 +40,7 @@ def get_deployments():
     deployment_names = []
     for dep in deployments.items:
         deployment_names.append(f"{dep.metadata.namespace}/{dep.metadata.name}")
-    return f"{deployment_names}"
+    return deployment_names
 
 def get_pods():
     config.load_incluster_config()
@@ -45,7 +49,7 @@ def get_pods():
     pods_dict = {}
     for pod in pods.items:
         pods_dict[pod.metadata.name] = pod.status.phase
-    return f"{pods_dict}"
+    return pods_dict
 
 def get_edge_container_images():
     config.load_incluster_config()
@@ -58,4 +62,4 @@ def get_edge_container_images():
             if pod.metadata.name not in containers_dict:
                 containers_dict[pod.metadata.name] = {}
             containers_dict[pod.metadata.name][container.name] = container.image_id
-    return f"{containers_dict}"
+    return containers_dict
