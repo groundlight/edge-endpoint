@@ -16,14 +16,13 @@ jinja2 = "^3.1.6"
 kubernetes = "^27.2.0"
 opencv-python = "^4.10.0.84"
 pillow = "^11.0.0"
+psutil = "^6.0.0"
 pydantic = "^2.9.2"
 python = "^3.10"
 pyyaml = "^6.0.2"
 SQLAlchemy = "2.0.35"
 svix-ksuid = "^0.6.2"
 uvicorn = {version = "^0.31.0", extras = ["standard"]}
-gputil = "^1.4.0"
-psutil = "^6.0.0"
 
 [tool.poetry.group.dev.dependencies]
 coverage = "^7.6.1"
@@ -32,6 +31,7 @@ pytest = "^8.3.3"
 pytest-cov = "^5.0.0"
 pytest-mock = "^3.14.0"
 requests = "^2.32.3"
+gputil = "^1.4.0"
 matplotlib = "^3.9.2"
 
 [tool.poetry.group.lint.dependencies]

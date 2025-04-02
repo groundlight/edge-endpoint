@@ -5,9 +5,13 @@ Filesystem structure:
 /opt/groundlight/edge-metrics/
     detectors/
         <detector_id1>/
-            last_iq
+            iqs
+            escalations
+            audits
         <detector_id2>/
-            last_iq
+            iqs
+            escalations
+            audits
     last_iq
 """
 
@@ -15,6 +19,9 @@ import os
 from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class FilesystemActivityTrackingHelper:
@@ -44,6 +51,20 @@ class FilesystemActivityTrackingHelper:
         """Get the path to a file which is used to track something specific to a detector."""
         return Path(self.detector_folder(detector_id), name)
 
+    def increment_counter_file(self, name: str, detector_id: str | None = None) -> None:
+        if detector_id:
+            f = self.detector_file(detector_id, name)
+        else:
+            f = self.file(name)
+
+        if not f.exists():
+            f.touch()
+            f.write_text("0")
+            return
+
+        read_total = int(f.read_text())
+        f.write_text(str(read_total + 1))
+
     def get_last_file_activity(self, name: str) -> datetime | None:
         """Get the last time a file was modified."""
         f = self.file(name)
@@ -62,28 +83,28 @@ def record_iq_activity(detector_id: str):
     """Records metrics about image queries submitted to the edge.
 
     Currently records
-     - time of last IQ submission (for the edge-endpoint and this detector)
+     - time of last IQ submission (for the edge-endpoint generally and this detector)
+     - total number of IQs processed (for the edge-endpoint generally and this detector)
     """
-    # TODO: Lots of obvious improvements here.  Number of active detectors,
-    # how many images were processed, etc etc.
-
     # Record the time of the last IQ
     f = _tracker().file("last_iq")
     f.touch()
 
-    # Record the last IQ time for this detector
-    f = _tracker().detector_file(detector_id, "last_iq")
-    f.touch()
+    # Add 1 to the total number of IQs processed
+    _tracker().increment_counter_file("total_iqs")
+
+    # Add 1 to the total number of IQs processed for this detector, and record the time of the last IQ
+    _tracker().increment_counter_file("iqs", detector_id)
 
 
 def record_escalation(detector_id: str):
-    f = _tracker().detector_file(detector_id, "last_escalation")
-    f.touch()
+    """Records an escalation from a detector."""
+    _tracker().increment_counter_file("escalations", detector_id)
 
 
 def record_audit(detector_id: str):
-    f = _tracker().detector_file(detector_id, "last_audit")
-    f.touch()
+    """Records an audit from a detector."""
+    _tracker().increment_counter_file("audits", detector_id)
 
 
 def last_activity_time() -> str:
@@ -102,9 +123,9 @@ def num_detectors_active(time_period: timedelta) -> int:
     """Get the number of detectors that have had an IQ submitted to them in the last time period."""
     f = _tracker().file("detectors")
     active_detectors = [
-        Path(det, "last_iq")
+        Path(det, "iqs")
         for det in f.iterdir()
-        if _tracker().get_last_file_activity(Path(det, "last_iq")) > datetime.now() - time_period
+        if _tracker().get_last_file_activity(Path(det, "iqs")) > datetime.now() - time_period
     ]
     return len(active_detectors)
 
@@ -117,20 +138,26 @@ def get_all_detector_activity() -> dict:
 
 def get_detector_activity_metrics(detector_id: str) -> dict:
     """Get all activity metrics for a single detector."""
-    f = _tracker().detector_file(detector_id, "last_iq")
+    f = _tracker().detector_file(detector_id, "iqs")
     last_iq = _tracker().get_last_file_activity(f)
     last_iq = last_iq.isoformat() if last_iq else "none"
+    total_iqs = int(f.read_text()) if f.exists() else 0
 
-    f = _tracker().detector_file(detector_id, "last_escalation")
+    f = _tracker().detector_file(detector_id, "escalations")
     last_escalation = _tracker().get_last_file_activity(f)
     last_escalation = last_escalation.isoformat() if last_escalation else "none"
+    total_escalations = int(f.read_text()) if f.exists() else 0
 
-    f = _tracker().detector_file(detector_id, "last_audit")
+    f = _tracker().detector_file(detector_id, "audits")
     last_audit = _tracker().get_last_file_activity(f)
     last_audit = last_audit.isoformat() if last_audit else "none"
+    total_audits = int(f.read_text()) if f.exists() else 0
 
     return {
         "last_iq": last_iq,
         "last_escalation": last_escalation,
         "last_audit": last_audit,
+        "total_iqs": total_iqs,
+        "total_escalations": total_escalations,
+        "total_audits": total_audits,
     }
