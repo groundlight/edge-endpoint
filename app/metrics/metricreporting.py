@@ -54,19 +54,18 @@ def metrics_payload() -> dict:
     out.add("device_metadata", lambda: deviceid.get_deviceid_metadata_dict())
     out.add("now", lambda: datetime.now().isoformat())
     out.add("cpucores", lambda: os.cpu_count())
+    out.add("inference_flavor", lambda: system_metrics.get_inference_flavor())
     out.add("last_image_processed", lambda: iqactivity.last_activity_time())
     out.add("num_detectors_lifetime", lambda: iqactivity.num_detectors_lifetime())
     out.add("num_detectors_active_1h", lambda: iqactivity.num_detectors_active(timedelta(hours=1)))
     out.add("num_detectors_active_24h", lambda: iqactivity.num_detectors_active(timedelta(days=1)))
-    # TODO: Add pod.status.containerStatuses[].imageId
-    # TODO: add metrics like GPU count, how many local models, etc
+    out.add("detector_activity", lambda: iqactivity.get_all_detector_activity())
     out.add("cpu_usage", lambda: system_metrics.get_cpu_usage())
     out.add("percentage_memory_used", lambda: system_metrics.get_percentage_memory_used())
     out.add("memory_available", lambda: system_metrics.get_memory_available())
     out.add("deployments_list", lambda: system_metrics.get_deployments())
     out.add("pods_status", lambda: system_metrics.get_pods())
     out.add("edge_container_images", lambda: system_metrics.get_edge_container_images())
-    out.add("inference_flavor", lambda: system_metrics.get_inference_flavor())
     return out.as_dict()
 
 

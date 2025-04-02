@@ -76,6 +76,16 @@ def record_iq_activity(detector_id: str):
     f.touch()
 
 
+def record_escalation(detector_id: str):
+    f = _tracker().detector_file(detector_id, "last_escalation")
+    f.touch()
+
+
+def record_audit(detector_id: str):
+    f = _tracker().detector_file(detector_id, "last_audit")
+    f.touch()
+
+
 def last_activity_time() -> str:
     """Get the last time an image was processed as an ISO 8601 timestamp."""
     last_file_activity = _tracker().get_last_file_activity("last_iq")
@@ -97,3 +107,30 @@ def num_detectors_active(time_period: timedelta) -> int:
         if _tracker().get_last_file_activity(Path(det, "last_iq")) > datetime.now() - time_period
     ]
     return len(active_detectors)
+
+
+def get_all_detector_activity() -> dict:
+    """Get all activity metrics for all detectors."""
+    f = _tracker().file("detectors")
+    return {det.name: get_detector_activity_metrics(det.name) for det in f.iterdir()}
+
+
+def get_detector_activity_metrics(detector_id: str) -> dict:
+    """Get all activity metrics for a single detector."""
+    f = _tracker().detector_file(detector_id, "last_iq")
+    last_iq = _tracker().get_last_file_activity(f)
+    last_iq = last_iq.isoformat() if last_iq else "none"
+
+    f = _tracker().detector_file(detector_id, "last_escalation")
+    last_escalation = _tracker().get_last_file_activity(f)
+    last_escalation = last_escalation.isoformat() if last_escalation else "none"
+
+    f = _tracker().detector_file(detector_id, "last_audit")
+    last_audit = _tracker().get_last_file_activity(f)
+    last_audit = last_audit.isoformat() if last_audit else "none"
+
+    return {
+        "last_iq": last_iq,
+        "last_escalation": last_escalation,
+        "last_audit": last_audit,
+    }
