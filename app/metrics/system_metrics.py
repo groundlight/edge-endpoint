@@ -24,10 +24,12 @@ def get_memory_available():
     total = psutil.virtual_memory().total
     return f"{total / (1024 ** 3):.2f} GB"
 
+
 def get_inference_flavor():
     """Get the inference flavor of the system."""
     inference_flavor = os.getenv("INFERENCE_FLAVOR")
     return inference_flavor
+
 
 def get_deployments():
     config.load_incluster_config()
@@ -50,6 +52,7 @@ def get_pods():
     for pod in pods.items:
         pods_dict[pod.metadata.name] = pod.status.phase
     return pods_dict
+
 
 def get_edge_container_images():
     config.load_incluster_config()
