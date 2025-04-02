@@ -164,6 +164,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 result_value=results["label"],
                 confidence=ml_confidence,
                 confidence_threshold=confidence_threshold,
+                is_done_processing=True,
                 query=detector_metadata.query,
                 patience_time=patience_time,
                 rois=results["rois"],
@@ -218,6 +219,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         metadata={"edge_result": results},
                         image_query_id=image_query.id,  # Ensure the cloud IQ has the same ID as the returned edge IQ
                     )
+                    image_query.done_processing = False
                 else:
                     logger.debug(
                         f"Not escalating to cloud due to rate limit on background cloud escalations: {detector_id=}"
