@@ -49,24 +49,33 @@ class SafeMetricsDict:
 
 def metrics_payload() -> dict:
     """Returns a dictionary of metrics to be sent to the cloud API."""
-    out = SafeMetricsDict()
-    out.add("device_id", lambda: deviceid.get_deviceid_str())
-    out.add("device_metadata", lambda: deviceid.get_deviceid_metadata_dict())
-    out.add("now", lambda: datetime.now().isoformat())
-    out.add("cpucores", lambda: os.cpu_count())
-    out.add("inference_flavor", lambda: system_metrics.get_inference_flavor())
-    out.add("last_image_processed", lambda: iqactivity.last_activity_time())
-    out.add("num_detectors_lifetime", lambda: iqactivity.num_detectors_lifetime())
-    out.add("num_detectors_active_1h", lambda: iqactivity.num_detectors_active(timedelta(hours=1)))
-    out.add("num_detectors_active_24h", lambda: iqactivity.num_detectors_active(timedelta(days=1)))
-    out.add("detector_activity", lambda: iqactivity.get_all_detector_activity())
-    out.add("cpu_usage", lambda: system_metrics.get_cpu_usage())
-    out.add("percentage_memory_used", lambda: system_metrics.get_percentage_memory_used())
-    out.add("memory_available", lambda: system_metrics.get_memory_available())
-    out.add("deployments_list", lambda: system_metrics.get_deployments())
-    out.add("pods_status", lambda: system_metrics.get_pods())
-    out.add("edge_container_images", lambda: system_metrics.get_edge_container_images())
-    return out.as_dict()
+    device_info = SafeMetricsDict()
+    device_info.add("device_id", lambda: deviceid.get_deviceid_str())
+    device_info.add("device_metadata", lambda: deviceid.get_deviceid_metadata_dict()) 
+    device_info.add("now", lambda: datetime.now().isoformat())
+    device_info.add("cpucores", lambda: os.cpu_count())
+    device_info.add("inference_flavor", lambda: system_metrics.get_inference_flavor())
+    device_info.add("cpu_usage", lambda: system_metrics.get_cpu_usage())
+    device_info.add("percentage_memory_used", lambda: system_metrics.get_percentage_memory_used())
+    device_info.add("memory_available", lambda: system_metrics.get_memory_available())
+
+    activity_metrics = SafeMetricsDict()
+    activity_metrics.add("last_image_processed", lambda: iqactivity.last_activity_time())
+    activity_metrics.add("num_detectors_lifetime", lambda: iqactivity.num_detectors_lifetime())
+    activity_metrics.add("num_detectors_active_1h", lambda: iqactivity.num_detectors_active(timedelta(hours=1)))
+    activity_metrics.add("num_detectors_active_24h", lambda: iqactivity.num_detectors_active(timedelta(days=1)))
+    activity_metrics.add("detector_activity", lambda: iqactivity.get_all_detector_activity())
+
+    k8s_stats = SafeMetricsDict()
+    k8s_stats.add("deployments", lambda: system_metrics.get_deployments())
+    k8s_stats.add("pod_statuses", lambda: system_metrics.get_pods())
+    k8s_stats.add("container_images", lambda: system_metrics.get_container_images())
+
+    return {
+        "device_info": device_info.as_dict(),
+        "activity_metrics": activity_metrics.as_dict(),
+        "k8s_stats": k8s_stats.as_dict()
+    }
 
 
 def report_metrics_to_cloud():

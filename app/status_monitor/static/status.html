@@ -25,12 +25,23 @@
             margin: 0 auto;
         }
 
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 1.5em;
+            margin-bottom: 10px;
+            color: #0066cc;
+        }
+
         pre {
             background-color: #f5f5f5;
             padding: 15px;
             border-radius: 5px;
             overflow-x: auto;
             white-space: pre-wrap;
+            margin: 0;
         }
 
         #loading {
@@ -53,7 +64,21 @@
     <div class="container">
         <div id="loading">Loading status...</div>
         <div id="error">Failed to load metrics data.</div>
-        <pre id="metrics"></pre>
+        
+        <div class="section">
+            <div class="section-title">Device Information</div>
+            <pre id="device-info"></pre>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Activity Metrics</div>
+            <pre id="activity-metrics"></pre>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Kubernetes Stats</div>
+            <pre id="k8s-stats"></pre>
+        </div>
     </div>
 
     <script>
@@ -66,7 +91,9 @@
                     return response.json();
                 })
                 .then(data => {
-                    document.getElementById('metrics').textContent = JSON.stringify(data, null, 2);
+                    document.getElementById('device-info').textContent = JSON.stringify(data.device_info, null, 2);
+                    document.getElementById('activity-metrics').textContent = JSON.stringify(data.activity_metrics, null, 2);
+                    document.getElementById('k8s-stats').textContent = JSON.stringify(data.k8s_stats, null, 2);
                     document.getElementById('loading').style.display = 'none';
                 })
                 .catch(error => {

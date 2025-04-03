@@ -7,44 +7,44 @@ from kubernetes import client, config
 logger = logging.getLogger(__name__)
 
 
-def get_cpu_usage():
+def get_cpu_usage() -> str:
     """Returns the percentage of total CPU used."""
     percent = psutil.cpu_percent(interval=1)
     return f"{percent}%"
 
 
-def get_percentage_memory_used():
+def get_percentage_memory_used() -> str:
     """Returns the percentage of total memory used."""
     percent = psutil.virtual_memory().percent
     return f"{percent}%"
 
 
-def get_memory_available():
+def get_memory_available() -> str:
     """Returns the amount of memory available in GB."""
     total = psutil.virtual_memory().total
     return f"{total / (1024 ** 3):.2f} GB"
 
 
-def get_inference_flavor():
+def get_inference_flavor() -> str:
     """Get the inference flavor of the system."""
     inference_flavor = os.getenv("INFERENCE_FLAVOR")
     return inference_flavor
 
 
-def get_deployments():
+def get_deployments() -> set[str]:
     config.load_incluster_config()
     v1_apps = client.AppsV1Api()
 
     # List deployments in current namespace
     deployments = v1_apps.list_namespaced_deployment(namespace=os.getenv("NAMESPACE", "edge"))
 
-    deployment_names = []
+    deployment_names = set()
     for dep in deployments.items:
-        deployment_names.append(f"{dep.metadata.namespace}/{dep.metadata.name}")
+        deployment_names.add(f"{dep.metadata.namespace}/{dep.metadata.name}")
     return deployment_names
 
 
-def get_pods():
+def get_pods() -> dict[str, str]:
     config.load_incluster_config()
     v1_core = client.CoreV1Api()
     pods = v1_core.list_namespaced_pod(namespace=os.getenv("NAMESPACE", "edge"))
@@ -54,7 +54,7 @@ def get_pods():
     return pods_dict
 
 
-def get_edge_container_images():
+def get_container_images() -> dict[str, dict[str, str]]:
     config.load_incluster_config()
     v1_core = client.CoreV1Api()
     pods = v1_core.list_namespaced_pod(namespace=os.getenv("NAMESPACE", "edge"))
