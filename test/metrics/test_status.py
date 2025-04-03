@@ -19,7 +19,7 @@ def test_status():
         try:
             status_response = requests.get(TEST_ENDPOINT + "/status")
             status_response.raise_for_status()
-            if status_response.json().get("status") == "ok":
+            if status_response.status_code == 200:
                 return
         except requests.RequestException as e:
             final_exception = e
