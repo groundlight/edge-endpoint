@@ -40,6 +40,7 @@ def test_metrics_payload():
     # Check that the full payload is JSON serializable
     json.dumps(payload)
 
+
 def _deliberate_error():
     raise RuntimeError("Intentional test error")
 
