@@ -64,10 +64,10 @@ class FilesystemActivityTrackingHelper:
     def increment_counter_file(self, name: str, detector_id: str | None = None):
         """Increment a counter file, or create it if it doesn't exist. If detector_id is provided,
         use the counter for that detector. Otherwise, use a system-wide counter.
-        
+
         Args:
             name (str): The name of the counter file.
-            detector_id (str | None): The ID of the detector to use, if the counter is for a 
+            detector_id (str | None): The ID of the detector to use, if the counter is for a
                 specific detector. If None, use a system-wide counter.
         """
         if detector_id:
@@ -99,13 +99,15 @@ def _tracker() -> FilesystemActivityTrackingHelper:
 
 def record_activity(detector_id: str, activity_type: str):
     """Records an activity from a detector. Currently supported activity types are:
-        - iqs
-        - escalations
-        - audits
+    - iqs
+    - escalations
+    - audits
     """
     supported_activity_types = ["iqs", "escalations", "audits"]
     if activity_type not in supported_activity_types:
-        logger.error(f"The provided activity type ({activity_type}) is not currently supported, not recording activity. Supported types are: {supported_activity_types}")
+        logger.error(
+            f"The provided activity type ({activity_type}) is not currently supported, not recording activity. Supported types are: {supported_activity_types}"
+        )
         return
 
     current_hour = datetime.now().strftime("%Y-%m-%d_%H")
@@ -120,6 +122,7 @@ def record_activity(detector_id: str, activity_type: str):
 
         _tracker().increment_counter_file(activity_type)
         _tracker().increment_counter_file(f"{activity_type}_{current_hour}")
+
 
 def last_activity_time() -> str:
     """Get the last time an image was processed as an ISO 8601 timestamp."""
@@ -194,6 +197,6 @@ def clear_old_activity_files():
 
     for folder in folders:
         files = folder.glob(f"*_{time_pattern}")
-        old_files = [f for f in files if f.name[- len("YYYY-MM-DD_HH"):] not in valid_hours]
+        old_files = [f for f in files if f.name[-len("YYYY-MM-DD_HH") :] not in valid_hours]
         for f in old_files:
             f.unlink()

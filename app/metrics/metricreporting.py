@@ -51,7 +51,7 @@ def metrics_payload() -> dict:
     """Returns a dictionary of metrics to be sent to the cloud API."""
     device_info = SafeMetricsDict()
     device_info.add("device_id", lambda: deviceid.get_deviceid_str())
-    device_info.add("device_metadata", lambda: deviceid.get_deviceid_metadata_dict()) 
+    device_info.add("device_metadata", lambda: deviceid.get_deviceid_metadata_dict())
     device_info.add("now", lambda: datetime.now().isoformat())
     device_info.add("cpucores", lambda: os.cpu_count())
     device_info.add("inference_flavor", lambda: system_metrics.get_inference_flavor())
@@ -74,7 +74,7 @@ def metrics_payload() -> dict:
     return {
         "device_info": device_info.as_dict(),
         "activity_metrics": activity_metrics.as_dict(),
-        "k8s_stats": k8s_stats.as_dict()
+        "k8s_stats": k8s_stats.as_dict(),
     }
 
 
