@@ -5,8 +5,9 @@ def test_metrics_payload():
     payload = metrics_payload()
     assert "device_id" in payload
     assert "now" in payload
+    assert "device_metadata" in payload
     assert isinstance(payload["cpucores"], int)
-
+    assert isinstance(payload["inference_flavor"], str)
 
 def _deliberate_error():
     raise RuntimeError("Intentional test error")
