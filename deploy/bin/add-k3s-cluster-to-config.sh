@@ -4,7 +4,7 @@
 # If the user already has a kubeconfig file, add the cluster information to the existing file
 # otherwise create a new kubeconfig file
 
-set -ex
+set -e
 
 # Don't use `k3s kubectl` here because it always uses the default kubeconfig file in /etc/rancher/k3s/k3s.yaml
 K=${KUBECTL_CMD:-kubectl}

@@ -4,9 +4,7 @@ from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from groundlight import Groundlight
-from model import (
-    ImageQuery,
-)
+from model import ImageQuery
 
 from app.core.app_state import (
     AppState,
@@ -193,7 +191,10 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         patience_time=patience_time,
                         confidence_threshold=confidence_threshold,
                         want_async=True,
-                        metadata={"is_edge_audit": True},  # This metadata will trigger an audit in the cloud
+                        metadata={
+                            "is_edge_audit": True,  # This metadata will trigger an audit in the cloud
+                            "edge_result": results,
+                        },
                         image_query_id=image_query.id,  # We give the cloud IQ the same ID as the returned edge IQ
                     )
 
@@ -218,6 +219,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         confidence_threshold=confidence_threshold,
                         human_review=human_review,
                         want_async=True,
+                        metadata={"edge_result": results},
                         image_query_id=image_query.id,  # Ensure the cloud IQ has the same ID as the returned edge IQ
                     )
                 else:

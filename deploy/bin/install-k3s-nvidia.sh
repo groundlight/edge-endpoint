@@ -8,7 +8,7 @@
 # This guide was more helpful than others fwiw:
 # https://support.tools/post/nvidia-gpus-on-k3s/
 
-set -ex
+set -e
 
 check_nvidia_drivers_and_container_runtime() {
   # Retrieve existing version or default to 525

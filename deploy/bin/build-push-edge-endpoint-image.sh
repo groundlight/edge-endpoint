@@ -16,7 +16,7 @@
 ECR_ACCOUNT=${ECR_ACCOUNT:-767397850842}
 ECR_REGION=${ECR_REGION:-us-west-2}
 
-set -ex
+set -e
 
 # Ensure that you're in the same directory as this script before running it
 cd "$(dirname "$0")"

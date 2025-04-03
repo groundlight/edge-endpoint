@@ -14,7 +14,7 @@
 # - DEPLOYMENT_NAMESPACE: The namespace for deployment. Defaults to the current namespace.
 # - RUN_EDGE_ENDPOINT: Controls the launch of edge endpoint pods.
 #   - If set, the edge-endpoint pods will be launched. If not set, pods will not be launched.
-set -ex
+set -e
 
 # If we're in a container, sudo won't be available. But otherwise there are commands where we want sudo.
 if command -v sudo &>/dev/null; then

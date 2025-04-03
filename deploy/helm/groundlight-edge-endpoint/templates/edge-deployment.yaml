@@ -113,7 +113,7 @@ spec:
 
       - name: status-monitor
         image: *edgeEndpointImage
-        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
         ports:
         - containerPort: 8123
         command: ["./app/bin/launch-status-monitor.sh"]
