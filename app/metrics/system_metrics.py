@@ -38,9 +38,9 @@ def get_deployments() -> set[str]:
     # List deployments in current namespace
     deployments = v1_apps.list_namespaced_deployment(namespace=os.getenv("NAMESPACE", "edge"))
 
-    deployment_names = set()
+    deployment_names = []
     for dep in deployments.items:
-        deployment_names.add(f"{dep.metadata.namespace}/{dep.metadata.name}")
+        deployment_names.append(f"{dep.metadata.namespace}/{dep.metadata.name}")
     return deployment_names
 
 
