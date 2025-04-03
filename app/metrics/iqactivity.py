@@ -110,6 +110,8 @@ def record_activity(detector_id: str, activity_type: str):
         )
         return
 
+    logger.debug(f"Recording activity {activity_type} on detector {detector_id}")
+
     current_hour = datetime.now().strftime("%Y-%m-%d_%H")
     _tracker().increment_counter_file(activity_type, detector_id)
     _tracker().increment_counter_file(f"{activity_type}_{current_hour}", detector_id)
@@ -195,8 +197,12 @@ def clear_old_activity_files():
     folders = list(Path(base_dir, "detectors").iterdir())
     folders.append(base_dir)
 
+    old_files = []
     for folder in folders:
         files = folder.glob(f"*_{time_pattern}")
-        old_files = [f for f in files if f.name[-len("YYYY-MM-DD_HH") :] not in valid_hours]
+        old_files.extend([f for f in files if f.name[-len("YYYY-MM-DD_HH") :] not in valid_hours])
+    
+    if old_files:
+        logger.info(f"Clearing {len(old_files)} old activity files: {old_files}")
         for f in old_files:
             f.unlink()

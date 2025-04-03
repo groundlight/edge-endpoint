@@ -7,24 +7,24 @@ import pytest
 from app.metrics.iqactivity import FilesystemActivityTrackingHelper, clear_old_activity_files, record_activity
 
 
-@pytest.fixture(scope="module", autouse=True)
+@pytest.fixture(scope="module")
 def tmp_base_dir(tmp_path_factory):
     return tmp_path_factory.mktemp("base_dir")
 
 
-@pytest.fixture(scope="module", autouse=True)
+@pytest.fixture(scope="module")
 def _test_tracker(tmp_base_dir):
     tracker = FilesystemActivityTrackingHelper(tmp_base_dir)
     yield tracker
 
 
-def test_initial_directories():
+def test_initial_directories(tmp_base_dir):
     # Check that basic directories exist after we create the tracker
     assert Path(tmp_base_dir).exists()
     assert Path(tmp_base_dir, "detectors").exists()
 
 
-def test_increment_counter_file():
+def test_increment_counter_file(tmp_base_dir, _test_tracker):
     assert not Path(tmp_base_dir, "increment_test").exists()
     _test_tracker().increment_counter_file("increment_test")
     assert Path(tmp_base_dir, "increment_test").exists()
@@ -40,7 +40,7 @@ def test_increment_counter_file():
     assert Path(tmp_base_dir, "detectors", "det_incrementtest", "increment_test").read_text() == "2"
 
 
-def test_activity_tracking():
+def test_activity_tracking(tmp_base_dir, _test_tracker):
     assert not Path(tmp_base_dir, "detectors", "det_recordactivitytest").exists()
 
     # Record an IQ, check that the last_iq file, iqs file, and detector-specific iqs file are all
@@ -91,7 +91,7 @@ def test_wrong_activity_type():
         record_activity("det_123", "wrong_activity_type")
 
 
-def test_clear_old_activity_files():
+def test_clear_old_activity_files(tmp_base_dir):
     Path(tmp_base_dir, "detectors", "det_123").mkdir(parents=True)
     Path(tmp_base_dir, "detectors", "det_456").mkdir(parents=True)
 

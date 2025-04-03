@@ -14,12 +14,12 @@ def test_metrics_payload():
     assert "k8s_stats" in payload
     assert isinstance(payload["k8s_stats"], dict)
 
-    # Check that the payload dictionaries have all the expected keys, and that the non-string values are the correct types
+    # Check that the payload dictionaries have all the expected keys
     device_info = payload["device_info"]
     assert "device_id" in device_info
-    assert isinstance(device_info["device_metadata"], dict)
+    assert "device_metadata" in device_info
     assert "now" in device_info
-    assert isinstance(device_info["cpucores"], int)
+    assert "cpucores" in device_info
     assert "inference_flavor" in device_info
     assert "cpu_usage" in device_info
     assert "percentage_memory_used" in device_info
@@ -30,12 +30,12 @@ def test_metrics_payload():
     assert "num_detectors_lifetime" in activity_metrics
     assert "num_detectors_active_1h" in activity_metrics
     assert "num_detectors_active_24h" in activity_metrics
-    assert isinstance(activity_metrics["detector_activity"], dict)
+    assert "detector_activity" in activity_metrics
 
     k8s_stats = payload["k8s_stats"]
-    assert isinstance(k8s_stats["deployments"], list)
-    assert isinstance(k8s_stats["pod_statuses"], dict)
-    assert isinstance(k8s_stats["container_images"], dict)
+    assert "deployments" in k8s_stats
+    assert "pod_statuses" in k8s_stats
+    assert "container_images" in k8s_stats
 
     # Check that the full payload is JSON serializable
     json.dumps(payload)

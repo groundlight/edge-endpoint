@@ -35,7 +35,6 @@ def get_deployments() -> set[str]:
     config.load_incluster_config()
     v1_apps = client.AppsV1Api()
 
-    # List deployments in current namespace
     deployments = v1_apps.list_namespaced_deployment(namespace=os.getenv("NAMESPACE", "edge"))
 
     deployment_names = []
