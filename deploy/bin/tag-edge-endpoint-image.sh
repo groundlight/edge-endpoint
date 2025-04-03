@@ -46,6 +46,6 @@ aws ecr get-login-password --region ${ECR_REGION} | docker login \
 # just the platform where the command is run.
 echo "🏷️ Tagging image $ECR_REPO:$GIT_TAG with tag $NEW_TAG"
 digest=$(docker buildx imagetools inspect $ECR_REPO:$GIT_TAG --format '{{json .}}' | jq -r .manifest.digest)
-docker buildx imagetools create --tag $ECR_REPO:$NEW_TAG $ECR_REPO:${digest}
+docker buildx imagetools create --tag $ECR_REPO:$NEW_TAG $ECR_REPO@${digest}
 
 echo "✅ Image successfully tagged: $ECR_REPO:$NEW_TAG"
