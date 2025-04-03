@@ -55,6 +55,8 @@ confidences = []
 logger.info(
     f'Starting laptop edge canary test. Submitting {NUM_IMAGE_QUERIES} image queries to {detector_id}...'
     )
+edge_query_count = 0
+cloud_query_count = 0
 test_start_time = time.time()
 for n in range(NUM_IMAGE_QUERIES):
     
@@ -74,10 +76,13 @@ for n in range(NUM_IMAGE_QUERIES):
     # logger.info(f'inference_duration: {inference_duration:.2f}')
     
     if inference_duration > MAX_EXPECTED_EDGE_INFERENCE_TIME_SEC:
+        cloud_query_count +=1
         logger.warning(
             f'Image query {iq.id} finished in {inference_duration:.2f} second(s), which suggests it got a cloud answer rather than an edge answer. '
             f'Too many cloud inferences might slow this test down to the point of failure. Consider adding more labels to your detector ({detector_id}).'
             )
+    else:
+        edge_query_count += 1
     
     unique_labels.add(iq.result.label.value)
     confidences.append(iq.result.confidence)
@@ -86,6 +91,13 @@ test_end_time = time.time()
 test_duration = test_end_time - test_start_time
 query_rate = NUM_IMAGE_QUERIES / test_duration
 logger.info(f'Processed {NUM_IMAGE_QUERIES} image queries in {test_duration:.2f} seconds at {query_rate:.2f} queries per second.')
+
+# TODO should we have any expectations about average confidence?
+average_confidence = sum(confidences) / len(confidences)
+logger.info(f'Finished with an average confidence of {average_confidence:.2f}.')
+
+# TODO should we have any expectations about how many queries go to the cloud?
+logger.info(f'{cloud_query_count / NUM_IMAGE_QUERIES * 100:.2f}% of image queries escalated to the cloud.')
 
 # Check that the query rate is sufficiently fast (edge speed)
 # keep MINIMUM_EXPECTED_BINARY_QUERY_RATE on the conservative side to avoid alerting too much
@@ -104,10 +116,6 @@ unexpected_labels = unique_labels - EXPECTED_BINARY_LABELS
 if len(unexpected_labels) > 0:
     logger.error(f"Found unexpected label(s) in results from Edge Endpoint: {unexpected_labels}. Expected: {EXPECTED_BINARY_LABELS}")
     sys.exit(1) # exit to avoid sending heartbeat
-    
-# TODO should we have any expectations about average confidence?
-average_confidence = sum(confidences) / len(confidences)
-logging.info(f'Finished with an average confidence of {average_confidence:.2f}.')
 
 # Report heartbeat
 # If all previous tests pass, send one image query to Groundlight Cloud, an alert will fire if the
