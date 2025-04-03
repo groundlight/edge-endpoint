@@ -24,6 +24,6 @@ def test_status():
         except requests.RequestException as e:
             final_exception = e
             time.sleep(1)  # wait for 1 second before retrying
-    pytest.fail(f"Edge endpoint status page is not available after polling for {MAX_WAIT_TIME_S} seconds. {final_exception=}")
-
-
+    pytest.fail(
+        f"Edge endpoint status page is not available after polling for {MAX_WAIT_TIME_S} seconds. {final_exception=}"
+    )

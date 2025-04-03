@@ -9,6 +9,7 @@ def test_metrics_payload():
     assert isinstance(payload["cpucores"], int)
     assert isinstance(payload["inference_flavor"], str)
 
+
 def _deliberate_error():
     raise RuntimeError("Intentional test error")
 
