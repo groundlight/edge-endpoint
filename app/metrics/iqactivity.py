@@ -18,19 +18,7 @@ Filesystem structure:
             audits_YYYY-MM-DD_HH   <--- Previous hour
             audits_YYYY-MM-DD_HH   <--- 2 hours ago
         <detector_id2>/
-            iqs
-            iqs_YYYY-MM-DD_HH   <--- Current hour
-            iqs_YYYY-MM-DD_HH   <--- Previous hour
-            iqs_YYYY-MM-DD_HH   <--- 2 hours ago
-            escalations
-            escalations_YYYY-MM-DD_HH   <--- Current hour
-            escalations_YYYY-MM-DD_HH   <--- Previous hour
-            escalations_YYYY-MM-DD_HH   <--- 2 hours ago
-            audits
-            audits_YYYY-MM-DD_HH   <--- Current hour
-            audits_YYYY-MM-DD_HH   <--- Previous hour
-            audits_YYYY-MM-DD_HH   <--- 2 hours ago
-    last_iq
+            repeat of above detector
     iqs
     iqs_YYYY-MM-DD_HH   <--- Current hour
     iqs_YYYY-MM-DD_HH   <--- Previous hour
@@ -109,45 +97,33 @@ def _tracker() -> FilesystemActivityTrackingHelper:
     return FilesystemActivityTrackingHelper(base_dir="/opt/groundlight/device/edge-metrics")
 
 
-def record_iq_activity(detector_id: str):
-    """Records metrics about image queries submitted to the edge.
-
-    Currently records
-     - time of last IQ submission (for the edge-endpoint generally and this detector)
-     - total number of IQs processed (for the edge-endpoint generally and this detector)
+def record_activity(detector_id: str, activity_type: str):
+    """Records an activity from a detector. Currently supported activity types are:
+        - iqs
+        - escalations
+        - audits
     """
+    supported_activity_types = ["iqs", "escalations", "audits"]
+    if activity_type not in supported_activity_types:
+        logger.error(f"The provided activity type ({activity_type}) is not currently supported, not recording activity. Supported types are: {supported_activity_types}")
+        return
+
     current_hour = datetime.now().strftime("%Y-%m-%d_%H")
+    _tracker().increment_counter_file(activity_type, detector_id)
+    _tracker().increment_counter_file(f"{activity_type}_{current_hour}", detector_id)
 
-    # Record the time of the last IQ
-    f = _tracker().file("last_iq")
-    f.touch()
+    # Record IQs for the edge-endpoint as a whole in addition to the detector level, for a quick activity view
+    if activity_type == "iqs":
+        # Record the time of the last IQ, included since this file was used in the first version of EE metrics
+        f = _tracker().file("last_iq")
+        f.touch()
 
-    # Log iqs processed across the whole edge-endpoint
-    _tracker().increment_counter_file("iqs")
-    _tracker().increment_counter_file(f"iqs_{current_hour}")
-
-    # Log iqs processed for this detector
-    _tracker().increment_counter_file("iqs", detector_id)
-    _tracker().increment_counter_file(f"iqs_{current_hour}", detector_id)
-
-
-def record_escalation(detector_id: str):
-    """Records an escalation from a detector."""
-    current_hour = datetime.now().strftime("%Y-%m-%d_%H")
-    _tracker().increment_counter_file("escalations", detector_id)
-    _tracker().increment_counter_file(f"escalations_{current_hour}", detector_id)
-
-
-def record_audit(detector_id: str):
-    """Records an audit from a detector."""
-    current_hour = datetime.now().strftime("%Y-%m-%d_%H")
-    _tracker().increment_counter_file("audits", detector_id)
-    _tracker().increment_counter_file(f"audits_{current_hour}", detector_id)
-
+        _tracker().increment_counter_file(activity_type)
+        _tracker().increment_counter_file(f"{activity_type}_{current_hour}")
 
 def last_activity_time() -> str:
     """Get the last time an image was processed as an ISO 8601 timestamp."""
-    last_file_activity = _tracker().get_last_file_activity("last_iq")
+    last_file_activity = _tracker().get_last_file_activity("iqs")
     return last_file_activity.isoformat() if last_file_activity else "none"
 
 
@@ -180,70 +156,44 @@ def get_detector_activity_metrics(detector_id: str) -> dict:
     current_hour = datetime.now().strftime("%Y-%m-%d_%H")
     last_hour = (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
 
-    f = _tracker().detector_file(detector_id, "iqs")
-    last_iq = _tracker().get_last_file_activity(f)
-    last_iq = last_iq.isoformat() if last_iq else "none"
-    total_iqs = int(f.read_text()) if f.exists() else 0
+    detector_metrics = {}
 
-    f = _tracker().detector_file(detector_id, f"iqs_{current_hour}")
-    current_hour_iqs = int(f.read_text()) if f.exists() else "none"
-    f = _tracker().detector_file(detector_id, f"iqs_{last_hour}")
-    last_hour_iqs = int(f.read_text()) if f.exists() else "none"
+    for activity_type in ["iqs", "escalations", "audits"]:
+        f = _tracker().detector_file(detector_id, activity_type)
+        last_activity = _tracker().get_last_file_activity(f)
+        last_activity = last_activity.isoformat() if last_activity else "none"
+        total_activity = int(f.read_text()) if f.exists() else 0
 
-    f = _tracker().detector_file(detector_id, "escalations")
-    last_escalation = _tracker().get_last_file_activity(f)
-    last_escalation = last_escalation.isoformat() if last_escalation else "none"
-    total_escalations = int(f.read_text()) if f.exists() else 0
+        f = _tracker().detector_file(detector_id, f"{activity_type}_{current_hour}")
+        current_hour_activity = int(f.read_text()) if f.exists() else "none"
+        f = _tracker().detector_file(detector_id, f"{activity_type}_{last_hour}")
+        last_hour_activity = int(f.read_text()) if f.exists() else "none"
 
-    f = _tracker().detector_file(detector_id, f"escalations_{current_hour}")
-    current_hour_escalations = int(f.read_text()) if f.exists() else "none"
-    f = _tracker().detector_file(detector_id, f"escalations_{last_hour}")
-    last_hour_escalations = int(f.read_text()) if f.exists() else "none"
+        detector_metrics[f"last_{activity_type}"] = last_activity
+        detector_metrics[f"total_{activity_type}"] = total_activity
+        detector_metrics[f"current_hour_{activity_type}"] = current_hour_activity
+        detector_metrics[f"last_hour_{activity_type}"] = last_hour_activity
 
-    f = _tracker().detector_file(detector_id, "audits")
-    last_audit = _tracker().get_last_file_activity(f)
-    last_audit = last_audit.isoformat() if last_audit else "none"
-    total_audits = int(f.read_text()) if f.exists() else 0
+    return detector_metrics
 
-    f = _tracker().detector_file(detector_id, f"audits_{current_hour}")
-    current_hour_audits = int(f.read_text()) if f.exists() else "none"
-    f = _tracker().detector_file(detector_id, f"audits_{last_hour}")
-    last_hour_audits = int(f.read_text()) if f.exists() else "none"
 
-    return {
-        "last_iq": last_iq,
-        "last_escalation": last_escalation,
-        "last_audit": last_audit,
-        "total_iqs": total_iqs,
-        "total_escalations": total_escalations,
-        "total_audits": total_audits,
-        "last_hour_iqs": last_hour_iqs,
-        "last_hour_escalations": last_hour_escalations,
-        "last_hour_audits": last_hour_audits,
-        "current_hour_iqs": current_hour_iqs,
-        "current_hour_escalations": current_hour_escalations,
-        "current_hour_audits": current_hour_audits,
-    }
+def clear_old_activity_files():
+    """Clear all activity files that are older than 2 hours."""
+    base_dir = _tracker().base_dir
 
-def clear_old_activity_files_one_folder(folder: Path):
-    """Keep the most recent 3 hours of activity files, delete anything older."""
     current_hour = datetime.now().strftime("%Y-%m-%d_%H")
     last_hour = (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
     two_hours_ago = (datetime.now() - timedelta(hours=2)).strftime("%Y-%m-%d_%H")
     valid_hours = [current_hour, last_hour, two_hours_ago]
 
-    # Files that match the pattern <record_name>_YYYY-MM-DD_HH
+    # Looking for files that match the pattern <record_name>_YYYY-MM-DD_HH
     time_pattern = "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]"
-    files = folder.glob(f"*_{time_pattern}")
 
-    old_files = [f for f in files if f.name[- len("YYYY-MM-DD_HH"):] not in valid_hours]
-    for f in old_files:
-        f.unlink()
+    folders = list(Path(base_dir, "detectors").iterdir())
+    folders.append(base_dir)
 
-def clear_old_activity_files():
-    """Clear all activity files that are older than 2 hours."""
-    base_dir = _tracker().base_dir
-    clear_old_activity_files_one_folder(base_dir)
-
-    for detector_folder in Path(base_dir, "detectors").iterdir():
-        clear_old_activity_files_one_folder(detector_folder)
+    for folder in folders:
+        files = folder.glob(f"*_{time_pattern}")
+        old_files = [f for f in files if f.name[- len("YYYY-MM-DD_HH"):] not in valid_hours]
+        for f in old_files:
+            f.unlink()
