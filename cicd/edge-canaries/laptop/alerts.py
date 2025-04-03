@@ -2,10 +2,8 @@ import groundlight
 from groundlight import VerbEnum, ApiException, Detector
 import logging
 import numpy as np
-import sys
 
-# TODO update this to the real pager duty inbox (edge-canary@groundlight.ai)
-PAGER_DUTY_INBOX = 'tim@groundlight.ai'
+PAGER_DUTY_INBOX = 'edge-canary@groundlight.ai'
 
 logger = logging.getLogger(__name__)
 
