@@ -15,11 +15,11 @@ Filesystem structure:
     last_iq
 """
 
+import logging
 import os
 from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
-import logging
 
 logger = logging.getLogger(__name__)
 
