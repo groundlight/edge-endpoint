@@ -50,4 +50,8 @@ fi
 
 echo now we check if the edge model performs well...
 poetry run python test/integration/integration.py -m final -d $DETECTOR_ID
+
+echo Now checking that the edge metrics status page is available...
+poetry run python test/integration/status.py
+
 echo All tests pass :D

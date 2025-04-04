@@ -1,17 +1,13 @@
-import os
 import time
-
-import pytest
 import requests
 
-# Tests in this file require a live edge-endpoint server and GL Api token in order to run.
-# Not ideal for unit-testing.
-TEST_ENDPOINT = os.getenv("LIVE_TEST_ENDPOINT", "http://localhost:30101")
+from integration import ENDPOINT_PORT
+
+TEST_ENDPOINT = f"http://localhost:{ENDPOINT_PORT}"
 MAX_WAIT_TIME_S = 60
 
 
-@pytest.mark.live
-def test_status():
+def check_status_page():
     """Ensure that the edge-endpoint status page comes online."""
     start_time = time.time()
     final_exception = None
@@ -24,6 +20,9 @@ def test_status():
         except requests.RequestException as e:
             final_exception = e
             time.sleep(1)  # wait for 1 second before retrying
-    pytest.fail(
+    raise Exception(
         f"Edge endpoint status page is not available after polling for {MAX_WAIT_TIME_S} seconds. {final_exception=}"
     )
+
+if __name__ == "__main__":
+    check_status_page()
