@@ -34,6 +34,7 @@ def create_iq(  # noqa: PLR0913
     result_value: int,
     confidence: float,
     confidence_threshold: float,
+    is_done_processing: bool,
     query: str = "",
     patience_time: float | None = None,
     rois: list[ROI] | None = None,
@@ -47,6 +48,7 @@ def create_iq(  # noqa: PLR0913
     :param result_value: The predicted value.
     :param confidence: The confidence of the predicted value.
     :param confidence_threshold: The confidence threshold for the query.
+    :param is_done_processing: Whether this is the final answer for the query.
     :param query: The query string.
     :param patience_time: The acceptable time to wait for a result.
     :param rois: The ROIs associated with the prediction, if applicable.
@@ -71,6 +73,7 @@ def create_iq(  # noqa: PLR0913
         confidence_threshold=confidence_threshold,
         rois=rois,
         text=text,
+        done_processing=is_done_processing,
     )
 
 
@@ -95,6 +98,7 @@ def _mode_to_result_and_type(
         result = BinaryClassificationResult(
             confidence=confidence,
             source=source,
+            from_edge=True,
             label=label,
         )
     elif mode == ModeEnum.COUNT:
@@ -110,6 +114,7 @@ def _mode_to_result_and_type(
         result = CountingResult(
             confidence=confidence,
             source=source,
+            from_edge=True,
             count=result_value,
             greater_than_max=greater_than_max,
         )
