@@ -6,7 +6,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
-from app.metrics.metricreporting import metrics_payload, report_metrics_to_cloud
+from app.metrics.metric_reporting import metrics_payload, report_metrics_to_cloud
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 # Environment variable lets us speed up testing
