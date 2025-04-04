@@ -1,6 +1,6 @@
 import time
-import requests
 
+import requests
 from integration import ENDPOINT_PORT
 
 TEST_ENDPOINT = f"http://localhost:{ENDPOINT_PORT}"
@@ -23,6 +23,7 @@ def check_status_page():
     raise Exception(
         f"Edge endpoint status page is not available after polling for {MAX_WAIT_TIME_S} seconds. {final_exception=}"
     )
+
 
 if __name__ == "__main__":
     check_status_page()
