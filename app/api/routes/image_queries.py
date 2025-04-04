@@ -15,7 +15,7 @@ from app.core.app_state import (
 )
 from app.core.edge_inference import get_edge_inference_model_name
 from app.core.utils import create_iq, safe_call_sdk
-from app.metrics.iqactivity import record_activity
+from app.metrics.iq_activity import record_activity
 
 logger = logging.getLogger(__name__)
 

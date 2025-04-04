@@ -13,7 +13,7 @@ from typing import Any, Callable
 from groundlight import Groundlight
 
 from app.core import deviceid
-from app.metrics import iqactivity, system_metrics
+from app.metrics import iq_activity, system_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -60,11 +60,11 @@ def metrics_payload() -> dict:
     device_info.add("memory_available", lambda: system_metrics.get_memory_available())
 
     activity_metrics = SafeMetricsDict()
-    activity_metrics.add("last_image_processed", lambda: iqactivity.last_activity_time())
-    activity_metrics.add("num_detectors_lifetime", lambda: iqactivity.num_detectors_lifetime())
-    activity_metrics.add("num_detectors_active_1h", lambda: iqactivity.num_detectors_active(timedelta(hours=1)))
-    activity_metrics.add("num_detectors_active_24h", lambda: iqactivity.num_detectors_active(timedelta(days=1)))
-    activity_metrics.add("detector_activity", lambda: iqactivity.get_all_detector_activity())
+    activity_metrics.add("last_image_processed", lambda: iq_activity.last_activity_time())
+    activity_metrics.add("num_detectors_lifetime", lambda: iq_activity.num_detectors_lifetime())
+    activity_metrics.add("num_detectors_active_1h", lambda: iq_activity.num_detectors_active(timedelta(hours=1)))
+    activity_metrics.add("num_detectors_active_24h", lambda: iq_activity.num_detectors_active(timedelta(days=1)))
+    activity_metrics.add("detector_activity", lambda: iq_activity.get_all_detector_activity())
 
     k8s_stats = SafeMetricsDict()
     k8s_stats.add("deployments", lambda: system_metrics.get_deployments())

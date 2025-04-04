@@ -1,6 +1,6 @@
 import json
 
-from app.metrics.metricreporting import SafeMetricsDict, metrics_payload
+from app.metrics.metric_reporting import SafeMetricsDict, metrics_payload
 
 
 def test_metrics_payload():

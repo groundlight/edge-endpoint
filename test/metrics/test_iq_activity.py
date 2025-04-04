@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.metrics.iqactivity import FilesystemActivityTrackingHelper, clear_old_activity_files, record_activity
+from app.metrics.iq_activity import FilesystemActivityTrackingHelper, clear_old_activity_files, record_activity
 
 
 @pytest.fixture(scope="module")
@@ -41,12 +41,12 @@ def test_increment_counter_file(tmp_base_dir, _test_tracker):
 
 
 def test_activity_tracking(monkeypatch, tmp_base_dir, _test_tracker):
-    monkeypatch.setattr("app.metrics.iqactivity._tracker", lambda: _test_tracker)
+    monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
     assert not Path(tmp_base_dir, "detectors", "det_recordactivitytest").exists()
 
     # Record an IQ, check that the last_iq file, iqs file, and detector-specific iqs file are all
     # created and have the correct values
-    with patch("app.metrics.iqactivity.datetime") as mock_datetime:
+    with patch("app.metrics.iq_activity.datetime") as mock_datetime:
         mock_datetime.now.return_value = datetime(2025, 4, 3, 12, 0, 0)
         record_activity("det_recordactivitytest", "iqs")
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "iqs").exists()
@@ -88,7 +88,7 @@ def test_wrong_activity_type(caplog):
 
 
 def test_clear_old_activity_files(monkeypatch, tmp_base_dir, _test_tracker):
-    monkeypatch.setattr("app.metrics.iqactivity._tracker", lambda: _test_tracker)
+    monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
     Path(tmp_base_dir, "detectors", "det_123").mkdir(parents=True)
     Path(tmp_base_dir, "detectors", "det_456").mkdir(parents=True)
 
@@ -117,7 +117,7 @@ def test_clear_old_activity_files(monkeypatch, tmp_base_dir, _test_tracker):
     Path(tmp_base_dir, "detectors", "det_456", "escalations").touch()
     Path(tmp_base_dir, "detectors", "det_456", "iqs_2010-04-03_09").touch()
 
-    with patch("app.metrics.iqactivity.datetime") as mock_datetime:
+    with patch("app.metrics.iq_activity.datetime") as mock_datetime:
         mock_datetime.now.return_value = datetime(2025, 4, 3, 12, 30, 0)
         clear_old_activity_files()
 
