@@ -4,6 +4,12 @@
 # live tests, which will hit the API service that got setup
 # Altogether, you can run everything with:
 # > make test-with-k3s-setup-ee
+
+# PREREQUISITE: This test must be run after you've pushed a container to ECR with
+# the git tag name. This is done in the pipeline, but if you're running locally you can
+# do it with:
+# > ./deploy/bin/build-push-edge-endpoint-image.sh
+
 set -e
 set -x
 
@@ -54,10 +60,8 @@ if ! kubectl get namespace $DEPLOYMENT_NAMESPACE &> /dev/null; then
 fi
 
 
-# Build the Docker image and import it into k3s
-echo "Building the Docker image..."
+# Set up k3s with our image tag
 export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
-./deploy/bin/build-push-edge-endpoint-image.sh dev
 ./deploy/bin/setup-ee.sh
 # restore config file
 mv configs/edge-config.yaml.tmp configs/edge-config.yaml
