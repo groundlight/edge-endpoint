@@ -140,7 +140,9 @@ def test_clear_old_activity_files(monkeypatch, tmp_base_dir, _test_tracker):
     assert Path(tmp_base_dir, "detectors", "det_123", "audits_2025-04-03_12").exists()
 
     # All hourly files outside of the last 3 hours should be deleted
-    assert not Path(tmp_base_dir, "iqs_2025-04-03_08").exists(), f"all files in {tmp_base_dir} are {list(Path(tmp_base_dir).iterdir())}"
+    assert not Path(
+        tmp_base_dir, "iqs_2025-04-03_08"
+    ).exists(), f"all files in {tmp_base_dir} are {list(Path(tmp_base_dir).iterdir())}"
     assert not Path(tmp_base_dir, "iqs_2025-04-03_09").exists()
     assert not Path(tmp_base_dir, "detectors", "det_123", "iqs_2025-04-03_08").exists()
     assert not Path(tmp_base_dir, "detectors", "det_123", "iqs_2025-04-03_09").exists()
