@@ -52,19 +52,21 @@ fi
 export HELM_RELEASE_NAME="$DEPLOYMENT_NAMESPACE"
 
 export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
-echo "Using ECR image tag: $IMAGE_TAG"
+echo "Using ECR edge-endpoint image tag: $IMAGE_TAG"
 
 # Run the helm chart
 echo "Installing edge-endpoint helm chart..."
 echo "INFERENCE_FLAVOR: $INFERENCE_FLAVOR"
 echo "DEPLOYMENT_NAMESPACE: $DEPLOYMENT_NAMESPACE"
 echo "IMAGE_TAG: $IMAGE_TAG"
+echo "INFERENCE_IMAGE_TAG: $INFERENCE_IMAGE_TAG"
 helm install -n default ${HELM_RELEASE_NAME} deploy/helm/groundlight-edge-endpoint \
     --set groundlightApiToken=$GROUNDLIGHT_API_TOKEN \
     --set inferenceFlavor=$INFERENCE_FLAVOR \
     --set edgeEndpointPort=$EDGE_ENDPOINT_PORT \
     --set namespace=$DEPLOYMENT_NAMESPACE \
     --set edgeEndpointTag=$IMAGE_TAG \
+    --set inferenceTag=$INFERENCE_IMAGE_TAG \
     --set-file configFile=$EDGE_CONFIG_FILE
 
 echo "Waiting for edge-endpoint pods to rollout..."
