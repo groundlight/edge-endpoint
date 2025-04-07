@@ -7,7 +7,7 @@ on:
     branches:
       - main
     types: [opened, synchronize, reopened]
-  repository_dispatch:  # To trigger tests from another repository
+  repository_dispatch:  # To trigger tests based on activity outside of this repo
     types: [test-inference-image]
   workflow_dispatch:
     # This allows it to be triggered manually in the github console
