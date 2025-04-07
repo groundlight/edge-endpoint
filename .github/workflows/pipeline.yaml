@@ -9,6 +9,11 @@ on:
     types: [opened, synchronize, reopened]
   repository_dispatch:  # To trigger tests based on activity outside of this repo
     types: [test-inference-image]
+  workflow_call:
+    inputs:
+      inference_image_tag:
+        required: true
+        type: string
   workflow_dispatch:
     # This allows it to be triggered manually in the github console
     # You could put inputs here, but we don't need them.
@@ -25,7 +30,7 @@ env:
 jobs:
   test-general-edge-endpoint:
     runs-on: ubuntu-22.04
-    if: github.event_name != 'repository_dispatch'  # Doesn't use the inference server image, skip when triggered from other repo
+    if: github.event_name != 'workflow_call'  # Doesn't use the inference server image, skip when triggered from other repo
     env:
       # This is the NGINX proxy endpoint
       GROUNDLIGHT_ENDPOINT: http://localhost:30101
@@ -110,7 +115,7 @@ jobs:
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
   validate-setup-ee:
-    if: github.event_name != 'repository_dispatch'  # Doesn't use the inference server image, skip when triggered from other repo
+    if: github.event_name != 'workflow_call'  # Doesn't use the inference server image, skip when triggered from other repo
     runs-on: ubuntu-latest-4-cores
     # We need more disk space than the default (2 core) runners have.
     # They have 73GB total, 21GB available.  4-cores has 145GB raw, 93 GB available.
@@ -154,7 +159,7 @@ jobs:
           NAMESPACE=validate-setup-ee ./deploy/bin/diagnose-k8-failure.sh
 
   validate-setup-helm:
-    if: github.event_name != 'repository_dispatch'  # Doesn't use the inference server image, skip when triggered from other repo
+    if: github.event_name != 'workflow_call'  # Doesn't use the inference server image, skip when triggered from other repo
     runs-on: ubuntu-latest-4-cores
     needs:
       - build-push-edge-endpoint-multiplatform
@@ -182,7 +187,7 @@ jobs:
   # we run this separately from validate-setup-ee since we run out of disk space doing
   # both of them on the same runner and they can be slow so its best to do them in parallel
   test-with-k3s-setup-ee:
-    if: github.event_name != 'repository_dispatch'  # Not clear how to use a specific inference image, skip when triggered from other repo
+    if: github.event_name != 'workflow_call'  # Not clear how to use a specific inference image, skip when triggered from other repo
     runs-on: ubuntu-latest-4-cores
     needs:
       - build-push-edge-endpoint-multiplatform
@@ -239,11 +244,14 @@ jobs:
       # associated with roxanne+test_edge account since for some reason it was failing with
       # prod biggies
       GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
-      # Only set if triggered via repository_dispatch
-      INFERENCE_IMAGE_TAG: ${{ github.event.client_payload.inference_image_tag }}
+      # Only set if triggered via workflow_call
+      INFERENCE_IMAGE_TAG: ${{ inputs.inference_image_tag }}
     steps:
       - name: Check out code
         uses: actions/checkout@v4
+        with:
+          # Check out the edge-endpoint repo, not the repo that triggered the workflow
+          repository: ${{ github.action_repository }}
 
       - name: Install k3s
         run: |
@@ -277,7 +285,7 @@ jobs:
 
   # Run Groundlight SDK tests against the edge proxy endpoint
   test-sdk:
-    if: github.event_name != 'repository_dispatch'  # Doesn't use the inference server image, skip when triggered from other repo
+    if: github.event_name != 'workflow_call'  # Doesn't use the inference server image, skip when triggered from other repo
     runs-on: ubuntu-22.04
     env:
       # This is the NGINX proxy endpoint
@@ -364,7 +372,7 @@ jobs:
     # Note this job can run multiple times in parallel because the stack name is unique
     # for the run.  How much we want to do this is TBD.
     runs-on: self-hosted
-    if: github.event_name != 'repository_dispatch'  # Doesn't use the inference server image, skip when triggered from other repo
+    if: github.event_name != 'workflow_call'  # Doesn't use the inference server image, skip when triggered from other repo
     needs:
       - build-push-edge-endpoint-multiplatform
 
@@ -498,6 +506,9 @@ jobs:
           mask-password: "true"
       - name: Check out code
         uses: actions/checkout@v4
+        with:
+          # Check out the edge-endpoint repo, not the repo that triggered the workflow
+          repository: ${{ github.action_repository }}
       - name: Build and Push Multiplatform edge-endpoint Image to ECR
         # This is actually only taking about 4 minutes right now.
         timeout-minutes: 45
