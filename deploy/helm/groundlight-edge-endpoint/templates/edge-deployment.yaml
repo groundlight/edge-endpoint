@@ -87,6 +87,8 @@ spec:
           subPath: nginx.conf
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/sqlite
+        - name: device-info-volume
+          mountPath: /opt/groundlight/device
         startupProbe:
           httpGet:
             path: /health/live  # Checks if the server is up
@@ -108,6 +110,27 @@ spec:
           initialDelaySeconds: 10
           periodSeconds: 10
           failureThreshold: 4  # after 40 seconds of failure, restart the pod
+
+      - name: status-monitor
+        image: *edgeEndpointImage
+        imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        ports:
+        - containerPort: 8123
+        command: ["./app/bin/launch-status-monitor.sh"]
+        env:
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: GROUNDLIGHT_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: groundlight-api-token
+              key: GROUNDLIGHT_API_TOKEN
+              optional: true
+        volumeMounts:
+          - name: edge-config-volume
+            mountPath: /etc/groundlight/edge-config
+          - name: device-info-volume
+            mountPath: /opt/groundlight/device
 
       - name: inference-model-updater
         image: *edgeEndpointImage
@@ -148,6 +171,9 @@ spec:
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/serving/model-repo
 
+        - name: device-info-volume
+          mountPath: /opt/groundlight/device
+
       imagePullSecrets:
       - name: registry-credentials
 
@@ -167,3 +193,7 @@ spec:
       - name: edge-endpoint-persistent-volume
         persistentVolumeClaim:
           claimName: edge-endpoint-pvc
+      - name: device-info-volume
+        hostPath:
+          path: /opt/groundlight/device
+          type: DirectoryOrCreate

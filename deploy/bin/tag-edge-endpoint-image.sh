@@ -41,7 +41,11 @@ aws ecr get-login-password --region ${ECR_REGION} | docker login \
                   --password-stdin  ${ECR_URL}
 
 # Tag the image with the new tag
+# To do this, we need to pull the digest SHA of the existing multiplatform image
+# and then create the tag on that SHA. Otherwise imagetools will create a tag for
+# just the platform where the command is run.
 echo "🏷️ Tagging image $ECR_REPO:$GIT_TAG with tag $NEW_TAG"
-docker buildx imagetools create --tag $ECR_REPO:$NEW_TAG $ECR_REPO:$GIT_TAG
+digest=$(docker buildx imagetools inspect $ECR_REPO:$GIT_TAG --format '{{json .}}' | jq -r .manifest.digest)
+docker buildx imagetools create --tag $ECR_REPO:$NEW_TAG $ECR_REPO@${digest}
 
 echo "✅ Image successfully tagged: $ECR_REPO:$NEW_TAG"

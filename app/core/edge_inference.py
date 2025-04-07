@@ -113,6 +113,9 @@ def adjust_confidence_with_oodd(primary_output_dict: dict, oodd_output_dict: dic
 
     adjusted_output_dict = primary_output_dict.copy()
     adjusted_output_dict["confidence"] = adjusted_confidence
+    # Raw prediction data for troubleshooting purposes
+    adjusted_output_dict["raw_primary_confidence"] = primary_output_dict["confidence"]
+    adjusted_output_dict["raw_oodd_prediction"] = oodd_output_dict.copy()
 
     return adjusted_output_dict
 
@@ -381,17 +384,20 @@ def fetch_model_info(detector_id: str, api_token: Optional[str] = None) -> tuple
     url = f"https://api.groundlight.ai/edge-api/v1/fetch-model-urls/{detector_id}/"
     headers = {"x-api-token": api_token}
     response = requests.get(url, headers=headers, timeout=10)
-    logger.debug(f"fetch-model-urls response = {response.json()}")
+    logger.debug(f'fetch-model-urls response.text = "{response.text}", response.status_code = {response.status_code}')
 
     if response.status_code == status.HTTP_200_OK:
         return parse_model_info(response.json())
-    else:
-        response_json = response.json()
-        exception_string = f"Failed to fetch model info for {detector_id=}."
-        if "detail" in response_json:  # Include additional detail on the error if available
-            exception_string = exception_string + f" Received error: {response_json['detail']}"
 
-        raise HTTPException(status_code=response.status_code, detail=exception_string)
+    exception_string = f"Failed to fetch model info for detector '{detector_id}'."
+    try:
+        response_json = response.json()
+        if "detail" in response_json:  # Include additional detail on the error if available
+            exception_string = f"{exception_string} Received error: {response_json['detail']}"
+    except requests.exceptions.JSONDecodeError:
+        exception_string = f"{exception_string} Received error: {response.text}"
+
+    raise HTTPException(status_code=response.status_code, detail=exception_string)
 
 
 def get_model_buffer(model_info: ModelInfoBase) -> bytes | None:

@@ -355,11 +355,8 @@ jobs:
     # Note this job can run multiple times in parallel because the stack name is unique
     # for the run.  How much we want to do this is TBD.
     runs-on: self-hosted
-
-    # TODO: switch this to use the ECR image like the other tests.
-    # Wait for Tom's "clone free" helm install to do this.
-    #needs:
-    #  - build-push-edge-endpoint-multiplatform
+    needs:
+      - build-push-edge-endpoint-multiplatform
 
     env:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
@@ -425,6 +422,11 @@ jobs:
           # It doesn't show up with a normal `git clone`
           COMMIT_TO_TEST=${GITHUB_SHA}
           uv run pulumi config set ee-cicd:targetCommit ${COMMIT_TO_TEST}
+          # You might think the EEUT can just derive the image tag itself by running git-tag-name.sh,
+          # but it can't because it's on a merge commit.  So it doesn't know the name of the branch.
+          # So it would produce an incorrect tag with a name like `1234567-HEAD` which would not match ECR.
+          EE_IMAGE_TAG=$(${GITHUB_WORKSPACE}/deploy/bin/git-tag-name.sh)
+          uv run pulumi config set ee-cicd:eeImageTag ${EE_IMAGE_TAG}
 
           # Inject the API token into the pulumi stack
           uv run pulumi config set ee-cicd:groundlightApiToken ${GROUNDLIGHT_API_TOKEN} --secret
@@ -470,7 +472,7 @@ jobs:
   build-push-edge-endpoint-multiplatform:
     # We run this at the beginning of every PR so that the various full k3s tests
     # can use this image
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4

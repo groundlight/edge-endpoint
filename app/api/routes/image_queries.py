@@ -4,9 +4,7 @@ from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from groundlight import Groundlight
-from model import (
-    ImageQuery,
-)
+from model import ImageQuery
 
 from app.core.app_state import (
     AppState,
@@ -17,6 +15,7 @@ from app.core.app_state import (
 )
 from app.core.edge_inference import get_edge_inference_model_name
 from app.core.utils import create_iq, safe_call_sdk
+from app.metrics.iqactivity import record_iq_activity
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +114,8 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             detail="Human review cannot be required if edge predictions are required.",
         )
 
+    record_iq_activity(detector_id)  # for metrics
+
     if want_async:  # just submit to the cloud w/ ask_async
         if return_edge_prediction:
             raise HTTPException(
@@ -137,6 +138,9 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     background_tasks.add_task(refresh_detector_metadata_if_needed, detector_id, gl)
 
     confidence_threshold = confidence_threshold or detector_metadata.confidence_threshold
+
+    # for holding edge results if and when available
+    results = None
 
     if require_human_review:
         # If human review is required, we should skip edge inference completely
@@ -187,7 +191,10 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         patience_time=patience_time,
                         confidence_threshold=confidence_threshold,
                         want_async=True,
-                        metadata={"is_edge_audit": True},  # This metadata will trigger an audit in the cloud
+                        metadata={
+                            "is_edge_audit": True,  # This metadata will trigger an audit in the cloud
+                            "edge_result": results,
+                        },
                         image_query_id=image_query.id,  # We give the cloud IQ the same ID as the returned edge IQ
                     )
 
@@ -211,6 +218,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         confidence_threshold=confidence_threshold,
                         human_review=human_review,
                         want_async=True,
+                        metadata={"edge_result": results},
                         image_query_id=image_query.id,  # Ensure the cloud IQ has the same ID as the returned edge IQ
                     )
                 else:
@@ -265,4 +273,5 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         patience_time=patience_time,
         confidence_threshold=confidence_threshold,
         human_review=human_review,
+        metadata={"edge_result": results},
     )
