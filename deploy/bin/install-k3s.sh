@@ -230,7 +230,7 @@ install_nvidia_operator() {
     helm repo add nvidia https://nvidia.github.io/gpu-operator
     helm repo update
 
-    helm upgrade -i nvidia/gpu-operator \
+    helm upgrade -i nvidia-gpu-operator nvidia/gpu-operator \
         --namespace gpu-operator \
         --create-namespace \
         --set driver.enabled=false \
@@ -292,42 +292,15 @@ if [ "$FLAVOR" == "gpu" ]; then
     echo '##################################################################################'
     echo '# Installing NVidia Kubernetes Operator'
     echo '##################################################################################'
-    install_nvidia_operator
-    # This doesn't work as a shell function because bash can't deal with scripts read from 
-    # stdin (`bash -s`) that have here-is docs inside a shell function. ¯\_(ツ)_/¯
-    # K3s includes a Helm CRD that we can use to submit the chart for the Nvidia GPU operator
-#     $K apply -f - <<EOF
-# apiVersion: v1
-# kind: Namespace
-# metadata:
-#   name: gpu-operator
-# ---
-# apiVersion: helm.cattle.io/v1
-# kind: HelmChart
-# metadata:
-#   name: nvidia-gpu-operator
-#   namespace: kube-system
-#   annotations:
-#     helm.cattle.io/helm-controller: "true"
-# spec:
-#   repo: https://nvidia.github.io/gpu-operator
-#   chart: gpu-operator
-#   targetNamespace: gpu-operator
-#   bootstrap: true  # Add this to ensure it's processed during bootstrap
-#   # https://github.com/NVIDIA/gpu-operator/blob/main/deployments/gpu-operator/values.yaml
-#   valuesContent: |-
-#     driver:
-#       enabled: false  # Disable NVIDIA driver installation since we have it pre-installed
-#     toolkit:
-#       enabled: false  # Disable NVIDIA Container Toolkit installation since we have it pre-installed
-# EOF    
 
+    install_nvidia_operator
     echo "NVIDIA GPU Operator installation completed."
     
     echo
     echo '##################################################################################'
     echo '# Waiting for GPU capacity to come online'
     echo '##################################################################################'
+
     wait_for_gpu
 fi
 
