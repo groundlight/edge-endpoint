@@ -512,7 +512,7 @@ jobs:
       - name: Build and Push Multiplatform edge-endpoint Image to ECR
         # This is actually only taking about 4 minutes right now.
         timeout-minutes: 45
-        run: ./edge-endpoint/deploy/bin/build-push-edge-endpoint-image.sh
+        run: edge-endpoint/deploy/bin/build-push-edge-endpoint-image.sh
 
   main-tests-pass:
     runs-on: ubuntu-latest
