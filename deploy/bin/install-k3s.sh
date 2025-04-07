@@ -228,7 +228,7 @@ helm repo update
 
 install_nvidia_operator() {
     helm repo add nvidia https://nvidia.github.io/gpu-operator
-    helm rep update
+    helm repo update
 
     helm upgrade -i nvidia/gpu-operator \
         --namespace gpu-operator \
