@@ -507,16 +507,12 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
         with:
-          # Check out the edge-endpoint repo, not the repo that triggered the workflow
-          repository: ${{ env.GH_ACTION_REPOSITORY }}
-        env:
-          GH_ACTION_REPOSITORY: ${{ github.action_repository || github.repository }}
+          # Make sure to check out the edge-endpoint repo, not the repo that triggered the workflow
+          repository: groundlight/edge-endpoint
       - name: Build and Push Multiplatform edge-endpoint Image to ECR
         # This is actually only taking about 4 minutes right now.
         timeout-minutes: 45
         run: |
-          echo "Github action repository: ${{ github.action_repository }}"
-          echo "Github repository: ${{ github.repository }}"
           echo "PWD: $(pwd)"
           echo "LS: $(ls -a)"
           ./edge-endpoint/deploy/bin/build-push-edge-endpoint-image.sh
