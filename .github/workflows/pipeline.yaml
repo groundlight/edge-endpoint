@@ -506,20 +506,16 @@ jobs:
           mask-password: "true"
       - name: Check out code
         uses: actions/checkout@v4
-        with:
-          # Check out the edge-endpoint repo, not the repo that triggered the workflow
-          repository: ${{ github.action_repository }}
+        # with:
+        #   # Check out the edge-endpoint repo, not the repo that triggered the workflow
+        #   repository: ${{ github.action_repository }}
       - name: Build and Push Multiplatform edge-endpoint Image to ECR
         # This is actually only taking about 4 minutes right now.
         timeout-minutes: 45
         run: |
           echo "PWD: $(pwd)"
           echo "LS: $(ls -a)"
-          echo "cd .."
-          cd ..
-          echo "PWD: $(pwd)"
-          echo "LS: $(ls -a)"
-          edge-endpoint/deploy/bin/build-push-edge-endpoint-image.sh
+          ./deploy/bin/build-push-edge-endpoint-image.sh
 
   main-tests-pass:
     runs-on: ubuntu-latest
