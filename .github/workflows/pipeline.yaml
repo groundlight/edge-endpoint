@@ -12,6 +12,16 @@ on:
       inference_image_tag:
         required: true
         type: string
+    secrets:
+      K3S_TEST_GROUNDLIGHT_API_TOKEN:
+        required: true
+        type: string
+      AWS_GL_PUBLIC_ACCESS_KEY_ID:
+        required: true
+        type: string
+      AWS_GL_PUBLIC_SECRET_ACCESS_KEY:
+        required: true
+        type: string
   workflow_dispatch:
     # This allows it to be triggered manually in the github console
     # You could put inputs here, but we don't need them.
