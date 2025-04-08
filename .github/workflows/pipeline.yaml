@@ -11,13 +11,10 @@ on:
     secrets:
       K3S_TEST_GROUNDLIGHT_API_TOKEN:
         required: true
-        type: string
       AWS_GL_PUBLIC_ACCESS_KEY_ID:
         required: true
-        type: string
       AWS_GL_PUBLIC_SECRET_ACCESS_KEY:
         required: true
-        type: string
     inputs:
       inference_image_tag:
         required: true
