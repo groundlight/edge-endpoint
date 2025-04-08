@@ -16,7 +16,13 @@ Configuring detectors for the edge endpoint allows you to provide fine-grained c
 
 Detector configurations are specified in [edge-config.yaml](configs/edge-config.yaml). The file has three sections: `global_config`, `edge_inference_configs`, and `detectors`. 
 
-NOTE: After modifying the config file, you'll have to re-run [setup-ee.sh](deploy/bin/setup-ee.sh) for your changes to be reflected.
+NOTE: After modifying the config file, you'll have to re-run helm to change the configuration:
+```shell
+helm install -n default edge-endpoint deploy/helm/groundlight-edge-endpoint \
+  --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}" --set-file configFile=./configs/edge-config.yaml
+```
+
+See the [deployment README file](deploy/README.md) for more information on installation and configuration options.
 
 ### `global_config`
 
@@ -25,6 +31,10 @@ The global config contains parameters that affect the overall behavior of the ed
 #### `refresh_rate`
 
 `refresh_rate` is a float that defines how often the edge endpoint will attempt to fetch updated ML models (in seconds). If you expect a detector to frequently have a better model available, you can reduce this to ensure that the improved models will quickly be fetched and deployed. For example, you may want to label many image queries on a new detector. A higher refresh rate will ensure that the latest model improvements from these labels are promptly deployed to the edge. In practice, you likely won't want this to be lower than ~30 seconds due to the time it takes to train and fetch new models. If not specified, the default is 60 seconds.
+
+#### `confident_audit_rate`
+
+`confident_audit_rate` is a float that defines the probability that any given confident prediction will be escalated to the cloud for auditing. This enables the accuracy of the edge model to be evaluated in the cloud even when it answers queries confidently. If a detector is configured to have cloud escalation disabled, this parameter will be ignored. If not specified, the default value is 1e-5 (meaning there is a 0.001% chance that a confident prediction will be audited).
 
 ### `edge_inference_configs`
 
@@ -79,9 +89,9 @@ This section is where you define your detectors, along with the edge inference c
 ```
 detectors:
     - detector_id: "det_abc"
-        edge_inference_config: "default"
+      edge_inference_config: "default"
     - detector_id: "det_xyz"
-        edge_inference_config: "my_custom_config"
+      edge_inference_config: "my_custom_config"
 ```
 Add a new entry for each detector that you want to configure. Each entry must include the detector ID and the edge inference config you want the detector to use. You can select one of the predefined edge inference configs or define a new one to achieve your desired behavior. 
 

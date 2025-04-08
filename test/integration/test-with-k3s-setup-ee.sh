@@ -3,7 +3,13 @@
 # This script will setup the k3s testing environment. Once you've run them you can run the
 # live tests, which will hit the API service that got setup
 # Altogether, you can run everything with:
-# > make test-with-k3s
+# > make test-with-k3s-setup-ee
+
+# PREREQUISITE: This test must be run after you've pushed a container to ECR with
+# the git tag name. This is done in the pipeline, but if you're running locally you can
+# do it with:
+# > ./deploy/bin/build-push-edge-endpoint-image.sh
+
 set -e
 set -x
 
@@ -54,10 +60,8 @@ if ! kubectl get namespace $DEPLOYMENT_NAMESPACE &> /dev/null; then
 fi
 
 
-# Build the Docker image and import it into k3s
-echo "Building the Docker image..."
+# Set up k3s with our image tag
 export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
-./deploy/bin/build-push-edge-endpoint-image.sh dev
 ./deploy/bin/setup-ee.sh
 # restore config file
 mv configs/edge-config.yaml.tmp configs/edge-config.yaml
@@ -83,22 +87,28 @@ kubectl describe pod -l app=inferencemodel-oodd-$DETECTOR_ID_WITH_DASHES -n $DEP
 
 # Run both rollout checks in parallel
 kubectl rollout status deployment/inferencemodel-primary-$DETECTOR_ID_WITH_DASHES \
-    -n $DEPLOYMENT_NAMESPACE --timeout=5m &
+    -n $DEPLOYMENT_NAMESPACE --timeout=10m &
 primary_pid=$!
 
 kubectl rollout status deployment/inferencemodel-oodd-$DETECTOR_ID_WITH_DASHES \
-    -n $DEPLOYMENT_NAMESPACE --timeout=5m &
+    -n $DEPLOYMENT_NAMESPACE --timeout=10m &
 oodd_pid=$!
 
-# Wait for both background jobs to finish and capture their exit statuses
+set +e  # Temporarily disable exit on error to wait for both background jobs to finish
 wait $primary_pid
 primary_status=$?
-
 wait $oodd_pid
 oodd_status=$?
+set -e  # Re-enable exit on error
 
 if [ $primary_status -ne 0 ] || [ $oodd_status -ne 0 ]; then
-    echo "Error: One or both inference deployments for detector $DETECTOR_ID_WITH_DASHES failed to rollout within the timeout period."
+    set +e  # Disable exit on error so all the diagnostic information available gets printed
+    echo "Error: One or both inference deployments for detector $DETECTOR_ID failed to rollout within the timeout period."
+    echo "Dumping a bunch of diagnostic information..."
+    kubectl -n $DEPLOYMENT_NAMESPACE describe deployment/inferencemodel-primary-$DETECTOR_ID_WITH_DASHES
+    kubectl -n $DEPLOYMENT_NAMESPACE logs deployment/inferencemodel-primary-$DETECTOR_ID_WITH_DASHES
+    kubectl -n $DEPLOYMENT_NAMESPACE describe deployment/inferencemodel-oodd-$DETECTOR_ID_WITH_DASHES
+    kubectl -n $DEPLOYMENT_NAMESPACE logs deployment/inferencemodel-oodd-$DETECTOR_ID_WITH_DASHES
     exit 1
 fi
 

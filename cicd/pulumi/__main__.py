@@ -48,10 +48,23 @@ def load_user_data_script() -> str:
     """Loads and customizes the user data script for the instance, which is used to install 
     everything on the instance."""
     with open('../bin/install-on-ubuntu.sh', 'r') as file:
-        user_data_script = file.read()
+        user_data_script0 = file.read()
+    
+    # Do all synchronous replacements first
     target_commit = get_target_commit()
-    user_data_script = user_data_script.replace("__EE_COMMIT_HASH__", target_commit)
-    return user_data_script
+    user_data_script1 = user_data_script0.replace("__EE_COMMIT_HASH__", target_commit)
+    
+    # Apply image tag replacement (also synchronous)
+    image_tag = config.get("eeImageTag") or "release"
+    user_data_script2 = user_data_script1.replace("__EEIMAGETAG__", image_tag)
+    
+    # Apply API token replacement as the final async transformation
+    api_token = config.require_secret("groundlightApiToken")
+    final_script = api_token.apply(
+        lambda token: user_data_script2.replace("__GROUNDLIGHTAPITOKEN__", token)
+    )
+    
+    return final_script
 
 instance_profile_name = get_instance_profile_by_tag("Name", "edge-device-instance-profile")
 

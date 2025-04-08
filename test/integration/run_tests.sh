@@ -31,8 +31,8 @@ echo "Training detector in the cloud"
 poetry run python test/integration/integration.py -m improve_model -d $DETECTOR_ID
 
 # Give the new model time to be pulled. We're a bit generous here.
-echo "Now we sleep for $((3 * REFRESH_RATE)) seconds to get a newer model" 
-sleep $((3 * REFRESH_RATE))
+echo "Now we sleep for $((4 * REFRESH_RATE)) seconds to get a newer model" 
+sleep $((4 * REFRESH_RATE))
 echo "Ensuring a new pod for the deployment $DETECTOR_ID_WITH_DASHES has been created after training..."
 
 # Ensure our most recent pod is brand new.

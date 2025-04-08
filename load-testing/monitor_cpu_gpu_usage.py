@@ -54,7 +54,7 @@ def monitor_system(duration: int):
 
         print(f"Elapsed Time: {elapsed:.2f}s, CPU: {cpu}%, Memory: {memory}%")
         for gpu in gpus:
-            print(f"GPU {gpu.id}: Usage: {gpu.load*100:.2f}%, Memory: {gpu.memoryUtil*100:.2f}%")
+            print(f"GPU {gpu.id}: Usage: {gpu.load * 100:.2f}%, Memory: {gpu.memoryUtil * 100:.2f}%")
 
     results = {
         "elapsed_time": elapsed_time,
@@ -123,6 +123,21 @@ def plot_gpu_data(gpu_data: dict[int, dict[str, list[float]]]):
         print(f"GPU {gpu_id} graphs saved to {output_file}")
 
 
+def print_max_usage_statistics(results: MonitoringResults) -> None:
+    """Prints the maximum CPU, memory, and GPU usage statistics."""
+    max_cpu_usage = max(results.cpu_usage) if results.cpu_usage else 0
+    max_memory_usage = max(results.memory_usage) if results.memory_usage else 0
+
+    print("\n--- Maximum Usage Statistics ---")
+    print(f"CPU - Maximum Usage: {max_cpu_usage:.2f}%, Maximum Memory: {max_memory_usage:.2f}%")
+
+    # Print maximum GPU usage for each GPU
+    for gpu_id, data in results.gpu_data.items():
+        max_gpu_usage = max(data["gpu_usage"]) if data["gpu_usage"] else 0
+        max_gpu_memory = max(data["memory_usage"]) if data["memory_usage"] else 0
+        print(f"GPU {gpu_id} - Maximum Usage: {max_gpu_usage:.2f}%, Maximum Memory: {max_gpu_memory:.2f}%")
+
+
 if __name__ == "__main__":
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -133,3 +148,4 @@ if __name__ == "__main__":
     results = monitor_system(args.duration)
     plot_cpu_data(results.elapsed_time, results.cpu_usage, results.memory_usage)
     plot_gpu_data(results.gpu_data)
+    print_max_usage_statistics(results)

@@ -48,6 +48,7 @@ sudo apt install -y \
     git \
     vim \
     tmux \
+    make \
     htop \
     curl \
     wget \
@@ -68,12 +69,23 @@ if [ -n "$SPECIFIC_COMMIT" ]; then
     # because that would be substituted too!
     if [ "${SPECIFIC_COMMIT:0:11}" != "__EE_COMMIT" ]; then
         echo "Checking out commit ${SPECIFIC_COMMIT}"
-        git checkout ${SPECIFIC_COMMIT}
+        # This is probably a merge commit, so we need to fetch it deliberately.
+        git fetch origin $SPECIFIC_COMMIT
+        git checkout $SPECIFIC_COMMIT
+        EE_IMAGE_TAG="__EEIMAGETAG__"
+        if [ "${EE_IMAGE_TAG:0:12}" != "__EEIMAGETAG" ]; then
+            echo "Using image tag ${EE_IMAGE_TAG}"
+        else
+            echo "ERROR: EEIMAGETAG was not substituted.  Required for specific commit."
+            exit 1
+        fi
     else
         echo "It appears the commit hash was not substituted.  Staying on main."
+        EE_IMAGE_TAG="release"
     fi
 else
     echo "A blank commit hash was provided.  Staying on main."
+    EE_IMAGE_TAG="release"
 fi
 
 # Set up k3s with GPU support
@@ -85,17 +97,18 @@ echo "alias k='kubectl'" >> /home/${TARGET_USER}/.bashrc
 echo "source <(kubectl completion bash)" >> /home/${TARGET_USER}/.bashrc
 echo "complete -F __start_kubectl k" >> /home/${TARGET_USER}/.bashrc
 echo "set -o vi" >> /home/${TARGET_USER}/.bashrc
+echo "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml" >> /home/${TARGET_USER}/.bashrc
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
-# Configure the edge-endpoint with environment variables
-export DEPLOYMENT_NAMESPACE="gl-edge"
-export INFERENCE_FLAVOR="GPU"
-export GROUNDLIGHT_API_TOKEN="api_token_not_set"
+# This should get substituted by the launching script
+export GROUNDLIGHT_API_TOKEN="__GROUNDLIGHTAPITOKEN__"
 
-# Install the edge-endpoint
-kubectl create namespace gl-edge
-kubectl config set-context edge --namespace=gl-edge --cluster=default --user=default
+# Install the edge-endpoint using helm
+make helm-install HELM_ARGS="--set groundlightApiToken=${GROUNDLIGHT_API_TOKEN} --set imageTag=${EE_IMAGE_TAG}"
+
+# Configure kubectl to use the namespace where the EE is installed
+kubectl config set-context edge --namespace=edge --cluster=default --user=default
 kubectl config use-context edge
-./deploy/bin/setup-ee.sh
 
 # Indicate that setup is complete
 SETUP_COMPLETE=1

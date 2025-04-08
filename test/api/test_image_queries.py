@@ -187,6 +187,29 @@ def test_post_image_query_with_async_request(test_client: TestClient, detector: 
         assert "id" in response_data, "Response should contain an 'id' field"
 
 
+def test_post_image_query_with_confident_audit(test_client: TestClient, detector: Detector):
+    """Test submitting an image query that should be audited."""
+    image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
+
+    with assert_escalated_to_gl(
+        submitted_with={"metadata": {"is_edge_audit": True}},
+        detector=detector,
+        sdk_response=confident_cloud_iq,
+    ):
+        with enable_edge_inference(edge_response={"confidence": 0.95, "label": 0, "text": None, "rois": None}):
+            with mock.patch("app.api.routes.image_queries.get_app_state") as mock_get_app_state:
+                # Guarantee an audit
+                mock_get_app_state.return_value.edge_config.global_config.confident_audit_rate = 1.0
+                response = test_client.post(
+                    url,
+                    headers={"Content-Type": "image/jpeg"},
+                    content=image_bytes,
+                    params={"detector_id": detector.id},
+                )
+
+            assert response.status_code == status.HTTP_200_OK, response.json()["detail"]
+
+
 # TODO: This test doesn't seem to actually test this behavior, since it was passing when it should have failed.
 # It should get removed once this behavior is tested in the live environment.
 def test_post_image_query_with_human_review(test_client: TestClient, detector: Detector):

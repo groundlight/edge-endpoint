@@ -40,7 +40,7 @@ Most configuration of the load testing scripts is done in [config.py](./config.p
 * `IMAGE_PATH` is the path to the image that the client processes will submit to the endpoint as part of load testing. Image size may affect processing times. By default, this points to `dog_resized_256x256.jpeg`.
 * `LOG_FILE` is the path to the file where logs from the client processes will be written and read from. If it doesn't exist, the file will be created. Each time the load test script runs, it will overwrite the contents of the file.
 * `TIME_BETWEEN_RAMP` is the amount of seconds the load testing script will wait before each subsequent ramp step. 
-* `REQUESTS-PER-SECOND` is the rate of requests that each client process will attempt to send. 
+* `REQUESTS_PER_SECOND` is the rate of requests that each client process will attempt to send. 
 
 ### Running the load testing scripts.
 
@@ -58,8 +58,8 @@ poetry run python load_test.py [options]
     * Specifies the maximum number of processes (clients) to ramp up to during the test.
 * `--step-size` (optional, default: 1)
     * Sets the number of clients to add at each step in ramp-up mode. This will also be the starting number of clients.
-* `--custom-ramp` (optional)
-    * Enables custom ramping mode, which will ignore step-size and max-clients values and instead follow a custom ramping logic defined in the script. 
+* `--use-preset-schedule` (optional)
+    * Enables using a preset schedule, which will ignore step-size and max-clients values and instead follow a custom ramping logic defined in the script. 
     * This mode will ramp from 1 to 60 clients, with smaller steps at the beginning and larger steps towards the end.
 
 After the load test finishes, it will automatically parse the results and generate graphs. If you want to rerun this step, you can also manually run `parse_load_test_logs.py`:
