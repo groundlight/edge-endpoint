@@ -515,7 +515,7 @@ jobs:
         run: |
           echo "PWD: $(pwd)"
           echo "LS: $(ls -a)"
-          ./edge-endpoint/deploy/bin/build-push-edge-endpoint-image.sh
+          ./deploy/bin/build-push-edge-endpoint-image.sh
 
   main-tests-pass:
     runs-on: ubuntu-latest
