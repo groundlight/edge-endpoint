@@ -9,7 +9,9 @@ from model import Detector
 from PIL import Image
 
 from app.core.utils import pil_image_to_bytes
-	@@ -15,16 +14,31 @@
+
+# Tests in this file require a live edge-endpoint server and GL Api token in order to run.	
+# Not ideal for unit-testing.
 TEST_ENDPOINT = os.getenv("LIVE_TEST_ENDPOINT", "http://localhost:30101")
 MAX_WAIT_TIME_S = 60
 
@@ -40,6 +42,8 @@ def ensure_edge_endpoint_is_live_and_ready():
             final_exception = e
             time.sleep(1)  # wait for 1 second before retrying
     pytest.fail(f"Edge endpoint is not live and ready after polling for {MAX_WAIT_TIME_S} seconds. {final_exception=}")
+
+
 @pytest.fixture(name="gl")
 def fixture_gl() -> Groundlight:
     """Create a Groundlight client object."""
