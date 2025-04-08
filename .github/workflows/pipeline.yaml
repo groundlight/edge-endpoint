@@ -15,6 +15,13 @@ on:
         required: true
       AWS_GL_PUBLIC_SECRET_ACCESS_KEY:
         required: true
+      # Currently not used when triggered via workflow_call, but need to define for valid workflow
+      GROUNDLIGHT_API_TOKEN:
+        required: false
+      PULUMI_CICD_PAT:
+        required: false
+      BOT_GITHUB_TOKEN:
+        required: false
     inputs:
       inference_image_tag:
         required: true
