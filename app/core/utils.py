@@ -155,7 +155,7 @@ def _mode_to_unclear_result(mode: ModeEnum):
         result = CountingResult(
             confidence=1.0,
             source=source,
-            count=None,  # TODO double-check how to model a counting Unclear result
+            count=None,  # TODO double-check how to model a counting Unclear result. Also this doesn't work on current SDK version.
             greater_than_max=False,
         )
     elif mode == ModeEnum.MULTI_CLASS:
@@ -187,8 +187,8 @@ def safe_escalate_iq(
             gl.submit_image_query,
             detector=detector_id,
             image=image_bytes,
-            wait=5,  # wait on the client, not here # TODO revert to 0
-            want_async=True,
+            wait=0,  # wait on the client, not here # TODO revert to 0
+            # want_async=True,
             patience_time=patience_time,
             confidence_threshold=confidence_threshold,
             human_review=human_review,
@@ -202,8 +202,10 @@ def safe_escalate_iq(
         if patience_time is None:
             patience_time = constants.DEFAULT_PATIENCE_TIME
 
+        readable_exception_str = f"{ex.__class__.__name__}: {str(ex)}"
+
         iq_to_return = ImageQuery(
-            metadata={"is_from_edge": True, "error_info": str(ex)},
+            metadata={"is_from_edge": True, "error_info": readable_exception_str},
             id=prefixed_ksuid(prefix="iq_"),
             type=ImageQueryTypeEnum.image_query,
             created_at=datetime.now(timezone.utc),
