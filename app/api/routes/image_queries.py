@@ -14,7 +14,7 @@ from app.core.app_state import (
     refresh_detector_metadata_if_needed,
 )
 from app.core.edge_inference import get_edge_inference_model_name
-from app.core.utils import HUMAN_REVIEW_TYPE, create_iq, safe_call_sdk
+from app.core.utils import HUMAN_REVIEW_TYPE, create_iq, safe_call_sdk, safe_escalate_iq
 from app.metrics.iqactivity import record_iq_activity
 
 logger = logging.getLogger(__name__)
@@ -265,24 +265,25 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         raise AssertionError("Cloud escalation is disabled.")  # ...should never reach this point
 
     logger.debug(f"Submitting image query to cloud for {detector_id=}")
-    return safe_call_sdk(
-        gl.submit_image_query,
-        detector=detector_id,
-        image=image_bytes,
-        wait=-1,  # wait on the client, not here
-        patience_time=patience_time,
-        confidence_threshold=confidence_threshold,
-        human_review=human_review,
-        metadata={"edge_result": results},
-    )
-    # return safe_escalate_iq(
-    #     gl=gl,
-    #     results=results,
-    #     detector_id=detector_id,
-    #     image_bytes=image_bytes,
+    # return safe_call_sdk(
+    #     gl.submit_image_query,
+    #     detector=detector_id,
+    #     image=image_bytes,
+    #     wait=5,  # wait on the client, not here
     #     patience_time=patience_time,
     #     confidence_threshold=confidence_threshold,
     #     human_review=human_review,
-    #     query=detector_metadata.query,
-    #     mode=detector_metadata.mode,
+    #     metadata={"edge_result": results},
+    #     want_async=True,
     # )
+    return safe_escalate_iq(
+        gl=gl,
+        results=results,
+        detector_id=detector_id,
+        image_bytes=image_bytes,
+        patience_time=patience_time,
+        confidence_threshold=confidence_threshold,
+        human_review=human_review,
+        query=detector_metadata.query,
+        mode=detector_metadata.mode,
+    )

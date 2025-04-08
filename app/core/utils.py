@@ -172,7 +172,7 @@ def safe_escalate_iq(
     results: dict[str, Any],
     detector_id: str,
     image_bytes: bytes,
-    patience_time: float,
+    patience_time: float | None,
     confidence_threshold: float,
     human_review: HUMAN_REVIEW_TYPE,
     query: str,
@@ -187,14 +187,20 @@ def safe_escalate_iq(
             gl.submit_image_query,
             detector=detector_id,
             image=image_bytes,
-            wait=0,  # wait on the client, not here
+            wait=5,  # wait on the client, not here # TODO revert to 0
+            want_async=True,
             patience_time=patience_time,
             confidence_threshold=confidence_threshold,
             human_review=human_review,
             metadata={"edge_result": results},
         )
+        logger.info("I called the sdk and there was no exception")
     except Exception as ex:
+        logger.info(f"I caught an exception! {ex=}")
         result_type, result = _mode_to_unclear_result(mode)
+
+        if patience_time is None:
+            patience_time = constants.DEFAULT_PATIENCE_TIME
 
         iq_to_return = ImageQuery(
             metadata={"is_from_edge": True, "error_info": str(ex)},
