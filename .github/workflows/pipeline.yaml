@@ -515,6 +515,10 @@ jobs:
         run: |
           echo "PWD: $(pwd)"
           echo "LS: $(ls -a)"
+          echo "cd .."
+          cd ..
+          echo "PWD: $(pwd)"
+          echo "LS: $(ls -a)"
           edge-endpoint/deploy/bin/build-push-edge-endpoint-image.sh
 
   main-tests-pass:
