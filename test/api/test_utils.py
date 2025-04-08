@@ -1,4 +1,7 @@
+from unittest.mock import MagicMock
+
 import pytest
+from groundlight import ImageQuery
 from model import (
     BinaryClassificationResult,
     CountingResult,
@@ -8,14 +11,152 @@ from model import (
     Source,
 )
 
+from app.core.constants import DEFAULT_PATIENCE_TIME
 from app.core.utils import (
+    HUMAN_REVIEW_TYPE,
     ModelInfoBase,
     ModelInfoNoBinary,
     ModelInfoWithBinary,
     create_iq,
     parse_model_info,
     prefixed_ksuid,
+    safe_escalate_iq,
 )
+
+
+class TestSafeEscalateIQ:
+    def setup_method(self):
+        self.detector_id = "test"
+        self.image_bytes: bytes = None
+        self.patience_time = DEFAULT_PATIENCE_TIME
+        self.confidence_threshold = 0.9
+        self.human_review: HUMAN_REVIEW_TYPE = "NEVER"
+        self.query = "test query"
+        self.results_metadata = {"edge_result": {}}
+
+    def test_escalate_no_exception(self):
+        """Test escalating an IQ with no exception raised."""
+        mock_gl = MagicMock()
+        escalated_iq = safe_escalate_iq(
+            gl=mock_gl,
+            results={},
+            detector_id=self.detector_id,
+            image_bytes=self.image_bytes,
+            patience_time=self.patience_time,
+            confidence_threshold=self.confidence_threshold,
+            human_review=self.human_review,
+            query=self.query,
+            mode=ModeEnum.BINARY,
+        )
+        mock_gl.submit_image_query.assert_called_once()
+        mock_gl.submit_image_query.assert_called_with(
+            detector=self.detector_id,
+            image=self.image_bytes,
+            wait=0,
+            patience_time=self.patience_time,
+            confidence_threshold=self.confidence_threshold,
+            human_review=self.human_review,
+            metadata=self.results_metadata,
+        )
+
+        assert isinstance(escalated_iq, MagicMock)  # This indicates that the SDK result was returned
+
+    def test_escalate_binary_with_exception(self):
+        """Test escalating a binary IQ with a raised exception."""
+        mock_gl = MagicMock()
+        mock_gl.submit_image_query.side_effect = ValueError("Something went wrong while executing submit_image_query.")
+        escalated_iq = safe_escalate_iq(
+            gl=mock_gl,
+            results={},
+            detector_id=self.detector_id,
+            image_bytes=self.image_bytes,
+            patience_time=self.patience_time,
+            confidence_threshold=self.confidence_threshold,
+            human_review=self.human_review,
+            query=self.query,
+            mode=ModeEnum.BINARY,
+        )
+        mock_gl.submit_image_query.assert_called_once()
+        mock_gl.submit_image_query.assert_called_with(
+            detector=self.detector_id,
+            image=self.image_bytes,
+            wait=0,
+            patience_time=self.patience_time,
+            confidence_threshold=self.confidence_threshold,
+            human_review=self.human_review,
+            metadata=self.results_metadata,
+        )
+
+        assert isinstance(
+            escalated_iq, ImageQuery
+        )  # This indicates that we returned an ImageQuery constructed on the edge
+        assert isinstance(escalated_iq.result, BinaryClassificationResult)
+        assert escalated_iq.result.label == Label.UNCLEAR
+        assert escalated_iq.result.confidence == 1.0
+        assert escalated_iq.result.source == Source.ALGORITHM
+        assert (
+            escalated_iq.metadata.get("error_info")
+            == "ValueError: Something went wrong while executing submit_image_query."
+        )
+        assert escalated_iq.metadata.get("is_from_edge")
+
+    def test_escalate_count_with_exception(self):
+        """Test escalating a count IQ with a raised exception."""
+        mock_gl = MagicMock()
+        mock_gl.submit_image_query.side_effect = ValueError("Something went wrong while executing submit_image_query.")
+        escalated_iq = safe_escalate_iq(
+            gl=mock_gl,
+            results={},
+            detector_id=self.detector_id,
+            image_bytes=self.image_bytes,
+            patience_time=self.patience_time,
+            confidence_threshold=self.confidence_threshold,
+            human_review=self.human_review,
+            query=self.query,
+            mode=ModeEnum.COUNT,
+        )
+        mock_gl.submit_image_query.assert_called_once()
+        mock_gl.submit_image_query.assert_called_with(
+            detector=self.detector_id,
+            image=self.image_bytes,
+            wait=0,
+            patience_time=self.patience_time,
+            confidence_threshold=self.confidence_threshold,
+            human_review=self.human_review,
+            metadata=self.results_metadata,
+        )
+
+        assert isinstance(
+            escalated_iq, ImageQuery
+        )  # This indicates that we returned an ImageQuery constructed on the edge
+        assert isinstance(escalated_iq.result, CountingResult)
+        assert escalated_iq.result.count is None
+        assert escalated_iq.result.confidence == 1.0
+        assert escalated_iq.result.source == Source.ALGORITHM
+        assert not escalated_iq.result.greater_than_max
+        assert (
+            escalated_iq.metadata.get("error_info")
+            == "ValueError: Something went wrong while executing submit_image_query."
+        )
+        assert escalated_iq.metadata.get("is_from_edge")
+
+    def test_escalate_multiclass(self):
+        """Test escalating a multiclass IQ."""
+        mock_gl = MagicMock()
+        mock_gl.submit_image_query.side_effect = ValueError("Something went wrong while executing submit_image_query.")
+
+        with pytest.raises(NotImplementedError, match="Multiclass functionality is not yet implemented"):
+            safe_escalate_iq(
+                gl=mock_gl,
+                results={},
+                detector_id=self.detector_id,
+                image_bytes=self.image_bytes,
+                patience_time=self.patience_time,
+                confidence_threshold=self.confidence_threshold,
+                human_review=self.human_review,
+                query=self.query,
+                mode=ModeEnum.MULTI_CLASS,
+            )
 
 
 class TestCreateIQ:

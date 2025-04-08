@@ -2,11 +2,12 @@ import logging
 import time
 from datetime import datetime, timezone
 from io import BytesIO
-from typing import Any, Callable
+from typing import Any, Callable, Literal, Optional
 
 import cachetools
 import ksuid
 from fastapi import HTTPException
+from groundlight import Groundlight
 from model import (
     ROI,
     BinaryClassificationResult,
@@ -25,6 +26,8 @@ from pydantic import BaseModel, ValidationError
 from app.core import constants
 
 logger = logging.getLogger(__name__)
+
+HUMAN_REVIEW_TYPE = Optional[Literal["DEFAULT", "ALWAYS", "NEVER"]]
 
 
 def create_iq(  # noqa: PLR0913
@@ -82,7 +85,7 @@ def _mode_to_result_and_type(
     based on the provided mode, confidence, and result value.
 
     :param mode: The mode of the detector.
-    :param mode_configuration:
+    :param mode_configuration: For counting only. A dict containing values for the max_count and class_name.
     :param confidence: The confidence of the predicted value.
     :param result_value: The predicted value.
 
@@ -136,6 +139,86 @@ def safe_call_sdk(api_method: Callable, **kwargs):
         if hasattr(ex, "status"):
             raise HTTPException(status_code=ex.status, detail=str(ex)) from ex
         raise ex
+
+
+def _mode_to_unclear_result(mode: ModeEnum):
+    source = Source.ALGORITHM  # TODO what should the source be?
+    if mode == ModeEnum.BINARY:
+        result_type = ResultTypeEnum.binary_classification
+        result = BinaryClassificationResult(
+            confidence=1.0,
+            source=source,
+            label=Label.UNCLEAR,
+        )
+    elif mode == ModeEnum.COUNT:
+        result_type = ResultTypeEnum.counting
+        result = CountingResult(
+            confidence=1.0,
+            source=source,
+            count=None,  # TODO double-check how to model a counting Unclear result. Also this doesn't work on current SDK version.
+            greater_than_max=False,
+        )
+    elif mode == ModeEnum.MULTI_CLASS:
+        raise NotImplementedError("Multiclass functionality is not yet implemented for the edge endpoint.")
+        # TODO add support for multiclass functionality.
+    else:
+        raise ValueError(f"Got unrecognized or unsupported detector mode: {mode}")
+
+    return result_type, result
+
+
+def safe_escalate_iq(
+    gl: Groundlight,
+    results: dict[str, Any],
+    detector_id: str,
+    image_bytes: bytes,
+    patience_time: float | None,
+    confidence_threshold: float,
+    human_review: HUMAN_REVIEW_TYPE,
+    query: str,
+    mode: ModeEnum,
+) -> ImageQuery:
+    """
+    This attempts to escalate an image query via the SDK. If it fails, it will catch the exception and return an
+    ImageQuery with an unclear result.
+    """
+    try:
+        iq_to_return = safe_call_sdk(
+            gl.submit_image_query,
+            detector=detector_id,
+            image=image_bytes,
+            wait=0,  # wait on the client, not here # TODO revert to 0
+            # want_async=True,
+            patience_time=patience_time,
+            confidence_threshold=confidence_threshold,
+            human_review=human_review,
+            metadata={"edge_result": results},
+        )
+        logger.info("I called the sdk and there was no exception")
+    except Exception as ex:
+        logger.info(f"I caught an exception! {ex=}")
+        result_type, result = _mode_to_unclear_result(mode)
+
+        if patience_time is None:
+            patience_time = constants.DEFAULT_PATIENCE_TIME
+
+        readable_exception_str = f"{ex.__class__.__name__}: {str(ex)}"
+
+        iq_to_return = ImageQuery(
+            metadata={"is_from_edge": True, "error_info": readable_exception_str},
+            id=prefixed_ksuid(prefix="iq_"),
+            type=ImageQueryTypeEnum.image_query,
+            created_at=datetime.now(timezone.utc),
+            query=query,
+            detector_id=detector_id,
+            result_type=result_type,
+            result=result,
+            patience_time=patience_time,
+            confidence_threshold=confidence_threshold,
+            rois=None,
+            text=None,
+        )
+    return iq_to_return
 
 
 def prefixed_ksuid(prefix: str | None = None) -> str:
