@@ -8,10 +8,6 @@ on:
       - main
     types: [opened, synchronize, reopened]
   workflow_call:
-    inputs:
-      inference_image_tag:
-        required: true
-        type: string
     secrets:
       K3S_TEST_GROUNDLIGHT_API_TOKEN:
         required: true
@@ -20,6 +16,10 @@ on:
         required: true
         type: string
       AWS_GL_PUBLIC_SECRET_ACCESS_KEY:
+        required: true
+        type: string
+    inputs:
+      inference_image_tag:
         required: true
         type: string
   workflow_dispatch:
