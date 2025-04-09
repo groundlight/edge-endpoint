@@ -91,6 +91,33 @@ class TestGenerateMetadataDict:
             "raw_oodd_prediction": {"confidence": 1.0, "label": 0.0, "text": None, "rois": None},
         }
 
+    @pytest.fixture
+    def count_result_with_too_large_text(self):
+        return {
+            "confidence": 0.08,
+            "label": 10,
+            "text": "a" * METADATA_SIZE_LIMIT_BYTES,  # The text field will cause the size limit to be exceeded.
+            "rois": [
+                {
+                    "label": "bird",
+                    "geometry": {
+                        "left": 0.40,
+                        "top": 0.40,
+                        "right": 0.60,
+                        "bottom": 0.60,
+                        "version": "2.0",
+                        "x": 0.50,
+                        "y": 0.50,
+                    },
+                    "score": 0.80,
+                    "version": "2.0",
+                }
+            ]
+            * 10,
+            "raw_primary_confidence": 0.08,
+            "raw_oodd_prediction": {"confidence": 1.0, "label": 0.0, "text": None, "rois": None},
+        }
+
     def _assert_metadata_within_size_limit(self, metadata: dict[str, Any]):
         assert _size_of_dict_in_bytes(metadata) < METADATA_SIZE_LIMIT_BYTES
 
@@ -134,6 +161,14 @@ class TestGenerateMetadataDict:
         modified_results = many_rois_count_result.copy()
         modified_results["rois"] = f"{len(many_rois_count_result['rois'])} ROIs were detected."
         expected_metadata = {"edge_result": modified_results, "is_edge_audit": True}
+
+        assert metadata == expected_metadata
+        self._assert_metadata_within_size_limit(metadata)
+
+    def test_results_exceed_without_rois(self, count_result_with_too_large_text: dict[str, Any]):
+        "Test generating metadata for a count response which exceeds the size limit even when ROIs are removed."
+        metadata = generate_metadata_dict(results=count_result_with_too_large_text)
+        expected_metadata = {}  # Should not include the results at all
 
         assert metadata == expected_metadata
         self._assert_metadata_within_size_limit(metadata)
