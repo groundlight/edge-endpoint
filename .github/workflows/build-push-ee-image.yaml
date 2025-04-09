@@ -10,6 +10,8 @@ on:
         required: true
 jobs:
   build-push-edge-endpoint-multiplatform:
+    # This used to run on a larger runner, but to use it as a reusable workflow outside of this
+    # orgnaization we need it to run on a default github runner.
     runs-on: ubuntu-latest
     steps:
       - name: Configure AWS credentials

@@ -12,6 +12,8 @@ on:
         type: string
 jobs:
   test-k3s-helm:
+    # This used to run on a larger runner, but to use it as a reusable workflow outside of this
+    # orgnaization we need it to run on a default github runner.
     runs-on: ubuntu-latest
     env:
       # associated with roxanne+test_edge account since for some reason it was failing with
