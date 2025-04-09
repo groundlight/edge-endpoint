@@ -59,9 +59,12 @@ class FilesystemActivityTrackingHelper:
         """Get the path to a file which is used to track something specific to a detector."""
         return Path(self.detector_folder(detector_id), name)
 
-    def increment_counter_file(self, name: str, detector_id: str | None = None):
-        """Increment a counter file, or create it if it doesn't exist. If detector_id is provided,
-        use the counter for that detector. Otherwise, use a system-wide counter.
+    def append_to_hourly_counter_file(self, name: str, detector_id: str | None = None):
+        """Append a "." to an hourly counter file, or create it if it doesn't exist. If detector_id
+        is provided, use the counter for that detector. Otherwise, use a system-wide counter.
+
+        This is only used for the hourly counters, not the lifetime total counters, so we clear them
+        regularly and the files don't become unboundedly large. 
 
         Args:
             name (str): The name of the counter file.
@@ -69,17 +72,16 @@ class FilesystemActivityTrackingHelper:
                 specific detector. If None, use a system-wide counter.
         """
         if detector_id:
-            f = self.detector_file(detector_id, name)
+            file_path = self.detector_file(detector_id, name)
         else:
-            f = self.file(name)
+            file_path = self.file(name)
 
-        if not f.exists():
-            f.touch()
-            f.write_text("1")
-            return
+        if not file_path.exists():
+            file_path.touch()
 
-        read_total = int(f.read_text())
-        f.write_text(str(read_total + 1))
+        # open in append mode to avoid race condition
+        with file_path.open("a") as f:
+            f.write(".")
 
     def get_last_file_activity(self, name: str) -> datetime | None:
         """Get the last time a file was modified."""
@@ -126,9 +128,11 @@ class FilesystemActivityRetriever:
         detector_metrics = {}
 
         for activity_type in ["iqs", "escalations", "audits"]:
-            f = _tracker().detector_file(detector_id, activity_type)
+            f = _tracker().detector_file(detector_id, f"last_{activity_type}")
             last_activity = _tracker().get_last_file_activity(f)
             last_activity = last_activity.isoformat() if last_activity else "none"
+
+            f = _tracker().detector_file(detector_id, activity_type)
             total_activity = int(f.read_text()) if f.exists() else 0
 
             f = _tracker().detector_file(detector_id, f"{activity_type}_{current_hour}")
@@ -164,17 +168,18 @@ def record_activity_for_metrics(detector_id: str, activity_type: str):
     logger.debug(f"Recording activity {activity_type} on detector {detector_id}")
 
     current_hour = datetime.now().strftime("%Y-%m-%d_%H")
-    _tracker().increment_counter_file(activity_type, detector_id)
-    _tracker().increment_counter_file(f"{activity_type}_{current_hour}", detector_id)
+    _tracker().append_to_hourly_counter_file(f"{activity_type}_{current_hour}", detector_id)
+
+    # record last activity time
+    f = _tracker().detector_file(detector_id, f"last_{activity_type}")
+    f.touch()
 
     # Record IQs for the edge-endpoint as a whole in addition to the detector level, for a quick activity view
     if activity_type == "iqs":
-        # Record the time of the last IQ, included since this file was used in the first version of EE metrics
-        f = _tracker().file("last_iq")
+        f = _tracker().file("last_iqs")
         f.touch()
 
-        _tracker().increment_counter_file(activity_type)
-        _tracker().increment_counter_file(f"{activity_type}_{current_hour}")
+        _tracker().append_to_hourly_counter_file(f"{activity_type}_{current_hour}")
 
 
 def clear_old_activity_files():
@@ -197,7 +202,23 @@ def clear_old_activity_files():
         files = folder.glob(f"*_{time_pattern}")
         old_files.extend([f for f in files if f.name[-len("YYYY-MM-DD_HH") :] not in valid_hours])
 
+    update_lifetime_counters(old_files)
+
     if old_files:
         logger.info(f"Clearing {len(old_files)} old activity files: {old_files}")
         for f in old_files:
             f.unlink()
+
+def update_lifetime_counters(hourly_files: list[Path]):
+    """Update the lifetime counters for each detector with the activity from a list of hourly files."""
+    for hourly_file in hourly_files:
+        folder = hourly_file.parent
+        activity_type = hourly_file.name.split("_")[0]
+        total_file = Path(folder, activity_type)
+
+        if not total_file.exists():
+            total_file.touch()
+
+        prev_total = int(total_file.read_text())
+        hour_total = len(hourly_file.read_text())
+        total_file.write_text(str(prev_total + hour_total))
