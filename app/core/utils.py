@@ -27,7 +27,9 @@ from app.core import constants
 
 logger = logging.getLogger(__name__)
 
-METADATA_SIZE_LIMIT_BYTES = 1024
+METADATA_SIZE_LIMIT_BYTES = (
+    1024  # This is defined in the SDK and will need to be manually updated here if it gets modified
+)
 
 
 def create_iq(  # noqa: PLR0913
