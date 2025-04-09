@@ -140,6 +140,9 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
     confidence_threshold = confidence_threshold or detector_metadata.confidence_threshold
 
+    # for holding edge results if and when available
+    results = None
+
     if require_human_review:
         # If human review is required, we should skip edge inference completely
         logger.debug("Received human_review=ALWAYS. Skipping edge inference.")
@@ -275,4 +278,5 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         patience_time=patience_time,
         confidence_threshold=confidence_threshold,
         human_review=human_review,
+        metadata={"edge_result": results},
     )
