@@ -145,7 +145,7 @@ def generate_metadata_dict(results: dict[str, Any] | None, is_edge_audit: bool =
     """
     Generates the metadata for an IQ being escalated to the cloud.
     Includes `"is_edge_audit": True` if it is an edge audit.
-    Includes `"edge_result": results` if including the results would not push the size over the max allowable size.
+    Includes `"edge_result": results` if including the results would not push the metadata over the size limit.
     """
     metadata_dict = {}
 
