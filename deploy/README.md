@@ -24,7 +24,7 @@ For GPU-based systems:
 ```shell
 git clone https://github.com/groundlight/edge-endpoint.git
 cd edge-endpoint
-./deploy/bin/install-k3s-nvidia.sh
+./deploy/bin/install-k3s.sh gpu
 export GROUNDLIGHT_API_TOKEN="api_xxxxxx"
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 helm install -n default edge-endpoint deploy/helm/groundlight-edge-endpoint \
@@ -36,7 +36,7 @@ For CPU-based systems:
 ```shell
 git clone https://github.com/groundlight/edge-endpoint.git
 cd edge-endpoint
-./deploy/bin/install-k3s.sh
+./deploy/bin/install-k3s.sh cpu
 export GROUNDLIGHT_API_TOKEN="api_xxxxxx"
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 helm install -n default edge-endpoint deploy/helm/groundlight-edge-endpoint \
@@ -63,12 +63,12 @@ If you don't have [k3s](https://docs.k3s.io/) installed, there are two scripts w
 
 ```shell
 # For CPU inference
-./deploy/bin/install-k3s.sh
+./deploy/bin/install-k3s.sh cpu
 ```
 
 ```shell
 # For GPU inference
-./deploy/bin/install-k3s-nvidia.sh
+./deploy/bin/install-k3s.sh gpu
 ```
 
 These scripts will install the k3s Kubernetes distribution on your machine.  If you have a CUDA GPU, the second script will also install the NVIDIA GPU plugin for Kubernetes. They will also install Helm, which is used to deploy the edge-endpoint, and the Linux utilities `curl` and `jq`, if you don't already have them.

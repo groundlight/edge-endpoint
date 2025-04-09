@@ -118,7 +118,7 @@ jobs:
 
       - name: Install k3s
         run: |
-          ./deploy/bin/install-k3s.sh
+          ./deploy/bin/install-k3s.sh cpu
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -163,7 +163,7 @@ jobs:
 
       - name: Install k3s
         run: |
-          ./deploy/bin/install-k3s.sh
+          ./deploy/bin/install-k3s.sh cpu
 
       - name: Validate setup edge endpoint
         run: |
@@ -190,7 +190,7 @@ jobs:
 
       - name: Install k3s
         run: |
-          ./deploy/bin/install-k3s.sh
+          ./deploy/bin/install-k3s.sh cpu
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -239,7 +239,7 @@ jobs:
 
       - name: Install k3s
         run: |
-          ./deploy/bin/install-k3s.sh
+          ./deploy/bin/install-k3s.sh cpu
 
       - name: Install poetry
         uses: snok/install-poetry@v1
