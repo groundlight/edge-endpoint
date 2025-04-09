@@ -157,6 +157,10 @@ def generate_metadata_dict(results: dict[str, Any] | None, is_edge_audit: bool =
     size_bytes = len(metadata_json)
     if size_bytes > METADATA_SIZE_LIMIT_BYTES:
         metadata_dict.pop("edge_result")
+        logger.debug(
+            f"Inference results were {size_bytes} bytes, which made the metadata larger than the max allowed size of "
+            f"{METADATA_SIZE_LIMIT_BYTES} bytes. Not including the results in the metadata."
+        )
 
     return metadata_dict
 
