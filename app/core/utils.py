@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 import cachetools
 import ksuid
+from app_state import AppState
 from fastapi import HTTPException
 from model import (
     ROI,
@@ -136,6 +137,18 @@ def safe_call_sdk(api_method: Callable, **kwargs):
         if hasattr(ex, "status"):
             raise HTTPException(status_code=ex.status, detail=str(ex)) from ex
         raise ex
+
+
+def get_reconciled_confident_audit_rate(app_state: AppState, det_id: str) -> float:
+    global_rate = app_state.edge_config.global_config.confident_audit_rate
+
+    detector_rate = None
+    detector_config = app_state.edge_config.detectors.get(det_id, None)
+    if detector_config is not None:
+        detector_rate = detector_config.confident_audit_rate
+
+    reconciled_rate = detector_rate if detector_rate is not None else global_rate
+    return reconciled_rate
 
 
 def prefixed_ksuid(prefix: str | None = None) -> str:

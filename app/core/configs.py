@@ -70,6 +70,10 @@ class DetectorConfig(BaseModel):
 
     detector_id: str = Field(..., description="Detector ID")
     edge_inference_config: str = Field(..., description="Config for edge inference.")
+    confident_audit_rate: float = Field(
+        default=None,
+        description="The probability that any given confident prediction will be sent to the cloud for auditing.",
+    )
 
 
 class RootEdgeConfig(BaseModel):
