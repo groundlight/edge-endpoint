@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 from datetime import datetime, timezone
@@ -25,6 +26,8 @@ from pydantic import BaseModel, ValidationError
 from app.core import constants
 
 logger = logging.getLogger(__name__)
+
+METADATA_SIZE_LIMIT_BYTES = 1024
 
 
 def create_iq(  # noqa: PLR0913
@@ -136,6 +139,26 @@ def safe_call_sdk(api_method: Callable, **kwargs):
         if hasattr(ex, "status"):
             raise HTTPException(status_code=ex.status, detail=str(ex)) from ex
         raise ex
+
+
+def generate_metadata_dict(results: dict[str, Any] | None, is_edge_audit: bool = False) -> dict[str, Any]:
+    """
+    Generates the metadata for an IQ being escalated to the cloud.
+    Includes `"is_edge_audit": True` if it is an edge audit.
+    Includes `"edge_result": results` if including the results would not push the size over the max allowable size.
+    """
+    metadata_dict = {}
+
+    if is_edge_audit:
+        metadata_dict["is_edge_audit"] = True  # This metadata will trigger an audit in the cloud
+
+    metadata_dict["edge_result"] = results
+    metadata_json = json.dumps(metadata_dict)
+    size_bytes = len(metadata_json)
+    if size_bytes > METADATA_SIZE_LIMIT_BYTES:
+        metadata_dict.pop("edge_result")
+
+    return metadata_dict
 
 
 def prefixed_ksuid(prefix: str | None = None) -> str:
