@@ -1,0 +1,34 @@
+name: build-push-ee-image
+on:
+  workflow_call:
+    secrets:
+      AWS_GL_PUBLIC_ACCESS_KEY_ID:
+        required: true
+      AWS_GL_PUBLIC_SECRET_ACCESS_KEY:
+        required: true
+jobs:
+  build-push-edge-endpoint-multiplatform:
+    # We run this at the beginning of every PR so that the various full k3s tests
+    # can use this image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          mask-password: "true"
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          # Check out the edge-endpoint repo, not the repo that triggered the workflow
+          repository: groundlight/edge-endpoint
+      - name: Build and Push Multiplatform edge-endpoint Image to ECR
+        # This is actually only taking about 4 minutes right now.
+        timeout-minutes: 45
+        run: ./deploy/bin/build-push-edge-endpoint-image.sh

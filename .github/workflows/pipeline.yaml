@@ -132,7 +132,7 @@ jobs:
     # We need more disk space than the default (2 core) runners have.
     # They have 73GB total, 21GB available.  4-cores has 145GB raw, 93 GB available.
     needs:
-      - build-push-edge-endpoint-multiplatform
+      - call-build-push-ee-image
     steps:
       - name: Check out code
         uses: actions/checkout@v4
@@ -174,7 +174,7 @@ jobs:
     if: github.event_name != 'workflow_call'  # Doesn't use the inference server image, skip when triggered from other repo
     runs-on: ubuntu-latest-4-cores
     needs:
-      - build-push-edge-endpoint-multiplatform
+      - call-build-push-ee-image
     env:
       # associated with roxanne+test_edge account since for some reason it was failing with
       # prod biggies
@@ -202,7 +202,7 @@ jobs:
     if: github.event_name != 'workflow_call'  # Not clear how to use a specific inference image, skip when triggered from other repo
     runs-on: ubuntu-latest-4-cores
     needs:
-      - build-push-edge-endpoint-multiplatform
+      - call-build-push-ee-image
     env:
       # associated with roxanne+test_edge account since for some reason it was failing with
       # prod biggies
@@ -248,52 +248,13 @@ jobs:
         run: |
           NAMESPACE=test-with-k3s ./deploy/bin/diagnose-k8-failure.sh
 
-  test-with-k3s-helm:
+  call-test-with-k3s-helm:
     runs-on: ubuntu-latest-4-cores
     needs:
-      - build-push-edge-endpoint-multiplatform
-    env:
-      # associated with roxanne+test_edge account since for some reason it was failing with
-      # prod biggies
-      GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
-      # Only set if triggered via workflow_call
-      INFERENCE_IMAGE_TAG: ${{ inputs.inference_image_tag }}
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-        with:
-          # Check out the edge-endpoint repo, not the repo that triggered the workflow
-          repository: groundlight/edge-endpoint
-
-      - name: Install k3s
-        run: |
-          ./deploy/bin/install-k3s.sh
-
-      - name: Install poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          installer-parallel: true
-
-      - name: Install edge-endpoint's python dependencies
-        run: |
-          poetry install --no-interaction --no-root
-
-      - name: Clear Poetry cache
-        run: |
-          poetry cache clear pypi --all
-          poetry cache clear virtualenvs --all
-
-      - name: Run tests with k3s
-        run: |
-          make test-with-k3s-helm
-
-      - name: Diagnose failure
-        if: failure()
-        run: |
-          NAMESPACE=test-with-k3s-helm ./deploy/bin/diagnose-k8-failure.sh
+      - call-build-push-ee-image
+    uses: ./.github/workflows/test-k3s-helm.yaml
+    secrets:
+      K3S_TEST_GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
 
   # Run Groundlight SDK tests against the edge proxy endpoint
   test-sdk:
@@ -386,7 +347,7 @@ jobs:
     runs-on: self-hosted
     if: github.event_name != 'workflow_call'  # Doesn't use the inference server image, skip when triggered from other repo
     needs:
-      - build-push-edge-endpoint-multiplatform
+      - call-build-push-ee-image
 
     env:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
@@ -500,31 +461,14 @@ jobs:
           echo "export EEUT_IP=${EEUT_IP}"
           echo "export EEUT_STACK_NAME=${STACK_NAME}"
 
-  build-push-edge-endpoint-multiplatform:
+  call-build-push-ee-image:
     # We run this at the beginning of every PR so that the various full k3s tests
     # can use this image
     runs-on: ubuntu-latest
-    steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
-        with:
-          mask-password: "true"
-      - name: Check out code
-        uses: actions/checkout@v4
-        with:
-          # Check out the edge-endpoint repo, not the repo that triggered the workflow
-          repository: groundlight/edge-endpoint
-      - name: Build and Push Multiplatform edge-endpoint Image to ECR
-        # This is actually only taking about 4 minutes right now.
-        timeout-minutes: 45
-        run: ./deploy/bin/build-push-edge-endpoint-image.sh
+    uses: ./.github/workflows/build-push-ee-image.yaml
+    secrets:
+      AWS_GL_PUBLIC_ACCESS_KEY_ID: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
+      AWS_GL_PUBLIC_SECRET_ACCESS_KEY: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
 
   main-tests-pass:
     runs-on: ubuntu-latest
@@ -533,7 +477,7 @@ jobs:
       - test-general-edge-endpoint
       - test-sdk
       - test-with-k3s-setup-ee
-      - test-with-k3s-helm
+      - call-test-with-k3s-helm
       - validate-setup-ee
       - validate-setup-helm
       - G4-end-to-end
