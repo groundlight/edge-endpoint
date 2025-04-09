@@ -189,13 +189,15 @@ class TestSubmittingToLocalInferenceConfigs:
     class TestNoCloudConfig:
         """Tests for no_cloud detector configuration."""
 
-        def test_high_threshold_comes_from_edge_not_escalated(self, gl, detector_no_cloud, image_bytes):
+        def test_high_threshold_comes_from_edge_not_escalated(
+            self, gl: Groundlight, detector_no_cloud: Detector, image_bytes: bytes
+        ):
             iq = gl.submit_image_query(detector=detector_no_cloud.id, image=image_bytes, confidence_threshold=1, wait=0)
             assert iq is not None, "ImageQuery should not be None."
             assert answer_is_from_edge(iq), "Answer should be from the edge."
             assert not was_escalated(gl, iq), "Answer should not be escalated."
 
-        def test_low_threshold_comes_from_edge(self, gl, detector_no_cloud, image_bytes):
+        def test_low_threshold_comes_from_edge(self, gl: Groundlight, detector_no_cloud: Detector, image_bytes: bytes):
             iq = gl.submit_image_query(
                 detector=detector_no_cloud.id, image=image_bytes, confidence_threshold=0.5, wait=0
             )
@@ -314,7 +316,7 @@ class TestEdgeQueryParams:
             self, gl: Groundlight, detector_no_cloud: Detector, image_bytes: bytes
         ):
             """Test that patience_time can be submitted without error."""
-            iq = gl.submit_image_query(detector=detector_no_cloud.id, image=image_bytes, patience_time=1.0)
+            iq = gl.submit_image_query(detector=detector_no_cloud.id, image=image_bytes, patience_time=10.0)
             assert iq is not None
 
     class TestConfidenceThreshold:

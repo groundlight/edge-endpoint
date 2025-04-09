@@ -259,7 +259,7 @@ class TestEdgeQueryParams:
         iq = gl.submit_image_query(detector=detector_default.id, image=image_bytes, wait=1.0)
         assert iq is not None
 
-        iq = gl.submit_image_query(detector=detector_default.id, image=image_bytes, patience_time=1.0)
+        iq = gl.submit_image_query(detector=detector_default.id, image=image_bytes, patience_time=10.0)
         assert iq is not None
 
         iq = gl.submit_image_query(detector=detector_default.id, image=image_bytes, confidence_threshold=0.8)
