@@ -26,7 +26,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           # Check out the edge-endpoint repo, not the repo that triggered the workflow
-          repository: groundlight/edge-endpoint
+          repository: ${{ github.repository }}
+          ref: ${{ github.ref }}
 
       - name: Install k3s
         run: |
