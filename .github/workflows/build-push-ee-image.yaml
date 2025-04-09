@@ -10,8 +10,7 @@ on:
         required: true
 jobs:
   build-push-edge-endpoint-multiplatform:
-    # We run this at the beginning of every PR so that the various full k3s tests
-    # can use this image
+    runs-on: ubuntu-latest-4-cores
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4

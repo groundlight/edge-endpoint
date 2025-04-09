@@ -249,7 +249,6 @@ jobs:
           NAMESPACE=test-with-k3s ./deploy/bin/diagnose-k8-failure.sh
 
   call-test-with-k3s-helm:
-    runs-on: ubuntu-latest-4-cores
     needs:
       - call-build-push-ee-image
     uses: ./.github/workflows/test-k3s-helm.yaml
@@ -464,7 +463,6 @@ jobs:
   call-build-push-ee-image:
     # We run this at the beginning of every PR so that the various full k3s tests
     # can use this image
-    runs-on: ubuntu-latest
     uses: ./.github/workflows/build-push-ee-image.yaml
     secrets:
       AWS_GL_PUBLIC_ACCESS_KEY_ID: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
