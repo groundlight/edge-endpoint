@@ -141,6 +141,17 @@ def safe_call_sdk(api_method: Callable, **kwargs):
         raise ex
 
 
+def _size_of_dict_with_field(initial_dict: dict[str, Any], new_data_key: str, new_data_value: Any) -> int:
+    """
+    Returns the size, in # of bytes (assuming all ASCII characters), of the provided dict if it includes the provided
+    key/value pair.
+    """
+    combined_dict = initial_dict.copy()
+    combined_dict[new_data_key] = new_data_value
+    combined_json = json.dumps(combined_dict)
+    return len(combined_json)
+
+
 def generate_metadata_dict(results: dict[str, Any] | None, is_edge_audit: bool = False) -> dict[str, Any]:
     """
     Generates the metadata for an IQ being escalated to the cloud.
@@ -152,15 +163,25 @@ def generate_metadata_dict(results: dict[str, Any] | None, is_edge_audit: bool =
     if is_edge_audit:
         metadata_dict["is_edge_audit"] = True  # This metadata will trigger an audit in the cloud
 
-    metadata_dict["edge_result"] = results
-    metadata_json = json.dumps(metadata_dict)
-    size_bytes = len(metadata_json)
-    if size_bytes > METADATA_SIZE_LIMIT_BYTES:
-        metadata_dict.pop("edge_result")
+    metadata_with_results_size = _size_of_dict_with_field(metadata_dict, "edge_result", results)
+    if metadata_with_results_size > METADATA_SIZE_LIMIT_BYTES:
         logger.debug(
-            f"Inference results were {size_bytes} bytes, which made the metadata larger than the max allowed size of "
-            f"{METADATA_SIZE_LIMIT_BYTES} bytes. Not including the results in the metadata."
+            f"Inference results were {metadata_with_results_size} bytes, which made the metadata larger than the max "
+            f"allowed size of {METADATA_SIZE_LIMIT_BYTES} bytes. Attempting to remove the ROIs from the results."
         )
+        results_without_rois = results.copy()
+        if "rois" in results_without_rois:
+            results_without_rois["rois"] = f"{len(results['rois'])} ROIs were detected."
+            metadata_with_results_size = _size_of_dict_with_field(metadata_dict, "edge_result", results_without_rois)
+            if metadata_with_results_size <= METADATA_SIZE_LIMIT_BYTES:
+                metadata_dict["edge_result"] = results_without_rois
+            else:
+                logger.debug(
+                    "Inference results were still too large after removing ROIs. Not including the results in the "
+                    "metadata."
+                )
+    else:
+        metadata_dict["edge_result"] = results
 
     return metadata_dict
 
