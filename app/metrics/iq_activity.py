@@ -35,9 +35,7 @@ logger = logging.getLogger(__name__)
 
 
 class FilesystemActivityTrackingHelper:
-    """Helper class to support tracking image-query activity using the filesystem.
-    This is just a skeleton and only supports timestamps right now.  But
-    we will expand this to support counting metrics, etc."""
+    """Helper class to support tracking image-query activity using the filesystem."""
 
     def __init__(self, base_dir: str):
         self.base_dir = Path(base_dir)
@@ -91,13 +89,67 @@ class FilesystemActivityTrackingHelper:
         return datetime.fromtimestamp(f.stat().st_mtime)
 
 
+class FilesystemActivityRetriever:
+    """Retrieve IQ activity metrics from the filesystem."""
+
+    def last_activity_time(self) -> str:
+        """Get the last time an image was processed as an ISO 8601 timestamp."""
+        last_file_activity = _tracker().get_last_file_activity("iqs")
+        return last_file_activity.isoformat() if last_file_activity else "none"
+
+    def num_detectors_lifetime(self) -> int:
+        """Get the total number of detectors."""
+        f = _tracker().file("detectors")
+        return len(list(f.iterdir()))
+
+    def num_detectors_active(self, time_period: timedelta) -> int:
+        """Get the number of detectors that have had an IQ submitted to them in the last time period."""
+        f = _tracker().file("detectors")
+        active_detectors = [
+            Path(det, "iqs")
+            for det in f.iterdir()
+            if _tracker().get_last_file_activity(Path(det, "iqs")) > datetime.now() - time_period
+        ]
+        return len(active_detectors)
+
+    def get_all_detector_activity(self) -> dict:
+        """Get all activity metrics for all detectors."""
+        f = _tracker().file("detectors")
+        return {det.name: self.get_detector_activity_metrics(det.name) for det in f.iterdir()}
+
+    def get_detector_activity_metrics(self, detector_id: str) -> dict:
+        """Get all activity metrics for a single detector. Note that the "last_hour" metrics are lagging
+        -- they return the activity from the previous full hour, not over a sliding window."""
+        current_hour = datetime.now().strftime("%Y-%m-%d_%H")
+        last_hour = (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
+
+        detector_metrics = {}
+
+        for activity_type in ["iqs", "escalations", "audits"]:
+            f = _tracker().detector_file(detector_id, activity_type)
+            last_activity = _tracker().get_last_file_activity(f)
+            last_activity = last_activity.isoformat() if last_activity else "none"
+            total_activity = int(f.read_text()) if f.exists() else 0
+
+            f = _tracker().detector_file(detector_id, f"{activity_type}_{current_hour}")
+            current_hour_activity = int(f.read_text()) if f.exists() else "none"
+            f = _tracker().detector_file(detector_id, f"{activity_type}_{last_hour}")
+            last_hour_activity = int(f.read_text()) if f.exists() else "none"
+
+            detector_metrics[f"last_{activity_type}"] = last_activity
+            detector_metrics[f"total_{activity_type}"] = total_activity
+            detector_metrics[f"current_hour_{activity_type}"] = current_hour_activity
+            detector_metrics[f"last_hour_{activity_type}"] = last_hour_activity
+
+        return detector_metrics
+
 @lru_cache(maxsize=1)  # Singleton
 def _tracker() -> FilesystemActivityTrackingHelper:
     """Get the activity tracker."""
     return FilesystemActivityTrackingHelper(base_dir="/opt/groundlight/device/edge-metrics")
 
 
-def record_activity(detector_id: str, activity_type: str):
+def record_activity_for_metrics(detector_id: str, activity_type: str):
     """Records an activity from a detector. Currently supported activity types are:
     - iqs
     - escalations
@@ -105,10 +157,9 @@ def record_activity(detector_id: str, activity_type: str):
     """
     supported_activity_types = ["iqs", "escalations", "audits"]
     if activity_type not in supported_activity_types:
-        logger.error(
-            f"The provided activity type ({activity_type}) is not currently supported, not recording activity. Supported types are: {supported_activity_types}"
+        raise ValueError(
+            f"The provided activity type ({activity_type}) is not currently supported. Supported types are: {supported_activity_types}"
         )
-        return
 
     logger.debug(f"Recording activity {activity_type} on detector {detector_id}")
 
@@ -124,62 +175,6 @@ def record_activity(detector_id: str, activity_type: str):
 
         _tracker().increment_counter_file(activity_type)
         _tracker().increment_counter_file(f"{activity_type}_{current_hour}")
-
-
-def last_activity_time() -> str:
-    """Get the last time an image was processed as an ISO 8601 timestamp."""
-    last_file_activity = _tracker().get_last_file_activity("iqs")
-    return last_file_activity.isoformat() if last_file_activity else "none"
-
-
-def num_detectors_lifetime() -> int:
-    """Get the total number of detectors."""
-    f = _tracker().file("detectors")
-    return len(list(f.iterdir()))
-
-
-def num_detectors_active(time_period: timedelta) -> int:
-    """Get the number of detectors that have had an IQ submitted to them in the last time period."""
-    f = _tracker().file("detectors")
-    active_detectors = [
-        Path(det, "iqs")
-        for det in f.iterdir()
-        if _tracker().get_last_file_activity(Path(det, "iqs")) > datetime.now() - time_period
-    ]
-    return len(active_detectors)
-
-
-def get_all_detector_activity() -> dict:
-    """Get all activity metrics for all detectors."""
-    f = _tracker().file("detectors")
-    return {det.name: get_detector_activity_metrics(det.name) for det in f.iterdir()}
-
-
-def get_detector_activity_metrics(detector_id: str) -> dict:
-    """Get all activity metrics for a single detector. Note that the "last_hour" metrics are lagging
-    -- they return the activity from the previous full hour, not over a sliding window."""
-    current_hour = datetime.now().strftime("%Y-%m-%d_%H")
-    last_hour = (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
-
-    detector_metrics = {}
-
-    for activity_type in ["iqs", "escalations", "audits"]:
-        f = _tracker().detector_file(detector_id, activity_type)
-        last_activity = _tracker().get_last_file_activity(f)
-        last_activity = last_activity.isoformat() if last_activity else "none"
-        total_activity = int(f.read_text()) if f.exists() else 0
-
-        f = _tracker().detector_file(detector_id, f"{activity_type}_{current_hour}")
-        current_hour_activity = int(f.read_text()) if f.exists() else "none"
-        f = _tracker().detector_file(detector_id, f"{activity_type}_{last_hour}")
-        last_hour_activity = int(f.read_text()) if f.exists() else "none"
-
-        detector_metrics[f"last_{activity_type}"] = last_activity
-        detector_metrics[f"total_{activity_type}"] = total_activity
-        detector_metrics[f"current_hour_{activity_type}"] = current_hour_activity
-        detector_metrics[f"last_hour_{activity_type}"] = last_hour_activity
-
-    return detector_metrics
 
 
 def clear_old_activity_files():

@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.metrics.iq_activity import FilesystemActivityTrackingHelper, clear_old_activity_files, record_activity
+from app.metrics.iq_activity import FilesystemActivityTrackingHelper, clear_old_activity_files, record_activity_for_metrics
 
 
 @pytest.fixture(scope="module")
@@ -48,7 +48,7 @@ def test_activity_tracking(monkeypatch, tmp_base_dir, _test_tracker):
     # created and have the correct values
     with patch("app.metrics.iq_activity.datetime") as mock_datetime:
         mock_datetime.now.return_value = datetime(2025, 4, 3, 12, 0, 0)
-        record_activity("det_recordactivitytest", "iqs")
+        record_activity_for_metrics("det_recordactivitytest", "iqs")
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "iqs").exists()
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "iqs").read_text() == "1"
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "iqs_2025-04-03_12").exists()
@@ -61,7 +61,7 @@ def test_activity_tracking(monkeypatch, tmp_base_dir, _test_tracker):
 
         # Record another IQ, make sure all files are updated correctly
         mock_datetime.now.return_value = datetime(2025, 4, 3, 12, 0, 1)
-        record_activity("det_recordactivitytest", "iqs")
+        record_activity_for_metrics("det_recordactivitytest", "iqs")
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "iqs").read_text() == "2"
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "iqs_2025-04-03_12").read_text() == "2"
         assert Path(tmp_base_dir, "iqs").read_text() == "2"
@@ -70,12 +70,12 @@ def test_activity_tracking(monkeypatch, tmp_base_dir, _test_tracker):
 
         # Record an escalation and an audit, make sure the detector-specific files are created and have
         # the correct values
-        record_activity("det_recordactivitytest", "escalations")
+        record_activity_for_metrics("det_recordactivitytest", "escalations")
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "escalations").exists()
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "escalations").read_text() == "1"
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "escalations_2025-04-03_12").exists()
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "escalations_2025-04-03_12").read_text() == "1"
-        record_activity("det_recordactivitytest", "audits")
+        record_activity_for_metrics("det_recordactivitytest", "audits")
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "audits").exists()
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "audits").read_text() == "1"
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "audits_2025-04-03_12").exists()
@@ -83,7 +83,7 @@ def test_activity_tracking(monkeypatch, tmp_base_dir, _test_tracker):
 
 
 def test_wrong_activity_type(caplog):
-    record_activity("det_123", "wrong_activity_type")
+    record_activity_for_metrics("det_123", "wrong_activity_type")
     assert "The provided activity type (wrong_activity_type) is not currently supported" in caplog.text
 
 

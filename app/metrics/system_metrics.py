@@ -7,22 +7,22 @@ from kubernetes import client, config
 logger = logging.getLogger(__name__)
 
 
-def get_cpu_usage() -> str:
+def get_cpu_usage_pct() -> str:
     """Returns the percentage of total CPU used."""
     percent = psutil.cpu_percent(interval=1)
-    return f"{percent}%"
+    return percent
 
 
-def get_percentage_memory_used() -> str:
+def get_memory_used_pct() -> str:
     """Returns the percentage of total memory used."""
     percent = psutil.virtual_memory().percent
-    return f"{percent}%"
+    return percent
 
 
-def get_memory_available() -> str:
-    """Returns the amount of memory available in GB."""
+def get_memory_available_bytes() -> str:
+    """Returns the amount of memory available in bytes."""
     total = psutil.virtual_memory().total
-    return f"{total / (1024 ** 3):.2f} GB"
+    return total
 
 
 def get_inference_flavor() -> str:

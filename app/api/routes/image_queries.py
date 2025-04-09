@@ -15,7 +15,7 @@ from app.core.app_state import (
 )
 from app.core.edge_inference import get_edge_inference_model_name
 from app.core.utils import create_iq, safe_call_sdk
-from app.metrics.iq_activity import record_activity
+from app.metrics.iq_activity import record_activity_for_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             detail="Human review cannot be required if edge predictions are required.",
         )
 
-    record_activity(detector_id, activity_type="iqs")  # for metrics
+    record_activity_for_metrics(detector_id, activity_type="iqs")
 
     if want_async:  # just submit to the cloud w/ ask_async
         if return_edge_prediction:
@@ -123,7 +123,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 detail="Async requests are not supported when 'always_return_edge_prediction' is set to True.",
             )
         logger.debug(f"Submitting ask_async image query to cloud API server for {detector_id=}")
-        record_activity(detector_id, activity_type="escalations")  # for metrics
+        record_activity_for_metrics(detector_id, activity_type="escalations")
         return safe_call_sdk(
             gl.ask_async,
             detector=detector_id,
@@ -146,7 +146,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     if require_human_review:
         # If human review is required, we should skip edge inference completely
         logger.debug("Received human_review=ALWAYS. Skipping edge inference.")
-        record_activity(detector_id, activity_type="escalations")  # for metrics
+        record_activity_for_metrics(detector_id, activity_type="escalations")
     elif app_state.edge_inference_manager.inference_is_available(detector_id=detector_id):
         # -- Edge-model Inference --
         logger.debug(f"Local inference is available for {detector_id=}. Running inference...")
@@ -184,7 +184,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                     logger.debug(
                         f"Auditing confident edge prediction with confidence {ml_confidence} for detector {detector_id=}."
                     )
-                    record_activity(detector_id, activity_type="audits")  # for metrics
+                    record_activity_for_metrics(detector_id, activity_type="audits")
                     background_tasks.add_task(
                         safe_call_sdk,
                         gl.submit_image_query,
@@ -211,7 +211,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                     logger.debug(
                         f"Escalating to cloud due to low confidence: {ml_confidence} < thresh={confidence_threshold}"
                     )
-                    record_activity(detector_id, activity_type="escalations")  # for metrics
+                    record_activity_for_metrics(detector_id, activity_type="escalations")
                     background_tasks.add_task(
                         safe_call_sdk,
                         gl.submit_image_query,  # This has to be submit_image_query in order to specify image_query_id
@@ -269,7 +269,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         raise AssertionError("Cloud escalation is disabled.")  # ...should never reach this point
 
     logger.debug(f"Submitting image query to cloud for {detector_id=}")
-    record_activity(detector_id, activity_type="escalations")  # for metrics
+    record_activity_for_metrics(detector_id, activity_type="escalations")
     return safe_call_sdk(
         gl.submit_image_query,
         detector=detector_id,
