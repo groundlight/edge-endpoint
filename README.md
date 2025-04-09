@@ -10,10 +10,15 @@ To install the edge-endpoint chart, add the repository to your Helm configuratio
 
 ```bash
 helm repo add edge-endpoint https://code.groundlight.ai/edge-endpoint/
+helm repo update
 ```
+
+Make sure that you've set the `GROUNDLIGHT_API_TOKEN` environment variable
+    to your Groundlight API token.
 
 Then you can install the chart:
 
 ```bash
-helm install edge-endpoint groundlight-edge-endpoint
+helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint \
+    --set groundlightApiToken=${GROUNDLIGHT_API_TOKEN}
 ```

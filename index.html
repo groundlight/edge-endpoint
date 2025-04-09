@@ -1,20 +1,22 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <meta charset="UTF-8">
   <title>Edge Endpoint Helm Repository</title>
 </head>
+
 <body>
   <h1>Edge Endpoint Helm Repository</h1>
 
   <p>
-    We use GitHub Pages to host our Helm repository. This repository only contains 
-    the Helm chart for the Edge-endpoint project — 
+    We use GitHub Pages to host our Helm repository. This repository only contains
+    the Helm chart for the Edge-endpoint project —
     named <code>groundlight-edge-endpoint</code>.
   </p>
 
   <p>
-    The repo is automatically updated by the CI/CD pipeline whenever 
+    The repo is automatically updated by the CI/CD pipeline whenever
     the <code>main</code> branch is deployed as a "release".
   </p>
 
@@ -22,12 +24,23 @@
 
   <p>To install the edge-endpoint chart, add the repository to your Helm configuration:</p>
 
-  <pre><code>helm repo add edge-endpoint https://code.groundlight.ai/edge-endpoint/
+  <pre><code>
+helm repo add edge-endpoint https://code.groundlight.ai/edge-endpoint/
+helm repo update
 </code></pre>
 
-  <p>Then you can install the chart:</p>
+  <p>
+    Make sure that you've set the <code>GROUNDLIGHT_API_TOKEN</code> environment variable
+    to your Groundlight API token.
+  </p>
 
-  <pre><code>helm install edge-endpoint groundlight-edge-endpoint
+  <p>Then you can install the chart:
+
+  <pre><code>
+helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint \
+    --set groundlightApiToken=${GROUNDLIGHT_API_TOKEN}
 </code></pre>
+  </p>
 </body>
+
 </html>
