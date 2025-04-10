@@ -4,7 +4,11 @@ from unittest.mock import patch
 
 import pytest
 
-from app.metrics.iq_activity import FilesystemActivityTrackingHelper, clear_old_activity_files, record_activity_for_metrics
+from app.metrics.iq_activity import (
+    FilesystemActivityTrackingHelper,
+    clear_old_activity_files,
+    record_activity_for_metrics,
+)
 
 
 @pytest.fixture(scope="module")
@@ -78,8 +82,9 @@ def test_activity_tracking(monkeypatch, tmp_base_dir, _test_tracker):
 
 
 def test_wrong_activity_type(caplog):
-    with pytest.raises(ValueError) as e:
+    with pytest.raises(ValueError):
         record_activity_for_metrics("det_123", "wrong_activity_type")
+
 
 def test_clear_old_activity_files(monkeypatch, tmp_base_dir, _test_tracker):
     monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)

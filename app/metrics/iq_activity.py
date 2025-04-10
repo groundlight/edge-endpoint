@@ -68,7 +68,7 @@ class FilesystemActivityTrackingHelper:
 
         if detector_id:
             return self.detector_file(detector_id, name)
-        
+
         return self.file(name)
 
     def hourly_activity_file(self, activity_type: str, time: datetime, detector_id: str | None = None) -> Path:
@@ -107,7 +107,7 @@ class FilesystemActivityTrackingHelper:
         f = self.file(name)
         if not f.exists():
             return 0
-        content = f.read_text(encoding='utf-8')
+        content = f.read_text(encoding="utf-8")
         return len(content)
 
     def get_activity_from_file(self, file: Path) -> int:
@@ -122,7 +122,7 @@ class FilesystemActivityTrackingHelper:
             return self.get_file_length(file.name)
 
         # otherwise, the file is a lifetime counter, so return the content as an int
-        text = file.read_text(encoding='utf-8')
+        text = file.read_text(encoding="utf-8")
         if text == "":
             return 0
         return int(text)
@@ -160,10 +160,7 @@ class ActivityRetriever:
     def num_detectors_active(self, time_period: timedelta) -> int:
         """Get the number of detectors that have had an IQ submitted to them in the last time period."""
         f = _tracker().detectors_dir
-        activity_files = [
-            _tracker().last_activity_file("iqs", det.name)
-            for det in f.iterdir()
-        ]
+        activity_files = [_tracker().last_activity_file("iqs", det.name) for det in f.iterdir()]
         active_detectors = [
             file.parent.name
             for file in activity_files
@@ -212,6 +209,7 @@ class ActivityRetriever:
             detector_metrics[f"last_hour_{activity_type}"] = last_hour_activity
 
         return detector_metrics
+
 
 @lru_cache(maxsize=1)  # Singleton
 def _tracker() -> FilesystemActivityTrackingHelper:
