@@ -118,8 +118,8 @@ if len(unexpected_labels) > 0:
     sys.exit(1) # exit to avoid sending heartbeat
 
 # Report heartbeat
-# If all previous tests pass, send one image query to Groundlight Cloud, an alert will fire if the
-# detector goes silent for too long
+# If all previous tests pass, send one image query to Groundlight Cloud
+# An alert will fire if the detector goes silent for too long
 logger.info("Laptop edge canary seems to be online and functioning properly. Submitting heartbeat...")
 heartbeat_frame = grabber.grab()
 resized_heartbeat_frame = image_utils.resize_image(heartbeat_frame, TARGET_FRAME_WIDTH)
