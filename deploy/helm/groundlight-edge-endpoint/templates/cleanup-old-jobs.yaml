@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cleanup-old-jobs
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "-5"  # Ensure it runs before other hooks
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: job-cleanup-sa  # Ensure permissions to delete Jobs
+      containers:
+        - name: kubectl
+          image: bitnami/kubectl:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "🔍 Finding old Jobs for release {{ .Release.Name }}..."
+              JOBS=$(kubectl get jobs -l app.kubernetes.io/instance={{ .Release.Name }} -o jsonpath='{.items[*].metadata.name}')
+              
+              if [ -z "$JOBS" ]; then
+                echo "✅ No old Jobs found."
+              else
+                echo "🗑 Deleting old Jobs..."
+                for JOB in $JOBS; do
+                  if [ "$JOB" = "cleanup-old-jobs" ]; then
+                    continue
+                  fi
+                  kubectl delete job "$JOB" --ignore-not-found=true
+                done
+                echo "✅ Cleanup complete."
+              fi

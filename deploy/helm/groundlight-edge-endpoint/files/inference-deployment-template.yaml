@@ -1,0 +1,125 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: placeholder-inference-service-name
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    app: inference-server
+    instance: placeholder-inference-instance-name
+  ports:
+    - protocol: TCP
+      port: 8000
+      name: http
+      targetPort: 8000
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: placeholder-inference-deployment-name
+  namespace: {{ .Values.namespace }}
+  labels:
+    name: placeholder-inference-deployment-name
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inference-server
+      instance: placeholder-inference-instance-name
+  template:
+    metadata:
+      labels:
+        app: inference-server
+        instance: placeholder-inference-instance-name
+    spec:
+{{ if eq .Values.inferenceFlavor "gpu" }}
+      runtimeClassName: nvidia  # Required for GPU use in k3s
+{{- end }}
+      imagePullSecrets:
+      - name: registry-credentials
+      strategy:
+        type: RollingUpdate
+        rollingUpdate:
+          maxSurge: 1
+          maxUnavailable: 0  # Aim for no downtime during rollout
+
+      initContainers:
+      # NOTE: the sync-pinamod container is duplicated in the warmup_inference_model.yaml Job
+      # TODO: refactor to share code between the Job and the initContainer in the Deployment
+      - name: sync-pinamod
+        image: amazon/aws-cli:latest
+        # Sync models from S3 to the local hostmapped filesystem.
+        command: ['sh', '-c', 'aws s3 sync s3://pinamod-artifacts-public/pinamod $PINAMOD_DIR --delete']
+        env:
+        - name: PINAMOD_DIR
+          value: /opt/models/pinamod
+        volumeMounts:
+        - name: pina-models
+          mountPath: /opt/models
+        - name: aws-credentials
+          mountPath: /root/.aws
+
+      containers:
+      - name: inference-server
+        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:{{ include "groundlight-edge-endpoint.inferenceTag" . }}
+        imagePullPolicy: "{{ include "groundlight-edge-endpoint.inferencePullPolicy" . }}"
+        env:
+        - name: MODEL_REPOSITORY
+          value: &modelRepository /opt/groundlight/edge/serving/model-repo
+        - name: MODEL_NAME
+          value: placeholder-model-name
+        - name: PINAMOD_DIR
+          value: /opt/models/pinamod
+        command:
+          [
+            "poetry", "run", "python3", "-m", "uvicorn", "serving.edge_inference_server.fastapi_server:app",
+            "--host", "0.0.0.0",
+            "--port", "8000",
+            "--workers", "1"
+          ]
+        volumeMounts:
+        - name: edge-endpoint-persistent-volume
+          mountPath: *modelRepository
+        - name: pina-models
+          mountPath: /opt/models
+          readOnly: true
+        ports:
+        - containerPort: 8000
+          name: http-fastapi
+        startupProbe:
+          httpGet:
+            path: /health/live  # Checks if the server is up
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 60  # Wait for up to 10 min
+        readinessProbe:
+          httpGet:
+            path: /health/ready  # Checks if the server is ready to serve requests
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          failureThreshold: 3  # after 30 seconds of failure, stop sending traffic to the pod
+        livenessProbe:
+          httpGet:
+            # We use "ready" here because the current liveness probe is too simple and
+            # doesn't check if the model is loaded.  If the models fail because of GPU memory
+            # issues, we need this to fail and restart the pod.
+            path: /health/ready
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          failureThreshold: 6  # after 60 seconds of failure, restart the pod
+
+      volumes:
+      - name: edge-endpoint-persistent-volume
+        persistentVolumeClaim:
+          claimName: edge-endpoint-pvc
+      - name: pina-models
+        hostPath:
+          path: /opt/groundlight/edge/pinamod-public
+          type: Directory
+      - name: aws-credentials
+        secret:
+          secretName: aws-credentials-file

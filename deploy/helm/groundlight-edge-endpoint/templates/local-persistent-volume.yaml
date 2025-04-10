@@ -1,0 +1,33 @@
+# All this precise matching is considered poor practice in K8s, but it makes
+# things more reliable here.
+apiVersion: v1 
+kind: PersistentVolume 
+metadata:
+  name: "{{ .Values.persistentVolumeNameBase }}-{{ .Values.namespace }}"
+  labels:
+    edge-pv-for-namespace: {{ .Values.namespace }}
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+spec:
+  capacity: 
+    storage: 2Gi
+  accessModes:
+    - ReadWriteOnce 
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /opt/groundlight/edge
+---
+apiVersion: v1 
+kind: PersistentVolumeClaim
+metadata:
+  name: edge-endpoint-pvc
+  namespace: {{ .Values.namespace }}
+spec: 
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  resources:
+    requests:
+      storage: 2Gi
+  selector:
+    matchLabels:
+      edge-pv-for-namespace: {{ .Values.namespace }}

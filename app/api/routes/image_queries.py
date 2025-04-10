@@ -1,11 +1,10 @@
 import logging
+import random
 from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from groundlight import Groundlight
-from model import (
-    ImageQuery,
-)
+from model import ImageQuery
 
 from app.core.app_state import (
     AppState,
@@ -14,7 +13,9 @@ from app.core.app_state import (
     get_groundlight_sdk_instance,
     refresh_detector_metadata_if_needed,
 )
-from app.core.utils import create_iq, safe_call_sdk
+from app.core.edge_inference import get_edge_inference_model_name
+from app.core.utils import create_iq, generate_metadata_dict, safe_call_sdk
+from app.metrics.iqactivity import record_iq_activity
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +114,8 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             detail="Human review cannot be required if edge predictions are required.",
         )
 
+    record_iq_activity(detector_id)  # for metrics
+
     if want_async:  # just submit to the cloud w/ ask_async
         if return_edge_prediction:
             raise HTTPException(
@@ -136,19 +139,22 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
     confidence_threshold = confidence_threshold or detector_metadata.confidence_threshold
 
+    # for holding edge results if and when available
+    results = None
+
     if require_human_review:
         # If human review is required, we should skip edge inference completely
         logger.debug("Received human_review=ALWAYS. Skipping edge inference.")
     elif app_state.edge_inference_manager.inference_is_available(detector_id=detector_id):
         # -- Edge-model Inference --
         logger.debug(f"Local inference is available for {detector_id=}. Running inference...")
-        results = app_state.edge_inference_manager.run_inference(
+        results = await app_state.edge_inference_manager.run_inference(
             detector_id=detector_id, image_bytes=image_bytes, content_type=content_type
         )
         ml_confidence = results["confidence"]
 
         is_confident_enough = ml_confidence >= confidence_threshold
-        if return_edge_prediction or is_confident_enough:  # return the edge prediction
+        if return_edge_prediction or is_confident_enough:  # Return the edge prediction
             if return_edge_prediction:
                 logger.debug(f"Returning edge prediction without cloud escalation. {detector_id=}")
             else:
@@ -167,9 +173,34 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 text=results["text"],
             )
 
-            # Escalate after returning edge prediction if escalation is enabled and we have low confidence
-            if not disable_cloud_escalation and not is_confident_enough:
-                # Only escalate if we haven't escalated on this detector too recently
+            # Skip cloud operations if escalation is disabled
+            if disable_cloud_escalation:
+                return image_query
+
+            if is_confident_enough:  # Audit confident edge predictions at the specified rate
+                if random.random() < app_state.edge_config.global_config.confident_audit_rate:
+                    logger.debug(
+                        f"Auditing confident edge prediction with confidence {ml_confidence} for detector {detector_id=}."
+                    )
+                    background_tasks.add_task(
+                        safe_call_sdk,
+                        gl.submit_image_query,
+                        detector=detector_id,
+                        image=image_bytes,
+                        wait=0,
+                        patience_time=patience_time,
+                        confidence_threshold=confidence_threshold,
+                        want_async=True,
+                        metadata=generate_metadata_dict(results=results, is_edge_audit=True),
+                        image_query_id=image_query.id,  # We give the cloud IQ the same ID as the returned edge IQ
+                    )
+
+                    # Don't want to escalate to cloud again if we're already auditing the query
+                    return image_query
+
+            # Escalate after returning edge prediction if escalation is enabled and we have low confidence.
+            if not is_confident_enough:
+                # Only escalate if we haven't escalated on this detector too recently.
                 if app_state.edge_inference_manager.escalation_cooldown_complete(detector_id=detector_id):
                     logger.debug(
                         f"Escalating to cloud due to low confidence: {ml_confidence} < thresh={confidence_threshold}"
@@ -184,6 +215,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         confidence_threshold=confidence_threshold,
                         human_review=human_review,
                         want_async=True,
+                        metadata=generate_metadata_dict(results=results, is_edge_audit=False),
                         image_query_id=image_query.id,  # Ensure the cloud IQ has the same ID as the returned edge IQ
                     )
                 else:
@@ -197,8 +229,24 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         # Create an edge-inference deployment record, which may be used to spin up an edge-inference server.
         logger.debug(f"Local inference not available for {detector_id=}. Creating inference deployment record.")
         api_token = gl.api_client.configuration.api_key["ApiToken"]
+        primary_model_name = get_edge_inference_model_name(detector_id=detector_id, is_oodd=False)
+        oodd_model_name = get_edge_inference_model_name(detector_id=detector_id, is_oodd=True)
+
         app_state.db_manager.create_or_update_inference_deployment_record(
-            deployment={"detector_id": detector_id, "api_token": api_token, "deployment_created": False}
+            deployment={
+                "model_name": primary_model_name,
+                "detector_id": detector_id,
+                "api_token": api_token,
+                "deployment_created": False,
+            }
+        )
+        app_state.db_manager.create_or_update_inference_deployment_record(
+            deployment={
+                "model_name": oodd_model_name,
+                "detector_id": detector_id,
+                "api_token": api_token,
+                "deployment_created": False,
+            }
         )
 
         if return_edge_prediction:
@@ -222,4 +270,5 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         patience_time=patience_time,
         confidence_threshold=confidence_threshold,
         human_review=human_review,
+        metadata=generate_metadata_dict(results=results, is_edge_audit=False),
     )

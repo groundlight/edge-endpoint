@@ -28,7 +28,7 @@ jobs:
       GROUNDLIGHT_ENDPOINT: http://localhost:30101
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up python
         id: setup_python
@@ -88,7 +88,7 @@ jobs:
             -e EDGE_CONFIG \
             -d -p 30101:30101 \
             groundlight-edge)
-          echo "::set-output name=container_id::$container_id"
+          echo "container_id=$container_id" >> $GITHUB_OUTPUT
 
       - name: Run Unit Tests (that do require docker)
         run: |
@@ -107,10 +107,14 @@ jobs:
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
   validate-setup-ee:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest-4-cores
+    # We need more disk space than the default (2 core) runners have.
+    # They have 73GB total, 21GB available.  4-cores has 145GB raw, 93 GB available.
+    needs:
+      - build-push-edge-endpoint-multiplatform
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install k3s
         run: |
@@ -137,19 +141,52 @@ jobs:
 
       - name: Validate setup edge endpoint
         run: |
+          export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
           make validate-setup-ee
 
-  # we run this seperately from validate-setup-ee since we run out of disk space doing
-  # both of them on the same runner and they can be slow so its best to do them in parallel
-  test-with-k3s:
-    runs-on: ubuntu-22.04-8core
+      - name: Diagnose failure
+        if: failure()
+        run: |
+          NAMESPACE=validate-setup-ee ./deploy/bin/diagnose-k8-failure.sh
+
+  validate-setup-helm:
+    runs-on: ubuntu-latest-4-cores
+    needs:
+      - build-push-edge-endpoint-multiplatform
     env:
       # associated with roxanne+test_edge account since for some reason it was failing with
       # prod biggies
       GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Install k3s
+        run: |
+          ./deploy/bin/install-k3s.sh
+
+      - name: Validate setup edge endpoint
+        run: |
+          make validate-setup-helm
+
+      - name: Diagnose failure
+        if: failure()
+        run: |
+          NAMESPACE=validate-setup-helm ./deploy/bin/diagnose-k8-failure.sh
+
+  # we run this separately from validate-setup-ee since we run out of disk space doing
+  # both of them on the same runner and they can be slow so its best to do them in parallel
+  test-with-k3s-setup-ee:
+    runs-on: ubuntu-latest-4-cores
+    needs:
+      - build-push-edge-endpoint-multiplatform
+    env:
+      # associated with roxanne+test_edge account since for some reason it was failing with
+      # prod biggies
+      GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
 
       - name: Install k3s
         run: |
@@ -181,7 +218,54 @@ jobs:
 
       - name: Run tests with k3s
         run: |
-          make test-with-k3s
+          make test-with-k3s-setup-ee
+
+      - name: Diagnose failure
+        if: failure()
+        run: |
+          NAMESPACE=test-with-k3s ./deploy/bin/diagnose-k8-failure.sh
+
+  test-with-k3s-helm:
+    runs-on: ubuntu-latest-4-cores
+    needs:
+      - build-push-edge-endpoint-multiplatform
+    env:
+      # associated with roxanne+test_edge account since for some reason it was failing with
+      # prod biggies
+      GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install k3s
+        run: |
+          ./deploy/bin/install-k3s.sh
+
+      - name: Install poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: ${{ env.POETRY_VERSION }}
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: true
+
+      - name: Install edge-endpoint's python dependencies
+        run: |
+          poetry install --no-interaction --no-root
+
+      - name: Clear Poetry cache
+        run: |
+          poetry cache clear pypi --all
+          poetry cache clear virtualenvs --all
+
+      - name: Run tests with k3s
+        run: |
+          make test-with-k3s-helm
+
+      - name: Diagnose failure
+        if: failure()
+        run: |
+          NAMESPACE=test-with-k3s-helm ./deploy/bin/diagnose-k8-failure.sh
 
   # Run Groundlight SDK tests against the edge proxy endpoint
   test-sdk:
@@ -191,7 +275,7 @@ jobs:
       GROUNDLIGHT_ENDPOINT: http://localhost:30101
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up python
         uses: actions/setup-python@v5
@@ -221,7 +305,7 @@ jobs:
             -e EDGE_CONFIG \
             -d -p 30101:30101 \
             groundlight-edge)
-          echo "::set-output name=container_id::$container_id"
+          echo "container_id=$container_id" >> $GITHUB_OUTPUT
 
       - name: Install poetry
         uses: snok/install-poetry@v1
@@ -241,7 +325,7 @@ jobs:
       # Note that we're pulling the latest main from the SDK repo
       # This might be ahead of what's published to pypi, but it's useful to test things before they're released.
       - name: Checkout Groundlight SDK
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: groundlight/python-sdk
           path: groundlight-sdk
@@ -271,13 +355,8 @@ jobs:
     # Note this job can run multiple times in parallel because the stack name is unique
     # for the run.  How much we want to do this is TBD.
     runs-on: self-hosted
-
-    # Run this on any PR.
-    # Question: Should we wait until the other tests pass before running this?
-    #needs:
-    #  - validate-setup-ee
-    #  - test-with-k3s
-    #  - test-sdk
+    needs:
+      - build-push-edge-endpoint-multiplatform
 
     env:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
@@ -287,7 +366,7 @@ jobs:
         working-directory: cicd/pulumi
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Name the stack
         run: |
@@ -333,27 +412,24 @@ jobs:
           uv run pulumi stack init ${STACK_NAME}
           uv run pulumi config
 
-      - name: Pick which commit we will test
+      - name: Configure pulumi
         run: |
-          echo "This is a bit subtle."
-          echo "We can't just test on 'main' for fairly obvious reasons - we"
-          echo "want to test the code in this PR's branch. The current commit"
-          echo "right here is ${GITHUB_SHA}, which is likely a merge commit."
-          echo "Merge commits are challenging. They are what would happen if"
-          echo "this PR were to be merged into its base branch. But they are"
-          echo "ephemeral things and not available in the public repo. So the"
-          echo "EEUT can't just check them out. Making them available to the"
-          echo "EEUT would require pushing them and polluting the repo. So,"
-          echo "for now, we are going to use the PR's head ref"
-          echo "${{ github.event.pull_request.head.ref }}, which is the commit"
-          echo "that was used to create the PR. Recognizing that this doesn't"
-          echo "reflect what will happen after merge. But it's simpler."
-
-          # TODO: test on the merge commit by pushing it to the repo with a temporary
-          # branch, and then clean up the branch later.
-
-          COMMIT_TO_TEST=${{ github.event.pull_request.head.ref }}
+          # We want to test the exact code that GitHub is running right now
+          # For PR runs, this is the merge commit that GitHub creates
+          # For main branch runs, this is the latest commit on main
+          # Either way, GITHUB_SHA gives us exactly what we need.
+          # This is a proper commit in the repo, you just have to fetch it deliberately.
+          # It doesn't show up with a normal `git clone`
+          COMMIT_TO_TEST=${GITHUB_SHA}
           uv run pulumi config set ee-cicd:targetCommit ${COMMIT_TO_TEST}
+          # You might think the EEUT can just derive the image tag itself by running git-tag-name.sh,
+          # but it can't because it's on a merge commit.  So it doesn't know the name of the branch.
+          # So it would produce an incorrect tag with a name like `1234567-HEAD` which would not match ECR.
+          EE_IMAGE_TAG=$(${GITHUB_WORKSPACE}/deploy/bin/git-tag-name.sh)
+          uv run pulumi config set ee-cicd:eeImageTag ${EE_IMAGE_TAG}
+
+          # Inject the API token into the pulumi stack
+          uv run pulumi config set ee-cicd:groundlightApiToken ${GROUNDLIGHT_API_TOKEN} --secret
 
       - name: Create the EEUT instance
         run: |
@@ -389,24 +465,14 @@ jobs:
         run: |
           EEUT_IP=$(uv run pulumi stack output eeut_private_ip)
           echo "If the tests failed, the EEUT (edge endpoint under test) is still running."
-          echo "You can connect to it via ssh using the following command:"
-          echo "ssh ubuntu@${EEUT_IP}"
-          echo "(Assuming you have the private key and are coming from the right subnet.)"
-          echo ""
-          echo "If the machine was put to sleep and you want it back, run:"
-          echo "wake-ec2 eeut-${STACK_NAME}"
-          echo "In the GL_Public account."
+          echo "To connect to it, see the Debugging EEUT runbook.  You'll want to know:"
+          echo "export EEUT_IP=${EEUT_IP}"
+          echo "export EEUT_STACK_NAME=${STACK_NAME}"
 
   build-push-edge-endpoint-multiplatform:
-    if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
-    # We only run this action if all the prior test actions succeed
-    needs:
-      - test-general-edge-endpoint
-      - test-sdk
-      - test-with-k3s
-      - validate-setup-ee
-      - G4-end-to-end
-    runs-on: ubuntu-22.04
+    # We run this at the beginning of every PR so that the various full k3s tests
+    # can use this image
+    runs-on: ubuntu-latest
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -422,16 +488,52 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
       - name: Build and Push Multiplatform edge-endpoint Image to ECR
+        # This is actually only taking about 4 minutes right now.
         timeout-minutes: 45
         run: ./deploy/bin/build-push-edge-endpoint-image.sh
+
+  main-tests-pass:
+    runs-on: ubuntu-latest
+    # This is a dummy step to avoid repeating the list of tests
+    needs:
+      - test-general-edge-endpoint
+      - test-sdk
+      - test-with-k3s-setup-ee
+      - test-with-k3s-helm
+      - validate-setup-ee
+      - validate-setup-helm
+      - G4-end-to-end
+    steps:
+      - name: declare success
+        run: echo "Main suite of tests all pass."
+
+  tag-pre-release:
+    if: github.ref == 'refs/heads/main'
+    needs:
+      - main-tests-pass
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          mask-password: "true"
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Tag main images with the "pre-release" tag after all the tests pass
+        run: ./deploy/bin/tag-edge-endpoint-image.sh pre-release
 
   update-glhub:
     if: github.ref == 'refs/heads/main'
     needs:
-      - test-general-edge-endpoint
-      - validate-setup-ee
-      - test-sdk
-      - test-with-k3s
+      - main-tests-pass
     runs-on: ubuntu-latest
     environment: live
 
@@ -456,3 +558,33 @@ jobs:
         env:
           GIT_AUTHOR_NAME: "edge-glhub-bot"
           GIT_AUTHOR_EMAIL: "roxanne+gh_bot@groundlight.ai"
+
+  tag-release:
+    # The environment rules are not defined in code -- instead, they are defined in the Github UI:
+    #   https://github.com/groundlight/edge-endpoint/settings/environments/5838966020/edit
+    # As of this time of writing, the environment rules require manual approval for tagging a release.
+    environment: live
+    # This will run (after manual approval) if a commit is pushed to the `main` branch
+    if: github.ref == 'refs/heads/main'
+    needs:
+      - main-tests-pass
+      - tag-pre-release
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          mask-password: "true"
+      - name: Check out code
+        uses: actions/checkout@v4
+      - name: Tag main images with the "latest" and "release" tags
+        run: |-
+          ./deploy/bin/tag-edge-endpoint-image.sh latest
+          ./deploy/bin/tag-edge-endpoint-image.sh release

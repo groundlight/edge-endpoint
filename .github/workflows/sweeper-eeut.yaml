@@ -4,7 +4,7 @@ name: sweeper-eeut
 # and we don't want to slow down the main pipeline for that.
 on:
   schedule:
-    - cron: '*/15 * * * *'  # Every 15 minutes
+    - cron: "*/15 * * * *" # Every 15 minutes
       # Note cron workflows only run from the main branch.
   push:
     branches:
@@ -52,7 +52,7 @@ jobs:
 
       - name: Check that pulumi is installed and authenticated
         run: |
-          set -ex
+          set -e
           pulumi whoami
 
       - name: Destroy old EEUT stacks

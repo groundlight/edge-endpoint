@@ -1,3 +1,6 @@
+import json
+import logging
+import time
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any, Callable
@@ -21,6 +24,12 @@ from PIL import Image
 from pydantic import BaseModel, ValidationError
 
 from app.core import constants
+
+logger = logging.getLogger(__name__)
+
+METADATA_SIZE_LIMIT_BYTES = (
+    1024  # This is defined in the SDK and will need to be manually updated here if it gets modified
+)
 
 
 def create_iq(  # noqa: PLR0913
@@ -134,6 +143,59 @@ def safe_call_sdk(api_method: Callable, **kwargs):
         raise ex
 
 
+def _size_of_dict_in_bytes(data: dict[str, Any]) -> int:
+    """Returns the size, in # of bytes (assuming all ASCII characters), of the provided dict."""
+    data_json = json.dumps(data)
+    return len(data_json)
+
+
+def _size_of_dict_with_field_in_bytes(initial_dict: dict[str, Any], new_data_key: str, new_data_value: Any) -> int:
+    """
+    Returns the size, in # of bytes (assuming all ASCII characters), of the provided dict if it included the provided
+    key/value pair.
+    """
+    combined_dict = initial_dict.copy()
+    combined_dict[new_data_key] = new_data_value
+    return _size_of_dict_in_bytes(combined_dict)
+
+
+def generate_metadata_dict(results: dict[str, Any] | None, is_edge_audit: bool = False) -> dict[str, Any]:
+    """
+    Generates the metadata for an IQ being escalated to the cloud.
+    Includes `"is_edge_audit": True` if it is an edge audit.
+    Includes `"edge_result": results` if including the results would not push the metadata over the size limit. If they
+        would, includes the results without the ROIs if the resulting metadata does not exceed the limit.
+    """
+    metadata_dict = {}
+
+    if is_edge_audit:
+        metadata_dict["is_edge_audit"] = True  # This metadata will trigger an audit in the cloud
+
+    metadata_with_results_size = _size_of_dict_with_field_in_bytes(metadata_dict, "edge_result", results)
+    if metadata_with_results_size > METADATA_SIZE_LIMIT_BYTES:
+        logger.debug(
+            f"Inference results were {metadata_with_results_size} bytes, which made the metadata larger than the max "
+            f"allowed size of {METADATA_SIZE_LIMIT_BYTES} bytes. Attempting to remove the ROIs from the results."
+        )
+        results_without_rois = results.copy()
+        if "rois" in results_without_rois:
+            results_without_rois["rois"] = f"{len(results['rois'])} ROIs were detected."
+            metadata_with_results_size = _size_of_dict_with_field_in_bytes(
+                metadata_dict, "edge_result", results_without_rois
+            )
+            if metadata_with_results_size <= METADATA_SIZE_LIMIT_BYTES:
+                metadata_dict["edge_result"] = results_without_rois
+            else:
+                logger.debug(
+                    "Inference results were still too large after removing ROIs. Not including the results in the "
+                    "metadata."
+                )
+    else:
+        metadata_dict["edge_result"] = results
+
+    return metadata_dict
+
+
 def prefixed_ksuid(prefix: str | None = None) -> str:
     """Returns a unique identifier, with a bunch of nice properties.
     It's statistically guaranteed unique, about as strongly as UUIDv4 are.
@@ -175,25 +237,76 @@ def pil_image_to_bytes(img: Image.Image, format: str = "JPEG") -> bytes:
         return buffer.getvalue()
 
 
-class TimestampedTTLCache(cachetools.TTLCache):
-    """TTLCache subclass that tracks when items were added to the cache."""
+class TimestampedCache(cachetools.Cache):
+    """Cache subclass that tracks when items were added to the cache, and supports suspending and restoring values."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.timestamps = {}  # Store timestamps for each key
+        self._timestamps: dict[Any, float] = {}  # Store timestamps for each key
+        self._suspended_values: dict[Any, Any] = {}
+        self._suspended_timestamps: dict[Any, float] = {}
 
-    def __setitem__(self, key, value, cache_setitem=cachetools.Cache.__setitem__):
-        # Track the current time when setting an item
-        self.timestamps[key] = self.timer()
-        super().__setitem__(key, value, cache_setitem)
+    def __setitem__(self, key, value, timestamp: float | None = None):
+        """Overrides the __setitem__ method to track the timestamp of when an item was added to the cache."""
+        # Track the time when setting an item. If no timestamp is provided, use the current time.
+        if timestamp is None:
+            timestamp = time.monotonic()
+        self._timestamps[key] = timestamp
+        super().__setitem__(key, value)
 
-    def __delitem__(self, key, cache_delitem=cachetools.Cache.__delitem__):
-        super().__delitem__(key, cache_delitem)
-        self.timestamps.pop(key, None)
+    def __delitem__(self, key):
+        """Overrides the __delitem__ method to remove the timestamp of when an item was added to the cache."""
+        super().__delitem__(key)
+        self._timestamps.pop(key, None)
 
-    def get_timestamp(self, key) -> float | None:
-        """Get the timestamp when an item was added to the cache."""
-        return self.timestamps.get(key)
+    def get_timestamp(self, key: Any) -> float | None:
+        """Get the timestamp of when an item was added to the cache. Returns None if the key is not in the cache."""
+        return self._timestamps.get(key, None)
+
+    def suspend_cached_value(self, key: Any) -> bool:
+        """
+        Suspend a value from the cache such that it can be restored later.
+
+        Returns True if the value was successfully suspended.
+        Raises KeyError if the key is not in the cache.
+        """
+        timestamp = self._timestamps.get(key, None)
+        item = self.pop(key, None)
+        if item is not None and timestamp is not None:
+            self._suspended_values[key] = item
+            self._suspended_timestamps[key] = timestamp
+            return True
+        raise KeyError(f"Key {key} not found in cache")
+
+    def restore_suspended_value(self, key: Any) -> bool:
+        """
+        Restore a suspended value to the cache.
+        If the key is already in the cache, the existing value will be overwritten.
+
+        Returns True if the value was successfully restored.
+        Raises KeyError if the key is not in the suspended values.
+        """
+        item = self._suspended_values.pop(key, None)
+        timestamp = self._suspended_timestamps.pop(key, None)
+        if item is not None and timestamp is not None:
+            if key in self:
+                logger.warning(f"Key {key} already in cache, overwriting with suspended value")
+            self.__setitem__(key, item, timestamp=timestamp)
+            return True
+        raise KeyError(f"Key {key} not found in suspended values")
+
+    def delete_suspended_value(self, key: Any) -> bool:
+        """
+        Delete a suspended value.
+
+        Returns True if the value was successfully deleted.
+        Raises KeyError if the key is not in the suspended values.
+        """
+        item = self._suspended_values.pop(key, None)
+        timestamp = self._suspended_timestamps.pop(key, None)
+        if item is not None and timestamp is not None:
+            return True
+        raise KeyError(f"Key {key} not found in suspended values")
 
 
 # Utilities for parsing the fetch models response

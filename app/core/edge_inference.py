@@ -1,9 +1,11 @@
+import asyncio
 import logging
 import os
 import shutil
 import time
 from typing import Optional
 
+import httpx
 import requests
 import yaml
 from cachetools import TTLCache, cached
@@ -33,18 +35,89 @@ def is_edge_inference_ready(inference_client_url: str) -> bool:
         return False
 
 
-def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, content_type: str) -> dict:
+async def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, content_type: str) -> dict:
     inference_url = f"http://{inference_client_url}/infer"
     headers = {"Content-Type": content_type}
-    try:
-        response = requests.post(inference_url, data=image_bytes, headers=headers)
-        if response.status_code != status.HTTP_200_OK:
-            logger.error(f"Inference server returned an error: {response.status_code} - {response.text}")
-            raise RuntimeError(f"Inference server error: {response.status_code} - {response.text}")
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to connect to {inference_url}: {e}")
-        raise RuntimeError("Failed to submit image for inference") from e
+    async with httpx.AsyncClient() as client:
+        try:
+            logger.debug(f"Submitting image for inference to {inference_url}")
+            response = await client.post(inference_url, data=image_bytes, headers=headers)
+            if response.status_code != status.HTTP_200_OK:
+                logger.error(f"Inference server returned an error: {response.status_code} - {response.text}")
+                raise RuntimeError(f"Inference server error: {response.status_code} - {response.text}")
+            return response.json()
+        except httpx.RequestError as e:
+            logger.error(f"Failed to connect to {inference_url}: {e}")
+            raise RuntimeError("Failed to submit image for inference") from e
+
+
+def get_inference_result(primary_response: dict, oodd_response: dict) -> str:
+    """
+    Get the final inference result from the primary and OODD responses.
+    """
+    primary_num_classes = get_num_classes(primary_response)
+
+    primary_output_dict = parse_inference_response(primary_response)
+    logger.debug(f"Primary inference server response: {primary_output_dict}.")
+    oodd_output_dict = parse_inference_response(oodd_response)
+    logger.debug(f"OODD inference server response: {oodd_output_dict}.")
+
+    combined_output_dict = adjust_confidence_with_oodd(primary_output_dict, oodd_output_dict, primary_num_classes)
+    logger.debug(f"Combined (primary + OODD) inference result: {combined_output_dict}.")
+
+    return combined_output_dict
+
+
+def get_num_classes(response: dict) -> int:
+    """
+    Get the number of classes from the inference response dictionary.
+    """
+    multi_predictions: dict = response.get("multi_predictions", None)
+    predictions: dict = response.get("predictions", None)
+    if multi_predictions is not None and predictions is not None:
+        raise ValueError("Got result with both multi_predictions and predictions.")
+    if multi_predictions is not None:
+        # multiclass or count case
+        return len(multi_predictions["probabilities"][0])
+    elif predictions is not None:
+        # binary case
+        return 2
+    else:
+        raise ValueError(
+            "Can't get number of classes from inference response with neither predictions nor multi_predictions."
+        )
+
+
+def adjust_confidence_with_oodd(primary_output_dict: dict, oodd_output_dict: dict, num_classes: int) -> dict:
+    """
+    Adjust the confidence of the primary result based on the OODD result.
+
+    NOTE: This is a duplication of the cloud inference result OODD confidence adjustment logic. Changes should not be
+    made here that bring this out of sync with the cloud OODD confidence adjustment logic. The cloud implementation for
+    binary detectors is found in detector_modes_logic, implemented separately for each detector mode.
+    """
+    oodd_confidence = oodd_output_dict["confidence"]
+    oodd_label = oodd_output_dict["label"]
+    primary_confidence = primary_output_dict["confidence"]
+    if oodd_confidence is None or primary_confidence is None:
+        logger.warning("Either the OODD or primary confidence is None, returning the primary result.")
+        return primary_output_dict
+
+    # 1.0 is the FAIL (outlier) class
+    outlier_probability = oodd_confidence if oodd_label == 1 else 1 - oodd_confidence
+
+    adjusted_confidence = (outlier_probability * 1 / num_classes) + (1 - outlier_probability) * primary_confidence
+    logger.debug(
+        f"Adjusted confidence of the primary prediction with the OODD prediction. New confidence is {adjusted_confidence}."
+    )
+
+    adjusted_output_dict = primary_output_dict.copy()
+    adjusted_output_dict["confidence"] = adjusted_confidence
+    # Raw prediction data for troubleshooting purposes
+    adjusted_output_dict["raw_primary_confidence"] = primary_output_dict["confidence"]
+    adjusted_output_dict["raw_oodd_prediction"] = oodd_output_dict.copy()
+
+    return adjusted_output_dict
 
 
 def parse_inference_response(response: dict) -> dict:
@@ -124,7 +197,7 @@ class EdgeInferenceManager:
             verbose: Whether to print verbose logs from the inference server client
         """
         self.verbose = verbose
-        self.detector_inference_configs, self.inference_client_urls = {}, {}
+        self.detector_inference_configs, self.inference_client_urls, self.oodd_inference_client_urls = {}, {}, {}
         self.speedmon = SpeedMonitor()
 
         if detector_inference_configs:
@@ -134,7 +207,11 @@ class EdgeInferenceManager:
                 for detector_id in self.detector_inference_configs.keys()
                 if self.detector_configured_for_edge_inference(detector_id)
             }
-
+            self.oodd_inference_client_urls = {
+                detector_id: get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
+                for detector_id in self.detector_inference_configs.keys()
+                if self.detector_configured_for_edge_inference(detector_id)
+            }
         # Last time we escalated to cloud for each detector
         self.last_escalation_times = {detector_id: None for detector_id in self.detector_inference_configs.keys()}
         # Minimum time between escalations for each detector
@@ -155,6 +232,9 @@ class EdgeInferenceManager:
         if detector_id not in self.detector_inference_configs.keys():
             self.detector_inference_configs[detector_id] = EdgeInferenceConfig(enabled=True, api_token=api_token)
             self.inference_client_urls[detector_id] = get_edge_inference_service_name(detector_id) + ":8000"
+            self.oodd_inference_client_urls[detector_id] = (
+                get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
+            )
             logger.info(f"Set up edge inference for {detector_id}")
 
     def detector_configured_for_edge_inference(self, detector_id: str) -> bool:
@@ -183,16 +263,20 @@ class EdgeInferenceManager:
         """
         try:
             inference_client_url = self.inference_client_urls[detector_id]
+            oodd_inference_client_url = self.oodd_inference_client_urls[detector_id]
         except KeyError:
-            logger.debug(f"Failed to look up inference client for {detector_id}")
+            logger.info(f"Failed to look up inference clients for {detector_id}")
             return False
 
-        if not is_edge_inference_ready(inference_client_url):
-            logger.debug("Edge inference server is not ready")
+        inference_clients_are_ready = is_edge_inference_ready(inference_client_url) and is_edge_inference_ready(
+            oodd_inference_client_url
+        )
+        if not inference_clients_are_ready:
+            logger.debug("Edge inference server and/or OODD inference server is not ready")
             return False
         return True
 
-    def run_inference(self, detector_id: str, image_bytes: bytes, content_type: str) -> dict:
+    async def run_inference(self, detector_id: str, image_bytes: bytes, content_type: str) -> dict:
         """
         Submit an image to the inference server, route to a specific model, and return the results.
         Args:
@@ -210,8 +294,14 @@ class EdgeInferenceManager:
         start_time = time.perf_counter()
 
         inference_client_url = self.inference_client_urls[detector_id]
-        response = submit_image_for_inference(inference_client_url, image_bytes, content_type)
-        output_dict = parse_inference_response(response)
+        oodd_inference_client_url = self.oodd_inference_client_urls[detector_id]
+
+        response, oodd_response = await asyncio.gather(
+            submit_image_for_inference(inference_client_url, image_bytes, content_type),
+            submit_image_for_inference(oodd_inference_client_url, image_bytes, content_type),
+        )
+
+        output_dict = get_inference_result(response, oodd_response)
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         self.speedmon.update(detector_id, elapsed_ms)
@@ -294,17 +384,20 @@ def fetch_model_info(detector_id: str, api_token: Optional[str] = None) -> tuple
     url = f"https://api.groundlight.ai/edge-api/v1/fetch-model-urls/{detector_id}/"
     headers = {"x-api-token": api_token}
     response = requests.get(url, headers=headers, timeout=10)
-    logger.debug(f"fetch-model-urls response = {response.json()}")
+    logger.debug(f'fetch-model-urls response.text = "{response.text}", response.status_code = {response.status_code}')
 
     if response.status_code == status.HTTP_200_OK:
         return parse_model_info(response.json())
-    else:
-        response_json = response.json()
-        exception_string = f"Failed to fetch model info for {detector_id=}."
-        if "detail" in response_json:  # Include additional detail on the error if available
-            exception_string = exception_string + f" Received error: {response_json['detail']}"
 
-        raise HTTPException(status_code=response.status_code, detail=exception_string)
+    exception_string = f"Failed to fetch model info for detector '{detector_id}'."
+    try:
+        response_json = response.json()
+        if "detail" in response_json:  # Include additional detail on the error if available
+            exception_string = f"{exception_string} Received error: {response_json['detail']}"
+    except requests.exceptions.JSONDecodeError:
+        exception_string = f"{exception_string} Received error: {response.text}"
+
+    raise HTTPException(status_code=response.status_code, detail=exception_string)
 
 
 def get_model_buffer(model_info: ModelInfoBase) -> bytes | None:
@@ -559,18 +652,22 @@ def delete_model_version(model_dir: str, model_version: int) -> None:
         shutil.rmtree(model_version_dir)
 
 
-def get_edge_inference_service_name(detector_id: str) -> str:
+def get_edge_inference_service_name(detector_id: str, is_oodd: bool = False) -> str:
     """
     Kubernetes service/deployment names have a strict naming convention.
     They have to be alphanumeric, lower cased, and can only contain dashes.
-    We just use `inferencemodel-<detector_id>` as the deployment name and
-    `inference-service-<detector_id>` as the service name.
+    We just use `inferencemodel-{'oodd' or 'primary'}-<detector_id>` as the deployment name and
+    `inference-service-{'oodd' or 'primary'}-<detector_id>` as the service name.
     """
-    return f"inference-service-{detector_id.replace('_', '-').lower()}"
+    return f"inference-service-{'oodd' if is_oodd else 'primary'}-{detector_id.replace('_', '-').lower()}"
 
 
-def get_edge_inference_deployment_name(detector_id: str) -> str:
-    return f"inferencemodel-{detector_id.replace('_', '-').lower()}"
+def get_edge_inference_deployment_name(detector_id: str, is_oodd: bool = False) -> str:
+    return f"inferencemodel-{'oodd' if is_oodd else 'primary'}-{detector_id.replace('_', '-').lower()}"
+
+
+def get_edge_inference_model_name(detector_id: str, is_oodd: bool = False) -> str:
+    return os.path.join(detector_id, "primary" if not is_oodd else "oodd")
 
 
 def get_detector_models_dir(repository_root: str, detector_id: str) -> str:

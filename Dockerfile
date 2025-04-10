@@ -11,7 +11,7 @@ ARG POETRY_VERSION=1.5.1
 #############
 # Build Stage
 #############
-FROM python:3.11-slim-bullseye as production-dependencies-build-stage
+FROM python:3.11-slim-bullseye AS production-dependencies-build-stage
 
 # Args that are needed in this stage
 ARG APP_ROOT
@@ -81,7 +81,7 @@ COPY deploy/k3s/inference_deployment/inference_deployment_template.yaml \
 ##################
 # Production Stage
 ##################
-FROM production-dependencies-build-stage as production-image
+FROM production-dependencies-build-stage AS production-image
 
 ARG APP_ROOT
 ARG NGINX_PORT
@@ -105,7 +105,7 @@ RUN rm /etc/nginx/sites-enabled/default
 RUN ln -sf /dev/stdout /var/log/nginx/access.log && \
     ln -sf /dev/stderr /var/log/nginx/error.log
 
-CMD nginx && poetry run uvicorn --workers 8 --host 0.0.0.0 --port ${APP_PORT} --proxy-headers app.main:app
+CMD ["/bin/bash", "-c", "./app/bin/launch-edge-logic-server.sh"]
 
 # Document the exposed port, which is configured in nginx.conf
 EXPOSE ${NGINX_PORT} ${NGINX_PORT_OLD}
