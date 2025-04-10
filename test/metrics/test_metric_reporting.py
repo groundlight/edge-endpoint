@@ -21,9 +21,9 @@ def test_metrics_payload():
     assert "now" in device_info
     assert "cpucores" in device_info
     assert "inference_flavor" in device_info
-    assert "cpu_usage" in device_info
-    assert "percentage_memory_used" in device_info
-    assert "memory_available" in device_info
+    assert "cpu_usage_pct" in device_info
+    assert "memory_used_pct" in device_info
+    assert "memory_available_bytes" in device_info
 
     activity_metrics = payload["activity_metrics"]
     assert "last_image_processed" in activity_metrics
