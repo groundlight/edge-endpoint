@@ -60,7 +60,7 @@ def metrics_payload() -> dict:
     device_info.add("memory_available_bytes", lambda: system_metrics.get_memory_available_bytes())
 
     activity_metrics = SafeMetricsDict()
-    retriever = iq_activity.FilesystemActivityRetriever()
+    retriever = iq_activity.ActivityRetriever()
     activity_metrics.add("last_image_processed", lambda: retriever.last_activity_time())
     activity_metrics.add("num_detectors_lifetime", lambda: retriever.num_detectors_lifetime())
     activity_metrics.add("num_detectors_active_1h", lambda: retriever.num_detectors_active(timedelta(hours=1)))

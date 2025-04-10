@@ -53,7 +53,7 @@ def test_activity_tracking(monkeypatch, tmp_base_dir, _test_tracker):
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "iqs").read_text() == "1"
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "iqs_2025-04-03_12").exists()
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "iqs_2025-04-03_12").read_text() == "1"
-        assert Path(tmp_base_dir, "last_iq").exists()
+        assert Path(tmp_base_dir, "last_iqs").exists()
         assert Path(tmp_base_dir, "iqs").exists()
         assert Path(tmp_base_dir, "iqs").read_text() == "1"
         assert Path(tmp_base_dir, "iqs_2025-04-03_12").exists()
