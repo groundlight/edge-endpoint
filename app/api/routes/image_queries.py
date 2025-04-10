@@ -14,7 +14,7 @@ from app.core.app_state import (
     refresh_detector_metadata_if_needed,
 )
 from app.core.edge_inference import get_edge_inference_model_name
-from app.core.utils import create_iq, safe_call_sdk
+from app.core.utils import create_iq, generate_metadata_dict, safe_call_sdk
 from app.metrics.iq_activity import record_activity_for_metrics
 
 logger = logging.getLogger(__name__)
@@ -194,10 +194,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         patience_time=patience_time,
                         confidence_threshold=confidence_threshold,
                         want_async=True,
-                        metadata={
-                            "is_edge_audit": True,  # This metadata will trigger an audit in the cloud
-                            "edge_result": results,
-                        },
+                        metadata=generate_metadata_dict(results=results, is_edge_audit=True),
                         image_query_id=image_query.id,  # We give the cloud IQ the same ID as the returned edge IQ
                     )
 
@@ -222,7 +219,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         confidence_threshold=confidence_threshold,
                         human_review=human_review,
                         want_async=True,
-                        metadata={"edge_result": results},
+                        metadata=generate_metadata_dict(results=results, is_edge_audit=False),
                         image_query_id=image_query.id,  # Ensure the cloud IQ has the same ID as the returned edge IQ
                     )
                 else:
@@ -278,5 +275,5 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         patience_time=patience_time,
         confidence_threshold=confidence_threshold,
         human_review=human_review,
-        metadata={"edge_result": results},
+        metadata=generate_metadata_dict(results=results, is_edge_audit=False),
     )
