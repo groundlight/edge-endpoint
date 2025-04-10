@@ -91,30 +91,9 @@
                     return response.json();
                 })
                 .then(data => {
-                    // Helper function to format dictionary values
-                    function formatDict(dict) {
-                        let formatted = Object.entries(dict)
-                            .map(([key, value]) => {
-                                // Format the value based on type
-                                let formattedValue = value;
-                                if (typeof value === 'string') {
-                                    formattedValue = value.replace(/"/g, '');
-                                } else if (typeof value === 'object' && value !== null) {
-                                    if (Array.isArray(value)) {
-                                        formattedValue = JSON.stringify(value);
-                                    } else {
-                                        formattedValue = '{\n' + formatDict(value).split('\n').map(line => '    ' + line).join('\n') + '\n}';
-                                    }
-                                }
-                                return `${key}: ${formattedValue}`;
-                            })
-                            .join('\n');
-                        return formatted;
-                    }
-
-                    document.getElementById('device-info').textContent = formatDict(data.device_info);
-                    document.getElementById('activity-metrics').textContent = formatDict(data.activity_metrics);
-                    document.getElementById('k8s-stats').textContent = formatDict(data.k8s_stats);
+                    document.getElementById('device-info').textContent = JSON.stringify(data.device_info, null, 2);
+                    document.getElementById('activity-metrics').textContent = JSON.stringify(data.activity_metrics, null, 2);
+                    document.getElementById('k8s-stats').textContent = JSON.stringify(data.k8s_stats, null, 2);
                     document.getElementById('loading').style.display = 'none';
                 })
                 .catch(error => {

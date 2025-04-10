@@ -24,20 +24,26 @@ def test_initial_directories(tmp_base_dir, _test_tracker):
     assert Path(tmp_base_dir, "detectors").exists()
 
 
-def test_increment_counter_file(tmp_base_dir, _test_tracker):
-    assert not Path(tmp_base_dir, "increment_test").exists()
-    _test_tracker.increment_counter_file("increment_test")
-    assert Path(tmp_base_dir, "increment_test").exists()
-    assert Path(tmp_base_dir, "increment_test").read_text() == "1"
-    _test_tracker.increment_counter_file("increment_test")
-    assert Path(tmp_base_dir, "increment_test").read_text() == "2"
+def test_append_to_counter_file(tmp_base_dir, _test_tracker):
+    assert not Path(tmp_base_dir, "append_test").exists()
+    file = _test_tracker.file("append_test")
+    _test_tracker.append_to_hourly_counter_file(file)
+    assert Path(tmp_base_dir, "append_test").exists()
+    assert Path(tmp_base_dir, "append_test").read_text() == "."
+    assert _test_tracker.get_file_length(file) == 1
+    _test_tracker.append_to_hourly_counter_file(file)
+    assert Path(tmp_base_dir, "append_test").read_text() == ".."
+    assert _test_tracker.get_file_length(file) == 2
 
-    assert not Path(tmp_base_dir, "detectors", "det_incrementtest", "increment_test").exists()
-    _test_tracker.increment_counter_file("increment_test", "det_incrementtest")
-    assert Path(tmp_base_dir, "detectors", "det_incrementtest", "increment_test").exists()
-    assert Path(tmp_base_dir, "detectors", "det_incrementtest", "increment_test").read_text() == "1"
-    _test_tracker.increment_counter_file("increment_test", "det_incrementtest")
-    assert Path(tmp_base_dir, "detectors", "det_incrementtest", "increment_test").read_text() == "2"
+    assert not Path(tmp_base_dir, "detectors", "det_appendtest", "append_test").exists()
+    file = _test_tracker.detector_file("det_appendtest", "append_test")
+    _test_tracker.append_to_hourly_counter_file(file)
+    assert Path(tmp_base_dir, "detectors", "det_appendtest", "append_test").exists()
+    assert Path(tmp_base_dir, "detectors", "det_appendtest", "append_test").read_text() == "."
+    assert _test_tracker.get_file_length(file) == 1
+    _test_tracker.append_to_hourly_counter_file(file)
+    assert Path(tmp_base_dir, "detectors", "det_appendtest", "append_test").read_text() == ".."
+    assert _test_tracker.get_file_length(file) == 2
 
 
 def test_activity_tracking(monkeypatch, tmp_base_dir, _test_tracker):
@@ -49,43 +55,31 @@ def test_activity_tracking(monkeypatch, tmp_base_dir, _test_tracker):
     with patch("app.metrics.iq_activity.datetime") as mock_datetime:
         mock_datetime.now.return_value = datetime(2025, 4, 3, 12, 0, 0)
         record_activity_for_metrics("det_recordactivitytest", "iqs")
-        assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "iqs").exists()
-        assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "iqs").read_text() == "1"
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "iqs_2025-04-03_12").exists()
-        assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "iqs_2025-04-03_12").read_text() == "1"
+        assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "iqs_2025-04-03_12").read_text() == "."
         assert Path(tmp_base_dir, "last_iqs").exists()
-        assert Path(tmp_base_dir, "iqs").exists()
-        assert Path(tmp_base_dir, "iqs").read_text() == "1"
         assert Path(tmp_base_dir, "iqs_2025-04-03_12").exists()
-        assert Path(tmp_base_dir, "iqs_2025-04-03_12").read_text() == "1"
+        assert Path(tmp_base_dir, "iqs_2025-04-03_12").read_text() == "."
 
         # Record another IQ, make sure all files are updated correctly
         mock_datetime.now.return_value = datetime(2025, 4, 3, 12, 0, 1)
         record_activity_for_metrics("det_recordactivitytest", "iqs")
-        assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "iqs").read_text() == "2"
-        assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "iqs_2025-04-03_12").read_text() == "2"
-        assert Path(tmp_base_dir, "iqs").read_text() == "2"
-        assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "iqs").read_text() == "2"
-        assert Path(tmp_base_dir, "iqs_2025-04-03_12").read_text() == "2"
+        assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "iqs_2025-04-03_12").read_text() == ".."
+        assert Path(tmp_base_dir, "iqs_2025-04-03_12").read_text() == ".."
 
         # Record an escalation and an audit, make sure the detector-specific files are created and have
         # the correct values
         record_activity_for_metrics("det_recordactivitytest", "escalations")
-        assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "escalations").exists()
-        assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "escalations").read_text() == "1"
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "escalations_2025-04-03_12").exists()
-        assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "escalations_2025-04-03_12").read_text() == "1"
+        assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "escalations_2025-04-03_12").read_text() == "."
         record_activity_for_metrics("det_recordactivitytest", "audits")
-        assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "audits").exists()
-        assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "audits").read_text() == "1"
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "audits_2025-04-03_12").exists()
-        assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "audits_2025-04-03_12").read_text() == "1"
+        assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "audits_2025-04-03_12").read_text() == "."
 
 
 def test_wrong_activity_type(caplog):
-    record_activity_for_metrics("det_123", "wrong_activity_type")
-    assert "The provided activity type (wrong_activity_type) is not currently supported" in caplog.text
-
+    with pytest.raises(ValueError) as e:
+        record_activity_for_metrics("det_123", "wrong_activity_type")
 
 def test_clear_old_activity_files(monkeypatch, tmp_base_dir, _test_tracker):
     monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)

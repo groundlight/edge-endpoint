@@ -43,25 +43,22 @@ def get_deployments() -> set[str]:
     return deployment_names
 
 
-def get_pods() -> dict[str, str]:
+def get_pods() -> list[tuple[str, str]]:
     config.load_incluster_config()
     v1_core = client.CoreV1Api()
     pods = v1_core.list_namespaced_pod(namespace=os.getenv("NAMESPACE", "edge"))
-    pods_dict = {}
-    for pod in pods.items:
-        pods_dict[pod.metadata.name] = pod.status.phase
-    return pods_dict
+    return [(pod.metadata.name, pod.status.phase) for pod in pods.items]
 
 
-def get_container_images() -> dict[str, dict[str, str]]:
+def get_container_images() -> list[tuple[str, dict[str, str]]]:
     config.load_incluster_config()
     v1_core = client.CoreV1Api()
     pods = v1_core.list_namespaced_pod(namespace=os.getenv("NAMESPACE", "edge"))
 
-    containers_dict = {}
+    containers = []
     for pod in pods.items:
+        pod_dict = {}
         for container in pod.status.container_statuses:
-            if pod.metadata.name not in containers_dict:
-                containers_dict[pod.metadata.name] = {}
-            containers_dict[pod.metadata.name][container.name] = container.image_id
-    return containers_dict
+            pod_dict[container.name] = container.image_id
+        containers.append((pod.metadata.name, pod_dict))
+    return containers

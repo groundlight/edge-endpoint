@@ -110,19 +110,22 @@ class FilesystemActivityTrackingHelper:
         content = f.read_text(encoding='utf-8')
         return len(content)
 
-    def get_activity_from_file(self, name: str) -> int:
+    def get_activity_from_file(self, file: Path) -> int:
         """Get the activity from a file. Returns 0 if the file doesn't exist."""
-        f = self.file(name)
-        if not f.exists():
+        if not file.exists():
             return 0
 
         # if the file is an hourly counter, return the length of the content
         # Looking for files that match the pattern <record_name>_YYYY-MM-DD_HH
         time_pattern = "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]$"
-        if re.search(time_pattern, name):
-            return self.get_file_length(name)
+        if re.search(time_pattern, file.name):
+            return self.get_file_length(file.name)
+
         # otherwise, the file is a lifetime counter, so return the content as an int
-        return int(f.read_text())
+        text = file.read_text(encoding='utf-8')
+        if text == "":
+            return 0
+        return int(text)
 
     def update_lifetime_counters_from_hourly_files(self, hourly_files: list[Path]):
         """Update the relevant lifetime counters with the activity from a list of hourly files."""
@@ -171,7 +174,7 @@ class ActivityRetriever:
     def get_all_detector_activity(self) -> dict:
         """Get all activity metrics for all detectors."""
         f = _tracker().detectors_dir
-        return {det.name: self.get_detector_activity_metrics(det.name) for det in f.iterdir()}
+        return [(det.name, self.get_detector_activity_metrics(det.name)) for det in f.iterdir()]
 
     def get_detector_activity_metrics(self, detector_id: str) -> dict:
         """Get all activity metrics for a single detector.
@@ -234,7 +237,6 @@ def record_activity_for_metrics(detector_id: str, activity_type: str):
     f = _tracker().hourly_activity_file(activity_type, current_hour, detector_id)
     _tracker().append_to_hourly_counter_file(f)
 
-    # record last activity time
     f = _tracker().last_activity_file(activity_type, detector_id)
     f.touch()
 
