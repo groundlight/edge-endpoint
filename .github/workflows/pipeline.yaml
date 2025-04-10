@@ -556,8 +556,8 @@ jobs:
           git commit -m "Update edge endpoint submodule"
           git push https://edge-glhub-bot:${{ secrets.BOT_GITHUB_TOKEN }}@github.com/groundlight/glhub.git main
         env:
-          GIT_AUTHOR_NAME: "edge-glhub-bot"
-          GIT_AUTHOR_EMAIL: "roxanne+gh_bot@groundlight.ai"
+          GIT_AUTHOR_NAME: "github-actions[bot]"
+          GIT_AUTHOR_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com"
 
   tag-release:
     # The environment rules are not defined in code -- instead, they are defined in the Github UI:
