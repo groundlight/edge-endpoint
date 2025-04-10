@@ -6,14 +6,14 @@ Can also be run directly as a script.
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import lru_cache
 from typing import Any, Callable
 
 from groundlight import Groundlight
 
 from app.core import deviceid
-from app.metrics import iqactivity
+from app.metrics import iq_activity, system_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -49,15 +49,34 @@ class SafeMetricsDict:
 
 def metrics_payload() -> dict:
     """Returns a dictionary of metrics to be sent to the cloud API."""
-    out = SafeMetricsDict()
-    out.add("device_id", lambda: deviceid.get_deviceid_str())
-    out.add("device_metadata", lambda: deviceid.get_deviceid_metadata_dict())
-    out.add("now", lambda: datetime.now().isoformat())
-    out.add("cpucores", lambda: os.cpu_count())
-    out.add("last_image_processed", lambda: iqactivity.last_activity_time())
-    # TODO: Add pod.status.containerStatuses[].imageId
-    # TODO: add metrics like GPU count, how many local models, etc
-    return out.as_dict()
+    device_info = SafeMetricsDict()
+    device_info.add("device_id", lambda: deviceid.get_deviceid_str())
+    device_info.add("device_metadata", lambda: deviceid.get_deviceid_metadata_dict())
+    device_info.add("now", lambda: datetime.now().isoformat())
+    device_info.add("cpucores", lambda: os.cpu_count())
+    device_info.add("inference_flavor", lambda: system_metrics.get_inference_flavor())
+    device_info.add("cpu_usage_pct", lambda: system_metrics.get_cpu_usage_pct())
+    device_info.add("memory_used_pct", lambda: system_metrics.get_memory_used_pct())
+    device_info.add("memory_available_bytes", lambda: system_metrics.get_memory_available_bytes())
+
+    activity_metrics = SafeMetricsDict()
+    retriever = iq_activity.ActivityRetriever()
+    activity_metrics.add("last_image_processed", lambda: retriever.last_activity_time())
+    activity_metrics.add("num_detectors_lifetime", lambda: retriever.num_detectors_lifetime())
+    activity_metrics.add("num_detectors_active_1h", lambda: retriever.num_detectors_active(timedelta(hours=1)))
+    activity_metrics.add("num_detectors_active_24h", lambda: retriever.num_detectors_active(timedelta(days=1)))
+    activity_metrics.add("detector_activity", lambda: retriever.get_all_detector_activity())
+
+    k8s_stats = SafeMetricsDict()
+    k8s_stats.add("deployments", lambda: system_metrics.get_deployments())
+    k8s_stats.add("pod_statuses", lambda: system_metrics.get_pods())
+    k8s_stats.add("container_images", lambda: system_metrics.get_container_images())
+
+    return {
+        "device_info": device_info.as_dict(),
+        "activity_metrics": activity_metrics.as_dict(),
+        "k8s_stats": k8s_stats.as_dict(),
+    }
 
 
 def report_metrics_to_cloud():

@@ -76,7 +76,7 @@ fi
 
 echo "Edge-endpoint pods have successfully rolled out."
 
-echo "Waiting for the inference deployment to rollout (inferencemodel-primary-$DETECTOR_ID) and (inferencemodel-oodd-$DETECTOR_ID)..."
+echo "Waiting for the inference deployments to rollout (inferencemodel-primary-$DETECTOR_ID) and (inferencemodel-oodd-$DETECTOR_ID)..."
 
 export DETECTOR_ID_WITH_DASHES=$(echo ${DETECTOR_ID//_/-} | tr '[:upper:]' '[:lower:]')
 sleep 60
