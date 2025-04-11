@@ -6,16 +6,14 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
-from app.metrics.metric_reporting import metrics_payload, report_metrics_to_cloud
+from app.metrics.metric_reporting import MetricsReporter
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
-# Environment variable lets us speed up testing
-STATUS_REPORT_INTERVAL = int(os.environ.get("STATUS_REPORT_INTERVAL", 3600))
 
 
 app = FastAPI(title="status-monitor")
 scheduler = AsyncIOScheduler()
-
+reporter = MetricsReporter()
 
 @app.on_event("startup")
 async def startup_event():
@@ -24,15 +22,16 @@ async def startup_event():
         level=LOG_LEVEL, format="%(asctime)s.%(msecs)03d %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
     )
     logging.info("Starting status-monitor server...")
-    scheduler.add_job(report_metrics_to_cloud, "cron", hour="*", minute="1", jitter=120)
-    logging.info("Will report metrics to cloud every hour")
+    logging.info("Will report metrics to the cloud every hour")
+    scheduler.add_job(reporter.collect_metrics_for_cloud, "cron", hour="*", minute="1")
+    scheduler.add_job(reporter.report_metrics_to_cloud, "cron", hour="*", minute="2", jitter=120)
     scheduler.start()
 
 
 @app.get("/status/metrics.json")
 async def get_metrics():
     """Return system metrics as JSON."""
-    return metrics_payload()
+    return reporter.metrics_payload()
 
 
 @app.get("/status")

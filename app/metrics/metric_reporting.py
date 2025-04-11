@@ -47,61 +47,74 @@ class SafeMetricsDict:
         return self.data
 
 
-def metrics_payload() -> dict:
-    """Returns a dictionary of metrics to be sent to the cloud API."""
-    device_info = SafeMetricsDict()
-    device_info.add("device_id", lambda: deviceid.get_deviceid_str())
-    device_info.add("device_metadata", lambda: deviceid.get_deviceid_metadata_dict())
-    device_info.add("now", lambda: datetime.now().isoformat())
-    device_info.add("cpucores", lambda: os.cpu_count())
-    device_info.add("inference_flavor", lambda: system_metrics.get_inference_flavor())
-    device_info.add("cpu_usage_pct", lambda: system_metrics.get_cpu_usage_pct())
-    device_info.add("memory_used_pct", lambda: system_metrics.get_memory_used_pct())
-    device_info.add("memory_available_bytes", lambda: system_metrics.get_memory_available_bytes())
+class MetricsReporter:
+    """Class that collects metrics and reports them to the cloud API."""
 
-    activity_metrics = SafeMetricsDict()
-    retriever = iq_activity.ActivityRetriever()
-    activity_metrics.add("last_image_processed", lambda: retriever.last_activity_time())
-    activity_metrics.add("num_detectors_lifetime", lambda: retriever.num_detectors_lifetime())
-    activity_metrics.add("num_detectors_active_1h", lambda: retriever.num_detectors_active(timedelta(hours=1)))
-    activity_metrics.add("num_detectors_active_24h", lambda: retriever.num_detectors_active(timedelta(days=1)))
-    activity_metrics.add("detector_activity", lambda: retriever.get_all_detector_activity())
+    def __init__(self):
+        self.metrics_to_send = {}
 
-    k8s_stats = SafeMetricsDict()
-    k8s_stats.add("deployments", lambda: system_metrics.get_deployments())
-    k8s_stats.add("pod_statuses", lambda: system_metrics.get_pods())
-    k8s_stats.add("container_images", lambda: system_metrics.get_container_images())
+    def metrics_payload(self) -> dict:
+        """Returns a dictionary of metrics to be sent to the cloud API."""
+        device_info = SafeMetricsDict()
+        device_info.add("device_id", lambda: deviceid.get_deviceid_str())
+        device_info.add("device_metadata", lambda: deviceid.get_deviceid_metadata_dict())
+        device_info.add("now", lambda: datetime.now().isoformat())
+        device_info.add("cpucores", lambda: os.cpu_count())
+        device_info.add("inference_flavor", lambda: system_metrics.get_inference_flavor())
+        device_info.add("cpu_usage_pct", lambda: system_metrics.get_cpu_usage_pct())
+        device_info.add("memory_used_pct", lambda: system_metrics.get_memory_used_pct())
+        device_info.add("memory_available_bytes", lambda: system_metrics.get_memory_available_bytes())
 
-    return {
-        "device_info": device_info.as_dict(),
-        "activity_metrics": activity_metrics.as_dict(),
-        "k8s_stats": k8s_stats.as_dict(),
-    }
+        activity_metrics = SafeMetricsDict()
+        retriever = iq_activity.ActivityRetriever()
+        activity_metrics.add("last_image_processed", lambda: retriever.last_activity_time())
+        activity_metrics.add("num_detectors_lifetime", lambda: retriever.num_detectors_lifetime())
+        activity_metrics.add("num_detectors_active_1h", lambda: retriever.num_detectors_active(timedelta(hours=1)))
+        activity_metrics.add("num_detectors_active_24h", lambda: retriever.num_detectors_active(timedelta(days=1)))
+        activity_metrics.add("detector_activity", lambda: retriever.get_all_detector_activity())
 
+        k8s_stats = SafeMetricsDict()
+        k8s_stats.add("deployments", lambda: system_metrics.get_deployments())
+        k8s_stats.add("pod_statuses", lambda: system_metrics.get_pods())
+        k8s_stats.add("container_images", lambda: system_metrics.get_container_images())
 
-def report_metrics_to_cloud():
-    """Reports metrics to the cloud API."""
-    payload = metrics_payload()
+        return {
+            "device_info": device_info.as_dict(),
+            "activity_metrics": activity_metrics.as_dict(),
+            "k8s_stats": k8s_stats.as_dict(),
+        }
 
-    logger.info(f"Reporting metrics to the cloud API: {payload}")
+    def collect_metrics_for_cloud(self):
+        """Collect metrics for the cloud API."""
+        payload = self.metrics_payload()
+        self.metrics_to_send[datetime.now().isoformat()] = payload
 
-    sdk = _groundlight_client()
-    # TODO: replace this with a proper SDK call when available.
-    headers = sdk.api_client._headers()
-    response = sdk.api_client.call_api(
-        # We have to do this in order because it analyzes *args.  Grrr.
-        "/v1/edge/report-metrics",  # The endpoint path
-        "POST",  # HTTP method
-        None,  # path_params
-        None,  # query_params
-        headers,  # header_params
-        payload,  # body
-        async_req=False,  # async_req
-        _return_http_data_only=True,  # _return_http_data_only
-    )
-    logger.debug(f"Report edge metrics: {response}")
+    def report_metrics_to_cloud(self):
+        """Reports metrics to the cloud API."""
+        sdk = _groundlight_client()
+        # TODO: replace this with a proper SDK call when available.
+        headers = sdk.api_client._headers()
+
+        for timestamp, payload in sorted(self.metrics_to_send.items(), key=lambda x: x[0]):
+            logger.info(f"Reporting metrics to the cloud API: {payload}")
+            response = sdk.api_client.call_api(
+                # We have to do this in order because it analyzes *args.  Grrr.
+                "/v1/edge/report-metrics",  # The endpoint path
+                "POST",  # HTTP method
+                None,  # path_params
+                None,  # query_params
+                headers,  # header_params
+                payload,  # body
+                async_req=False,  # async_req
+                _return_http_data_only=True,  # _return_http_data_only
+            )
+            logger.debug(f"Report edge metrics: {response}")
+            if response.status_code == 200:
+                del self.metrics_to_send[timestamp]
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    report_metrics_to_cloud()
+    reporter = MetricsReporter()
+    reporter.collect_metrics_for_cloud()
+    reporter.report_metrics_to_cloud()

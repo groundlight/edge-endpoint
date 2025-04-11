@@ -15,7 +15,7 @@ from app.api.api import api_router, health_router, ping_router
 from app.api.naming import API_BASE_PATH
 from app.core.app_state import AppState
 from app.metrics.iq_activity import clear_old_activity_files
-from app.metrics.metric_reporting import report_metrics_to_cloud
+from app.metrics.metric_reporting import MetricsReporter
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 DEPLOY_DETECTOR_LEVEL_INFERENCE = bool(int(os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", 0)))
@@ -55,7 +55,9 @@ async def startup_event():
 
     logging.info(f"edge_config={app.state.app_state.edge_config}")
 
-    scheduler.add_job(report_metrics_to_cloud, "interval", seconds=ONE_HOUR_IN_SECONDS)
+    reporter = MetricsReporter()
+    scheduler.add_job(reporter.collect_metrics_for_cloud, "cron", hour="*", minute="1")
+    scheduler.add_job(reporter.report_metrics_to_cloud, "cron", hour="*", minute="2", jitter=120)
     scheduler.add_job(clear_old_activity_files, "interval", seconds=ONE_HOUR_IN_SECONDS)
 
     if DEPLOY_DETECTOR_LEVEL_INFERENCE:
