@@ -142,15 +142,16 @@ class ActivityRetriever:
 
     def get_detector_activity_metrics(self, detector_id: str) -> int:
         """Get the activity on a detector for a particular hour."""
-        time = datetime.now() - timedelta(hours=1)
+        time = (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
+        logger.info(f"Getting activity for detector {detector_id} at {time}")
+
         detector_folder = _tracker().detector_folder(detector_id)
-        activity_files = detector_folder.glob(f"*_{time.strftime('%Y-%m-%d_%H')}")
+        activity_files = list(detector_folder.glob(f"*_{time}"))
 
         detector_metrics = {}
         for activity_type in ["iqs", "escalations", "audits"]:
             files = [f for f in activity_files if f.name.startswith(activity_type)]
             total_activity = sum([_tracker().get_activity_from_file(f) for f in files])
-
             f = _tracker().last_activity_file(activity_type, detector_id)
             last_activity = _tracker().get_last_file_modification_time(f)
             last_activity = last_activity.isoformat() if last_activity else "none"
@@ -206,8 +207,6 @@ def clear_old_activity_files():
     for folder in folders:
         files = folder.glob(f"*_{time_pattern}")
         old_files.extend([f for f in files if f.name[-len("YYYY-MM-DD_HH") :] not in valid_hours])
-
-    _tracker().update_lifetime_counters_from_hourly_files(old_files)
 
     if old_files:
         logger.info(f"Clearing {len(old_files)} old activity files: {old_files}")
