@@ -44,12 +44,6 @@ groundlightApiToken: ""
 # you can override this value.
 upstreamEndpoint: "https://api.groundlight.ai"
 
-# TODO: remove these values once we retrieve them from Janzu
-# The user must provide the AWS Access Key Id as input or the deployment will fail
-awsAccessKeyId: ""
-# The user must provide the AWS Secret Access Key as input or the deployment will fail
-awsSecretAccessKey: ""
-
 # Currently, all Groundlight services are deployed in the us-west-2 region
 awsRegion: "us-west-2"
 

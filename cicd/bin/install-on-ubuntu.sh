@@ -89,7 +89,7 @@ else
 fi
 
 # Set up k3s with GPU support
-./deploy/bin/install-k3s-nvidia.sh
+./deploy/bin/install-k3s.sh gpu
 
 # Set up some shell niceties
 TARGET_USER="ubuntu"
