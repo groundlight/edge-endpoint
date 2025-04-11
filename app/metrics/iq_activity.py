@@ -5,29 +5,19 @@ Filesystem structure:
 /opt/groundlight/edge-metrics/
     detectors/
         <detector_id1>/
-            iqs
-            iqs_YYYY-MM-DD_HH   <--- Current hour
-            iqs_YYYY-MM-DD_HH   <--- Previous hour
-            iqs_YYYY-MM-DD_HH   <--- 2 hours ago
-            escalations
-            escalations_YYYY-MM-DD_HH   <--- Current hour
-            escalations_YYYY-MM-DD_HH   <--- Previous hour
-            escalations_YYYY-MM-DD_HH   <--- 2 hours ago
-            audits
-            audits_YYYY-MM-DD_HH   <--- Current hour
-            audits_YYYY-MM-DD_HH   <--- Previous hour
-            audits_YYYY-MM-DD_HH   <--- 2 hours ago
+            iqs_<pid1>_YYYY-MM-DD_HH
+            iqs_<pid1>_YYYY-MM-DD_HH
+            iqs_<pid2>_YYYY-MM-DD_HH
+            iqs_<pid2>_YYYY-MM-DD_HH
+            escalations_<pid1>_YYYY-MM-DD_HH
+            escalations_<pid2>_YYYY-MM-DD_HH
+            audits_<pid1>_YYYY-MM-DD_HH
         <detector_id2>/
             repeat of above detector
-    iqs
-    iqs_YYYY-MM-DD_HH   <--- Current hour
-    iqs_YYYY-MM-DD_HH   <--- Previous hour
-    iqs_YYYY-MM-DD_HH   <--- 2 hours ago
 """
 
 import logging
 import os
-import re
 from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -63,7 +53,9 @@ class FilesystemActivityTrackingHelper:
         return Path(self.detector_folder(detector_id), name)
 
     def last_activity_file(self, activity_type: str, detector_id: str | None = None) -> Path:
-        """Get the path to a file which is used to track the last time an image was processed by the edge-endpoint."""
+        """Get the path to a file which is used to track the last time "activity_type" occurred, on
+        a per-detector or system-wide basis. Not specific to a process.
+        """
         name = f"last_{activity_type}"
 
         if detector_id:
@@ -72,29 +64,31 @@ class FilesystemActivityTrackingHelper:
         return self.file(name)
 
     def hourly_activity_file(self, activity_type: str, time: datetime, detector_id: str | None = None) -> Path:
-        """Get the path to a file which is used to track the number of times an activity type occurred in an hour."""
+        """Get the path to a file which is used to track the number of times an activity type
+        occurred in an hour on this process."""
         hour = time.strftime("%Y-%m-%d_%H")
+        pid = os.getpid()
 
-        name = f"{activity_type}_{hour}"
+        name = f"{activity_type}_{pid}_{hour}"
 
         if detector_id:
             return self.detector_file(detector_id, name)
 
         return self.file(name)
 
-    def append_to_hourly_counter_file(self, file: Path):
-        """Append a "." to an hourly counter file, or create it if it doesn't exist. If detector_id
-        is provided, use the counter for that detector. Otherwise, use a system-wide counter.
+    def increment_counter_file(self, file: Path):
+        """Increment a counter file, or create it if it doesn't exist.
 
-        This is only used for the hourly counters, not the lifetime total counters, so we clear them
-        regularly and the files don't become unboundedly large.
+        Args:
+            file (Path): The path to the counter file.
         """
         if not file.exists():
             file.touch()
+            file.write_text("1")
+            return
 
-        # open in append mode to avoid race condition
-        with file.open("a") as f:
-            f.write(".")
+        read_total = int(file.read_text())
+        file.write_text(str(read_total + 1))
 
     def get_last_file_modification_time(self, file: Path) -> datetime | None:
         """Get the last time a file was modified."""
@@ -102,45 +96,15 @@ class FilesystemActivityTrackingHelper:
             return None
         return datetime.fromtimestamp(file.stat().st_mtime)
 
-    def get_file_length(self, name: str) -> int:
-        """Get the length of a file's content. Returns 0 if the file doesn't exist."""
-        f = self.file(name)
-        if not f.exists():
-            return 0
-        content = f.read_text(encoding='utf-8')
-        return len(content)
-
     def get_activity_from_file(self, file: Path) -> int:
-        """Get the activity from a file. Returns 0 if the file doesn't exist."""
+        """Get the activity from a file. Returns 0 if the file doesn't exist or is empty."""
         if not file.exists():
             return 0
 
-        # if the file is an hourly counter, return the length of the content
-        # Looking for files that match the pattern <record_name>_YYYY-MM-DD_HH
-        time_pattern = "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]$"
-        if re.search(time_pattern, file.name):
-            return self.get_file_length(file.name)
-
-        # otherwise, the file is a lifetime counter, so return the content as an int
         text = file.read_text(encoding='utf-8')
         if text == "":
             return 0
         return int(text)
-
-    def update_lifetime_counters_from_hourly_files(self, hourly_files: list[Path]):
-        """Update the relevant lifetime counters with the activity from a list of hourly files."""
-        for hourly_file in hourly_files:
-            # The total file has the same path and activity type as the hourly file, just remove the _YYYY-MM-DD_HH suffix
-            folder = hourly_file.parent
-            activity_type = hourly_file.name.split("_")[0]
-            total_file = Path(folder, activity_type)
-
-            if not total_file.exists():
-                total_file.touch()
-
-            prev_total = self.get_activity_from_file(total_file)
-            hour_total = self.get_activity_from_file(hourly_file)
-            total_file.write_text(str(prev_total + hour_total))
 
 
 class ActivityRetriever:
@@ -176,42 +140,26 @@ class ActivityRetriever:
         f = _tracker().detectors_dir
         return [(det.name, self.get_detector_activity_metrics(det.name)) for det in f.iterdir()]
 
-    def get_detector_activity_metrics(self, detector_id: str) -> dict:
-        """Get all activity metrics for a single detector.
-
-        Return info
-        * last_<activity_type> -- last time <activity_type> occurred for this detector
-        * total_<activity_type> -- total number of <activity_type> for this detector, excluding
-            those recorded in hourly activity files (lagging)
-        * current_hour_<activity_type> -- number of <activity_type> for this detector in the current
-            full hour (not a sliding window)
-        * last_hour_<activity_type> -- number of <activity_type> for this detector in the previous
-            full hour (not a sliding window)
-        """
-        current_hour = datetime.now()
-        last_hour = current_hour - timedelta(hours=1)
+    def get_detector_activity_metrics(self, detector_id: str) -> int:
+        """Get the activity on a detector for a particular hour."""
+        time = datetime.now() - timedelta(hours=1)
+        detector_folder = _tracker().detector_folder(detector_id)
+        activity_files = detector_folder.glob(f"*_{time.strftime('%Y-%m-%d_%H')}")
 
         detector_metrics = {}
-
         for activity_type in ["iqs", "escalations", "audits"]:
+            files = [f for f in activity_files if f.name.startswith(activity_type)]
+            total_activity = sum([_tracker().get_activity_from_file(f) for f in files])
+
             f = _tracker().last_activity_file(activity_type, detector_id)
             last_activity = _tracker().get_last_file_modification_time(f)
             last_activity = last_activity.isoformat() if last_activity else "none"
 
-            f = _tracker().detector_file(detector_id, activity_type)
-            total_activity = _tracker().get_activity_from_file(f)
-
-            f = _tracker().hourly_activity_file(activity_type, current_hour, detector_id)
-            current_hour_activity = _tracker().get_activity_from_file(f)
-            f = _tracker().hourly_activity_file(activity_type, last_hour, detector_id)
-            last_hour_activity = _tracker().get_activity_from_file(f)
-
-            detector_metrics[f"last_{activity_type}"] = last_activity
             detector_metrics[f"total_{activity_type}"] = total_activity
-            detector_metrics[f"current_hour_{activity_type}"] = current_hour_activity
-            detector_metrics[f"last_hour_{activity_type}"] = last_hour_activity
+            detector_metrics[f"last_{activity_type}"] = last_activity
 
         return detector_metrics
+
 
 @lru_cache(maxsize=1)  # Singleton
 def _tracker() -> FilesystemActivityTrackingHelper:
@@ -235,18 +183,10 @@ def record_activity_for_metrics(detector_id: str, activity_type: str):
 
     current_hour = datetime.now()
     f = _tracker().hourly_activity_file(activity_type, current_hour, detector_id)
-    _tracker().append_to_hourly_counter_file(f)
+    _tracker().increment_counter_file(f)
 
     f = _tracker().last_activity_file(activity_type, detector_id)
     f.touch()
-
-    # Record IQs for the edge-endpoint as a whole in addition to the detector level, for a quick activity view
-    if activity_type == "iqs":
-        f = _tracker().last_activity_file("iqs")
-        f.touch()
-
-        f = _tracker().hourly_activity_file("iqs", current_hour)
-        _tracker().append_to_hourly_counter_file(f)
 
 
 def clear_old_activity_files():
