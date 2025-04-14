@@ -16,10 +16,10 @@ git clone https://github.com/groundlight/edge-endpoint
 3) Install k3s
 
 ```
-./deploy/bin/install-k3s.sh
+./deploy/bin/install-k3s.sh cpu
 ```
 
-or run `~/edge-endpoint/deploy/bin/install-k3s.sh`
+or run `~/edge-endpoint/deploy/bin/install-k3s.sh cpu`
 
 4) AWS credentials
 

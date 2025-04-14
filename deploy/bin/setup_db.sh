@@ -3,7 +3,7 @@
 # Sets up the SQLite database for the edge endpoint.
 # This script is invoked by an initContainer in the edge endpoint deployment.
 
-set -ex
+set -e
 
 DATABASE_DIRECTORY="/opt/groundlight/edge/sqlite"
 DATABASE_PATH="${DATABASE_DIRECTORY}/sqlite.db"

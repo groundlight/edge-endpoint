@@ -4,6 +4,12 @@
 # live tests, which will hit the API service that got setup
 # Altogether, you can run everything with:
 # > make test-with-k3s-setup-ee
+
+# PREREQUISITE: This test must be run after you've pushed a container to ECR with
+# the git tag name. This is done in the pipeline, but if you're running locally you can
+# do it with:
+# > ./deploy/bin/build-push-edge-endpoint-image.sh
+
 set -e
 set -x
 
@@ -32,6 +38,11 @@ export INFERENCE_FLAVOR="CPU"
 export LIVE_TEST_ENDPOINT="http://localhost:$EDGE_ENDPOINT_PORT"
 export REFRESH_RATE=60 # not actually different than the default, but we may want to tweak this
 
+# Compute the image tag name before we muck with the config file so we get
+# the tag that will correspond to the current commit so it can match the image
+# that was built and pushed to ECR
+export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
+
 # update the config for this detector, such that we always take edge answers
 # but first, save the template to a temporary file
 cp configs/edge-config.yaml configs/edge-config.yaml.tmp
@@ -54,10 +65,7 @@ if ! kubectl get namespace $DEPLOYMENT_NAMESPACE &> /dev/null; then
 fi
 
 
-# Build the Docker image and import it into k3s
-echo "Building the Docker image..."
-export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
-./deploy/bin/build-push-edge-endpoint-image.sh dev
+# Set up k3s with our image tag
 ./deploy/bin/setup-ee.sh
 # restore config file
 mv configs/edge-config.yaml.tmp configs/edge-config.yaml

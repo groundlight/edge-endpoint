@@ -16,7 +16,7 @@
 ECR_ACCOUNT=${ECR_ACCOUNT:-767397850842}
 ECR_REGION=${ECR_REGION:-us-west-2}
 
-set -ex
+set -e
 
 # Ensure that you're in the same directory as this script before running it
 cd "$(dirname "$0")"
@@ -31,17 +31,9 @@ aws ecr get-login-password --region ${ECR_REGION} | docker login \
                   --username AWS \
                   --password-stdin  ${ECR_URL}
 
-# TODO: delete this!!!  (Why?  Because we want to standardize on the multiplatform build I think.
-# But right now this does actually seem useful and not so bad.)
-# Check if the first argument is "dev". If it is, only build the image for the current platform
 if [ "$1" == "dev" ]; then
-  docker build --tag ${EDGE_ENDPOINT_IMAGE} ../..
-  docker tag ${EDGE_ENDPOINT_IMAGE}:latest ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG}
-  docker push ${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG}
-
-  echo "Successfully pushed image to ECR_URL=${ECR_URL}"
-  echo "${ECR_URL}/${EDGE_ENDPOINT_IMAGE}:${TAG}"
-  exit 0
+  echo "'$0 dev' is no longer supported!!"
+  exit 1
 fi
 
 # We use docker buildx to build the image for multiple platforms. buildx comes
