@@ -128,8 +128,6 @@ echo '##########################################################################
 echo '# Installing k3s'
 echo '##################################################################################'
 
-curl -sfL https://get.k3s.io |  K3S_KUBECONFIG_MODE="644" sh -s - --disable=traefik
-
 check_k3s_is_running() {
     local TIMEOUT=30 # Maximum wait time of 30 seconds
     local COUNT=0
@@ -146,12 +144,29 @@ check_k3s_is_running() {
     return 1
 }
 
-if check_k3s_is_running; then
-    echo "kubectl has been configured for the current user."
+# If k3s is already installed, we can skip the installation, but we need to do
+# a couple of checks to make sure it's running and configured correctly.
+
+if command -v k3s &> /dev/null; then
+    echo "k3s is already installed. Checking status..."
+    if ! k3s kubectl get nodes &> /dev/null; then
+        echo "k3s is not running. Restart it or uninstall it and run this script again."
+        exit 1
+    else
+        echo "k3s is running."
+    fi
 else
-    echo "There was an issue with the K3s installation. Please check the system logs."
-    exit 0
+    echo "k3s is not installed. Installing..."
+    curl -sfL https://get.k3s.io |  K3S_KUBECONFIG_MODE="644" sh -s - --disable=traefik
+
+    if check_k3s_is_running; then
+        echo "k3s has installed and initialized successfully."
+    else
+        echo "There was an issue with the K3s installation. Please check the system logs."
+        exit 0
+    fi
 fi
+
 
 echo
 echo '##################################################################################'
