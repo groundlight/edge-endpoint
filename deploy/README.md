@@ -11,8 +11,8 @@ These are the steps to set up a single-node Edge Endpoint:
 1. [Set up a local Kubernetes cluster with k3s](#setting-up-single-node-kubernetes-with-k3s).
 2. [Set your Groundlight API token](#set-the-groundlight-api-token).
 3. [Set up to use the Helm package manager](#setting-up-for-helm).
-4. [Install the Edge Endpoint with Helm](#installation-with-helm).
-5. [Confirm that the Edge Endpoint is running](#verifying-the-helm-installation).
+4. [Install the Edge Endpoint with Helm](#installing-the-edge-endpoint-with-helm).
+5. [Confirm that the Edge Endpoint is running](#verifying-the-installation).
 
 ### TL;DR - No fluff, just bash commands
 
