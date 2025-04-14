@@ -60,7 +60,7 @@ class FilesystemActivityTrackingHelper:
 
         if detector_id:
             return self.detector_file(detector_id, name)
-        
+
         return self.file(name)
 
     def hourly_activity_file(self, activity_type: str, time: datetime, detector_id: str | None = None) -> Path:
@@ -124,10 +124,7 @@ class ActivityRetriever:
     def num_detectors_active(self, time_period: timedelta) -> int:
         """Get the number of detectors that have had an IQ submitted to them in the last time period."""
         f = _tracker().detectors_dir
-        activity_files = [
-            _tracker().last_activity_file("iqs", det.name)
-            for det in f.iterdir()
-        ]
+        activity_files = [_tracker().last_activity_file("iqs", det.name) for det in f.iterdir()]
         active_detectors = [
             file.parent.name
             for file in activity_files

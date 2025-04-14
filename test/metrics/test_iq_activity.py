@@ -64,8 +64,13 @@ def test_activity_tracking(monkeypatch, tmp_base_dir, _test_tracker):
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "audits_67890_2025-04-03_12").read_text() == "1"
 
 
+<<<<<<< HEAD
 def test_wrong_activity_type():
     with pytest.raises(ValueError) as e:
+=======
+def test_wrong_activity_type(caplog):
+    with pytest.raises(ValueError):
+>>>>>>> 75d33598ea2dc0d479fc26b3173040da51c301eb
         record_activity_for_metrics("det_123", "wrong_activity_type")
 
 
