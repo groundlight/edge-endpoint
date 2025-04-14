@@ -1,11 +1,16 @@
 import os
-import pytest
-
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
-from app.metrics.iq_activity import FilesystemActivityTrackingHelper, ActivityRetriever, clear_old_activity_files, record_activity_for_metrics
+import pytest
+
+from app.metrics.iq_activity import (
+    ActivityRetriever,
+    FilesystemActivityTrackingHelper,
+    clear_old_activity_files,
+    record_activity_for_metrics,
+)
 
 
 @pytest.fixture(scope="module")
@@ -58,10 +63,15 @@ def test_activity_tracking(monkeypatch, tmp_base_dir, _test_tracker):
         # the correct values
         record_activity_for_metrics("det_recordactivitytest", "escalations")
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "escalations_67890_2025-04-03_12").exists()
-        assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "escalations_67890_2025-04-03_12").read_text() == "1"
+        assert (
+            Path(tmp_base_dir, "detectors", "det_recordactivitytest", "escalations_67890_2025-04-03_12").read_text()
+            == "1"
+        )
         record_activity_for_metrics("det_recordactivitytest", "audits")
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "audits_67890_2025-04-03_12").exists()
-        assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "audits_67890_2025-04-03_12").read_text() == "1"
+        assert (
+            Path(tmp_base_dir, "detectors", "det_recordactivitytest", "audits_67890_2025-04-03_12").read_text() == "1"
+        )
 
 
 def test_wrong_activity_type():
