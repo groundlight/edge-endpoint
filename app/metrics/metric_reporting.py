@@ -71,7 +71,7 @@ class MetricsReporter:
         activity_metrics.add("num_detectors_lifetime", lambda: retriever.num_detectors_lifetime())
         activity_metrics.add("num_detectors_active_1h", lambda: retriever.num_detectors_active(timedelta(hours=1)))
         activity_metrics.add("num_detectors_active_24h", lambda: retriever.num_detectors_active(timedelta(days=1)))
-        activity_metrics.add("detector_activity", lambda: retriever.get_all_detector_activity())
+        activity_metrics.add("detector_activity_previous_hour", lambda: retriever.get_all_detector_activity())
 
         k8s_stats = SafeMetricsDict()
         k8s_stats.add("deployments", lambda: system_metrics.get_deployments())

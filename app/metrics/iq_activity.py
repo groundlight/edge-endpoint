@@ -138,7 +138,7 @@ class ActivityRetriever:
         return [(det.name, self.get_detector_activity_metrics(det.name)) for det in f.iterdir()]
 
     def get_detector_activity_metrics(self, detector_id: str) -> int:
-        """Get the activity on a detector for a particular hour."""
+        """Get the activity on a detector for the previous hour."""
         time = (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
         logger.info(f"Getting activity for detector {detector_id} at {time}")
 
@@ -153,8 +153,8 @@ class ActivityRetriever:
             last_activity = _tracker().get_last_file_modification_time(f)
             last_activity = last_activity.isoformat() if last_activity else "none"
 
-            detector_metrics[f"total_{activity_type}"] = total_activity
-            detector_metrics[f"last_{activity_type}"] = last_activity
+            detector_metrics[f"hourly_total_{activity_type}"] = total_activity
+            detector_metrics[f"last_{activity_type[:-1]}"] = last_activity
 
         return detector_metrics
 

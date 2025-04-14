@@ -85,7 +85,7 @@ class TestMetricsReporter:
         assert "num_detectors_lifetime" in activity_metrics
         assert "num_detectors_active_1h" in activity_metrics
         assert "num_detectors_active_24h" in activity_metrics
-        assert "detector_activity" in activity_metrics
+        assert "detector_activity_previous_hour" in activity_metrics
 
         k8s_stats = payload["k8s_stats"]
         assert "deployments" in k8s_stats
@@ -94,6 +94,14 @@ class TestMetricsReporter:
 
         # Check that the full payload is JSON serializable
         json.dumps(payload)
+
+    def _get_mock_api_client(self, status_code=200):
+        mock_response = MagicMock()
+        mock_response.status_code = status_code
+        mock_api_client = MagicMock()
+        mock_api_client.call_api.return_value = mock_response
+        mock_api_client._headers.return_value = {"Authorization": "Bearer fake-token"}
+        return mock_api_client
 
     def test_metrics_payload(self):
         reporter = MetricsReporter()
@@ -116,12 +124,7 @@ class TestMetricsReporter:
     @patch("app.metrics.metric_reporting._groundlight_client")
     def test_report_single_metric_payload_to_cloud(self, mock_gl_client):
         """Test that a single metric payload is reported correctly."""
-        # Setup mock response
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_api_client = MagicMock()
-        mock_api_client.call_api.return_value = mock_response
-        mock_api_client._headers.return_value = {"Authorization": "Bearer fake-token"}
+        mock_api_client = self._get_mock_api_client()
         mock_gl_client.return_value.api_client = mock_api_client
 
         reporter = MetricsReporter()
@@ -136,12 +139,7 @@ class TestMetricsReporter:
     @patch("app.metrics.metric_reporting._groundlight_client")
     def test_report_multiple_metric_payloads_to_cloud(self, mock_gl_client):
         """Test that multiple metric payloads are reported correctly."""
-        # Setup mock response
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_api_client = MagicMock()
-        mock_api_client.call_api.return_value = mock_response
-        mock_api_client._headers.return_value = {"Authorization": "Bearer fake-token"}
+        mock_api_client = self._get_mock_api_client()
         mock_gl_client.return_value.api_client = mock_api_client
 
         reporter = MetricsReporter()
@@ -152,7 +150,39 @@ class TestMetricsReporter:
         }
         reporter.report_metrics_to_cloud()
 
-        # Verify the API was called
+        # Verify the API was called and metrics_to_send was cleared
         assert mock_api_client.call_api.call_count == 3
+        assert len(reporter.metrics_to_send) == 0
 
+    @patch("app.metrics.metric_reporting._groundlight_client")
+    def test_report_metric_payload_to_cloud_failure(self, mock_gl_client):
+        """Test that a metric payload is kept in metrics_to_send if the cloud API call fails."""
+        mock_api_client = self._get_mock_api_client(status_code=400)
+        mock_gl_client.return_value.api_client = mock_api_client
+
+        reporter = MetricsReporter()
+        mock_metrics = {
+            "timestamp1": {"payload": "payload1"},
+            "timestamp2": {"payload": "payload2"},
+            "timestamp3": {"payload": "payload3"},
+        }
+        reporter.metrics_to_send = mock_metrics.copy()
+        reporter.report_metrics_to_cloud()
+
+        # Verify the API was called and metrics_to_send was not cleared
+        assert mock_api_client.call_api.call_count == 3
+        assert len(reporter.metrics_to_send) == 3
+        assert reporter.metrics_to_send == mock_metrics
+
+    @patch("app.metrics.metric_reporting._groundlight_client")
+    def test_report_metric_payload_empty_metrics_to_send(self, mock_gl_client):
+        """Test that a metric payload is kept in metrics_to_send if the cloud API call fails."""
+        mock_api_client = self._get_mock_api_client(status_code=400)
+        mock_gl_client.return_value.api_client = mock_api_client
+
+        reporter = MetricsReporter()
+        reporter.metrics_to_send = {}
+        reporter.report_metrics_to_cloud()
+
+        assert mock_api_client.call_api.call_count == 0
         assert len(reporter.metrics_to_send) == 0
