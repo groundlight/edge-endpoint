@@ -195,6 +195,8 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         metadata=generate_metadata_dict(results=results, is_edge_audit=True),
                         image_query_id=image_query.id,  # We give the cloud IQ the same ID as the returned edge IQ
                     )
+                    # Not done processing because the associated IQ in the cloud could get a better answer
+                    image_query.done_processing = False
 
                     # Don't want to escalate to cloud again if we're already auditing the query
                     return image_query
@@ -219,6 +221,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         metadata=generate_metadata_dict(results=results, is_edge_audit=False),
                         image_query_id=image_query.id,  # Ensure the cloud IQ has the same ID as the returned edge IQ
                     )
+                    # Not done processing because the associated IQ in the cloud could get a better answer
                     image_query.done_processing = False
                 else:
                     logger.debug(
