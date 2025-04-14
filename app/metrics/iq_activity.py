@@ -101,7 +101,7 @@ class FilesystemActivityTrackingHelper:
         if not file.exists():
             return 0
 
-        text = file.read_text(encoding='utf-8')
+        text = file.read_text(encoding="utf-8")
         if text == "":
             return 0
         return int(text)

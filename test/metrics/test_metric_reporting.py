@@ -1,8 +1,7 @@
 import json
+from unittest.mock import MagicMock, patch
 
-from unittest.mock import patch, MagicMock
-
-from app.metrics.metric_reporting import SafeMetricsDict, MetricsReporter
+from app.metrics.metric_reporting import MetricsReporter, SafeMetricsDict
 
 
 def _deliberate_error():
@@ -114,7 +113,7 @@ class TestMetricsReporter:
         _, payload = reporter.metrics_to_send.popitem()
         self._check_payload_structure(payload)
 
-    @patch('app.metrics.metric_reporting._groundlight_client')
+    @patch("app.metrics.metric_reporting._groundlight_client")
     def test_report_single_metric_payload_to_cloud(self, mock_gl_client):
         """Test that a single metric payload is reported correctly."""
         # Setup mock response
@@ -126,11 +125,7 @@ class TestMetricsReporter:
         mock_gl_client.return_value.api_client = mock_api_client
 
         reporter = MetricsReporter()
-        reporter.metrics_to_send = {
-            "timestamp": {
-                "payload": "payload"
-            }
-        }
+        reporter.metrics_to_send = {"timestamp": {"payload": "payload"}}
         reporter.report_metrics_to_cloud()
 
         # Verify the API was called
@@ -138,7 +133,7 @@ class TestMetricsReporter:
 
         assert len(reporter.metrics_to_send) == 0
 
-    @patch('app.metrics.metric_reporting._groundlight_client')
+    @patch("app.metrics.metric_reporting._groundlight_client")
     def test_report_multiple_metric_payloads_to_cloud(self, mock_gl_client):
         """Test that multiple metric payloads are reported correctly."""
         # Setup mock response
@@ -151,19 +146,13 @@ class TestMetricsReporter:
 
         reporter = MetricsReporter()
         reporter.metrics_to_send = {
-            "timestamp1": {
-                "payload": "payload1"
-            },
-            "timestamp2": {
-                "payload": "payload2"
-            },
-            "timestamp3": {
-                "payload": "payload3"
-            }
+            "timestamp1": {"payload": "payload1"},
+            "timestamp2": {"payload": "payload2"},
+            "timestamp3": {"payload": "payload3"},
         }
         reporter.report_metrics_to_cloud()
 
         # Verify the API was called
         assert mock_api_client.call_api.call_count == 3
-        
+
         assert len(reporter.metrics_to_send) == 0

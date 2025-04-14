@@ -15,6 +15,7 @@ app = FastAPI(title="status-monitor")
 scheduler = AsyncIOScheduler()
 reporter = MetricsReporter()
 
+
 @app.on_event("startup")
 async def startup_event():
     """Lifecycle event that is triggered when the application starts."""
