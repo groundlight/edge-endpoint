@@ -14,7 +14,7 @@ from app.core.app_state import (
     refresh_detector_metadata_if_needed,
 )
 from app.core.edge_inference import get_edge_inference_model_name
-from app.core.utils import create_iq, safe_call_sdk
+from app.core.utils import create_iq, generate_metadata_dict, safe_call_sdk
 from app.metrics.iqactivity import record_iq_activity
 
 logger = logging.getLogger(__name__)
@@ -139,6 +139,9 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
     confidence_threshold = confidence_threshold or detector_metadata.confidence_threshold
 
+    # for holding edge results if and when available
+    results = None
+
     if require_human_review:
         # If human review is required, we should skip edge inference completely
         logger.debug("Received human_review=ALWAYS. Skipping edge inference.")
@@ -189,10 +192,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         patience_time=patience_time,
                         confidence_threshold=confidence_threshold,
                         want_async=True,
-                        metadata={
-                            "is_edge_audit": True,  # This metadata will trigger an audit in the cloud
-                            "edge_result": results,
-                        },
+                        metadata=generate_metadata_dict(results=results, is_edge_audit=True),
                         image_query_id=image_query.id,  # We give the cloud IQ the same ID as the returned edge IQ
                     )
 
@@ -216,7 +216,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         confidence_threshold=confidence_threshold,
                         human_review=human_review,
                         want_async=True,
-                        metadata={"edge_result": results},
+                        metadata=generate_metadata_dict(results=results, is_edge_audit=False),
                         image_query_id=image_query.id,  # Ensure the cloud IQ has the same ID as the returned edge IQ
                     )
                     image_query.done_processing = False
@@ -272,4 +272,5 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         patience_time=patience_time,
         confidence_threshold=confidence_threshold,
         human_review=human_review,
+        metadata=generate_metadata_dict(results=results, is_edge_audit=False),
     )
