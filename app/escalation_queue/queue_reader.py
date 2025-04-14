@@ -43,7 +43,7 @@ class QueueReader:
                 for line in f:
                     logger.info(f"{line=}")
                     yield line
-                # TODO delete old file
+                self.current_file_path.unlink()  # Delete file when done reading
                 self.current_file_path = None
 
     def _choose_new_file(self) -> None | Path:
