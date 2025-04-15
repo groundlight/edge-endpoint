@@ -22,10 +22,21 @@ jobs:
       # Only set if triggered via workflow_call
       INFERENCE_IMAGE_TAG: ${{ inputs.inference_image_tag }}
     steps:
-      - name: Remove unwanted software (to free up space)
+      - name: Report disk space before cleanup
         run: |
-          sudo rm -rf /usr/share/dotnet
+          df -h
+
+      - name: Remove unwanted software (to free up space)
+        # Lots of stuff is installed by default on the github runners that we don't need.
+        # This is a hack to free up space, since we need more to run this test. If we start running
+        # out of space again, there are other things we can delete for more space.
+        # Removing android SDKs and tools should free up ~9 GB, and takes ~1 minute.
+        run: |
           sudo rm -rf /usr/local/lib/android
+
+      - name: Report disk space after cleanup
+        run: |
+          df -h
 
       - name: Check out code
         uses: actions/checkout@v4

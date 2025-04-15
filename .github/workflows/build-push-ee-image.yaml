@@ -11,7 +11,10 @@ on:
 jobs:
   build-push-edge-endpoint-multiplatform:
     # This used to run on a larger runner, but to use it as a reusable workflow outside of this
-    # orgnaization we need it to run on a default github runner.
+    # orgnaization we need it to run on a default github runner. 
+    # If we start seeing issues with the default runner again, there are some hacks to delete
+    # unwanted software that's installed by default on the github runners to free up space. This is
+    # already done in the test-k3s-helm workflow.
     runs-on: ubuntu-latest
     steps:
       - name: Configure AWS credentials
