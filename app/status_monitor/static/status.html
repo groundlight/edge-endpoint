@@ -115,8 +115,8 @@
                         JSON.stringify(parseSection(data.device_info), null, 2);
                     document.getElementById('activity-metrics').textContent = 
                         JSON.stringify(parseSection(data.activity_metrics), null, 2);
-                    document.getElementById('k8s-stats').textContent = 
-                        JSON.stringify(parseSection(data.k8s_stats), null, 2);
+                    document.getElementById('k3s-stats').textContent = 
+                        JSON.stringify(parseSection(data.k3s_stats), null, 2);
                     document.getElementById('loading').style.display = 'none';
                 })
                 .catch(error => {

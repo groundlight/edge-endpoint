@@ -66,8 +66,8 @@ class TestMetricsReporter:
         assert isinstance(payload["device_info"], dict)
         assert "activity_metrics" in payload
         assert isinstance(payload["activity_metrics"], dict)
-        assert "k8s_stats" in payload
-        assert isinstance(payload["k8s_stats"], dict)
+        assert "k3s_stats" in payload
+        assert isinstance(payload["k3s_stats"], dict)
 
         # Check that the payload dictionaries have all the expected keys
         device_info = payload["device_info"]
@@ -87,10 +87,10 @@ class TestMetricsReporter:
         assert "num_detectors_active_24h" in activity_metrics
         assert "detector_activity_previous_hour" in activity_metrics
 
-        k8s_stats = payload["k8s_stats"]
-        assert "deployments" in k8s_stats
-        assert "pod_statuses" in k8s_stats
-        assert "container_images" in k8s_stats
+        k3s_stats = payload["k3s_stats"]
+        assert "deployments" in k3s_stats
+        assert "pod_statuses" in k3s_stats
+        assert "container_images" in k3s_stats
 
         # Check that the full payload is JSON serializable
         json.dumps(payload)
