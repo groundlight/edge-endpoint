@@ -1,7 +1,10 @@
 import json
 import os
 import shutil
+import tempfile
+from typing import Generator
 
+import ksuid
 import pytest
 
 from app.escalation_queue.queue_reader import QueueReader
@@ -36,11 +39,13 @@ def test_escalation() -> EscalationInfo:
 
 
 @pytest.fixture
-def base_dir() -> str:  # TODO check if this is needed
-    path_str = "/home/corey/ptdev/edge-endpoint/test-queue"
-    if os.path.isdir(path_str):  # TODO remove and use temp directory. random name each time to ensure different?
-        shutil.rmtree(path_str)
-    return path_str
+def base_dir() -> Generator[str, None, None]:
+    temp_dir = os.path.join(tempfile.gettempdir(), f"test-escalation-queue-{ksuid.KsuidMs()}")
+    os.makedirs(temp_dir, exist_ok=True)
+    yield temp_dir
+    # Clean up the directory once the test finishes
+    if os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir)
 
 
 @pytest.fixture
