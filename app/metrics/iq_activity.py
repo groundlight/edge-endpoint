@@ -5,7 +5,10 @@ Filesystem structure:
 /opt/groundlight/edge-metrics/
     detectors/
         <detector_id1>/
-            iqs_<pid1>_YYYY-MM-DD_HH
+            last_iqs
+            last_escalations
+            last_audits
+            iqs_<pid1>_YYYY-MM-DD_HH    <-- arbitrary number of files, one per process. hourly files cleared out regularly
             iqs_<pid1>_YYYY-MM-DD_HH
             iqs_<pid2>_YYYY-MM-DD_HH
             iqs_<pid2>_YYYY-MM-DD_HH
