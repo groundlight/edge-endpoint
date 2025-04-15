@@ -26,7 +26,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: groundlight/edge-endpoint
-          ref: ${{ github.action_ref }}
+          ref: refs/pull/222/merge
 
       - name: Install k3s
         run: |
