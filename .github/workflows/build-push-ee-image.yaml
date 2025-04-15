@@ -29,7 +29,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           # Check out the edge-endpoint repo, not the repo that triggered the workflow
-          repository: ${{ github.repository }}
+          repository: groundlight/edge-endpoint
           ref: ${{ github.ref }}
       - name: Build and Push Multiplatform edge-endpoint Image to ECR
         # This is actually only taking about 4 minutes right now.
