@@ -22,6 +22,11 @@ jobs:
       # Only set if triggered via workflow_call
       INFERENCE_IMAGE_TAG: ${{ inputs.inference_image_tag }}
     steps:
+      - name: Remove unwanted software (to free up space)
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+
       - name: Check out code
         uses: actions/checkout@v4
         with:
