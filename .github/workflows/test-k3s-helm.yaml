@@ -25,7 +25,7 @@ jobs:
       # associated with roxanne+test_edge account since for some reason it was failing with
       # prod biggies
       GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
-      # Only set if triggered via workflow_call
+      # Only set if triggered via workflow_call, otherwise it's set to an empty string
       INFERENCE_IMAGE_TAG: ${{ inputs.inference_image_tag }}
     steps:
       - name: Report disk space before cleanup
