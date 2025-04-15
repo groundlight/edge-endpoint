@@ -8,70 +8,62 @@ The instructions below are fairly opinionated, optimized for single-node cluster
 
 These are the steps to set up a single-node Edge Endpoint:
 
-1. [Clone this code to the machine where you want to run Edge Endpoint](#cloning-the-code)
-2. [Set up a local Kubernetes cluster with k3s](#setting-up-single-node-kubernetes-with-k3s).
-3. [Set your Groundlight API token](#set-the-groundlight-api-token).
-4. [Set up your shell to run Helm](#setting-up-for-helm).
-5. [Install the Edge Endpoint with Helm](#installation-with-helm).
-6. [Confirm that the Edge Endpoint is running](#verifying-the-helm-installation).
+1. [Set up a local Kubernetes cluster with k3s](#setting-up-single-node-kubernetes-with-k3s).
+2. [Set your Groundlight API token](#set-the-groundlight-api-token).
+3. [Set up to use the Helm package manager](#setting-up-for-helm).
+4. [Install the Edge Endpoint with Helm](#installing-the-edge-endpoint-with-helm).
+5. [Confirm that the Edge Endpoint is running](#verifying-the-installation).
 
 ### TL;DR - No fluff, just bash commands
 
-This is the quick version of the instructions above.  On a fresh system with no other customization, you can run the following commands to set up the Edge Endpoint:
+This is the quick version of the instructions above.  On a fresh system with no other customization, you can run the following commands to set up the Edge Endpoint.
+
+Before starting, get a Groundlight API token from the Groundlight web app and set it as an environment variable:
+
+```shell
+export GROUNDLIGHT_API_TOKEN="api_xxxxxx"
+```
+
+Then, run the following commands to set up the Edge Endpoint:
 
 For GPU-based systems:
 
 ```shell
-git clone https://github.com/groundlight/edge-endpoint.git
-cd edge-endpoint
-./deploy/bin/install-k3s-nvidia.sh
-export GROUNDLIGHT_API_TOKEN="api_xxxxxx"
+curl -fsSL https://raw.githubusercontent.com/groundlight/edge-endpoint/refs/heads/main/deploy/bin/install-k3s.sh | bash -s gpu
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-helm install -n default edge-endpoint deploy/helm/groundlight-edge-endpoint \
+helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint \
   --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}"
 ```
 
 For CPU-based systems:
 
 ```shell
-git clone https://github.com/groundlight/edge-endpoint.git
-cd edge-endpoint
-./deploy/bin/install-k3s.sh
-export GROUNDLIGHT_API_TOKEN="api_xxxxxx"
+curl -fsSL https://raw.githubusercontent.com/groundlight/edge-endpoint/refs/heads/main/deploy/bin/install-k3s.sh | bash -s cpu
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-helm install -n default edge-endpoint deploy/helm/groundlight-edge-endpoint \
+helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint \
   --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}" \
   --set inferenceFlavor=cpu
 ```
 
 You're done. You can skip down to [Verifying the Installation](#verifying-the-installation) to confirm that the Edge Endpoint is running.
 
-### Cloning the code
-
-If you haven't already cloned this repository, you can do so with the following command:
-
-```shell
-git clone https://github.com/groundlight/edge-endpoint.git
-cd edge-endpoint
-```
-
-The rest of the instructions assume you're in the `edge-endpoint` directory.
-
 ### Setting up Single-Node Kubernetes with k3s
 
-If you don't have [k3s](https://docs.k3s.io/) installed, there are two scripts which can install it depending on whether you have a CUDA GPU or not.  If you don't set up a GPU, the models will run more slowly on CPU.
-
-```shell
-# For CPU inference
-./deploy/bin/install-k3s.sh
-```
+If you don't have [k3s](https://docs.k3s.io/) installed, there is a script which can install it depending on whether you have a NVidia GPU or not.  If you don't set up a GPU, the models will run on the CPU, but be somewhat slower.
 
 ```shell
 # For GPU inference
-./deploy/bin/install-k3s-nvidia.sh
+curl -fsSL -O https://raw.githubusercontent.com/groundlight/edge-endpoint/refs/heads/main/deploy/bin/install-k3s.sh 
+bash ./install-k3s.sh gpu
 ```
 
-These scripts will install the k3s Kubernetes distribution on your machine.  If you have a CUDA GPU, the second script will also install the NVIDIA GPU plugin for Kubernetes. They will also install Helm, which is used to deploy the edge-endpoint, and the Linux utilities `curl` and `jq`, if you don't already have them.
+```shell
+# For CPU inference
+curl -fsSL -O https://raw.githubusercontent.com/groundlight/edge-endpoint/refs/heads/main/deploy/bin/install-k3s.sh 
+bash ./install-k3s.sh cpu
+```
+
+This script will install the k3s Kubernetes distribution on your machine.  If you use the `gpu` argument, the script will also install the  NVIDIA GPU plugin for Kubernetes. It will also install the [Helm](https://helm.sh) package manager, which is used to deploy the edge-endpoint, and the Linux utilities `curl` and `jq`, if you don't already have them.
 
 ### Set the Groundlight API Token
 
@@ -88,12 +80,31 @@ export GROUNDLIGHT_API_TOKEN="api_xxxxxx"
 
 ### Setting up for Helm
 
-If you've just installed k3s, you should have Helm installed as well.  If you're setting up Helm on a machine that already has k3s installed, you can run the following script (as described [here](https://helm.sh/docs/intro/install/)):
+[Helm](https://helm.sh/) is a package manager for Kubernetes. Groundlight distributes the edge endpoint via a "Helm Chart."
+
+If you've just installed k3s with the setup script above, you should have Helm installed and the edge-endpoint chart repository added. In this case, you can skip to step 3.  
+
+If you're setting up Helm on a machine that already has k3s (or another Kubernetes environment) installed, do all three steps to get started.
+
+####  Step 1: Install Helm
+
+Run the Helm install script (as described [here](https://helm.sh/docs/intro/install/)):
 
 ```shell
 curl -fsSL -o /tmp/get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
 bash /tmp/get_helm.sh
 ```
+
+
+#### Step 2: Add the Groundlight Helm repository
+```
+helm repo add edge-endpoint https://code.groundlight.ai/edge-endpoint/
+helm repo update
+```
+
+#### Step 3: Point Helm to the k3s cluster
+
+If you installed k3s with the script above, it should have created a kubeconfig file in `/etc/rancher/k3s/k3s.yaml`.  This is the file that Helm will use to connect to your k3s cluster.
 
 If you're running with k3s and you haven't created a kubeconfig file in your home directory, you need to tell Helm to use the one that k3s created.  You can do this by setting the `KUBECONFIG` environment variable:
 
@@ -101,32 +112,37 @@ If you're running with k3s and you haven't created a kubeconfig file in your hom
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 ```
 
+You probably want to set this in your `.bashrc` or `.zshrc` file so you don't have to set it every time you open a new terminal.
+
+
 ### Installing the Edge Endpoint with Helm
 
 For a simple, default installation, you can run the following command:
 
 ```shell
-helm install -n default edge-endpoint deploy/helm/groundlight-edge-endpoint \
+helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint \
   --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}"
 ```
 
 This will install the Edge Endpoint doing GPU-based inference in the `edge` namespace in your k3s cluster and expose it on port 30101 on your local node. Helm will keep a history of the installation in the `default` namespace (signified by the `-n default` flag).
 
-To change values that you've customized after you've installed the Edge Endpoint or to install an updated chart, you can use the `helm upgrade` command. For example, to change the `groundlightApiToken` value, you can run:
+To change values that you've customized after you've installed the Edge Endpoint or to install an updated chart, use the `helm upgrade` command. For example, to change the `groundlightApiToken` value, you can run:
 
 ```shell
-helm upgrade -n default edge-endpoint deploy/helm/groundlight-edge-endpoint \
+helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint \
   --set groundlightApiToken="<new groundlight api token>"
 ```
 
 #### Variation: Custom Edge Endpoint Configuration
 
-You might want to customize the [edge config file](../deploy/helm/groundlight-edge-endpoint/files/default-edge-config.yaml) to include the detector ID's you want to run. See [the guide to configuring detectors](/CONFIGURING-DETECTORS.md) for more information. Adding detector ID's to the config file will cause inference pods to be initialized automatically for each detector and provides you finer-grained control over each detector's behavior. Even if detectors aren't configured in the config file, edge inference will be set up for each detector ID for which the Groundlight service receives requests (note that it takes some time for each inference pod to become available for the first time).
+You might want to customize the edge config file to include the detector ID's you want to run. See [the guide to configuring detectors](/CONFIGURING-DETECTORS.md) for more information. Adding detector ID's to the config file will cause inference pods to be initialized automatically for each detector and provides you finer-grained control over each detector's behavior. Even if detectors aren't configured in the config file, edge inference will be set up for each detector ID for which the Groundlight service receives requests (note that it takes some time for each inference pod to become available for the first time).
 
-To use a custom edge config file, you can set the `configFile` Helm value to the path of the file:
+You can find an example edge config file here: [edge-config.yaml](https://github.com/groundlight/edge-endpoint/blob/clone-free-install/configs/edge-config.yaml). The easiest path is to download that file and modify it to your needs.
+
+To use a custom edge config file, set the `configFile` Helm value to the path of the file:
 
 ```shell
-helm install -n default edge-endpoint deploy/helm/groundlight-edge-endpoint \
+helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint \
   --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}" --set-file configFile=/path/to/your/edge-config.yaml
 ```
 #### Variation: CPU Mode Inference
@@ -134,7 +150,7 @@ helm install -n default edge-endpoint deploy/helm/groundlight-edge-endpoint \
 If the system you're running on doesn't have a GPU, you can run the Edge Endpoint in CPU mode. To do this, set the `inferenceFlavor` Helm value to `cpu`:
 
 ```shell
-helm install -n default edge-endpoint deploy/helm/groundlight-edge-endpoint \
+helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint \
   --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}" \
   --set inferenceFlavor=cpu
 ```
@@ -146,7 +162,7 @@ The Helm chart supports various configuration options which can be set using `--
 If you want to customize a number of values, you can create a `values.yaml` file with your custom values and pass it to Helm:
 
 ```shell
-helm install -n default edge-endpoint deploy/helm/groundlight-edge-endpoint -f /path/to/your/values.yaml
+helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint -f /path/to/your/values.yaml
 ```
 
 ### Verifying the Installation
