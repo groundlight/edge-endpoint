@@ -19,7 +19,6 @@ from app.metrics.metric_reporting import MetricsReporter
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 DEPLOY_DETECTOR_LEVEL_INFERENCE = bool(int(os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", 0)))
-ONE_HOUR_IN_SECONDS = 3600
 
 logging.basicConfig(
     level=LOG_LEVEL, format="%(asctime)s.%(msecs)03d %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
@@ -54,11 +53,6 @@ async def startup_event():
     app.state.app_state.db_manager.reset_database()
 
     logging.info(f"edge_config={app.state.app_state.edge_config}")
-
-    reporter = MetricsReporter()
-    scheduler.add_job(reporter.collect_metrics_for_cloud, "cron", hour="*", minute="1")
-    scheduler.add_job(reporter.report_metrics_to_cloud, "cron", hour="*", minute="2", jitter=120)
-    scheduler.add_job(clear_old_activity_files, "interval", seconds=ONE_HOUR_IN_SECONDS)
 
     if DEPLOY_DETECTOR_LEVEL_INFERENCE:
         # Add job to periodically update the inference config
