@@ -32,7 +32,7 @@ def get_inference_flavor() -> str:
     return inference_flavor
 
 
-def get_deployments() -> list[str]:
+def get_deployments() -> str:
     config.load_incluster_config()
     v1_apps = client.AppsV1Api()
 
@@ -44,7 +44,7 @@ def get_deployments() -> list[str]:
     return str(deployment_names)
 
 
-def get_pods() -> list[tuple[str, str]]:
+def get_pods() -> str:
     config.load_incluster_config()
     v1_core = client.CoreV1Api()
     pods = v1_core.list_namespaced_pod(namespace=os.getenv("NAMESPACE", "edge"))
@@ -54,7 +54,7 @@ def get_pods() -> list[tuple[str, str]]:
     return json.dumps({pod.metadata.name: pod.status.phase for pod in pods.items})
 
 
-def get_container_images() -> list[tuple[str, dict[str, str]]]:
+def get_container_images() -> str:
     config.load_incluster_config()
     v1_core = client.CoreV1Api()
     pods = v1_core.list_namespaced_pod(namespace=os.getenv("NAMESPACE", "edge"))

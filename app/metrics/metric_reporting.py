@@ -73,15 +73,15 @@ class MetricsReporter:
         activity_metrics.add("num_detectors_active_24h", lambda: retriever.num_detectors_active(timedelta(days=1)))
         activity_metrics.add("detector_activity_previous_hour", lambda: retriever.get_all_detector_activity())
 
-        k8s_stats = SafeMetricsDict()
-        k8s_stats.add("deployments", lambda: system_metrics.get_deployments())
-        k8s_stats.add("pod_statuses", lambda: system_metrics.get_pods())
-        k8s_stats.add("container_images", lambda: system_metrics.get_container_images())
+        k3s_stats = SafeMetricsDict()
+        k3s_stats.add("deployments", lambda: system_metrics.get_deployments())
+        k3s_stats.add("pod_statuses", lambda: system_metrics.get_pods())
+        k3s_stats.add("container_images", lambda: system_metrics.get_container_images())
 
         return {
             "device_info": device_info.as_dict(),
             "activity_metrics": activity_metrics.as_dict(),
-            "k8s_stats": k8s_stats.as_dict(),
+            "k3s_stats": k3s_stats.as_dict(),
         }
 
     def collect_metrics_for_cloud(self):
