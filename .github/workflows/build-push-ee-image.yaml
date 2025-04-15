@@ -27,9 +27,9 @@ jobs:
           mask-password: "true"
       - name: Check out code
         uses: actions/checkout@v4
-        # with:
-        #   # Check out the edge-endpoint repo, not the repo that triggered the workflow
-        #   repository: groundlight/edge-endpoint
+        with:
+          repository: groundlight/edge-endpoint
+          ref: ${{ github.action_ref }}
       - name: Build and Push Multiplatform edge-endpoint Image to ECR
         # This is actually only taking about 4 minutes right now.
         timeout-minutes: 45
