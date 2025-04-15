@@ -3,6 +3,13 @@ name: build-push-ee-image
 # from other repositories, to test new inference images. 
 on:
   workflow_call:
+    inputs:
+      repo:
+        required: true
+        type: string
+      ref:
+        required: true
+        type: string
     secrets:
       AWS_GL_PUBLIC_ACCESS_KEY_ID:
         required: true
@@ -28,16 +35,11 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v1
         with:
           mask-password: "true"
-      - run: |
-          echo "Repository: ${{ github.repository }}"
-          echo "Ref: ${{ github.ref }}"
-          echo "Action Repository: ${{ github.action_repository }}"
-          echo "Action Ref: ${{ github.action_ref }}"
       - name: Check out code
         uses: actions/checkout@v4
         with:
-          repository: groundlight/edge-endpoint
-          ref: refs/pull/222/merge
+          repository: ${{ inputs.repo }}
+          ref: ${{ inputs.ref }}
       - name: Build and Push Multiplatform edge-endpoint Image to ECR
         # This is actually only taking about 4 minutes right now.
         timeout-minutes: 45

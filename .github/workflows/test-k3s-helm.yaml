@@ -10,6 +10,12 @@ on:
       inference_image_tag:
         required: false
         type: string
+      repo:
+        required: true
+        type: string
+      ref:
+        required: true
+        type: string
 jobs:
   test-k3s-helm:
     # This used to run on a larger runner, but to use it as a reusable workflow outside of this
@@ -30,7 +36,7 @@ jobs:
         # Lots of stuff is installed by default on the github runners that we don't need.
         # This is a hack to free up space, since we need more to run this test. If we start running
         # out of space again, there are other things we can delete for more space.
-        # Removing android SDKs and tools should free up ~9 GB, and takes ~1 minute.
+        # Removing android SDKs and tools should free up ~9 GB, and seemt to take <15 seconds.
         run: |
           sudo rm -rf /usr/local/lib/android
 
@@ -41,8 +47,8 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
         with:
-          repository: groundlight/edge-endpoint
-          ref: refs/pull/222/merge
+          repository: ${{ inputs.repo }}
+          ref: ${{ inputs.ref }}
 
       - name: Install k3s
         run: |

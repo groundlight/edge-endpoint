@@ -229,6 +229,9 @@ jobs:
     needs:
       - call-build-push-ee-image
     uses: ./.github/workflows/test-k3s-helm.yaml
+    with:
+      repo: ${{ github.repository }}
+      ref: ${{ github.ref }}
     secrets:
       K3S_TEST_GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
 
@@ -439,6 +442,9 @@ jobs:
     # We run this at the beginning of every PR so that the various full k3s tests
     # can use this image
     uses: ./.github/workflows/build-push-ee-image.yaml
+    with:
+      repo: ${{ github.repository }}
+      ref: ${{ github.ref }}
     secrets:
       AWS_GL_PUBLIC_ACCESS_KEY_ID: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
       AWS_GL_PUBLIC_SECRET_ACCESS_KEY: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
