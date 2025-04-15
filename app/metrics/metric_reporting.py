@@ -106,11 +106,14 @@ class MetricsReporter:
                 headers,  # header_params
                 payload,  # body
                 async_req=False,  # async_req
-                _return_http_data_only=True,  # _return_http_data_only
             )
-            logger.debug(f"Report edge metrics: {response}")
-            if response.status_code == 200:
+            logger.info(f"Report edge metrics: {response}")
+            # Returns a tuple of (return_data, status, headers)
+            if response[1] == 200:
+                logger.info(f"Metrics reported successfully: {response}")
                 del self.metrics_to_send[timestamp]
+            else:
+                logger.error(f"Error reporting metrics to the cloud API: {response}")
 
 
 if __name__ == "__main__":

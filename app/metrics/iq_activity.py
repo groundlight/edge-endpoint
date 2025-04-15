@@ -16,8 +16,10 @@ Filesystem structure:
             repeat of above detector
 """
 
+import json
 import logging
 import os
+
 from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -135,7 +137,11 @@ class ActivityRetriever:
     def get_all_detector_activity(self) -> dict:
         """Get all activity metrics for all detectors."""
         f = _tracker().detectors_dir
-        return [(det.name, self.get_detector_activity_metrics(det.name)) for det in f.iterdir()]
+        detector_activity = {det.name: self.get_detector_activity_metrics(det.name) for det in f.iterdir()}
+
+        # Convert the detector_activity dict to a JSON string to prevent opensearch from indexing all
+        # the individual detector fields
+        return json.dumps(detector_activity)
 
     def get_detector_activity_metrics(self, detector_id: str) -> int:
         """Get the activity on a detector for the previous hour."""

@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 
@@ -31,7 +32,7 @@ def get_inference_flavor() -> str:
     return inference_flavor
 
 
-def get_deployments() -> set[str]:
+def get_deployments() -> list[str]:
     config.load_incluster_config()
     v1_apps = client.AppsV1Api()
 
@@ -40,14 +41,17 @@ def get_deployments() -> set[str]:
     deployment_names = []
     for dep in deployments.items:
         deployment_names.append(f"{dep.metadata.namespace}/{dep.metadata.name}")
-    return deployment_names
+    return str(deployment_names)
 
 
 def get_pods() -> list[tuple[str, str]]:
     config.load_incluster_config()
     v1_core = client.CoreV1Api()
     pods = v1_core.list_namespaced_pod(namespace=os.getenv("NAMESPACE", "edge"))
-    return [(pod.metadata.name, pod.status.phase) for pod in pods.items]
+
+    # Convert the pods dict to a JSON string to prevent opensearch from indexing all
+    # the individual pod fields
+    return json.dumps({pod.metadata.name: pod.status.phase for pod in pods.items})
 
 
 def get_container_images() -> list[tuple[str, dict[str, str]]]:
@@ -55,10 +59,13 @@ def get_container_images() -> list[tuple[str, dict[str, str]]]:
     v1_core = client.CoreV1Api()
     pods = v1_core.list_namespaced_pod(namespace=os.getenv("NAMESPACE", "edge"))
 
-    containers = []
+    containers = {}
     for pod in pods.items:
         pod_dict = {}
         for container in pod.status.container_statuses:
             pod_dict[container.name] = container.image_id
-        containers.append((pod.metadata.name, pod_dict))
-    return containers
+        containers[pod.metadata.name] = pod_dict
+
+    # Convert the containers dict to a JSON string to prevent opensearch from indexing all
+    # the individual container fields
+    return json.dumps(containers)
