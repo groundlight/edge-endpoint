@@ -25,6 +25,11 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v1
         with:
           mask-password: "true"
+      - run: |
+          echo "Repository: ${{ github.repository }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Action Repository: ${{ github.action_repository }}"
+          echo "Action Ref: ${{ github.action_ref }}"
       - name: Check out code
         uses: actions/checkout@v4
         with:
