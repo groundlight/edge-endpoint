@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 from datetime import datetime, timezone
@@ -25,6 +26,10 @@ from pydantic import BaseModel, ValidationError
 from app.core import constants
 
 logger = logging.getLogger(__name__)
+
+METADATA_SIZE_LIMIT_BYTES = (
+    1024  # This is defined in the SDK and will need to be manually updated here if it gets modified
+)
 
 
 def create_iq(  # noqa: PLR0913
@@ -136,6 +141,59 @@ def safe_call_sdk(api_method: Callable, **kwargs):
         if hasattr(ex, "status"):
             raise HTTPException(status_code=ex.status, detail=str(ex)) from ex
         raise ex
+
+
+def _size_of_dict_in_bytes(data: dict[str, Any]) -> int:
+    """Returns the size, in # of bytes (assuming all ASCII characters), of the provided dict."""
+    data_json = json.dumps(data)
+    return len(data_json)
+
+
+def _size_of_dict_with_field_in_bytes(initial_dict: dict[str, Any], new_data_key: str, new_data_value: Any) -> int:
+    """
+    Returns the size, in # of bytes (assuming all ASCII characters), of the provided dict if it included the provided
+    key/value pair.
+    """
+    combined_dict = initial_dict.copy()
+    combined_dict[new_data_key] = new_data_value
+    return _size_of_dict_in_bytes(combined_dict)
+
+
+def generate_metadata_dict(results: dict[str, Any] | None, is_edge_audit: bool = False) -> dict[str, Any]:
+    """
+    Generates the metadata for an IQ being escalated to the cloud.
+    Includes `"is_edge_audit": True` if it is an edge audit.
+    Includes `"edge_result": results` if including the results would not push the metadata over the size limit. If they
+        would, includes the results without the ROIs if the resulting metadata does not exceed the limit.
+    """
+    metadata_dict = {}
+
+    if is_edge_audit:
+        metadata_dict["is_edge_audit"] = True  # This metadata will trigger an audit in the cloud
+
+    metadata_with_results_size = _size_of_dict_with_field_in_bytes(metadata_dict, "edge_result", results)
+    if metadata_with_results_size > METADATA_SIZE_LIMIT_BYTES:
+        logger.debug(
+            f"Inference results were {metadata_with_results_size} bytes, which made the metadata larger than the max "
+            f"allowed size of {METADATA_SIZE_LIMIT_BYTES} bytes. Attempting to remove the ROIs from the results."
+        )
+        results_without_rois = results.copy()
+        if "rois" in results_without_rois:
+            results_without_rois["rois"] = f"{len(results['rois'])} ROIs were detected."
+            metadata_with_results_size = _size_of_dict_with_field_in_bytes(
+                metadata_dict, "edge_result", results_without_rois
+            )
+            if metadata_with_results_size <= METADATA_SIZE_LIMIT_BYTES:
+                metadata_dict["edge_result"] = results_without_rois
+            else:
+                logger.debug(
+                    "Inference results were still too large after removing ROIs. Not including the results in the "
+                    "metadata."
+                )
+    else:
+        metadata_dict["edge_result"] = results
+
+    return metadata_dict
 
 
 def prefixed_ksuid(prefix: str | None = None) -> str:

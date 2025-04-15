@@ -31,7 +31,7 @@ jobs:
 
       - name: Install k3s
         run: |
-          ./deploy/bin/install-k3s.sh
+          ./deploy/bin/install-k3s.sh cpu
 
       - name: Install poetry
         uses: snok/install-poetry@v1
