@@ -2,19 +2,39 @@ import json
 import os
 import shutil
 import tempfile
+from pathlib import Path
 from typing import Generator
 
 import ksuid
 import pytest
 
+from app.core.utils import get_formatted_timestamp_str
 from app.escalation_queue.queue_reader import QueueReader
-from app.escalation_queue.queue_writer import EscalationInfo, QueueWriter
+from app.escalation_queue.queue_writer import EscalationInfo, QueueWriter, SubmitImageQueryParams
 
 ### Helper functions
 
 
-def generate_test_escalation(detector_id: str = "test_id", image_path: str = "test_path") -> EscalationInfo:
-    data = {"detector_id": detector_id, "image_path": image_path}
+def generate_test_escalation(
+    timestamp_str: str = get_formatted_timestamp_str(),
+    submit_iq_params: SubmitImageQueryParams = SubmitImageQueryParams(
+        wait=None,
+        patience_time=None,
+        confidence_threshold=0.9,
+        human_review=None,
+        want_async=False,
+        metadata={"test_key": "test_value"},
+        image_query_id=None,
+    ),
+    detector_id: str = "test_id",
+    image_path: str = "test_path",
+) -> EscalationInfo:
+    data = {
+        "timestamp": timestamp_str,
+        "detector_id": detector_id,
+        "image_path": image_path,
+        "submit_iq_params": submit_iq_params,
+    }
     return EscalationInfo(**data)
 
 
@@ -31,6 +51,17 @@ def assert_contents_of_next_read_line(reader: QueueReader, expected_result: Esca
 
 
 ### Fixtures
+
+
+@pytest.fixture
+def timestamp_str() -> str:
+    return get_formatted_timestamp_str()
+
+
+@pytest.fixture
+def test_image_bytes() -> bytes:
+    image_path = Path("test/assets/cat.jpeg")
+    return image_path.read_bytes()
 
 
 @pytest.fixture
@@ -98,6 +129,34 @@ def test_separate_writers_write_to_different_files(
 
     assert_file_length(writer.last_file_path, 1)
     assert_file_length(second_writer.last_file_path, 1)
+
+
+def test_writer_can_write_image(writer: QueueWriter, timestamp_str: str, test_image_bytes: bytes):
+    """Verify that basic image writing works properly."""
+    detector_id = "test_id"
+    image_path = writer.write_image_bytes(test_image_bytes, detector_id, timestamp_str)
+    assert detector_id in image_path
+    assert timestamp_str in image_path
+
+    image_path = Path(image_path)
+    assert image_path.is_file()
+
+    saved_bytes = image_path.read_bytes()
+    assert saved_bytes == test_image_bytes
+
+
+def test_writer_saves_images_to_unique_paths(writer: QueueWriter, timestamp_str: str, test_image_bytes: bytes):
+    """Verify that multiple images saved with the same detector ID and timestamp are saved to unique paths."""
+    detector_id = "test_id"
+    first_image_path = writer.write_image_bytes(test_image_bytes, detector_id, timestamp_str)
+    first_image_path = Path(first_image_path)
+    assert first_image_path.is_file()
+
+    second_image_path = writer.write_image_bytes(test_image_bytes, detector_id, timestamp_str)
+    second_image_path = Path(second_image_path)
+    assert second_image_path.is_file()
+
+    assert not first_image_path.samefile(second_image_path)
 
 
 ### Reader tests

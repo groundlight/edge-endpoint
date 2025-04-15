@@ -143,6 +143,11 @@ def safe_call_sdk(api_method: Callable, **kwargs):
         raise ex
 
 
+def get_formatted_timestamp_str() -> str:
+    """Get the current datetime with the highest time precision available."""
+    return datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+
+
 def _size_of_dict_in_bytes(data: dict[str, Any]) -> int:
     """Returns the size, in # of bytes (assuming all ASCII characters), of the provided dict."""
     data_json = json.dumps(data)
