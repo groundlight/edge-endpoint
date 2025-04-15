@@ -98,9 +98,9 @@ class TestMetricsReporter:
     def _get_mock_api_client(self, status_code=200):
         mock_response = MagicMock()
         mock_response.status_code = status_code
+        mock_response.headers = {"Authorization": "Bearer fake-token"}
         mock_api_client = MagicMock()
-        mock_api_client.call_api.return_value = mock_response
-        mock_api_client._headers.return_value = {"Authorization": "Bearer fake-token"}
+        mock_api_client.call_api.return_value = (None, mock_response.status_code, mock_response.headers)
         return mock_api_client
 
     def test_metrics_payload(self):

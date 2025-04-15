@@ -158,12 +158,12 @@ def test_get_detector_activity_metrics(monkeypatch, tmp_base_dir, _test_tracker)
         Path(tmp_base_dir, "detectors", "det_123", "last_escalations").touch()
         Path(tmp_base_dir, "detectors", "det_123", "last_audits").touch()
         det_123_metrics = retriever.get_detector_activity_metrics("det_123")
-        assert det_123_metrics["total_iqs"] == 28
-        assert det_123_metrics["total_escalations"] == 2
-        assert det_123_metrics["total_audits"] == 1
-        assert det_123_metrics["last_iqs"] != "none"
-        assert det_123_metrics["last_escalations"] != "none"
-        assert det_123_metrics["last_audits"] != "none"
+        assert det_123_metrics["hourly_total_iqs"] == 28
+        assert det_123_metrics["hourly_total_escalations"] == 2
+        assert det_123_metrics["hourly_total_audits"] == 1
+        assert det_123_metrics["last_iq"] != "none"
+        assert det_123_metrics["last_escalation"] != "none"
+        assert det_123_metrics["last_audit"] != "none"
 
         # Test that it's fine to have an activity type missing
         # Total iqs should be 10, total escalations should be 1, and total audits should be 0
@@ -173,12 +173,12 @@ def test_get_detector_activity_metrics(monkeypatch, tmp_base_dir, _test_tracker)
         Path(tmp_base_dir, "detectors", "det_456", "last_iqs").touch()
         Path(tmp_base_dir, "detectors", "det_456", "last_escalations").touch()
         det_456_metrics = retriever.get_detector_activity_metrics("det_456")
-        assert det_456_metrics["total_iqs"] == 10
-        assert det_456_metrics["total_escalations"] == 1
-        assert det_456_metrics["total_audits"] == 0
-        assert det_456_metrics["last_iqs"] != "none"
-        assert det_456_metrics["last_escalations"] != "none"
-        assert det_456_metrics["last_audits"] == "none"
+        assert det_456_metrics["hourly_total_iqs"] == 10
+        assert det_456_metrics["hourly_total_escalations"] == 1
+        assert det_456_metrics["hourly_total_audits"] == 0
+        assert det_456_metrics["last_iq"] != "none"
+        assert det_456_metrics["last_escalation"] != "none"
+        assert det_456_metrics["last_audit"] == "none"
 
         # Test that it's fine to have empty files or files that contain "0"
         # Total iqs should be 80, total escalations and audits should both be 0
@@ -189,9 +189,9 @@ def test_get_detector_activity_metrics(monkeypatch, tmp_base_dir, _test_tracker)
         Path(tmp_base_dir, "detectors", "det_789", "escalations_102394_2025-04-03_11").write_text("0")
         Path(tmp_base_dir, "detectors", "det_789", "audits_102394_2025-04-03_11").write_text("")
         det_789_metrics = retriever.get_detector_activity_metrics("det_789")
-        assert det_789_metrics["total_iqs"] == 80
-        assert det_789_metrics["total_escalations"] == 0
-        assert det_789_metrics["total_audits"] == 0
-        assert det_789_metrics["last_iqs"] == "none"
-        assert det_789_metrics["last_escalations"] == "none"
-        assert det_789_metrics["last_audits"] == "none"
+        assert det_789_metrics["hourly_total_iqs"] == 80
+        assert det_789_metrics["hourly_total_escalations"] == 0
+        assert det_789_metrics["hourly_total_audits"] == 0
+        assert det_789_metrics["last_iq"] == "none"
+        assert det_789_metrics["last_escalation"] == "none"
+        assert det_789_metrics["last_audit"] == "none"
