@@ -91,9 +91,32 @@
                     return response.json();
                 })
                 .then(data => {
-                    document.getElementById('device-info').textContent = JSON.stringify(data.device_info, null, 2);
-                    document.getElementById('activity-metrics').textContent = JSON.stringify(data.activity_metrics, null, 2);
-                    document.getElementById('k8s-stats').textContent = JSON.stringify(data.k8s_stats, null, 2);
+                    const parseIfJson = (value) => {
+                        if (typeof value === 'string') {
+                            try {
+                                return JSON.parse(value);
+                            } catch (e) {
+                                return value;
+                            }
+                        }
+                        return value;
+                    };
+
+                    const parseSection = (section) => {
+                        if (!section) return section;
+                        const parsed = {...section};
+                        for (const [key, value] of Object.entries(parsed)) {
+                            parsed[key] = parseIfJson(value);
+                        }
+                        return parsed;
+                    };
+
+                    document.getElementById('device-info').textContent = 
+                        JSON.stringify(parseSection(data.device_info), null, 2);
+                    document.getElementById('activity-metrics').textContent = 
+                        JSON.stringify(parseSection(data.activity_metrics), null, 2);
+                    document.getElementById('k8s-stats').textContent = 
+                        JSON.stringify(parseSection(data.k8s_stats), null, 2);
                     document.getElementById('loading').style.display = 'none';
                 })
                 .catch(error => {

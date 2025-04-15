@@ -7,9 +7,10 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
 from app.metrics.metric_reporting import MetricsReporter
+from app.metrics.iq_activity import clear_old_activity_files
 
+ONE_HOUR_IN_SECONDS = 3600
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
-
 
 app = FastAPI(title="status-monitor")
 scheduler = AsyncIOScheduler()
@@ -26,6 +27,7 @@ async def startup_event():
     logging.info("Will report metrics to the cloud every hour")
     scheduler.add_job(reporter.collect_metrics_for_cloud, "cron", hour="*", minute="1")
     scheduler.add_job(reporter.report_metrics_to_cloud, "cron", hour="*", minute="2", jitter=120)
+    scheduler.add_job(clear_old_activity_files, "interval", seconds=ONE_HOUR_IN_SECONDS)
     scheduler.start()
 
 
