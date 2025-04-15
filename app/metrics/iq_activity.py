@@ -22,7 +22,6 @@ Filesystem structure:
 import json
 import logging
 import os
-
 from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path

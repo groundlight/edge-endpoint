@@ -14,8 +14,6 @@ from fastapi import FastAPI
 from app.api.api import api_router, health_router, ping_router
 from app.api.naming import API_BASE_PATH
 from app.core.app_state import AppState
-from app.metrics.iq_activity import clear_old_activity_files
-from app.metrics.metric_reporting import MetricsReporter
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 DEPLOY_DETECTOR_LEVEL_INFERENCE = bool(int(os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", 0)))
