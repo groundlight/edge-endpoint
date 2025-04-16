@@ -126,6 +126,8 @@ spec:
               name: groundlight-api-token
               key: GROUNDLIGHT_API_TOKEN
               optional: true
+        - name: INFERENCE_FLAVOR
+          value: "{{ .Values.inferenceFlavor }}"
         volumeMounts:
           - name: edge-config-volume
             mountPath: /etc/groundlight/edge-config
