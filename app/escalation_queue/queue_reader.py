@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from typing import Generator
 
-from app.escalation_queue.queue_writer import DEFAULT_QUEUE_BASE_DIR
+from app.escalation_queue.constants import DEFAULT_QUEUE_BASE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +38,8 @@ class QueueReader:
                     return  # Triggers a StopIteration exception
                 self.current_file_path = new_file_path
 
-            logger.info(f"{self.current_file_path=}")
-            with open(self.current_file_path, "r") as f:
+            with self.current_file_path.open(mode="r") as f:
                 for line in f:
-                    logger.info(f"{line=}")
                     yield line
                 self.current_file_path.unlink()  # Delete file when done reading
                 self.current_file_path = None
@@ -53,11 +51,9 @@ class QueueReader:
             return None
 
         oldest_writing_path = Path(sorted(queue_files)[0])
-        logger.info(f"{oldest_writing_path=}")
         new_reading_path = (
             oldest_writing_path.replace(  # This will overwrite if the target path exists (which shouldn't happen)
                 oldest_writing_path.parent.parent / "reading" / oldest_writing_path.name
             )
         )
-        logger.info(f"{new_reading_path=}")
         return new_reading_path

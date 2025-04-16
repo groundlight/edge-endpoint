@@ -35,4 +35,4 @@ def write_escalation_to_queue(
         image_path=image_path,
         submit_iq_params=submit_iq_params,
     )
-    writer.write_escalation(escalation_info)
+    writer.write_escalation(escalation_info)  # TODO retry here?

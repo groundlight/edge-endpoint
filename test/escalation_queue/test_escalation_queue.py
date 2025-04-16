@@ -9,6 +9,7 @@ import ksuid
 import pytest
 
 from app.core.utils import get_formatted_timestamp_str
+from app.escalation_queue.constants import MAX_QUEUE_FILE_LINES
 from app.escalation_queue.queue_reader import QueueReader
 from app.escalation_queue.queue_writer import EscalationInfo, QueueWriter, SubmitImageQueryParams
 
@@ -99,11 +100,10 @@ def reader(base_dir: str) -> QueueReader:
 
 def test_successive_writes_go_to_same_file(writer: QueueWriter, test_escalation: EscalationInfo):
     """Verify that successive escalation writes go to the same file."""
-    assert writer.write_escalation(test_escalation)
-    assert_file_length(writer.last_file_path, 1)
-
-    assert writer.write_escalation(test_escalation)
-    assert_file_length(writer.last_file_path, 2)
+    for i in range(1, 4):
+        assert writer.write_escalation(test_escalation)
+        assert_file_length(writer.last_file_path, i)
+        assert writer.num_lines_written_to_file == i
 
 
 def test_write_to_different_file(writer: QueueWriter, test_escalation: EscalationInfo):
@@ -111,11 +111,13 @@ def test_write_to_different_file(writer: QueueWriter, test_escalation: Escalatio
     assert writer.write_escalation(test_escalation)
     first_file_path = writer.last_file_path
     assert_file_length(first_file_path, 1)
+    assert writer.num_lines_written_to_file == 1
 
     first_file_path.unlink()
     assert writer.write_escalation(test_escalation)
     assert_file_length(writer.last_file_path, 1)
     assert first_file_path != writer.last_file_path
+    assert writer.num_lines_written_to_file == 1
 
 
 def test_separate_writers_write_to_different_files(
@@ -125,10 +127,24 @@ def test_separate_writers_write_to_different_files(
     assert writer.write_escalation(test_escalation)
     assert second_writer.write_escalation(test_escalation)
 
-    assert writer.last_file_path != second_writer.last_file_path
+    assert not writer.last_file_path.samefile(second_writer.last_file_path)
 
     assert_file_length(writer.last_file_path, 1)
     assert_file_length(second_writer.last_file_path, 1)
+
+
+def test_writer_respects_file_length_limit(writer: QueueWriter, test_escalation: EscalationInfo):
+    """Verify that the writer starts writing to a new file when a file reaches the max allowed line length."""
+    for i in range(MAX_QUEUE_FILE_LINES):
+        assert writer.write_escalation(test_escalation)
+        assert_file_length(writer.last_file_path, i + 1)
+        assert writer.num_lines_written_to_file == i + 1
+
+    first_file_path = writer.last_file_path
+    assert writer.write_escalation(test_escalation)
+    assert_file_length(writer.last_file_path, 1)
+    assert writer.num_lines_written_to_file == 1
+    assert not first_file_path.samefile(writer.last_file_path)
 
 
 def test_writer_can_write_image(writer: QueueWriter, timestamp_str: str, test_image_bytes: bytes):
@@ -216,7 +232,7 @@ def test_reader_selects_oldest_file(reader: QueueReader, writer: QueueWriter, se
 
     assert writer.write_escalation(test_escalation_1)
     assert second_writer.write_escalation(test_escalation_2)
-    assert writer.last_file_path != second_writer.last_file_path
+    assert not writer.last_file_path.samefile(second_writer.last_file_path)
 
     assert_contents_of_next_read_line(reader, test_escalation_1)
     assert_contents_of_next_read_line(reader, test_escalation_2)
