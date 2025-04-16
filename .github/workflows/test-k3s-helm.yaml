@@ -36,7 +36,7 @@ jobs:
         # Lots of stuff is installed by default on the github runners that we don't need.
         # This is a hack to free up space, since we need more to run this test. If we start running
         # out of space again, there are other things we can delete for more space.
-        # Removing android SDKs and tools should free up ~9 GB, and seemt to take <15 seconds.
+        # Removing android SDKs and tools should free up ~9 GB, and seems to take <15 seconds.
         run: |
           sudo rm -rf /usr/local/lib/android
 
