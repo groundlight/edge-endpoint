@@ -106,6 +106,101 @@ jobs:
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
+  # Run Groundlight SDK tests against the edge proxy endpoint
+  test-sdk:
+    runs-on: ubuntu-22.04
+    env:
+      # This is the NGINX proxy endpoint
+      GROUNDLIGHT_ENDPOINT: http://localhost:30101
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Docker
+        run: |
+          sudo apt-get update
+          sudo apt-get remove moby-runc
+          sudo apt-get install apt-transport-https ca-certificates curl software-properties-common
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+          sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+          sudo apt-get update
+          sudo apt-get install docker-ce
+
+      - name: Build Docker Image
+        run: docker build --tag groundlight-edge .
+
+      - name: Start Docker Container
+        id: start_container
+        run: |
+          source test/setup_plain_test_env.sh
+          echo "EDGE_CONFIG=$EDGE_CONFIG"
+          container_id=$(docker run \
+            -e LOG_LEVEL=DEBUG \
+            -e EDGE_CONFIG \
+            -d -p 30101:30101 \
+            groundlight-edge)
+          echo "container_id=$container_id" >> $GITHUB_OUTPUT
+
+      - name: Install poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: ${{ env.POETRY_VERSION }}
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: true
+
+      - name: Load Cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v3
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/poetry.lock') }}
+
+      # Note that we're pulling the latest main from the SDK repo
+      # This might be ahead of what's published to pypi, but it's useful to test things before they're released.
+      - name: Checkout Groundlight SDK
+        uses: actions/checkout@v4
+        with:
+          repository: groundlight/python-sdk
+          path: groundlight-sdk
+
+      - name: Install Groundlight SDK dependencies
+        run: |
+          cd groundlight-sdk
+          make install
+
+      - name: Run Groundlight SDK tests against Prod API via Edge Proxy Endpoint
+        run: |
+          cd groundlight-sdk
+          make test-4edge
+          cd ..
+
+      - name: Dump Logs from Docker Container
+        if: always()
+        run: docker logs ${{ steps.start_container.outputs.container_id }}
+
+      - name: Stop Docker Container
+        # This ensures that we always stop the container regardless of the outcomes of
+        # the previous steps
+        if: always()
+        run: docker stop ${{ steps.start_container.outputs.container_id }}
+
+  call-build-push-ee-image:
+    # We run this at the beginning of every PR so that the various full k3s tests
+    # can use this image
+    uses: ./.github/workflows/build-push-ee-image.yaml
+    with:
+      repo: ${{ github.repository }}
+      ref: ${{ github.ref }}
+    secrets:
+      AWS_GL_PUBLIC_ACCESS_KEY_ID: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
+      AWS_GL_PUBLIC_SECRET_ACCESS_KEY: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
+
   validate-setup-ee:
     runs-on: ubuntu-latest-4-cores
     # We need more disk space than the default (2 core) runners have.
@@ -235,90 +330,6 @@ jobs:
     secrets:
       K3S_TEST_GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
 
-  # Run Groundlight SDK tests against the edge proxy endpoint
-  test-sdk:
-    runs-on: ubuntu-22.04
-    env:
-      # This is the NGINX proxy endpoint
-      GROUNDLIGHT_ENDPOINT: http://localhost:30101
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-
-      - name: Set up python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install Docker
-        run: |
-          sudo apt-get update
-          sudo apt-get remove moby-runc
-          sudo apt-get install apt-transport-https ca-certificates curl software-properties-common
-          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-          sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-          sudo apt-get update
-          sudo apt-get install docker-ce
-
-      - name: Build Docker Image
-        run: docker build --tag groundlight-edge .
-
-      - name: Start Docker Container
-        id: start_container
-        run: |
-          source test/setup_plain_test_env.sh
-          echo "EDGE_CONFIG=$EDGE_CONFIG"
-          container_id=$(docker run \
-            -e LOG_LEVEL=DEBUG \
-            -e EDGE_CONFIG \
-            -d -p 30101:30101 \
-            groundlight-edge)
-          echo "container_id=$container_id" >> $GITHUB_OUTPUT
-
-      - name: Install poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          installer-parallel: true
-
-      - name: Load Cached venv
-        id: cached-poetry-dependencies
-        uses: actions/cache@v3
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/poetry.lock') }}
-
-      # Note that we're pulling the latest main from the SDK repo
-      # This might be ahead of what's published to pypi, but it's useful to test things before they're released.
-      - name: Checkout Groundlight SDK
-        uses: actions/checkout@v4
-        with:
-          repository: groundlight/python-sdk
-          path: groundlight-sdk
-
-      - name: Install Groundlight SDK dependencies
-        run: |
-          cd groundlight-sdk
-          make install
-
-      - name: Run Groundlight SDK tests against Prod API via Edge Proxy Endpoint
-        run: |
-          cd groundlight-sdk
-          make test-4edge
-          cd ..
-
-      - name: Dump Logs from Docker Container
-        if: always()
-        run: docker logs ${{ steps.start_container.outputs.container_id }}
-
-      - name: Stop Docker Container
-        # This ensures that we always stop the container regardless of the outcomes of
-        # the previous steps
-        if: always()
-        run: docker stop ${{ steps.start_container.outputs.container_id }}
-
   G4-end-to-end:
     # Note this job can run multiple times in parallel because the stack name is unique
     # for the run.  How much we want to do this is TBD.
@@ -438,17 +449,6 @@ jobs:
           echo "export EEUT_IP=${EEUT_IP}"
           echo "export EEUT_STACK_NAME=${STACK_NAME}"
 
-  call-build-push-ee-image:
-    # We run this at the beginning of every PR so that the various full k3s tests
-    # can use this image
-    uses: ./.github/workflows/build-push-ee-image.yaml
-    with:
-      repo: ${{ github.repository }}
-      ref: ${{ github.ref }}
-    secrets:
-      AWS_GL_PUBLIC_ACCESS_KEY_ID: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
-      AWS_GL_PUBLIC_SECRET_ACCESS_KEY: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
-
   main-tests-pass:
     runs-on: ubuntu-latest
     # This is a dummy step to avoid repeating the list of tests
@@ -463,30 +463,7 @@ jobs:
     steps:
       - name: declare success
         run: echo "Main suite of tests all pass."
-
-  tag-pre-release:
-    if: github.ref == 'refs/heads/main'
-    needs:
-      - main-tests-pass
-    runs-on: ubuntu-latest
-    steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
-        with:
-          mask-password: "true"
-      - name: Check out code
-        uses: actions/checkout@v4
-
-      - name: Tag main images with the "pre-release" tag after all the tests pass
-        run: ./deploy/bin/tag-edge-endpoint-image.sh pre-release
-
+  
   update-glhub:
     if: github.ref == 'refs/heads/main'
     needs:
@@ -515,6 +492,29 @@ jobs:
         env:
           GIT_AUTHOR_NAME: "github-actions[bot]"
           GIT_AUTHOR_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com"
+
+  tag-pre-release:
+    if: github.ref == 'refs/heads/main'
+    needs:
+      - main-tests-pass
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          mask-password: "true"
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Tag main images with the "pre-release" tag after all the tests pass
+        run: ./deploy/bin/tag-edge-endpoint-image.sh pre-release
 
   tag-release:
     # The environment rules are not defined in code -- instead, they are defined in the Github UI:
