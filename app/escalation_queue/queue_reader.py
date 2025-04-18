@@ -14,6 +14,7 @@ class QueueReader:
         os.makedirs(self.base_reading_dir, exist_ok=True)  # Ensure base_reading_dir exists
         self.base_writing_dir = Path(base_dir, "writing")  # It's okay if this doesn't exist (yet)
         self.current_file_path: Path | None = None
+        self.current_tracking_file_path: Path | None = None
 
         self._generator = self._get_line_generator()
 
@@ -33,19 +34,38 @@ class QueueReader:
         """
         while True:
             if not self.current_file_path or not self.current_file_path.exists():
-                new_file_path = self._choose_new_file()
+                new_file_path = (
+                    self._choose_new_file()
+                )  # TODO need to know if this is an existing file (from tracked file) and treat it different
                 if new_file_path is None:
                     return  # Triggers a StopIteration exception
                 self.current_file_path = new_file_path
+                self.current_tracking_file_path = self.current_file_path.with_name(
+                    f"tracking-{self.current_file_path.name}"
+                )
 
-            with self.current_file_path.open(mode="r") as f:
-                for line in f:
+            with (
+                self.current_file_path.open(mode="r") as reading_fd,
+                self.current_tracking_file_path.open(mode="a") as tracking_fd,
+            ):
+                for line in reading_fd:
+                    tracking_fd.write("1")
+                    tracking_fd.flush()
                     yield line
                 self.current_file_path.unlink()  # Delete file when done reading
+                self.current_tracking_file_path.unlink()  # Delete tracking file when done reading
                 self.current_file_path = None
+                self.current_tracking_file_path = None
 
     def _choose_new_file(self) -> None | Path:
         """Returns None if no files are in the base_dir, otherwise the least element."""
+        # tracking_files = list(self.base_reading_dir.glob("tracking-*_*-*.txt"))
+        # if len(tracking_files) > 0:
+        #     logger.info("Found at least one unfinished tracking file. Choosing a random one and continuing from there.")
+        #     tracking_path = tracking_files[0]
+        #     new_reading_path = Path(tracking_path.parent, tracking_path.name.replace("tracking-", ""))
+        #     return new_reading_path
+
         queue_files = list(self.base_writing_dir.glob("*_*-*.txt"))  # TODO improve this?
         if len(queue_files) == 0:
             return None

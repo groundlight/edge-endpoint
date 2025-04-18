@@ -39,6 +39,15 @@ def generate_test_escalation(
     return EscalationInfo(**data)
 
 
+def get_num_tracked_escalations(reader: QueueReader) -> int:
+    if reader.current_tracking_file_path is None:
+        return 0
+    with reader.current_tracking_file_path.open(mode="r") as f:
+        line = f.readline()
+        print(f"{line=}")
+        return len(line)
+
+
 def assert_file_length(file_path: str, expected_lines: int):
     with open(file_path, "r") as f:
         num_lines = len(f.readlines())
@@ -253,3 +262,29 @@ def test_reader_deletes_empty_file(reader: QueueReader, writer: QueueWriter, tes
     assert_contents_of_next_read_line(reader, None)
     assert reader.current_file_path is None
     assert not previous_reading_path.exists()
+
+
+def test_reader_basic_tracking(reader: QueueReader, writer: QueueWriter, test_escalation: EscalationInfo):
+    """Verify that the reader tracks escalations in a separate file properly."""
+    num_lines = 3
+    for _ in range(num_lines):
+        assert writer.write_escalation(test_escalation)
+
+    for i in range(num_lines):
+        assert_contents_of_next_read_line(reader, test_escalation)
+        assert get_num_tracked_escalations(reader) == i + 1
+
+    assert_contents_of_next_read_line(reader, None)
+    assert reader.current_tracking_file_path is None
+
+
+def test_reader_track(reader: QueueReader, writer: QueueWriter, test_escalation: EscalationInfo):
+    assert writer.write_escalation(test_escalation)
+    assert writer.write_escalation(test_escalation)
+    assert writer.write_escalation(test_escalation)
+
+    assert_contents_of_next_read_line(reader, test_escalation)
+    assert get_num_tracked_escalations(reader) == 1
+
+    new_path = reader._choose_new_file()
+    print(f"{new_path=}")
