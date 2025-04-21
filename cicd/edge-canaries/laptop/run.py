@@ -111,7 +111,7 @@ if query_rate < MINIMUM_EXPECTED_BINARY_QUERY_RATE:
     sys.exit(1) # exit to avoid sending heartbeat
 
 # Check that the received labels are valid
-EXPECTED_BINARY_LABELS = set(["YES", "NO", "UNSURE"])
+EXPECTED_BINARY_LABELS = set(["YES", "NO", "UNCLEAR"])
 unexpected_labels = unique_labels - EXPECTED_BINARY_LABELS
 if len(unexpected_labels) > 0:
     logger.error(f"Found unexpected label(s) in results from Edge Endpoint: {unexpected_labels}. Expected: {EXPECTED_BINARY_LABELS}")
