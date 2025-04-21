@@ -1,9 +1,11 @@
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Generator
 
 from app.escalation_queue.constants import DEFAULT_QUEUE_BASE_DIR
+from app.escalation_queue.queue_writer import EscalationInfo
 
 logger = logging.getLogger(__name__)
 
@@ -77,3 +79,23 @@ class QueueReader:
             )
         )
         return new_reading_path
+
+
+def consume_queued_escalation(escalation: EscalationInfo):
+    logger.info(f"Consuming queued escalation. {escalation=}")
+    return True
+
+
+def manage_read_escalation_queue(reader: QueueReader):
+    while True:
+        queued_escalation = queue_reader.get_next_line()
+        if queued_escalation is not None:
+            consume_queued_escalation()
+        time.sleep(1)
+
+
+if __name__ == "__main__":
+    logger.info("Starting escalation queue reader.")
+
+    queue_reader = QueueReader()
+    manage_read_escalation_queue(queue_reader)
