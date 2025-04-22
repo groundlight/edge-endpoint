@@ -8,13 +8,13 @@ from kubernetes import client, config
 logger = logging.getLogger(__name__)
 
 
-def get_cpu_usage_pct() -> str:
+def get_cpu_utilization() -> str:
     """Returns the percentage of total CPU used."""
     percent = psutil.cpu_percent(interval=1)
     return percent
 
 
-def get_memory_used_pct() -> str:
+def get_memory_utilization() -> str:
     """Returns the percentage of total memory used."""
     percent = psutil.virtual_memory().percent
     return percent

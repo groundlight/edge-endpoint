@@ -76,12 +76,12 @@ class TestMetricsReporter:
         assert "now" in device_info
         assert "cpucores" in device_info
         assert "inference_flavor" in device_info
-        assert "cpu_usage_pct" in device_info
-        assert "memory_used_pct" in device_info
+        assert "cpu_utilization" in device_info
+        assert "memory_utilization" in device_info
         assert "memory_available_bytes" in device_info
 
         activity_metrics = payload["activity_metrics"]
-        assert "last_image_processed" in activity_metrics
+        assert "last_activity_time" in activity_metrics
         assert "num_detectors_lifetime" in activity_metrics
         assert "num_detectors_active_1h" in activity_metrics
         assert "num_detectors_active_24h" in activity_metrics
