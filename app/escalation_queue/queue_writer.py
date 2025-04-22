@@ -26,7 +26,7 @@ class SubmitImageQueryParams(BaseModel):
 class EscalationInfo(BaseModel):
     timestamp: str
     detector_id: str
-    image_path: str
+    image_path_str: str
     submit_iq_params: SubmitImageQueryParams
 
 

@@ -33,7 +33,7 @@ def generate_test_escalation(
     data = {
         "timestamp": timestamp_str,
         "detector_id": detector_id,
-        "image_path": image_path,
+        "image_path_str": image_path,
         "submit_iq_params": submit_iq_params,
     }
     return EscalationInfo(**data)
