@@ -292,7 +292,7 @@ def test_basic_escalation_consumption(test_escalation: EscalationInfo):
     mock_gl = Mock()
     with patch("app.escalation_queue.queue_reader.safe_call_sdk", return_value=mock_iq) as mock_sdk_call:
         mock_sdk_call.side_effect = HTTPException(status_code=404)
-        escalation_result = consume_queued_escalation(test_escalation_str, gl=mock_gl)
+        consume_queued_escalation(test_escalation_str, gl=mock_gl)
 
 
 def test_consume_escalation_image_not_found():
