@@ -9,7 +9,7 @@ K="k3s kubectl"
 
 # Validate number of arguments
 if [ "$#" -ne 1 ]; then
-    echo "❌ Error: Exactly one argument is required: 'gpu' or 'cpu'." >&2
+    echo "❌ Error: Exactly one argument is required: 'gpu', 'jetson', or 'cpu'." >&2
     exit 1
 fi
 
@@ -17,8 +17,8 @@ fi
 FLAVOR=$(echo "$1" | tr '[:upper:]' '[:lower:]')
 
 # Validate value
-if [ "$FLAVOR" != "gpu" ] && [ "$FLAVOR" != "cpu" ]; then
-    echo "❌ Error: Argument must be either 'gpu' or 'cpu'." >&2
+if [ "$FLAVOR" != "gpu" ] && [ "$FLAVOR" != "jetson" ] && [ "$FLAVOR" != "cpu" ]; then
+    echo "❌ Error: Argument must be either 'gpu', 'jetson', or 'cpu'." >&2
     exit 1
 fi
 
@@ -116,6 +116,11 @@ check_nvidia_drivers_and_container_runtime() {
   NVIDIA_VERSION=${NVIDIA_VERSION:-525}
 
   if ! command -v nvidia-smi &> /dev/null; then
+    # If we are on a Jetson platform, the NVIDIA drivers cannot be installed manually as it comes pre-installed with JetPack.
+    if [ "$FLAVOR" == "jetson" ]; then
+        echo "WARNING: NVIDIA drivers are not installed (nvidia-smi not found) on Jetson and cannot be installed manually, please make sure JetPack is installed."
+        exit 1
+    fi
     echo "NVIDIA drivers are not installed (nvidia-smi not found). Installing..."
     sudo apt update && sudo apt install -y "nvidia-headless-$NVIDIA_VERSION-server" "nvidia-utils-$NVIDIA_VERSION-server"
   else
@@ -144,7 +149,7 @@ check_nvidia_drivers_and_container_runtime() {
   fi
 }
 
-if [ "$FLAVOR" == "gpu" ]; then
+if [ "$FLAVOR" == "gpu" ] || [ "$FLAVOR" == "jetson" ]; then
     echo
     echo '##################################################################################'
     echo '# Installing driver support for NVIDIA GPUs'
