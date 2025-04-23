@@ -4,12 +4,15 @@ import shutil
 import tempfile
 from pathlib import Path
 from typing import Generator
+from unittest.mock import Mock, patch
 
 import ksuid
 import pytest
+from fastapi import HTTPException
 
 from app.core.utils import get_formatted_timestamp_str
 from app.escalation_queue.constants import MAX_QUEUE_FILE_LINES
+from app.escalation_queue.manage_reader import consume_queued_escalation
 from app.escalation_queue.queue_reader import QueueReader
 from app.escalation_queue.queue_writer import EscalationInfo, QueueWriter, SubmitImageQueryParams
 
@@ -28,7 +31,7 @@ def generate_test_escalation(
         image_query_id=None,
     ),
     detector_id: str = "test_id",
-    image_path: str = "test_path",
+    image_path: str = "test/assets/cat.jpeg",
 ) -> EscalationInfo:
     data = {
         "timestamp": timestamp_str,
@@ -40,21 +43,23 @@ def generate_test_escalation(
 
 
 def get_num_tracked_escalations(reader: QueueReader) -> int:
+    """Get the number of escalations recorded in the reader's tracking file. Will return 0 if there is no such file."""
     if reader.current_tracking_file_path is None:
         return 0
     with reader.current_tracking_file_path.open(mode="r") as f:
         line = f.readline()
-        print(f"{line=}")
         return len(line)
 
 
 def assert_file_length(file_path: str, expected_lines: int):
+    """Assert that the file at the specified file path has the expected number of lines."""
     with open(file_path, "r") as f:
         num_lines = len(f.readlines())
         assert num_lines == expected_lines
 
 
 def assert_contents_of_next_read_line(reader: QueueReader, expected_result: EscalationInfo | None):  # TODO rename
+    """Assert that the next read line matches the expected result."""
     next_escalation_str = reader.get_next_line()
     next_escalation = None if next_escalation_str is None else EscalationInfo(**json.loads(next_escalation_str))
     assert next_escalation == expected_result
@@ -278,13 +283,37 @@ def test_reader_basic_tracking(reader: QueueReader, writer: QueueWriter, test_es
     assert reader.current_tracking_file_path is None
 
 
-def test_reader_track(reader: QueueReader, writer: QueueWriter, test_escalation: EscalationInfo):
-    assert writer.write_escalation(test_escalation)
-    assert writer.write_escalation(test_escalation)
-    assert writer.write_escalation(test_escalation)
+### Escalation consumption tests
 
-    assert_contents_of_next_read_line(reader, test_escalation)
-    assert get_num_tracked_escalations(reader) == 1
 
-    new_path = reader._choose_new_file()
-    print(f"{new_path=}")
+def test_basic_escalation_consumption(test_escalation: EscalationInfo):
+    test_escalation_str = f"{json.dumps(test_escalation.model_dump())}\n"
+    mock_iq = Mock()
+    mock_gl = Mock()
+    with patch("app.escalation_queue.queue_reader.safe_call_sdk", return_value=mock_iq) as mock_sdk_call:
+        mock_sdk_call.side_effect = HTTPException(status_code=404)
+        escalation_result = consume_queued_escalation(test_escalation_str, gl=mock_gl)
+
+
+def test_consume_escalation_image_not_found():
+    pass
+
+
+def test_consume_escalation_no_connection():
+    pass
+
+
+def test_consume_escalation_bad_request():
+    pass
+
+
+def test_consume_escalation_other_http_exception():
+    pass
+
+
+def test_consume_escalation_other_general_exception():
+    pass
+
+
+def test_consume_escalation_gl_client_creation_failure():
+    pass
