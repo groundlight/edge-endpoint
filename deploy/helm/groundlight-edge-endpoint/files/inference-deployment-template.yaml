@@ -71,6 +71,8 @@ spec:
           value: placeholder-model-name
         - name: PINAMOD_DIR
           value: /opt/models/pinamod
+        - name: LOG_LEVEL
+          value: {{ .Values.logLevel | quote }}
         command:
           [
             "poetry", "run", "python3", "-m", "uvicorn", "serving.edge_inference_server.fastapi_server:app",

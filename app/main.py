@@ -22,7 +22,9 @@ DEPLOY_DETECTOR_LEVEL_INFERENCE = bool(int(os.environ.get("DEPLOY_DETECTOR_LEVEL
 logging.basicConfig(
     level=LOG_LEVEL, format="%(asctime)s.%(msecs)03d %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
 )
-
+# The asyncio executor is too verbose at INFO level, so we set it to WARNING
+if LOG_LEVEL == "INFO":
+    logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
 
 app = FastAPI(title="edge-endpoint")
 app.include_router(router=api_router, prefix=API_BASE_PATH)
@@ -34,7 +36,7 @@ scheduler = AsyncIOScheduler()
 
 def update_inference_config(app_state: AppState) -> None:
     """Update the App's edge-inference config by querying the database for new detectors."""
-    logging.info("Querying database for updated inference deployment records...")
+    logging.debug("Querying database for updated inference deployment records...")
     detectors = app_state.db_manager.get_inference_deployment_records(deployment_created=True)
     if detectors:
         for detector_record in detectors:
