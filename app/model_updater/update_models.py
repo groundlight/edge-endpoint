@@ -133,7 +133,7 @@ def manage_update_models(
 
     while True:
         start = time.time()
-        logger.info("Starting model update check for existing inference deployments.")
+        logger.debug("Starting model update check for existing inference deployments.")
         for detector_id in edge_inference_manager.detector_inference_configs.keys():
             try:
                 logger.debug(f"Checking new models and inference deployments for detector_id: {detector_id}")
@@ -143,19 +143,19 @@ def manage_update_models(
                     deployment_manager=deployment_manager,
                     db_manager=db_manager,
                 )
-                logger.info(f"Successfully updated model for detector_id: {detector_id}")
+                logger.debug(f"Successfully updated model for detector_id: {detector_id}")
             except Exception as e:
-                logger.error(f"Failed to update model for detector_id: {detector_id}. Error: {e}", exc_info=True)
+                logger.info(f"Failed to update model for detector_id: {detector_id}. Error: {e}", exc_info=True)
 
         elapsed_s = time.time() - start
-        logger.info(f"Model update check completed in {elapsed_s:.2f} seconds.")
+        logger.debug(f"Model update check completed in {elapsed_s:.2f} seconds.")
         if elapsed_s < refresh_rate:
             sleep_duration = refresh_rate - elapsed_s
-            logger.info(f"Sleeping for {sleep_duration:.2f} seconds before next update cycle.")
+            logger.debug(f"Sleeping for {sleep_duration:.2f} seconds before next update cycle.")
             time.sleep(sleep_duration)
 
         # Fetch detector IDs that need to be deployed from the database and add them to the config
-        logger.info("Fetching undeployed detector IDs from the database.")
+        logger.debug("Fetching undeployed detector IDs from the database.")
         undeployed_detector_ids = db_manager.get_inference_deployment_records(deployment_created=False)
         if undeployed_detector_ids:
             logger.info(f"Found {len(undeployed_detector_ids)} undeployed detectors. Updating inference config.")
@@ -165,7 +165,7 @@ def manage_update_models(
                     detector_id=detector_record.detector_id, api_token=detector_record.api_token
                 )
         else:
-            logger.info("No undeployed detectors found.")
+            logger.debug("No undeployed detectors found.")
 
         # Update the status of the inference deployments in the database
         deployment_records = db_manager.get_inference_deployment_records()
