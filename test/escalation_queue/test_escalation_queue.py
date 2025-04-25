@@ -8,7 +8,9 @@ from unittest.mock import Mock, patch
 
 import ksuid
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, status
+from groundlight import GroundlightClientError
+from urllib3.exceptions import MaxRetryError
 
 from app.core.utils import get_formatted_timestamp_str
 from app.escalation_queue.constants import MAX_QUEUE_FILE_LINES
@@ -63,6 +65,10 @@ def assert_contents_of_next_read_line(reader: QueueReader, expected_result: Esca
     next_escalation_str = reader.get_next_line()
     next_escalation = None if next_escalation_str is None else EscalationInfo(**json.loads(next_escalation_str))
     assert next_escalation == expected_result
+
+
+def escalation_info_to_str(escalation_info: EscalationInfo) -> str:
+    return f"{json.dumps(escalation_info.model_dump())}\n"
 
 
 ### Fixtures
@@ -287,33 +293,59 @@ def test_reader_basic_tracking(reader: QueueReader, writer: QueueWriter, test_es
 
 
 def test_basic_escalation_consumption(test_escalation: EscalationInfo):
-    test_escalation_str = f"{json.dumps(test_escalation.model_dump())}\n"
-    mock_iq = Mock()
-    mock_gl = Mock()
-    with patch("app.escalation_queue.queue_reader.safe_call_sdk", return_value=mock_iq) as mock_sdk_call:
-        mock_sdk_call.side_effect = HTTPException(status_code=404)
-        consume_queued_escalation(test_escalation_str, gl=mock_gl)
+    test_escalation_str = escalation_info_to_str(test_escalation)
+    with patch("app.escalation_queue.manage_reader.safe_call_sdk", return_value=Mock()) as mock_sdk_call:
+        mock_sdk_call.side_effect = HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        consume_queued_escalation(test_escalation_str, gl=Mock())
 
 
-def test_consume_escalation_image_not_found():
-    pass
+def test_consume_escalation_image_not_found(test_escalation: EscalationInfo):
+    """Verifies that no error is raised and the escalation is skipped when the image cannot be found."""
+    test_escalation.image_path_str = "not-a-real-path"
+    test_escalation_str = escalation_info_to_str(test_escalation)
+
+    escalation_result, should_try_again = consume_queued_escalation(test_escalation_str, gl=Mock())
+    assert escalation_result is None
+    assert not should_try_again
 
 
-def test_consume_escalation_no_connection():
-    pass
+def test_consume_escalation_no_connection(test_escalation: EscalationInfo):
+    """Verifies that no error is raised and a retry is prompted when there is no connection."""
+    test_escalation_str = escalation_info_to_str(test_escalation)
+    with patch("app.escalation_queue.manage_reader.safe_call_sdk", return_value=Mock()) as mock_sdk_call:
+        mock_sdk_call.side_effect = MaxRetryError(pool=None, url=None)
+        escalation_result, should_try_again = consume_queued_escalation(test_escalation_str, gl=Mock())
+        assert escalation_result is None
+        assert should_try_again
 
 
-def test_consume_escalation_bad_request():
-    pass
+def test_consume_escalation_bad_request(test_escalation: EscalationInfo):
+    """Verifies that no error is raised and no retry is prompted when a bad request exception is encountered."""
+    test_escalation.submit_iq_params.human_review = "NOT A VALID OPTION"
+    test_escalation_str = escalation_info_to_str(test_escalation)
+    with patch("app.escalation_queue.manage_reader.safe_call_sdk", return_value=Mock()) as mock_sdk_call:
+        mock_sdk_call.side_effect = HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+        escalation_result, should_try_again = consume_queued_escalation(test_escalation_str, gl=Mock())
+        assert escalation_result is None
+        assert not should_try_again
 
 
-def test_consume_escalation_other_http_exception():
-    pass
+def test_consume_escalation_other_http_exception(test_escalation: EscalationInfo):
+    """Verifies that no error is raised and no retry is prompted when any HTTP exception is encountered."""
+    test_escalation_str = escalation_info_to_str(test_escalation)
+    with patch("app.escalation_queue.manage_reader.safe_call_sdk", return_value=Mock()) as mock_sdk_call:
+        mock_sdk_call.side_effect = HTTPException(status_code=status.HTTP_418_IM_A_TEAPOT)
+        escalation_result, should_try_again = consume_queued_escalation(test_escalation_str, gl=Mock())
+        assert escalation_result is None
+        assert not should_try_again
 
 
-def test_consume_escalation_other_general_exception():
-    pass
+def test_consume_escalation_gl_client_creation_failure(test_escalation: EscalationInfo):
+    """Verifies that no error is raised when it fails to create a Groundlight client."""
+    test_escalation_str = escalation_info_to_str(test_escalation)
 
-
-def test_consume_escalation_gl_client_creation_failure():
-    pass
+    with patch("app.escalation_queue.manage_reader._groundlight_client", return_value=Mock()) as mock_gl_client:
+        mock_gl_client.side_effect = GroundlightClientError()
+        escalation_result, should_try_again = consume_queued_escalation(test_escalation_str)
+        assert escalation_result is None
+        assert should_try_again

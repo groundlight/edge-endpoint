@@ -1,7 +1,20 @@
+import logging
+import socket
+import time
 from typing import Any
 
+from cachetools import TTLCache, cached
+
 from app.core.utils import get_formatted_timestamp_str
+from app.escalation_queue.constants import (
+    CONNECTION_STATUS_TTL_SECS,
+    CONNECTION_TEST_HOST,
+    CONNECTION_TEST_PORT,
+    CONNECTION_TIMEOUT,
+)
 from app.escalation_queue.queue_writer import EscalationInfo, QueueWriter, SubmitImageQueryParams
+
+logger = logging.getLogger(__name__)
 
 
 def write_escalation_to_queue(
@@ -36,3 +49,22 @@ def write_escalation_to_queue(
         submit_iq_params=submit_iq_params,
     )
     writer.write_escalation(escalation_info)  # TODO retry here?
+
+
+connection_ttl_cache = TTLCache(maxsize=1, ttl=CONNECTION_STATUS_TTL_SECS)
+
+
+@cached(connection_ttl_cache)
+def is_connected() -> bool:
+    """Check if the system can establish a network connection to the test host. Result is cached for a short time."""
+    try:
+        socket.setdefaulttimeout(CONNECTION_TIMEOUT)
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((CONNECTION_TEST_HOST, CONNECTION_TEST_PORT))
+        return True
+    except socket.error:
+        return False
+
+
+def wait_for_connection() -> None:
+    while not is_connected():
+        time.sleep(1)  # TODO make configurable? or constant setting?
