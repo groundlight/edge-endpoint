@@ -67,7 +67,7 @@ for n in range(NUM_IMAGE_QUERIES):
     iq = gl.submit_image_query(
         detector=detector,
         image=resized_frame,
-        human_review="NEVER",
+        human_review="DEFAULT",
         wait=0.0,
         confidence_threshold=0.75, # let's be conservative about escalation to keep inferences moving quickly
     )
