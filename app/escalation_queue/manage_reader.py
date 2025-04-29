@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import time
 from functools import lru_cache
 from pathlib import Path
 
@@ -42,8 +41,7 @@ def consume_queued_escalation(escalation_str: str, gl: Groundlight | None = None
 
     escalation_info = EscalationInfo(**json.loads(escalation_str))
     logger.info(
-        f"Consumed queued escalation. Escalation IQ for detector {escalation_info.detector_id} at "
-        f"{escalation_info.timestamp}."
+        f"Consumed queued escalation for detector {escalation_info.detector_id} at {escalation_info.timestamp}."
     )
 
     if gl is None:
@@ -95,36 +93,41 @@ def consume_queued_escalation(escalation_str: str, gl: Groundlight | None = None
         return None, True  # Should retry because this may have been a one-off issue.
 
 
-def manage_read_escalation_queue(reader: QueueReader):
-    while True:
-        queued_escalation = reader.get_next_line()
-        if queued_escalation is not None:
-            retry_count = 0
-            should_retry_escalation = True
-            escalation_result = None
-            while should_retry_escalation:
-                wait_for_connection()  # Wait for connection before trying to escalate
+def read_from_escalation_queue(reader: QueueReader) -> None:
+    queued_escalation = reader.get_next_line()
+    if queued_escalation is not None:
+        retry_count = 0
+        should_retry_escalation = True
+        escalation_result = None
+        while should_retry_escalation:
+            wait_for_connection()  # Wait for connection before trying to escalate
 
-                escalation_result, should_try_again = consume_queued_escalation(queued_escalation)
-                if escalation_result is None:
-                    logger.info("Escalation failed.")
-                    if should_try_again:
-                        retry_count += 1
-                        if (
-                            retry_count < MAX_RETRY_ATTEMPTS
-                        ):  # TODO as of now we will skip an escalation if we gain and then lose escalation too many times. Is that okay?
-                            logger.info(f"Retrying escalation (attempt {retry_count}/{MAX_RETRY_ATTEMPTS})...")
-                        else:
-                            logger.info(f"Escalation failed after {MAX_RETRY_ATTEMPTS} attempts. Moving to next item.")
-                            should_retry_escalation = False
+            escalation_result, should_try_again = consume_queued_escalation(queued_escalation)
+            logger.info(f"{should_try_again=}")
+            if escalation_result is None:
+                logger.info("Escalation failed.")
+                if should_try_again:
+                    retry_count += 1
+                    if (
+                        retry_count < MAX_RETRY_ATTEMPTS
+                    ):  # TODO as of now we will skip an escalation if we gain and then lose connection too many times. Is that okay?
+                        logger.info(f"Retrying escalation (attempt {retry_count}/{MAX_RETRY_ATTEMPTS})...")
                     else:
-                        # If there isn't reason to try again, we move on to the next escalation.
+                        logger.info(f"Escalation failed after {MAX_RETRY_ATTEMPTS} attempts. Moving to next item.")
                         should_retry_escalation = False
                 else:
-                    logger.info(f"Escalation succeeded. {escalation_result=}")
+                    # If there isn't reason to try again, we move on to the next escalation.
+                    logger.info("Moving to next item without retrying.")
                     should_retry_escalation = False
+            else:
+                logger.info(f"Escalation succeeded. {escalation_result=}")
+                should_retry_escalation = False
+        logger.info(f"Stopping escalation process. Got {escalation_result=}")
 
-        time.sleep(1)  # TODO this is just for easier dev, remove
+
+def manage_read_escalation_queue(reader: QueueReader) -> None:
+    while True:
+        read_from_escalation_queue(reader)
 
 
 if __name__ == "__main__":
