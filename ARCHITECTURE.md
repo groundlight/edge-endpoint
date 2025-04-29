@@ -10,7 +10,7 @@ The edge endpoint is implemented as a set of Kubernetes resources (defined by th
 
 There is a single pod for the main logic of the edge endpoint and one pod for each inference model.
 
-The edge endpoint pod divides its work between three containers:
+The edge endpoint pod divides its work between four containers:
 
 | Container               | Function                                                                                                                                                |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
