@@ -9,7 +9,7 @@ K="k3s kubectl"
 
 # Validate number of arguments
 if [ "$#" -ne 1 ]; then
-    echo "❌ Error: Exactly one argument is required: 'gpu' or 'cpu'." >&2
+    echo "❌ Error: Exactly one argument is required: 'gpu', 'jetson', or 'cpu'." >&2
     exit 1
 fi
 
@@ -17,8 +17,8 @@ fi
 FLAVOR=$(echo "$1" | tr '[:upper:]' '[:lower:]')
 
 # Validate value
-if [ "$FLAVOR" != "gpu" ] && [ "$FLAVOR" != "cpu" ]; then
-    echo "❌ Error: Argument must be either 'gpu' or 'cpu'." >&2
+if [ "$FLAVOR" != "gpu" ] && [ "$FLAVOR" != "jetson" ] && [ "$FLAVOR" != "cpu" ]; then
+    echo "❌ Error: Argument must be either 'gpu', 'jetson', or 'cpu'." >&2
     exit 1
 fi
 
@@ -40,7 +40,18 @@ echo '##########################################################################
 check_cgroup() {
     if mount | grep -q "cgroup2"; then
         echo "Cgroup v2 is enabled."
-        return 0
+        
+        # Check if memory controller is available and enabled in cgroup v2
+        if [ -f "/sys/fs/cgroup/cgroup.controllers" ] && 
+           grep -q "memory" "/sys/fs/cgroup/cgroup.controllers" ] && 
+           [ -f "/sys/fs/cgroup/cgroup.subtree_control" ] && 
+           grep -q "memory" "/sys/fs/cgroup/cgroup.subtree_control"; then
+            echo "Memory controller is properly enabled in cgroup v2."
+            return 0
+        else
+            echo "Cgroup v2 is mounted but memory controller is not properly enabled."
+            return 1
+        fi
     elif mount | grep -q "cgroup/memory"; then
         # For cgroup v1, verify memory controller is actually functional
         if [ -f "/sys/fs/cgroup/memory/memory.limit_in_bytes" ]; then
@@ -63,11 +74,30 @@ CGROUP_STATUS=$?
 
 if [ $CGROUP_STATUS -eq 1 ]; then
     cat << EOF
-Cgroup setup is NOT correct.  k3s will probably not work on this system.
-To fix, add the following to the kernel command line in your bootloader configuration:
-    cgroup_memory=1 cgroup_enable=memory
-You can do this with grub on most systems,
-or on Raspberry Pi by editing /boot/cmdline.txt or /boot/firmware/cmdline.txt.
+Cgroup memory controller is not properly enabled. K3s requires this to function.
+
+There are two possible fixes depending on your system:
+
+1. For most modern Linux distributions (Ubuntu 22.04+, Debian 11+, newer Raspberry Pi OS):
+   Add to kernel command line:
+      cgroup_memory=1 cgroup_enable=memory systemd.unified_cgroup_hierarchy=1
+   
+   This enables memory cgroups and specifically configures systemd to use the unified 
+   cgroup v2 hierarchy, which is the modern approach.
+
+2. For older systems or if option 1 doesn't work:
+   Add to kernel command line:
+      cgroup_memory=1 cgroup_enable=memory
+   
+   This enables basic memory cgroup support which works with cgroup v1 systems.
+
+For Raspberry Pi: Edit /boot/cmdline.txt or /boot/firmware/cmdline.txt
+For most other systems: Edit GRUB configuration via /etc/default/grub
+
+After modifying the kernel command line, a reboot is required.
+
+Note: Some systems running older kernels (pre-5.2) or using alternative init systems 
+may need to research specific cgroup configuration for their environment.
 EOF
     exit 1
 fi
@@ -86,6 +116,11 @@ check_nvidia_drivers_and_container_runtime() {
   NVIDIA_VERSION=${NVIDIA_VERSION:-525}
 
   if ! command -v nvidia-smi &> /dev/null; then
+    # If we are on a Jetson platform, the NVIDIA drivers cannot be installed manually as it comes pre-installed with JetPack.
+    if [ "$FLAVOR" == "jetson" ]; then
+        echo "WARNING: NVIDIA drivers are not installed (nvidia-smi not found) on Jetson and cannot be installed manually, please make sure JetPack is installed."
+        exit 1
+    fi
     echo "NVIDIA drivers are not installed (nvidia-smi not found). Installing..."
     sudo apt update && sudo apt install -y "nvidia-headless-$NVIDIA_VERSION-server" "nvidia-utils-$NVIDIA_VERSION-server"
   else
@@ -114,7 +149,7 @@ check_nvidia_drivers_and_container_runtime() {
   fi
 }
 
-if [ "$FLAVOR" == "gpu" ]; then
+if [ "$FLAVOR" == "gpu" ] || [ "$FLAVOR" == "jetson" ]; then
     echo
     echo '##################################################################################'
     echo '# Installing driver support for NVIDIA GPUs'

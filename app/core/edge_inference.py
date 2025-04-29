@@ -339,7 +339,7 @@ class EdgeInferenceManager:
         update_oodd_model = should_update(oodd_model_info, oodd_model_dir, oodd_version)
 
         if not update_primary_model and not update_oodd_model:
-            logger.info(f"No new models available for {detector_id}")
+            logger.debug(f"No new models available for {detector_id}")
             return False
 
         logger.info(f"At least one new model is available for {detector_id}, saving models to repository.")

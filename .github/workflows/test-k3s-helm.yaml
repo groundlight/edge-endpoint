@@ -1,0 +1,81 @@
+name: test-k3s-helm
+# This workflow is split into a separate file and called via workflow_call to enable triggering it
+# from other repositories, to test new inference images. 
+on:
+  workflow_call:
+    secrets:
+      K3S_TEST_GROUNDLIGHT_API_TOKEN:
+        required: true
+    inputs:
+      inference_image_tag:
+        required: false
+        type: string
+      repo:
+        required: true
+        type: string
+      ref:
+        required: true
+        type: string
+jobs:
+  test-k3s-helm:
+    # This used to run on a larger runner, but to use it as a reusable workflow outside of this
+    # orgnaization we need it to run on a default github runner.
+    runs-on: ubuntu-latest
+    env:
+      # associated with roxanne+test_edge account since for some reason it was failing with
+      # prod biggies
+      GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
+      # Only set if triggered via workflow_call, otherwise it's set to an empty string
+      INFERENCE_IMAGE_TAG: ${{ inputs.inference_image_tag }}
+    steps:
+      - name: Report disk space before cleanup
+        run: |
+          df -h
+
+      - name: Remove unwanted software (to free up space)
+        # Lots of stuff is installed by default on the github runners that we don't need.
+        # This is a hack to free up space, since we need more to run this test. If we start running
+        # out of space again, there are other things we can delete for more space.
+        # Removing android SDKs and tools should free up ~9 GB, and seems to take <15 seconds.
+        run: |
+          sudo rm -rf /usr/local/lib/android
+
+      - name: Report disk space after cleanup
+        run: |
+          df -h
+
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.repo }}
+          ref: ${{ inputs.ref }}
+
+      - name: Install k3s
+        run: |
+          ./deploy/bin/install-k3s.sh cpu
+
+      - name: Install poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: ${{ env.POETRY_VERSION }}
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: true
+
+      - name: Install edge-endpoint's python dependencies
+        run: |
+          poetry install --no-interaction --no-root
+
+      - name: Clear Poetry cache
+        run: |
+          poetry cache clear pypi --all
+          poetry cache clear virtualenvs --all
+
+      - name: Run tests with k3s
+        run: |
+          make test-with-k3s-helm
+
+      - name: Diagnose failure
+        if: failure()
+        run: |
+          NAMESPACE=test-with-k3s-helm ./deploy/bin/diagnose-k8-failure.sh
