@@ -85,7 +85,6 @@ HTTP_STATUS=$(curl -s -L -o /tmp/credentials.json -w "%{http_code}" --fail-with-
 
 if [ $? -ne 0 ]; then
   echo "Failed to fetch credentials from Janzu"
-  echo "GROUNDLIGHT_API_TOKEN: $GROUNDLIGHT_API_TOKEN" # TODO: REMOVE!!!!
   if [ -n "$HTTP_STATUS" ]; then
     echo "HTTP Status: $HTTP_STATUS"
   fi
@@ -97,11 +96,6 @@ fi
 if [ "$validate" == "yes" ]; then
 
   echo "API token validation successful. Exiting."
-  if [ -n "$HTTP_STATUS" ]; then
-    echo "HTTP Status: $HTTP_STATUS"
-  fi
-  echo -n "Response:"
-  cat /tmp/credentials.json; echo
   exit 0
 fi
 
