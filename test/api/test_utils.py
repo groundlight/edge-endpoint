@@ -3,10 +3,10 @@ from typing import Any
 import pytest
 from model import (
     BinaryClassificationResult,
-    MultiClassificationResult,
     CountingResult,
     Label,
     ModeEnum,
+    MultiClassificationResult,
     ResultTypeEnum,
     Source,
 )
@@ -243,7 +243,7 @@ class TestCreateIQ:
 
     def test_create_multiclass_iq(self):
         """Test creating a basic multiclass IQ."""
-        
+
         iq = create_iq(
             detector_id=prefixed_ksuid("det_"),
             mode=ModeEnum.MULTI_CLASS,
@@ -274,7 +274,7 @@ class TestCreateIQ:
                 confidence_threshold=self.confidence_threshold,
                 query="Test query",
             )
-    
+
     def test_create_multiclass_iq_without_configuration(self):
         """Test creating a multiclass IQ with no mode_configuration."""
         with pytest.raises(ValueError, match="mode_configuration for MultiClass detector shouldn't be None."):
