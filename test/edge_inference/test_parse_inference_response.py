@@ -174,7 +174,7 @@ class TestParseInferenceResponse:
         assert result["rois"][0]["score"] == 0.9
         assert "x" in result["rois"][0]["geometry"]
         assert "y" in result["rois"][0]["geometry"]
-    
+
     def test_parse_multiclass_response(self, mock_multiclass_response):
         result = parse_inference_response(mock_multiclass_response)
         assert result["confidence"] == 0.90
