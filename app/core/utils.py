@@ -123,7 +123,7 @@ def _mode_to_result_and_type(
     elif mode == ModeEnum.MULTI_CLASS:
         if mode_configuration is None:
             raise ValueError("mode_configuration for MultiClass detector shouldn't be None.")
-        multi_class_mode_configuration = MultiClassModeConfiguration(**mode_configuration)
+        MultiClassModeConfiguration(**mode_configuration)
         result_type = ResultTypeEnum.multi_classification
         result = MultiClassificationResult(
             confidence=confidence,
