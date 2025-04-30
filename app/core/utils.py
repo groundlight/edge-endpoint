@@ -123,12 +123,12 @@ def _mode_to_result_and_type(
     elif mode == ModeEnum.MULTI_CLASS:
         if mode_configuration is None:
             raise ValueError("mode_configuration for MultiClass detector shouldn't be None.")
-        MultiClassModeConfiguration(**mode_configuration)
+        multi_class_mode_configuration = MultiClassModeConfiguration(**mode_configuration)
         result_type = ResultTypeEnum.multi_classification
         result = MultiClassificationResult(
             confidence=confidence,
             source=source,
-            label=str(result_value),
+            label=multi_class_mode_configuration.class_names[result_value],
         )
     else:
         raise ValueError(f"Got unrecognized or unsupported detector mode: {mode}")
