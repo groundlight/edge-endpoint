@@ -248,7 +248,7 @@ class TestCreateIQ:
             detector_id=prefixed_ksuid("det_"),
             mode=ModeEnum.MULTI_CLASS,
             mode_configuration={"class_names": ["1", "2", "3"]},
-            result_value=1,
+            result_value=0,
             confidence=0.8,
             confidence_threshold=self.confidence_threshold,
             query="Test query",
