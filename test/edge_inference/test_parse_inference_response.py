@@ -40,6 +40,21 @@ def mock_count_response():
 
 
 @pytest.fixture
+def mock_multiclass_response():
+    return {
+        "multi_predictions": {
+            "labels": [[0.0, 1.0, 0.0, 0.0]],
+            "probabilities": [[0.03, 0.90, 0.01, 0.03]],
+            "rois": None,
+            "text": None,
+            "ignore_prob_sum": False,
+        },
+        "predictions": None,
+        "secondary_predictions": None,
+    }
+
+
+@pytest.fixture
 def mock_binary_with_rois_response():
     return {
         "multi_predictions": None,
@@ -159,6 +174,13 @@ class TestParseInferenceResponse:
         assert result["rois"][0]["score"] == 0.9
         assert "x" in result["rois"][0]["geometry"]
         assert "y" in result["rois"][0]["geometry"]
+    
+    def test_parse_multiclass_response(self, mock_multiclass_response):
+        result = parse_inference_response(mock_multiclass_response)
+        assert result["confidence"] == 0.90
+        assert result["label"] == 1
+        assert result["text"] is None
+        assert result["rois"] is None
 
     def test_parse_binary_with_rois_response(self, mock_binary_with_rois_response):
         result = parse_inference_response(mock_binary_with_rois_response)

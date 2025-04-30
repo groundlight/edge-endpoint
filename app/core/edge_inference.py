@@ -56,7 +56,6 @@ def get_inference_result(primary_response: dict, oodd_response: dict) -> str:
     Get the final inference result from the primary and OODD responses.
     """
     primary_num_classes = get_num_classes(primary_response)
-    logger.debug(f"Primary response: {primary_response}.")
 
     primary_output_dict = parse_inference_response(primary_response)
     logger.debug(f"Primary inference server response: {primary_output_dict}.")
