@@ -128,7 +128,7 @@ def _mode_to_result_and_type(
         result = MultiClassificationResult(
             confidence=confidence,
             source=source,
-            label=multi_class_mode_configuration.label,
+            label=str(result_value),
         )
     else:
         raise ValueError(f"Got unrecognized or unsupported detector mode: {mode}")
