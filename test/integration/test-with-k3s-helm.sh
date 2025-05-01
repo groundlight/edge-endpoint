@@ -32,7 +32,7 @@ export EDGE_ENDPOINT_PORT="30108"
 export DEPLOYMENT_NAMESPACE="test-with-k3s-helm"
 export INFERENCE_FLAVOR="CPU"
 export LIVE_TEST_ENDPOINT="http://localhost:$EDGE_ENDPOINT_PORT"
-export REFRESH_RATE=10 # not actually different than the default, but we may want to tweak this
+export REFRESH_RATE=60 # not actually different than the default, but we may want to tweak this
 
 # update the config for this detector, such that we always take edge answers
 # but first, save the template to a temporary file
