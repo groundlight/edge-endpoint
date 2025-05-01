@@ -267,7 +267,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
     logger.debug(f"Submitting image query to cloud for {detector_id=}")
     record_activity_for_metrics(detector_id, activity_type="escalations")
-    logger.info(f"results: {results}")
+
     return safe_call_sdk(
         gl.submit_image_query,
         detector=detector_id,
