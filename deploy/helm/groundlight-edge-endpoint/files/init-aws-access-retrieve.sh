@@ -80,15 +80,15 @@ sanitize_endpoint_url() {
 sanitized_url=$(sanitize_endpoint_url "${GROUNDLIGHT_ENDPOINT}")
 echo "Sanitized URL: $sanitized_url"
 
-echo "Fetching temporary AWS credentials from Janzu..."
+echo "Fetching temporary AWS credentials from the Groundlight cloud service..."
 HTTP_STATUS=$(curl -s -L -o /tmp/credentials.json -w "%{http_code}" --fail-with-body --header "x-api-token: ${GROUNDLIGHT_API_TOKEN}" ${sanitized_url}/reader-credentials)
 
 if [ $? -ne 0 ]; then
-  echo "Failed to fetch credentials from Janzu"
+  echo "Failed to fetch credentials from the Groundlight cloud service"
   if [ -n "$HTTP_STATUS" ]; then
     echo "HTTP Status: $HTTP_STATUS"
   fi
-  echo -n "Response:"
+  echo -n "Response: "
   cat /tmp/credentials.json; echo
   exit 1
 fi
