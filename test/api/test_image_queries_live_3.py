@@ -14,23 +14,23 @@ from app.core.utils import pil_image_to_bytes
 TEST_ENDPOINT = os.getenv("LIVE_TEST_ENDPOINT", "http://localhost:30101")
 MAX_WAIT_TIME_S = 60
 
-# Detectors for live testing. On the prod-biggies account.
+# Detectors for live testing. On the corey+edge-cicd account.
 # - name="live_edge_testing_1",
 # - query="Is there a dog in the image?",
 # - confidence_threshold=0.9
-DETECTOR_ID_1 = "det_2raefZ74V0ojgbmM2UJzQCpFKyF"
+DEFAULT_DETECTOR_ID = "det_2vjZOWnQjmlewxTd7tc7YDWs3wo"
 # - name="live_edge_testing_2",
 # - query="Is there a dog in the image?",
 # - confidence_threshold=0.9
-DETECTOR_ID_2 = "det_2rdUY6SJOBJtuW5oqD3ExL1DjFn"
+EDGE_ANSWERS_DETECTOR_ID = "det_2vjZQVkzWLimoAxqyjObJDX865p"
 # - name="live_edge_testing_3",
 # - query="Is there a dog in the image?",
 # - confidence_threshold=0.9
-DETECTOR_ID_3 = "det_2rdUb0jljHCosfKGuTugVoo4eiY"
+NO_CLOUD_DETECTOR_ID = "det_2vjZSI4e6sKCyLTb51oJCvYHzRD"
 # - name="live_edge_testing_4",
 # - query="Is there a dog in the image?",
 # - confidence_threshold=0.9
-DETECTOR_ID_4 = "det_2rdVBErF53NWjVjhVdIrb6QJbRT"
+DISABLED_DETECTOR_ID = "det_2vjZTtb9Mo5W6fkC6OfLIxYOdqv"
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -67,25 +67,25 @@ def fixture_gl() -> Groundlight:
 @pytest.fixture
 def detector_default(gl: Groundlight) -> Detector:
     """Retrieve the default detector using the Groundlight client."""
-    return gl.get_detector(id=DETECTOR_ID_1)
+    return gl.get_detector(id=DEFAULT_DETECTOR_ID)
 
 
 @pytest.fixture
 def detector_edge_answers(gl: Groundlight) -> Detector:
     """Retrieve the edge answers detector using the Groundlight client."""
-    return gl.get_detector(id=DETECTOR_ID_2)
+    return gl.get_detector(id=EDGE_ANSWERS_DETECTOR_ID)
 
 
 @pytest.fixture
 def detector_no_cloud(gl: Groundlight) -> Detector:
     """Retrieve the no cloud detector using the Groundlight client."""
-    return gl.get_detector(id=DETECTOR_ID_3)
+    return gl.get_detector(id=NO_CLOUD_DETECTOR_ID)
 
 
 @pytest.fixture
 def detector_disabled(gl: Groundlight) -> Detector:
     """Retrieve the disabled detector using the Groundlight client."""
-    return gl.get_detector(id=DETECTOR_ID_4)
+    return gl.get_detector(id=DISABLED_DETECTOR_ID)
 
 
 @pytest.fixture
