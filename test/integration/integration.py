@@ -8,12 +8,19 @@
 ## - Submit the final dog/cat image query to the edge, expect high confidence
 
 import argparse
+import logging
 import os
 import time
 
 import ksuid
 from groundlight import Groundlight
 from model import Detector
+
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=LOG_LEVEL, format="%(asctime)s.%(msecs)03d %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+)
+logger = logging.getLogger(__name__)
 
 EDGE_SETUP = os.getenv("EDGE_SETUP", "0") == "1"
 ENDPOINT_PORT = os.getenv("EDGE_ENDPOINT_PORT", "30107")
@@ -77,17 +84,17 @@ def submit_initial(detector: Detector) -> str:
     iq_yes = _submit_cat(detector, confidence_threshold=0.5)
     iq_no = _submit_dog(detector, confidence_threshold=0.5)
     end_time = time.time()
-    print(f"Time taken to get low confidence response from edge: {end_time - start_time} seconds")
+    logger.info(f"Time taken to get low confidence response from edge: {end_time - start_time} seconds")
 
     # a bit dependent on the current default model,
     # but that one always defaults to 0.5 confidence at first.
 
-    assert (
-        0.5 <= iq_yes.result.confidence <= 0.55
-    ), f"Expected confidence to be between 0.5 and 0.55, but got {iq_yes.result.confidence}"
-    assert (
-        0.5 <= iq_no.result.confidence <= 0.55
-    ), f"Expected confidence to be between 0.5 and 0.55, but got {iq_no.result.confidence}"
+    assert 0.5 <= iq_yes.result.confidence <= 0.55, (
+        f"Expected confidence to be between 0.5 and 0.55, but got {iq_yes.result.confidence}"
+    )
+    assert 0.5 <= iq_no.result.confidence <= 0.55, (
+        f"Expected confidence to be between 0.5 and 0.55, but got {iq_no.result.confidence}"
+    )
 
 
 def improve_model(detector: Detector):
@@ -110,7 +117,7 @@ def submit_final(detector: Detector):
     iq_yes = _submit_cat(detector, confidence_threshold=0.5)
     iq_no = _submit_dog(detector, confidence_threshold=0.5)
     end_time = time.time()
-    print(f"Time taken to get high confidence response from edge: {end_time - start_time} seconds")
+    logger.info(f"Time taken to get high confidence response from edge: {end_time - start_time} seconds")
 
     iq_yes_cloud = _submit_cat(detector, confidence_threshold=1, wait=0)
     iq_no_cloud = _submit_dog(detector, confidence_threshold=1, wait=0)
@@ -119,22 +126,22 @@ def submit_final(detector: Detector):
         f"{iq_yes_cloud.result.label} with confidence {iq_yes_cloud.result.confidence}. "
         f"Metadata: {iq_yes_cloud.metadata}."
     )
-    print(cloud_yes_result_string)
+    logger.info(cloud_yes_result_string)
     cloud_no_result_string = (
         f"For the final dog/NO image sent to the cloud ({iq_no_cloud.id}), received answer "
         f"{iq_no_cloud.result.label} with confidence {iq_no_cloud.result.confidence}. "
         f"Metadata: {iq_no_cloud.metadata}."
     )
-    print(cloud_no_result_string)
+    logger.info(cloud_no_result_string)
 
-    assert (
-        iq_yes.result.confidence > ACCEPTABLE_TRAINED_CONFIDENCE
-    ), f"Expected confidence to be greater than {ACCEPTABLE_TRAINED_CONFIDENCE}, but got {iq_yes.result.confidence}"
+    assert iq_yes.result.confidence > ACCEPTABLE_TRAINED_CONFIDENCE, (
+        f"Expected confidence to be greater than {ACCEPTABLE_TRAINED_CONFIDENCE}, but got {iq_yes.result.confidence}"
+    )
     assert iq_yes.result.label.value == "YES", f"Expected label to be YES, but got {iq_yes.result.label.value}"
 
-    assert (
-        iq_no.result.confidence > ACCEPTABLE_TRAINED_CONFIDENCE
-    ), f"Expected confidence to be greater than {ACCEPTABLE_TRAINED_CONFIDENCE}, but got {iq_no.result.confidence}"
+    assert iq_no.result.confidence > ACCEPTABLE_TRAINED_CONFIDENCE, (
+        f"Expected confidence to be greater than {ACCEPTABLE_TRAINED_CONFIDENCE}, but got {iq_no.result.confidence}"
+    )
     assert iq_no.result.label.value == "NO", f"Expected label to be NO, but got {iq_no.result.label.value}"
 
 
