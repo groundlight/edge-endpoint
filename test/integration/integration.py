@@ -89,12 +89,12 @@ def submit_initial(detector: Detector) -> str:
     # a bit dependent on the current default model,
     # but that one always defaults to 0.5 confidence at first.
 
-    assert (
-        0.5 <= iq_yes.result.confidence <= 0.55
-    ), f"Expected confidence to be between 0.5 and 0.55, but got {iq_yes.result.confidence}"
-    assert (
-        0.5 <= iq_no.result.confidence <= 0.55
-    ), f"Expected confidence to be between 0.5 and 0.55, but got {iq_no.result.confidence}"
+    assert 0.5 <= iq_yes.result.confidence <= 0.55, (
+        f"Expected confidence to be between 0.5 and 0.55, but got {iq_yes.result.confidence}"
+    )
+    assert 0.5 <= iq_no.result.confidence <= 0.55, (
+        f"Expected confidence to be between 0.5 and 0.55, but got {iq_no.result.confidence}"
+    )
 
 
 def improve_model(detector: Detector):
@@ -134,26 +134,26 @@ def submit_final(detector: Detector):
     )
     logger.info(cloud_no_result_string)
 
-    assert (
-        iq_yes.result.confidence > ACCEPTABLE_TRAINED_CONFIDENCE
-    ), f"Expected confidence to be greater than {ACCEPTABLE_TRAINED_CONFIDENCE}, but got {iq_yes.result.confidence}"
+    assert iq_yes.result.confidence > ACCEPTABLE_TRAINED_CONFIDENCE, (
+        f"Expected confidence to be greater than {ACCEPTABLE_TRAINED_CONFIDENCE}, but got {iq_yes.result.confidence}"
+    )
     assert iq_yes.result.label.value == "YES", f"Expected label to be YES, but got {iq_yes.result.label.value}"
 
-    assert (
-        iq_no.result.confidence > ACCEPTABLE_TRAINED_CONFIDENCE
-    ), f"Expected confidence to be greater than {ACCEPTABLE_TRAINED_CONFIDENCE}, but got {iq_no.result.confidence}"
+    assert iq_no.result.confidence > ACCEPTABLE_TRAINED_CONFIDENCE, (
+        f"Expected confidence to be greater than {ACCEPTABLE_TRAINED_CONFIDENCE}, but got {iq_no.result.confidence}"
+    )
     assert iq_no.result.label.value == "NO", f"Expected label to be NO, but got {iq_no.result.label.value}"
 
 
 def _submit_cat(detector: Detector, confidence_threshold: float, wait: int = None):
     return _submit_dog_or_cat(
-        detector=detector, confidence_threshold=confidence_threshold, img_file="./test/integration/cat.jpg", wait=wait
+        detector=detector, confidence_threshold=confidence_threshold, img_file="./test/assets/cat.jpeg", wait=wait
     )
 
 
 def _submit_dog(detector: Detector, confidence_threshold: float, wait: int = None):
     return _submit_dog_or_cat(
-        detector=detector, confidence_threshold=confidence_threshold, img_file="./test/integration/dog.jpg", wait=wait
+        detector=detector, confidence_threshold=confidence_threshold, img_file="./test/assets/dog.jpeg", wait=wait
     )
 
 
