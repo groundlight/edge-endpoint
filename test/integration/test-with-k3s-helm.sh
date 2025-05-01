@@ -124,8 +124,6 @@ helm test -n default ${HELM_RELEASE_NAME} --hide-notes
 
 echo "Helm tests completed successfully."
 
-export EDGE_SETUP=1
-
 ./test/integration/run_tests.sh
 
 # cleanup

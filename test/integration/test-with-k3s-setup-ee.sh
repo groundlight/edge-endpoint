@@ -118,7 +118,5 @@ fi
 
 echo "Inference deployment for detector $DETECTOR_ID has successfully rolled out."
 
-export EDGE_SETUP=1
-
 ./test/integration/run_tests.sh
 
