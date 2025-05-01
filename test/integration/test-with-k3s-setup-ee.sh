@@ -36,7 +36,7 @@ export PERSISTENT_VOLUME_NAME="test-with-k3s-pv"
 export EDGE_ENDPOINT_PORT="30108"
 export INFERENCE_FLAVOR="CPU"
 export LIVE_TEST_ENDPOINT="http://localhost:$EDGE_ENDPOINT_PORT"
-export REFRESH_RATE=60 # not actually different than the default, but we may want to tweak this
+export REFRESH_RATE=10 # not actually different than the default, but we may want to tweak this
 
 # Compute the image tag name before we muck with the config file so we get
 # the tag that will correspond to the current commit so it can match the image
