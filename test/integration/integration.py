@@ -82,12 +82,12 @@ def submit_initial(detector: Detector) -> str:
     # a bit dependent on the current default model,
     # but that one always defaults to 0.5 confidence at first.
 
-    assert 0.5 <= iq_yes.result.confidence <= 0.55, (
-        f"Expected confidence to be between 0.5 and 0.55, but got {iq_yes.result.confidence}"
-    )
-    assert 0.5 <= iq_no.result.confidence <= 0.55, (
-        f"Expected confidence to be between 0.5 and 0.55, but got {iq_no.result.confidence}"
-    )
+    assert (
+        0.5 <= iq_yes.result.confidence <= 0.55
+    ), f"Expected confidence to be between 0.5 and 0.55, but got {iq_yes.result.confidence}"
+    assert (
+        0.5 <= iq_no.result.confidence <= 0.55
+    ), f"Expected confidence to be between 0.5 and 0.55, but got {iq_no.result.confidence}"
 
 
 def improve_model(detector: Detector):
@@ -111,14 +111,14 @@ def submit_final(detector: Detector):
     iq_no = _submit_dog(detector, confidence_threshold=0.5)
     end_time = time.time()
     print(f"Time taken to get high confidence response from edge: {end_time - start_time} seconds")
-    assert iq_yes.result.confidence > ACCEPTABLE_TRAINED_CONFIDENCE, (
-        f"Expected confidence to be greater than {ACCEPTABLE_TRAINED_CONFIDENCE}, but got {iq_yes.result.confidence}"
-    )
+    assert (
+        iq_yes.result.confidence > ACCEPTABLE_TRAINED_CONFIDENCE
+    ), f"Expected confidence to be greater than {ACCEPTABLE_TRAINED_CONFIDENCE}, but got {iq_yes.result.confidence}"
     assert iq_yes.result.label.value == "YES", f"Expected label to be YES, but got {iq_yes.result.label.value}"
 
-    assert iq_no.result.confidence > ACCEPTABLE_TRAINED_CONFIDENCE, (
-        f"Expected confidence to be greater than {ACCEPTABLE_TRAINED_CONFIDENCE}, but got {iq_no.result.confidence}"
-    )
+    assert (
+        iq_no.result.confidence > ACCEPTABLE_TRAINED_CONFIDENCE
+    ), f"Expected confidence to be greater than {ACCEPTABLE_TRAINED_CONFIDENCE}, but got {iq_no.result.confidence}"
     assert iq_no.result.label.value == "NO", f"Expected label to be NO, but got {iq_no.result.label.value}"
 
 
