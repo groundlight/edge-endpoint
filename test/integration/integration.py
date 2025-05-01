@@ -23,7 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 NUM_IQS_PER_CLASS_TO_IMPROVE_MODEL = 10
-# ACCEPTABLE_TRAINED_CONFIDENCE = 0.60 NOTE: temporarily commented out, see Note below.
+# ACCEPTABLE_TRAINED_CONFIDENCE = 0.75 NOTE: temporarily commented out, see Note below.
 
 ENDPOINT_PORT = os.getenv("EDGE_ENDPOINT_PORT", "30107")
 gl = Groundlight(endpoint=f"http://localhost:{ENDPOINT_PORT}")
@@ -84,12 +84,12 @@ def submit_initial(detector: Detector) -> str:
     # a bit dependent on the current default model,
     # but that one always defaults to 0.5 confidence at first.
 
-    assert (
-        0.5 <= iq_yes.result.confidence <= 0.55
-    ), f"Expected confidence to be between 0.5 and 0.55, but got {iq_yes.result.confidence}"
-    assert (
-        0.5 <= iq_no.result.confidence <= 0.55
-    ), f"Expected confidence to be between 0.5 and 0.55, but got {iq_no.result.confidence}"
+    assert 0.5 <= iq_yes.result.confidence <= 0.55, (
+        f"Expected confidence to be between 0.5 and 0.55, but got {iq_yes.result.confidence}"
+    )
+    assert 0.5 <= iq_no.result.confidence <= 0.55, (
+        f"Expected confidence to be between 0.5 and 0.55, but got {iq_no.result.confidence}"
+    )
 
 
 def improve_model(detector: Detector):
