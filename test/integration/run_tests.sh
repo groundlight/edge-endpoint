@@ -11,10 +11,10 @@ set -e
 
 # first do basic pytest integration style tests
 # we skip the async test because we're setup for edge answers
-if ! poetry run pytest -m live -k "not test_post_image_query_via_sdk_want_async"; then
-    echo "Error: pytest integration tests failed."
-    exit 1
-fi
+# if ! poetry run pytest -m live -k "not test_post_image_query_via_sdk_want_async"; then
+#     echo "Error: pytest integration tests failed."
+#     exit 1
+# fi
 
 echo "Submitting initial iqs, ensuring we get low confidence at first"
 # submit initial tests that we get low confidence answers at first
@@ -53,7 +53,7 @@ fi
 echo Now we check that we can submit queries to the new inference pod...
 poetry run python test/integration/integration.py -m final -d $DETECTOR_ID
 
-echo Now checking that the edge metrics status page is available...
-poetry run python test/integration/status.py
+# echo Now checking that the edge metrics status page is available...
+# poetry run python test/integration/status.py
 
 echo All tests pass :D

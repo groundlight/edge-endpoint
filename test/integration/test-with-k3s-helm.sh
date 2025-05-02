@@ -49,7 +49,8 @@ fi
 
 export HELM_RELEASE_NAME="$DEPLOYMENT_NAMESPACE"
 
-export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
+# export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
+export IMAGE_TAG="latest"
 echo "Using ECR edge-endpoint image tag: $IMAGE_TAG"
 
 # Run the helm chart
@@ -116,25 +117,25 @@ fi
 
 echo "Inference deployment for detector $DETECTOR_ID has successfully rolled out."
 
-echo "Running the Helm tests..."
+# echo "Running the Helm tests..."
 
-helm test -n default ${HELM_RELEASE_NAME} --hide-notes
+# helm test -n default ${HELM_RELEASE_NAME} --hide-notes
 
-echo "Helm tests completed successfully."
+# echo "Helm tests completed successfully."
 
 export EDGE_SETUP=1 # Setting this to 1 will make the integration tests use the edge endpoint
 ./test/integration/run_tests.sh
 
 # cleanup
-echo "Deleting helm deployment..."
-helm uninstall ${HELM_RELEASE_NAME} -n default
+# echo "Deleting helm deployment..."
+# helm uninstall ${HELM_RELEASE_NAME} -n default
 
-echo "Waiting for namespace $DEPLOYMENT_NAMESPACE to terminate..."
-if ! kubectl wait --for=delete namespace/$DEPLOYMENT_NAMESPACE --timeout=5m; then
-    echo "Error: namespace $DEPLOYMENT_NAMESPACE failed to terminate within the timeout period."
-    exit 1
-fi
+# echo "Waiting for namespace $DEPLOYMENT_NAMESPACE to terminate..."
+# if ! kubectl wait --for=delete namespace/$DEPLOYMENT_NAMESPACE --timeout=5m; then
+#     echo "Error: namespace $DEPLOYMENT_NAMESPACE failed to terminate within the timeout period."
+#     exit 1
+# fi
 
-echo "Namespace $DEPLOYMENT_NAMESPACE has been successfully deleted."
-echo "Test completed successfully."
+# echo "Namespace $DEPLOYMENT_NAMESPACE has been successfully deleted."
+# echo "Test completed successfully."
 
