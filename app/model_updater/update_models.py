@@ -169,20 +169,22 @@ def manage_update_models(
 
         # Update the status of the inference deployments in the database
         deployment_records = db_manager.get_inference_deployment_records()
-        for record in deployment_records:
-            primary_deployment_name = get_edge_inference_deployment_name(record.detector_id)
-            oodd_deployment_name = get_edge_inference_deployment_name(record.detector_id, is_oodd=True)
+        # using a set to only get unique detector_ids
+        deployed_detector_ids = set(record.detector_id for record in deployment_records)
+        for detector_id in deployed_detector_ids:
+            primary_deployment_name = get_edge_inference_deployment_name(detector_id)
+            oodd_deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd=True)
             primary_deployment_created = (
                 deployment_manager.get_inference_deployment(primary_deployment_name) is not None
             )
             oodd_deployment_created = deployment_manager.get_inference_deployment(oodd_deployment_name) is not None
 
             db_manager.update_inference_deployment_record(
-                model_name=get_edge_inference_model_name(record.detector_id, is_oodd=False),
+                model_name=get_edge_inference_model_name(detector_id, is_oodd=False),
                 fields_to_update={"deployment_created": primary_deployment_created},
             )
             db_manager.update_inference_deployment_record(
-                model_name=get_edge_inference_model_name(record.detector_id, is_oodd=True),
+                model_name=get_edge_inference_model_name(detector_id, is_oodd=True),
                 fields_to_update={"deployment_created": oodd_deployment_created},
             )
 
