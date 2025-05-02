@@ -22,11 +22,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+EDGE_SETUP = os.getenv("EDGE_SETUP", "0") == "1"
+ENDPOINT_PORT = os.getenv("EDGE_ENDPOINT_PORT", "30107")
+
 NUM_IQS_PER_CLASS_TO_IMPROVE_MODEL = 10
 # ACCEPTABLE_TRAINED_CONFIDENCE = 0.75 NOTE: temporarily commented out, see Note below.
 
-ENDPOINT_PORT = os.getenv("EDGE_ENDPOINT_PORT", "30107")
-gl = Groundlight(endpoint=f"http://localhost:{ENDPOINT_PORT}")
+if EDGE_SETUP:  # This flag exists so that we can create the detector before the edge is deployed
+    gl = Groundlight(endpoint=f"http://localhost:{ENDPOINT_PORT}")
+else:
+    gl = Groundlight()
 
 
 def main():
@@ -84,12 +89,12 @@ def submit_initial(detector: Detector) -> str:
     # a bit dependent on the current default model,
     # but that one always defaults to 0.5 confidence at first.
 
-    assert (
-        0.5 <= iq_yes.result.confidence <= 0.55
-    ), f"Expected confidence to be between 0.5 and 0.55, but got {iq_yes.result.confidence}"
-    assert (
-        0.5 <= iq_no.result.confidence <= 0.55
-    ), f"Expected confidence to be between 0.5 and 0.55, but got {iq_no.result.confidence}"
+    assert 0.5 <= iq_yes.result.confidence <= 0.55, (
+        f"Expected confidence to be between 0.5 and 0.55, but got {iq_yes.result.confidence}"
+    )
+    assert 0.5 <= iq_no.result.confidence <= 0.55, (
+        f"Expected confidence to be between 0.5 and 0.55, but got {iq_no.result.confidence}"
+    )
 
 
 def improve_model(detector: Detector):
