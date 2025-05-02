@@ -17,6 +17,8 @@ from model import (
     ImageQueryTypeEnum,
     Label,
     ModeEnum,
+    MultiClassificationResult,
+    MultiClassModeConfiguration,
     ResultTypeEnum,
     Source,
 )
@@ -81,7 +83,7 @@ def create_iq(  # noqa: PLR0913
 
 def _mode_to_result_and_type(
     mode: ModeEnum, mode_configuration: dict[str, Any] | None, confidence: float, result_value: int
-) -> tuple[ResultTypeEnum, BinaryClassificationResult | CountingResult]:
+) -> tuple[ResultTypeEnum, BinaryClassificationResult | CountingResult | MultiClassificationResult]:
     """
     Maps the detector mode to the corresponding result type and generates the result object
     based on the provided mode, confidence, and result value.
@@ -119,8 +121,15 @@ def _mode_to_result_and_type(
             greater_than_max=greater_than_max,
         )
     elif mode == ModeEnum.MULTI_CLASS:
-        raise NotImplementedError("Multiclass functionality is not yet implemented for the edge endpoint.")
-        # TODO add support for multiclass functionality.
+        if mode_configuration is None:
+            raise ValueError("mode_configuration for MultiClass detector shouldn't be None.")
+        multi_class_mode_configuration = MultiClassModeConfiguration(**mode_configuration)
+        result_type = ResultTypeEnum.multi_classification
+        result = MultiClassificationResult(
+            confidence=confidence,
+            source=source,
+            label=multi_class_mode_configuration.class_names[result_value],
+        )
     else:
         raise ValueError(f"Got unrecognized or unsupported detector mode: {mode}")
 
