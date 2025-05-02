@@ -23,6 +23,8 @@ logger = logging.getLogger(__name__)
 # This will be process-specific, so each edge-endpoint worker will have its own cache instance.
 ttl_cache = TTLCache(maxsize=128, ttl=2)
 
+CONFIDENCE_SIGNIFICANT_DIGITS = 4
+
 
 @cached(ttl_cache)
 def is_edge_inference_ready(inference_client_url: str) -> bool:
@@ -173,7 +175,12 @@ def parse_inference_response(response: dict) -> dict:
                 raise ValueError("Got more than one text prediction. This should not happen.")
             text = text_predictions[0]
 
-    output_dict = {"confidence": confidence, "label": label, "text": text, "rois": rois}
+    output_dict = {
+        "confidence": round(confidence, CONFIDENCE_SIGNIFICANT_DIGITS),
+        "label": label,
+        "text": text,
+        "rois": rois,
+    }
 
     return output_dict
 
