@@ -10,6 +10,8 @@ The edge endpoint is implemented as a set of Kubernetes resources (defined by th
 
 There is a single pod for the main logic of the edge endpoint and one pod for each inference model.
 
+There are currently two models for each detector: a __primary__ model that answers the query and an out-of-domain (__OODD__) model that tells us that something has changed in the image that may mean that the primary model will no longer be effective. Each of these models is served by its own pod, so there are two inference pods for each detector.
+
 The edge endpoint pod divides its work between four containers:
 
 | Container               | Function                                                                                                                                                |
@@ -121,7 +123,7 @@ The following diagram shows the flow of inference requests:
 ## Communication between the edge endpoint containers
 
 While the normal inference and API requests use HTTP to communicate between the various parts of the service, there are two other types of communication that are used internally:
-1. When the edge endpoint container gets an inference request for a detector that it hasn't seen before, it creates rows in a SQLite database to track the model and its status. The inference model updater container will then see these rows and start new inference pods for the corresponding models. When the pods are started, the inference model updater will update the rows in the database to indicate that the model is ready and edge endpoint can start using it. There are currently two models for each detector: a primary model that answers the query and an out-of-domain model that tells us that something has changed in the image that may mean that the primary model will no longer be effective.
+1. When the edge endpoint container gets an inference request for a detector that it hasn't seen before, it creates rows in a SQLite database to track the model and its status. The inference model updater container will then see these rows and start new inference pods for the corresponding models. When the pods are started, the inference model updater will update the rows in the database to indicate that the model is ready and edge endpoint can start using it. 
 2. Edge endpoint writes usage statistics to files in the file system (per process and per unit time). The status monitor container will read these files periodically and upload the statistics to the cloud service. It can also serve real-time statistics as a simple web page.
 
 These mechanisms have an important advantage over HTTP in that they are durable and represent the current state rather than events. This makes it easy to handle process restarts and intermittent connectivity.
