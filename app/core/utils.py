@@ -20,9 +20,10 @@ from model import (
     MultiClassificationResult,
     MultiClassModeConfiguration,
     ResultTypeEnum,
-    # TODO: Put this back in once the SDK is fixed
-    # Source,
 )
+
+# TODO: Put this back in once the SDK is fixed
+# Source,
 from PIL import Image
 from pydantic import BaseModel, ValidationError
 
