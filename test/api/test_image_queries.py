@@ -5,6 +5,7 @@ from unittest import mock
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
+from groundlight.binary_labels import Label
 from model import (
     BinaryClassificationResult,
     Detector,
@@ -12,10 +13,8 @@ from model import (
     EscalationTypeEnum,
     ImageQuery,
     ImageQueryTypeEnum,
-    Label,
     ModeEnum,
     ResultTypeEnum,
-    Source,
 )
 from PIL import Image
 
@@ -61,7 +60,9 @@ confident_cloud_iq = ImageQuery(
     query="",
     detector_id=DETECTOR_ID,
     result_type=ResultTypeEnum.binary_classification,
-    result=BinaryClassificationResult(confidence=1.0, label=Label.YES, source=Source.CLOUD),
+    result=BinaryClassificationResult(
+        confidence=1.0, label=Label.YES, source="CLOUD"
+    ),  # TODO: switch back to using Source enum when the SDK is fixed
     confidence_threshold=0.75,
     patience_time=30,
     rois=None,
