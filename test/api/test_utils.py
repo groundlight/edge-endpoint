@@ -8,10 +8,10 @@ from model import (
     ModeEnum,
     MultiClassificationResult,
     ResultTypeEnum,
-    # TODO: Reenble this import when it's added back to the SDK
-    # Source,
 )
 
+# TODO: Reenble this import when it's added back to the SDK
+# Source,
 from app.core.utils import (
     METADATA_SIZE_LIMIT_BYTES,
     ModelInfoBase,
