@@ -3,12 +3,12 @@ entries:
   groundlight-edge-endpoint:
   - apiVersion: v2
     appVersion: 0.7.0
-    created: "2025-05-02T21:37:13.15837974Z"
+    created: "2025-05-06T21:33:19.929288169Z"
     description: A full stack for deploying the Groundlight Edge Endpoint
-    digest: a6850d719bd471d68ddc675614f67c9830b4e3490c2967a0f823db2a13a6aa7b
+    digest: 98bc14479ab9c43a877cf956b1f99d228ca05df654978af75e0271af42dce64f
     name: groundlight-edge-endpoint
     type: application
     urls:
     - https://code.groundlight.ai/edge-endpoint/groundlight-edge-endpoint-0.7.0.tgz
     version: 0.7.0
-generated: "2025-05-02T21:37:13.157642108Z"
+generated: "2025-05-06T21:33:19.928555931Z"
