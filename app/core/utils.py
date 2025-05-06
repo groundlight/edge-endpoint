@@ -11,8 +11,8 @@ from fastapi import HTTPException
 from model import (
     ROI,
     BinaryClassificationResult,
-    BoundingBoxResult,
     BoundingBoxModeConfiguration,
+    BoundingBoxResult,
     CountingResult,
     CountModeConfiguration,
     ImageQuery,
@@ -135,7 +135,7 @@ def _mode_to_result_and_type(
     elif mode == ModeEnum.BOUNDING_BOX:
         if mode_configuration is None:
             raise ValueError("mode_configuration for Bounding Box detector shouldn't be None.")
-        bounding_box_mode_configuration = BoundingBoxModeConfiguration(**mode_configuration)
+        BoundingBoxModeConfiguration(**mode_configuration)
         result_type = ResultTypeEnum.bounding_box
         result = BoundingBoxResult(
             confidence=confidence,
