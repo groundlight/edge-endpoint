@@ -262,6 +262,26 @@ class TestCreateIQ:
         assert "is_from_edge" in iq.metadata
         assert iq.metadata["is_from_edge"]
 
+    def test_create_bounding_box_iq(self):
+        """Test creating a basic bounding box IQ."""
+        iq = create_iq(
+            detector_id=prefixed_ksuid("det_"),
+            mode=ModeEnum.BOUNDING_BOX,
+            mode_configuration={"max_num_bboxes": 5, "class_name": "test_class"},
+            result_value=1,
+            confidence=0.8,
+            confidence_threshold=self.confidence_threshold,
+            query="Test query",
+        )
+
+        assert "iq_" in iq.id
+        assert iq.result_type == ResultTypeEnum.bounding_box
+        assert isinstance(iq.result, BoundingBoxResult)
+        assert iq.result.source == Source.ALGORITHM
+        assert iq.result.label == 1
+        assert "is_from_edge" in iq.metadata
+        assert iq.metadata["is_from_edge"]
+
     def test_create_count_iq_without_configuration(self):
         """Test creating a count IQ with no mode_configuration."""
         with pytest.raises(ValueError, match="mode_configuration for Counting detector shouldn't be None."):
@@ -281,6 +301,19 @@ class TestCreateIQ:
             create_iq(
                 detector_id=prefixed_ksuid("det_"),
                 mode=ModeEnum.MULTI_CLASS,
+                mode_configuration=None,
+                result_value=1,
+                confidence=0.8,
+                confidence_threshold=self.confidence_threshold,
+                query="Test query",
+            )
+
+    def test_create_bounding_box_iq_without_configuration(self):
+        """Test creating a bounding box IQ with no mode_configuration."""
+        with pytest.raises(ValueError, match="mode_configuration for Bounding Box detector shouldn't be None."):
+            create_iq(
+                detector_id=prefixed_ksuid("det_"),
+                mode=ModeEnum.BOUNDING_BOX,
                 mode_configuration=None,
                 result_value=1,
                 confidence=0.8,

@@ -11,6 +11,8 @@ from fastapi import HTTPException
 from model import (
     ROI,
     BinaryClassificationResult,
+    BoundingBoxResult,
+    BoundingBoxModeConfiguration,
     CountingResult,
     CountModeConfiguration,
     ImageQuery,
@@ -83,7 +85,7 @@ def create_iq(  # noqa: PLR0913
 
 def _mode_to_result_and_type(
     mode: ModeEnum, mode_configuration: dict[str, Any] | None, confidence: float, result_value: int
-) -> tuple[ResultTypeEnum, BinaryClassificationResult | CountingResult | MultiClassificationResult]:
+) -> tuple[ResultTypeEnum, BinaryClassificationResult | CountingResult | MultiClassificationResult | BoundingBoxResult]:
     """
     Maps the detector mode to the corresponding result type and generates the result object
     based on the provided mode, confidence, and result value.
@@ -129,6 +131,16 @@ def _mode_to_result_and_type(
             confidence=confidence,
             source=source,
             label=multi_class_mode_configuration.class_names[result_value],
+        )
+    elif mode == ModeEnum.BOUNDING_BOX:
+        if mode_configuration is None:
+            raise ValueError("mode_configuration for Bounding Box detector shouldn't be None.")
+        bounding_box_mode_configuration = BoundingBoxModeConfiguration(**mode_configuration)
+        result_type = ResultTypeEnum.bounding_box
+        result = BoundingBoxResult(
+            confidence=confidence,
+            source=source,
+            label=result_value,
         )
     else:
         raise ValueError(f"Got unrecognized or unsupported detector mode: {mode}")
