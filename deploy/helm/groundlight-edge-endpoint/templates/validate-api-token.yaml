@@ -1,0 +1,71 @@
+{{- $check := required "You must supply a Groundlight API token!" .Values.groundlightApiToken }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: validate-api-token-{{ .Values.namespace }}
+  namespace: default
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0 # Do not retry the job
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: main
+          image: amazon/aws-cli:latest
+          env:
+            - name: GROUNDLIGHT_ENDPOINT
+              value: "{{ .Values.upstreamEndpoint }}"
+            - name: GROUNDLIGHT_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: groundlight-api-token-validate-{{ .Values.namespace }}
+                  key: GROUNDLIGHT_API_TOKEN
+          command:
+            - /bin/bash
+            - /app/init-aws-access-retrieve.sh
+            - validate
+          volumeMounts:
+            - name: validate-api-token-script
+              mountPath: /app/init-aws-access-retrieve.sh
+              subPath: init-aws-access-retrieve.sh
+      volumes:
+        - name: validate-api-token-script
+          configMap:
+            name: validate-api-token-script-{{ .Values.namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: validate-api-token-script-{{ .Values.namespace }}
+  namespace: default
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-1"  # Ensure it runs before the job
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded,hook-failed
+data:
+  init-aws-access-retrieve.sh: |
+    {{- tpl (.Files.Get "files/init-aws-access-retrieve.sh") . | nindent 4 }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: groundlight-api-token-validate-{{ .Values.namespace }}
+  namespace: default
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-1"  # Ensure it runs before the job
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded,hook-failed
+type: Opaque
+data:
+  GROUNDLIGHT_API_TOKEN: {{ .Values.groundlightApiToken | b64enc | quote }}

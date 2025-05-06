@@ -14,6 +14,8 @@ These are the steps to set up a single-node Edge Endpoint:
 4. [Install the Edge Endpoint with Helm](#installing-the-edge-endpoint-with-helm).
 5. [Confirm that the Edge Endpoint is running](#verifying-the-installation).
 
+If you follow these instructions and something isn't working, please check the [troubleshooting section](#troubleshooting-deployments) for help.
+
 ### TL;DR - No fluff, just bash commands
 
 This is the quick version of the instructions above.  On a fresh system with no other customization, you can run the following commands to set up the Edge Endpoint.
@@ -265,6 +267,51 @@ DEPLOYMENT_NAMESPACE=<namespace-you-deployed-to> ./deploy/bin/delete-old-deploym
 3. That's it
 
 ## Troubleshooting Deployments
+
+Here are some common issues you might encounter when deploying the edge endpoint and how to resolve them. If you have an issue that's not listed here, please contact Groundlight support at [support@groundlight.ai](mailto:support@groundlight.ai) for more assistence.
+
+### Helm deployment fails with `validate-api-token` error
+
+If you see an error like this when running the Helm install command:
+```
+Error: failed pre-install: 1 error occurred:
+        * job validate-api-token-edge failed: BackoffLimitExceeded
+```
+it means that the API token you provided is not giving access.
+
+There are two possible reasons for this:
+1. The API token is invalid. Check the value you're providing and make sure it maps to a valid API token in the Groundlight web app.
+2. Your account does not have permission to use edge services. Not all plans enable edge inference. To find out more and get your account enabled, contact Groundlight support at [support@groundlight.ai](mailto:support@groundlight.ai).
+
+To diagnose which of these is the issue (or if it's something else entirely), you can check the logs of the `validate-api-token-edge` job:
+
+```shell
+kubectl logs -n default job/validate-api-token-edge
+```
+
+(If you're installing into a different namespace, replace `edge` in the job name with the name of your namespace.)
+
+This will show you the error returned by the Groundlight cloud service.
+
+After resolving this issue, you need to reset the Helm release to get back to a clean state. You can do this by running:
+
+```shell
+helm uninstall -n default edge-endpoint --keep-history
+```
+
+Then, re-run the Helm install command.
+
+### Helm deployment fails with `namespaces "edge" not found`.
+
+This happens when there was an initial failure in the Helm install command and the namespace was not created. 
+
+To fix this, reset the Helm release to get back to a clean state. You can do this by running:
+
+```shell
+helm uninstall -n default edge-endpoint --keep-history
+```
+
+Then, re-run the Helm install command.
 
 ### Pods with `ImagePullBackOff` Status
 

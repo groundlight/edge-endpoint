@@ -3,7 +3,9 @@
 cd $(dirname $0)  # script is in app/bin/ dir
 cd ../..
 
-# TODO: We should move nginx to its own container
+# TODO: We've moved the real nginx into its own container, so we don't need to run it here. This is 
+# just here for backwards compatibility since the containers and the chart may not be in sync.
+
 nginx 
 
 poetry run uvicorn \
