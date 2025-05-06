@@ -821,13 +821,13 @@ test = ["objgraph", "psutil"]
 
 [[package]]
 name = "groundlight"
-version = "0.22.4"
+version = "0.22.5"
 description = "Build computer vision systems using natural language with Groundlight"
 optional = false
 python-versions = "<4.0,>=3.9"
 files = [
-    {file = "groundlight-0.22.4-py3-none-any.whl", hash = "sha256:14367911fd980662eea716f2906ea68e4458f5df2074f33b8299ff92c2fa46f7"},
-    {file = "groundlight-0.22.4.tar.gz", hash = "sha256:97cb6943ebfd019737eb1aa4a0d50d1f844d7d78866ff46af76db9ece34543b5"},
+    {file = "groundlight-0.22.5-py3-none-any.whl", hash = "sha256:dd9164f7457a749dd3ac8c3fc982471173f8f47d0596bfe438c80846f43ce18a"},
+    {file = "groundlight-0.22.5.tar.gz", hash = "sha256:37e22aae2b260bdc36a15cb32315e85d73ce04047e2f45d793bf3168d902f7a0"},
 ]
 
 [package.dependencies]
@@ -2893,4 +2893,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "e4056fad1ad48a368813405d87b33cdb8ca91566e363328a0259fbb119bd183f"
+content-hash = "afcd35ddba6c2a9569b2fc0ff7d2d724d47645ad07413adf34942275a54c7e94"
