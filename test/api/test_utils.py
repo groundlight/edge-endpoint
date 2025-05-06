@@ -1,14 +1,15 @@
 from typing import Any
 
 import pytest
+from groundlight.binary_labels import Label
 from model import (
     BinaryClassificationResult,
     CountingResult,
-    Label,
     ModeEnum,
     MultiClassificationResult,
     ResultTypeEnum,
-    Source,
+    # TODO: Reenble this import when it's added back to the SDK
+    # Source,
 )
 
 from app.core.utils import (
@@ -194,7 +195,7 @@ class TestCreateIQ:
         assert "iq_" in iq.id
         assert iq.result_type == ResultTypeEnum.binary_classification
         assert isinstance(iq.result, BinaryClassificationResult)
-        assert iq.result.source == Source.ALGORITHM
+        assert iq.result.source == "ALGORITHM"  # TODO: put back Source.ALGORITHM when the SDK is fixed
         assert iq.result.label == Label.YES
         assert "is_from_edge" in iq.metadata
         assert iq.metadata["is_from_edge"]
@@ -215,7 +216,7 @@ class TestCreateIQ:
         assert "iq_" in iq.id
         assert iq.result_type == ResultTypeEnum.counting
         assert isinstance(iq.result, CountingResult)
-        assert iq.result.source == Source.ALGORITHM
+        assert iq.result.source == "ALGORITHM"  # TODO: put back Source.ALGORITHM when the SDK is fixed
         assert iq.result.count == count_value
         assert not iq.result.greater_than_max
         assert "is_from_edge" in iq.metadata
@@ -237,7 +238,7 @@ class TestCreateIQ:
 
         assert iq.result_type == ResultTypeEnum.counting
         assert isinstance(iq.result, CountingResult)
-        assert iq.result.source == Source.ALGORITHM
+        assert iq.result.source == "ALGORITHM"  # TODO: put back Source.ALGORITHM when the SDK is fixed
         assert iq.result.greater_than_max
         assert iq.result.count == max_count_value
 
@@ -257,7 +258,7 @@ class TestCreateIQ:
         assert "iq_" in iq.id
         assert iq.result_type == ResultTypeEnum.multi_classification
         assert isinstance(iq.result, MultiClassificationResult)
-        assert iq.result.source == Source.ALGORITHM
+        assert iq.result.source == "ALGORITHM"  # TODO: put back Source.ALGORITHM when the SDK is fixed
         assert iq.result.label == "1"
         assert "is_from_edge" in iq.metadata
         assert iq.metadata["is_from_edge"]
