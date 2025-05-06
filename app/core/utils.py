@@ -8,6 +8,7 @@ from typing import Any, Callable
 import cachetools
 import ksuid
 from fastapi import HTTPException
+from groundlight.binary_labels import Label
 from model import (
     ROI,
     BinaryClassificationResult,
@@ -15,12 +16,12 @@ from model import (
     CountModeConfiguration,
     ImageQuery,
     ImageQueryTypeEnum,
-    Label,
     ModeEnum,
     MultiClassificationResult,
     MultiClassModeConfiguration,
     ResultTypeEnum,
-    Source,
+    # TODO: Put this back in once the SDK is fixed
+    # Source,
 )
 from PIL import Image
 from pydantic import BaseModel, ValidationError
@@ -95,7 +96,9 @@ def _mode_to_result_and_type(
 
     :return: A tuple of the result type and the generated result object.
     """
-    source = Source.ALGORITHM  # Results from edge model are always from algorithm
+    # TODO: This should use Source.ALGORITHM but that got dropped from the SDK. Put it back
+    # once the SDK is fixed.
+    source = "ALGORITHM"  # Results from edge model are always from algorithm
     if mode == ModeEnum.BINARY:
         result_type = ResultTypeEnum.binary_classification
         label = Label.NO if result_value else Label.YES  # Map false / 0 to "YES" and true / 1 to "NO"
