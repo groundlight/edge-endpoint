@@ -32,10 +32,10 @@ from app.core.constants import (
     CONNECTION_STATUS_TTL_SECS,
     CONNECTION_TEST_HOST,
     CONNECTION_TEST_PORT,
-    CONNECTION_TIMEOUT,
     DEFAULT_POLLING_EXPONENTIAL_BACKOFF,
     DEFAULT_POLLING_INITIAL_DELAY,
     DEFAULT_POLLING_TIMEOUT_SEC,
+    SOCKET_TIMEOUT,
 )
 
 logger = logging.getLogger(__name__)
@@ -154,7 +154,7 @@ connection_ttl_cache = TTLCache(maxsize=1, ttl=CONNECTION_STATUS_TTL_SECS)
 def is_connected() -> bool:
     """Check if the system can establish a network connection to the test host. Result is cached for a short time."""
     try:
-        socket.setdefaulttimeout(CONNECTION_TIMEOUT)
+        socket.setdefaulttimeout(SOCKET_TIMEOUT)
         socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((CONNECTION_TEST_HOST, CONNECTION_TEST_PORT))
         return True
     except socket.error:
