@@ -109,9 +109,9 @@ The general idea of the inference request flow is that the edge endpoint will ha
 However, there are a number of special cases to consider:
 - Async inference requests are always sent to the cloud.
 - If the edge endpoint is not able to handle the request locally (e.g. the model is not available), it will forward the request to the cloud service.
-- If escalation is not allowed (by the configuration), the endpoint will always handle the request locally, even if the confidence is low. If there is no local model available, the request will be return an error (this will always happen on the first inference attempts if the model was not pre-loaded by the configuration).
-- Randomly selected requests will be sent to the cloud to audit and improve the model, assuming escalation is allowed.
-- If the user has configured the edge endpoint to always return the local result, the edge endpoint will always return the local result, even if it's low-confidence. If escalation is allowed, the low-confidence image query will be escalated to the cloud asyncronously for labeling and training purposes. (This option is good for clients that always need low-latency results, but still want to improve the model over time.)
+- If escalation is not allowed (by the configuration), the endpoint will always handle the request locally, even if the confidence is low. If there is no local model available, the request will return an error (this will always happen on the first inference attempts if the model was not pre-loaded by the configuration).
+- Randomly selected requests where local inference was confident will be sent to the cloud to audit and improve the model, assuming escalation is allowed.
+- If the user has configured the edge endpoint to always return the local result, the edge endpoint will always return the local result, even if it's low-confidence. If escalation is allowed, the low-confidence image query will be escalated to the cloud asynchronously for labeling and training purposes. (This option is good for clients that always need low-latency results, but still want to improve the model over time.)
 
 For details on configuring these options, see the page [CONFIGURING DETECTORS](CONFIGURING-DETECTORS.md).
 
