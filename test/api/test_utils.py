@@ -276,11 +276,20 @@ class TestCreateIQ:
             confidence_threshold=self.confidence_threshold,
             query="Test query",
             rois=[
-                ROI(
-                    label="test_class",
-                    score=0.8,
-                    geometry=BBoxGeometry(left=0.4, top=0.4, right=0.6, bottom=0.6),
-                )
+                {
+                    "label": "test_class",
+                    "score": 0.8,
+                    "geometry": {
+                        "left": 0.4,
+                        "top": 0.4,
+                        "right": 0.6,
+                        "bottom": 0.6,
+                        # x and y are calculated in parse_inference_response, so should be included in calls to 
+                        # create_iq
+                        "x": 0.5,
+                        "y": 0.5,
+                    },
+                }
             ],
         )
 
@@ -293,7 +302,7 @@ class TestCreateIQ:
             ROI(
                 label="test_class",
                 score=0.8,
-                geometry=BBoxGeometry(left=0.4, top=0.4, right=0.6, bottom=0.6),
+                geometry=BBoxGeometry(left=0.4, top=0.4, right=0.6, bottom=0.6, x=0.5, y=0.5),
             )
         ]
         assert "is_from_edge" in iq.metadata
@@ -337,11 +346,20 @@ class TestCreateIQ:
                 confidence_threshold=self.confidence_threshold,
                 query="Test query",
                 rois=[
-                    ROI(
-                        label="test_class",
-                        score=0.8,
-                        geometry=BBoxGeometry(left=0.4, top=0.4, right=0.6, bottom=0.6),
-                    )
+                    {
+                        "label": "test_class",
+                        "score": 0.8,
+                        "geometry": {
+                            "left": 0.4,
+                            "top": 0.4,
+                            "right": 0.6,
+                            "bottom": 0.6,
+                            # x and y are calculated in parse_inference_response, so should be included in calls to 
+                            # create_iq
+                            "x": 0.5,
+                            "y": 0.5,
+                        },
+                    }
                 ],
             )
 
