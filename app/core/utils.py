@@ -164,7 +164,7 @@ def wait_with_exponential_backoff(
     timeout_sec: float = DEFAULT_POLLING_TIMEOUT_SEC,
 ) -> bool:
     """
-    Wait for the condition to be True, or the timeout_sec to be reached, with configurable exponential backoff.
+    Wait for the condition to be True or the timeout_sec to be reached, with configurable exponential backoff.
     Returns True if the condition is met within the timeout_sec and False otherwise.
     """
     start_time = time.time()
@@ -182,12 +182,12 @@ def wait_with_exponential_backoff(
         next_delay *= exponential_backoff
 
 
-def wait_for_connection(
+def wait_for_network_connection(
     timeout_sec: float = DEFAULT_POLLING_TIMEOUT_SEC,
 ) -> bool:
     """
-    Wait for connection with configurable timeout and exponential backoff.
-    Returns True if connection is achieved within the timeout_sec and False otherwise.
+    Wait for network connection with configurable timeout and exponential backoff.
+    Returns True if network connection is achieved within the timeout_sec and False otherwise.
     """
     return wait_with_exponential_backoff(is_connected, timeout_sec=timeout_sec)
 
@@ -197,9 +197,10 @@ def safe_call_sdk(api_method: Callable, **kwargs):
     This ensures that we correctly handle HTTP error status codes. In some cases,
     for instance, 400 error codes from the SDK are forwarded as 500 by FastAPI,
     which is not what we want.
+
+    We wait until there's network connection up to 1 second. If no connection is found, raises a 503 error.
     """
-    # TODO do we want to do this waiting for connection here?
-    has_connection = wait_for_connection(timeout_sec=1.0)  # Wait for connection, but only for one second
+    has_connection = wait_for_network_connection(timeout_sec=1.0)  # Wait for connection, but only for one second
     if has_connection:
         try:
             return api_method(**kwargs)
