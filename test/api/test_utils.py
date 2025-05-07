@@ -3,12 +3,15 @@ from typing import Any
 import pytest
 from model import (
     BinaryClassificationResult,
+    BoundingBoxResult,
     CountingResult,
     Label,
     ModeEnum,
     MultiClassificationResult,
     ResultTypeEnum,
     Source,
+    ROI,
+    BBoxGeometry,
 )
 
 from app.core.utils import (
@@ -268,17 +271,31 @@ class TestCreateIQ:
             detector_id=prefixed_ksuid("det_"),
             mode=ModeEnum.BOUNDING_BOX,
             mode_configuration={"max_num_bboxes": 5, "class_name": "test_class"},
-            result_value=1,
+            result_value="BOUNDING_BOX",
             confidence=0.8,
             confidence_threshold=self.confidence_threshold,
             query="Test query",
+            rois=[
+                ROI(
+                    label="test_class",
+                    score=0.8,
+                    geometry=BBoxGeometry(left=0.4, top=0.4, right=0.6, bottom=0.6),
+                )
+            ],
         )
 
         assert "iq_" in iq.id
         assert iq.result_type == ResultTypeEnum.bounding_box
         assert isinstance(iq.result, BoundingBoxResult)
         assert iq.result.source == Source.ALGORITHM
-        assert iq.result.label == 1
+        assert iq.result.label == "BOUNDING_BOX"
+        assert iq.rois == [
+            ROI(
+                label="test_class",
+                score=0.8,
+                geometry=BBoxGeometry(left=0.4, top=0.4, right=0.6, bottom=0.6),
+            )
+        ]
         assert "is_from_edge" in iq.metadata
         assert iq.metadata["is_from_edge"]
 
@@ -315,10 +332,17 @@ class TestCreateIQ:
                 detector_id=prefixed_ksuid("det_"),
                 mode=ModeEnum.BOUNDING_BOX,
                 mode_configuration=None,
-                result_value=1,
+                result_value="BOUNDING_BOX",
                 confidence=0.8,
                 confidence_threshold=self.confidence_threshold,
                 query="Test query",
+                rois=[
+                    ROI(
+                        label="test_class",
+                        score=0.8,
+                        geometry=BBoxGeometry(left=0.4, top=0.4, right=0.6, bottom=0.6),
+                    )
+                ],
             )
 
 
