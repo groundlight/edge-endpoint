@@ -2,6 +2,8 @@ from typing import Any
 
 import pytest
 from model import (
+    ROI,
+    BBoxGeometry,
     BinaryClassificationResult,
     BoundingBoxResult,
     CountingResult,
@@ -10,8 +12,6 @@ from model import (
     MultiClassificationResult,
     ResultTypeEnum,
     Source,
-    ROI,
-    BBoxGeometry,
 )
 
 from app.core.utils import (
