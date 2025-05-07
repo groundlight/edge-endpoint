@@ -202,7 +202,7 @@ def safe_call_sdk(api_method: Callable, **kwargs):
     for instance, 400 error codes from the SDK are forwarded as 500 by FastAPI,
     which is not what we want.
 
-    Waits for network connection up to 1 second. If no connection is found, raises a 503 error.
+    Waits for network connection for up to one second. If no connection is found, raises a 503 error.
     """
     has_connection = wait_for_network_connection(timeout_sec=1.0)  # Wait for connection, but only for one second
     if has_connection:
@@ -215,7 +215,7 @@ def safe_call_sdk(api_method: Callable, **kwargs):
                 raise HTTPException(status_code=ex.status, detail=str(ex)) from ex
             raise ex
 
-    raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="No internet connection available.")
+    raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="No network connection available.")
 
 
 def _size_of_dict_in_bytes(data: dict[str, Any]) -> int:
