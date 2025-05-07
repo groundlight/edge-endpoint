@@ -28,7 +28,6 @@ def generate_test_escalation(
         patience_time=None,
         confidence_threshold=0.9,
         human_review=None,
-        want_async=False,
         metadata={"test_key": "test_value"},
         image_query_id=None,
     ),
@@ -115,7 +114,21 @@ def reader(base_dir: str) -> QueueReader:
     return QueueReader(base_dir)
 
 
-### Writer tests
+@pytest.fixture
+def mock_consume_escalation():
+    with patch(
+        "app.escalation_queue.manage_reader.consume_queued_escalation",
+    ) as consume_mock:
+        yield consume_mock
+
+
+@pytest.fixture
+def mock_wait_for_connection():
+    with patch("app.escalation_queue.manage_reader.wait_for_connection") as wait_mock:
+        yield wait_mock
+
+
+### Writer tests # TODO separate tests into separate classes for better compartmentalization/readability?
 
 
 def test_successive_writes_go_to_same_file(writer: QueueWriter, test_escalation: EscalationInfo):
@@ -356,43 +369,53 @@ def test_consume_escalation_gl_client_creation_failure(test_escalation: Escalati
 ### Escalation queue management tests
 
 
-def test_queue_management_basic_functionality(writer: QueueWriter, reader: QueueReader):
+def test_queue_management_basic_functionality(
+    writer: QueueWriter, reader: QueueReader, mock_consume_escalation: Mock, mock_wait_for_connection: Mock
+):
     """Verifies that basic queue management works when reading from the queue and consuming the queued escalations."""
+    # Starts off with nothing in the queue to read
+    read_from_escalation_queue(reader)
+    mock_wait_for_connection.assert_not_called()
+    mock_consume_escalation.assert_not_called()
+    mock_wait_for_connection.reset_mock()
+    mock_consume_escalation.reset_mock()
+
     num_escalations = 3
     test_escalations = [generate_test_escalation(detector_id=f"test_id_{i}") for i in range(num_escalations)]
     for escalation in test_escalations:
         assert writer.write_escalation(escalation)
 
-    with patch(
-        "app.escalation_queue.manage_reader.consume_queued_escalation",
-        return_value=(Mock(), False),  # TODO put patches into helper(s)?
-    ) as mock_consume_escalation:
-        with patch("app.escalation_queue.manage_reader.wait_for_connection") as mock_wait_for_connection:
-            # Ensure the escalations we wrote get consumed
-            for escalation in test_escalations:
-                read_from_escalation_queue(reader)
-                mock_wait_for_connection.assert_called_once()
-                mock_consume_escalation.assert_called_once_with(escalation_info_to_str(escalation))
-                mock_wait_for_connection.reset_mock()
-                mock_consume_escalation.reset_mock()
+    mock_consume_escalation.return_value = (Mock(), False)
 
-            # Nothing more in the queue to read
-            read_from_escalation_queue(reader)
-            mock_wait_for_connection.assert_not_called()
-            mock_consume_escalation.assert_not_called()
-            mock_wait_for_connection.reset_mock()
-            mock_consume_escalation.reset_mock()
+    # Ensure the escalations we wrote get consumed
+    for escalation in test_escalations:
+        read_from_escalation_queue(reader)
+        mock_wait_for_connection.assert_called_once()
+        mock_consume_escalation.assert_called_once_with(escalation_info_to_str(escalation))
+        mock_wait_for_connection.reset_mock()
+        mock_consume_escalation.reset_mock()
 
-            # Write another escalation and ensure it gets consumed
-            test_escalation = generate_test_escalation()
-            assert writer.write_escalation(test_escalation)
-            read_from_escalation_queue(reader)
-            mock_wait_for_connection.assert_called_once()
-            mock_consume_escalation.assert_called_once_with(escalation_info_to_str(test_escalation))
+    # Nothing more in the queue to read
+    read_from_escalation_queue(reader)
+    mock_wait_for_connection.assert_not_called()
+    mock_consume_escalation.assert_not_called()
+    mock_wait_for_connection.reset_mock()
+    mock_consume_escalation.reset_mock()
+
+    # Write another escalation and ensure it gets consumed
+    test_escalation = generate_test_escalation()
+    assert writer.write_escalation(test_escalation)
+    read_from_escalation_queue(reader)
+    mock_wait_for_connection.assert_called_once()
+    mock_consume_escalation.assert_called_once_with(escalation_info_to_str(test_escalation))
 
 
 def test_queue_management_retries_successfully(
-    test_escalation: EscalationInfo, writer: QueueWriter, reader: QueueReader
+    test_escalation: EscalationInfo,
+    writer: QueueWriter,
+    reader: QueueReader,
+    mock_consume_escalation: Mock,
+    mock_wait_for_connection: Mock,
 ):
     """Verifies that an error from consumption triggers a retry for the escalation."""
 
@@ -403,49 +426,47 @@ def test_queue_management_retries_successfully(
             return (None, True)
         return (None, False)
 
+    mock_consume_escalation.side_effect = side_effect_true_then_false
+
     assert writer.write_escalation(test_escalation)
-    with patch(
-        "app.escalation_queue.manage_reader.consume_queued_escalation", side_effect=side_effect_true_then_false
-    ) as mock_consume_escalation:
-        with patch("app.escalation_queue.manage_reader.wait_for_connection") as mock_wait_for_connection:
-            read_from_escalation_queue(reader)
 
-            expected_connection_calls = [call()] * 2
-            assert mock_wait_for_connection.mock_calls == expected_connection_calls
+    read_from_escalation_queue(reader)
 
-            test_escalation_str = escalation_info_to_str(test_escalation)
-            expected_consumption_calls = [call(test_escalation_str)] * 2
-            assert mock_consume_escalation.mock_calls == expected_consumption_calls
+    num_attempts = 2
+    assert len(mock_wait_for_connection.mock_calls) == num_attempts
+    test_escalation_str = escalation_info_to_str(test_escalation)
+    expected_consumption_calls = [call(test_escalation_str)] * num_attempts
+    assert mock_consume_escalation.mock_calls == expected_consumption_calls
 
 
 def test_queue_management_stops_retrying_after_max_attempts(
-    test_escalation: EscalationInfo, writer: QueueWriter, reader: QueueReader
+    test_escalation: EscalationInfo,
+    writer: QueueWriter,
+    reader: QueueReader,
+    mock_consume_escalation: Mock,
+    mock_wait_for_connection: Mock,
 ):
     """Verifies that an escalation will be attempted to be escalated only up to the max allowed attempts."""
     assert writer.write_escalation(test_escalation)
-    with patch(
-        "app.escalation_queue.manage_reader.consume_queued_escalation", return_value=(None, True)
-    ) as mock_consume_escalation:
-        with patch("app.escalation_queue.manage_reader.wait_for_connection") as mock_wait_for_connection:
-            read_from_escalation_queue(reader)
+    mock_consume_escalation.return_value = (None, True)
+    read_from_escalation_queue(reader)
 
-            expected_connection_calls = [call()] * MAX_RETRY_ATTEMPTS
-            mock_wait_for_connection.assert_has_calls(expected_connection_calls)
-
-            test_escalation_str = escalation_info_to_str(test_escalation)
-            expected_consumption_calls = [call(test_escalation_str)] * MAX_RETRY_ATTEMPTS
-            mock_consume_escalation.assert_has_calls(expected_consumption_calls)
+    assert len(mock_wait_for_connection.mock_calls) == MAX_RETRY_ATTEMPTS
+    test_escalation_str = escalation_info_to_str(test_escalation)
+    expected_consumption_calls = [call(test_escalation_str)] * MAX_RETRY_ATTEMPTS
+    assert mock_consume_escalation.mock_calls == expected_consumption_calls
 
 
 def test_queue_management_no_retry_when_no_reason_to(
-    test_escalation: EscalationInfo, writer: QueueWriter, reader: QueueReader
+    test_escalation: EscalationInfo,
+    writer: QueueWriter,
+    reader: QueueReader,
+    mock_consume_escalation: Mock,
+    mock_wait_for_connection: Mock,
 ):
     """Verifies that an escalation is not retried when consumption fails in a way that retrying won't fix."""
     assert writer.write_escalation(test_escalation)
-    with patch(
-        "app.escalation_queue.manage_reader.consume_queued_escalation", return_value=(None, False)
-    ) as mock_consume_escalation:
-        with patch("app.escalation_queue.manage_reader.wait_for_connection") as mock_wait_for_connection:
-            read_from_escalation_queue(reader)
-            mock_wait_for_connection.assert_called_once()
-            mock_consume_escalation.assert_called_once()
+    mock_consume_escalation.return_value = (None, False)
+    read_from_escalation_queue(reader)
+    mock_wait_for_connection.assert_called_once()
+    mock_consume_escalation.assert_called_once()

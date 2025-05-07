@@ -14,8 +14,8 @@ from app.core.app_state import (
     refresh_detector_metadata_if_needed,
 )
 from app.core.edge_inference import get_edge_inference_model_name
-from app.core.utils import create_iq, generate_metadata_dict, safe_call_sdk
-from app.escalation_queue.queue_utils import write_escalation_to_queue
+from app.core.utils import create_iq, generate_metadata_dict
+from app.escalation_queue.queue_utils import safe_escalate_with_queue_write, write_escalation_to_queue
 from app.metrics.iq_activity import record_activity_for_metrics
 
 logger = logging.getLogger(__name__)
@@ -125,10 +125,19 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             )
         logger.debug(f"Submitting ask_async image query to cloud API server for {detector_id=}")
         record_activity_for_metrics(detector_id, activity_type="escalations")
-        return safe_call_sdk(  # TODO write to queue if this fails
-            gl.ask_async,
-            detector=detector_id,
-            image=image_bytes,
+        # return safe_call_sdk(
+        #     gl.ask_async,
+        #     detector=detector_id,
+        #     image=image_bytes,
+        #     patience_time=patience_time,
+        #     confidence_threshold=confidence_threshold,
+        #     human_review=human_review,
+        # )
+        return safe_escalate_with_queue_write(
+            gl=gl,
+            detector_id=detector_id,
+            image_bytes=image_bytes,
+            want_async=True,
             patience_time=patience_time,
             confidence_threshold=confidence_threshold,
             human_review=human_review,
@@ -188,12 +197,12 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                     record_activity_for_metrics(detector_id, activity_type="audits")
                     background_tasks.add_task(
                         write_escalation_to_queue,
+                        writer=app_state.queue_writer,
                         detector_id=detector_id,
                         image_bytes=image_bytes,
-                        wait=0,
                         patience_time=patience_time,
                         confidence_threshold=confidence_threshold,
-                        want_async=True,
+                        human_review=None,
                         metadata=generate_metadata_dict(results=results, is_edge_audit=True),
                         image_query_id=image_query.id,  # We give the cloud IQ the same ID as the returned edge IQ
                     )
@@ -223,13 +232,12 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                     record_activity_for_metrics(detector_id, activity_type="escalations")
                     background_tasks.add_task(
                         write_escalation_to_queue,
+                        writer=app_state.queue_writer,
                         detector_id=detector_id,
                         image_bytes=image_bytes,
-                        wait=0,
                         patience_time=patience_time,
                         confidence_threshold=confidence_threshold,
-                        human_review=human_review,
-                        want_async=True,
+                        human_review=None,
                         metadata=generate_metadata_dict(results=results, is_edge_audit=False),
                         image_query_id=image_query.id,
                     )
@@ -291,13 +299,24 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
     logger.debug(f"Submitting image query to cloud for {detector_id=}")
     record_activity_for_metrics(detector_id, activity_type="escalations")
-    return safe_call_sdk(  # TODO write to queue if this fails
-        gl.submit_image_query,
-        detector=detector_id,
-        image=image_bytes,
-        wait=0,  # wait on the client, not here
+    # return safe_call_sdk(
+    #     gl.submit_image_query,
+    #     detector=detector_id,
+    #     image=image_bytes,
+    #     wait=0,  # wait on the client, not here
+    #     patience_time=patience_time,
+    #     confidence_threshold=confidence_threshold,
+    #     human_review=human_review,
+    #     metadata=generate_metadata_dict(results=results, is_edge_audit=False),
+    # )
+    return safe_escalate_with_queue_write(
+        gl=gl,
+        queue_writer=app_state.queue_writer,
+        detector_id=detector_id,
+        image_bytes=image_bytes,
+        want_async=False,
         patience_time=patience_time,
         confidence_threshold=confidence_threshold,
         human_review=human_review,
-        metadata=generate_metadata_dict(results=results, is_edge_audit=False),
+        meatadata=generate_metadata_dict(results=results, is_edge_audit=False),
     )

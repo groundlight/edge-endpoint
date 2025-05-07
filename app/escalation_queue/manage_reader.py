@@ -8,10 +8,9 @@ from fastapi import HTTPException, status
 from groundlight import Groundlight, GroundlightClientError, ImageQuery
 from urllib3.exceptions import MaxRetryError
 
-from app.core.utils import safe_call_sdk
+from app.core.utils import safe_call_sdk, wait_for_connection
 from app.escalation_queue.constants import MAX_RETRY_ATTEMPTS
 from app.escalation_queue.queue_reader import QueueReader
-from app.escalation_queue.queue_utils import wait_for_connection
 from app.escalation_queue.queue_writer import EscalationInfo
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -68,7 +67,7 @@ def consume_queued_escalation(escalation_str: str, gl: Groundlight | None = None
             patience_time=submit_iq_params.patience_time,
             confidence_threshold=submit_iq_params.confidence_threshold,
             human_review=submit_iq_params.human_review,
-            want_async=submit_iq_params.want_async,
+            want_async=True,  # Escalations from the queue are always async
             image_query_id=submit_iq_params.image_query_id,
             metadata=submit_iq_params.metadata,
         )
@@ -100,10 +99,9 @@ def read_from_escalation_queue(reader: QueueReader) -> None:
         should_retry_escalation = True
         escalation_result = None
         while should_retry_escalation:
-            wait_for_connection()  # Wait for connection before trying to escalate
+            wait_for_connection(float("inf"))  # Wait for connection before trying to escalate
 
             escalation_result, should_try_again = consume_queued_escalation(queued_escalation)
-            logger.info(f"{should_try_again=}")
             if escalation_result is None:
                 logger.info("Escalation failed.")
                 if should_try_again:

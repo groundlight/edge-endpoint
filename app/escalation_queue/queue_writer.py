@@ -18,7 +18,6 @@ class SubmitImageQueryParams(BaseModel):
     patience_time: float | None
     confidence_threshold: float
     human_review: str | None
-    want_async: bool
     metadata: dict[str, Any] | None
     image_query_id: str | None
 
