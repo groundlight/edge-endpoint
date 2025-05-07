@@ -204,7 +204,7 @@ def safe_call_sdk(api_method: Callable, **kwargs):
 
     Waits for network connection for up to one second. If no connection is found, raises a 503 error.
     """
-    has_connection = wait_for_network_connection(timeout_sec=1.0)  # Wait for connection, but only for one second
+    has_connection = wait_for_network_connection(timeout_sec=1.0)  # Wait for connection for up to one second
     if has_connection:
         try:
             return api_method(**kwargs)
