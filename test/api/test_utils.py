@@ -284,7 +284,7 @@ class TestCreateIQ:
                         "top": 0.4,
                         "right": 0.6,
                         "bottom": 0.6,
-                        # x and y are calculated in parse_inference_response, so should be included in calls to 
+                        # x and y are calculated in parse_inference_response, so should be included in calls to
                         # create_iq
                         "x": 0.5,
                         "y": 0.5,
@@ -354,7 +354,7 @@ class TestCreateIQ:
                             "top": 0.4,
                             "right": 0.6,
                             "bottom": 0.6,
-                            # x and y are calculated in parse_inference_response, so should be included in calls to 
+                            # x and y are calculated in parse_inference_response, so should be included in calls to
                             # create_iq
                             "x": 0.5,
                             "y": 0.5,
