@@ -320,7 +320,7 @@ class EdgeInferenceManager:
         """
         has_connection = wait_for_network_connection(1.0)
         if not has_connection:
-            logger.debug(f"We don't currently have network connection. Skipping model update check for {detector_id}.")
+            logger.debug(f"There is currently no network connection. Skipping model update check for {detector_id}.")
             return False
 
         logger.info(f"Checking if there are new models available for {detector_id}")
