@@ -124,7 +124,7 @@ def mock_consume_escalation():
 
 @pytest.fixture
 def mock_wait_for_connection():
-    with patch("app.escalation_queue.manage_reader.wait_for_connection") as wait_mock:
+    with patch("app.escalation_queue.manage_reader.wait_for_network_connection") as wait_mock:
         yield wait_mock
 
 
