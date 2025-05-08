@@ -19,8 +19,6 @@ then
 
 fi
 
-echo $GROUNDLIGHT_ENDPOINT 
-
 # First create a detector to use for testing:
 export DETECTOR_ID=$(poetry run python test/integration/integration.py --mode create_detector)
 echo "created detector with id: $DETECTOR_ID"
@@ -124,6 +122,7 @@ helm test -n default ${HELM_RELEASE_NAME} --hide-notes
 
 echo "Helm tests completed successfully."
 
+export EDGE_SETUP=1 # Setting this to 1 will make the integration tests use the edge endpoint
 ./test/integration/run_tests.sh
 
 # cleanup

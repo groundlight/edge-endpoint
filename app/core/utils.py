@@ -19,6 +19,8 @@ from model import (
     ImageQueryTypeEnum,
     Label,
     ModeEnum,
+    MultiClassificationResult,
+    MultiClassModeConfiguration,
     ResultTypeEnum,
     Source,
 )
@@ -30,10 +32,10 @@ from app.core.constants import (
     CONNECTION_STATUS_TTL_SECS,
     CONNECTION_TEST_HOST,
     CONNECTION_TEST_PORT,
-    CONNECTION_TIMEOUT,
     DEFAULT_POLLING_EXPONENTIAL_BACKOFF,
     DEFAULT_POLLING_INITIAL_DELAY,
     DEFAULT_POLLING_TIMEOUT_SEC,
+    SOCKET_TIMEOUT,
 )
 
 logger = logging.getLogger(__name__)
@@ -92,7 +94,7 @@ def create_iq(  # noqa: PLR0913
 
 def _mode_to_result_and_type(
     mode: ModeEnum, mode_configuration: dict[str, Any] | None, confidence: float, result_value: int
-) -> tuple[ResultTypeEnum, BinaryClassificationResult | CountingResult]:
+) -> tuple[ResultTypeEnum, BinaryClassificationResult | CountingResult | MultiClassificationResult]:
     """
     Maps the detector mode to the corresponding result type and generates the result object
     based on the provided mode, confidence, and result value.
@@ -130,8 +132,15 @@ def _mode_to_result_and_type(
             greater_than_max=greater_than_max,
         )
     elif mode == ModeEnum.MULTI_CLASS:
-        raise NotImplementedError("Multiclass functionality is not yet implemented for the edge endpoint.")
-        # TODO add support for multiclass functionality.
+        if mode_configuration is None:
+            raise ValueError("mode_configuration for MultiClass detector shouldn't be None.")
+        multi_class_mode_configuration = MultiClassModeConfiguration(**mode_configuration)
+        result_type = ResultTypeEnum.multi_classification
+        result = MultiClassificationResult(
+            confidence=confidence,
+            source=source,
+            label=multi_class_mode_configuration.class_names[result_value],
+        )
     else:
         raise ValueError(f"Got unrecognized or unsupported detector mode: {mode}")
 
@@ -150,7 +159,7 @@ connection_ttl_cache = TTLCache(maxsize=1, ttl=CONNECTION_STATUS_TTL_SECS)
 def is_connected() -> bool:
     """Check if the system can establish a network connection to the test host. Result is cached for a short time."""
     try:
-        socket.setdefaulttimeout(CONNECTION_TIMEOUT)
+        socket.setdefaulttimeout(SOCKET_TIMEOUT)
         socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((CONNECTION_TEST_HOST, CONNECTION_TEST_PORT))
         return True
     except socket.error:
@@ -198,9 +207,9 @@ def safe_call_sdk(api_method: Callable, **kwargs):
     for instance, 400 error codes from the SDK are forwarded as 500 by FastAPI,
     which is not what we want.
 
-    We wait until there's network connection up to 1 second. If no connection is found, raises a 503 error.
+    Waits for network connection for up to one second. If no connection is found, raises a 503 error.
     """
-    has_connection = wait_for_network_connection(timeout_sec=1.0)  # Wait for connection, but only for one second
+    has_connection = wait_for_network_connection(timeout_sec=1.0)  # Wait for connection for up to one second
     if has_connection:
         try:
             return api_method(**kwargs)
@@ -211,7 +220,7 @@ def safe_call_sdk(api_method: Callable, **kwargs):
                 raise HTTPException(status_code=ex.status, detail=str(ex)) from ex
             raise ex
 
-    raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="No internet connection available.")
+    raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="No network connection available.")
 
 
 def _size_of_dict_in_bytes(data: dict[str, Any]) -> int:

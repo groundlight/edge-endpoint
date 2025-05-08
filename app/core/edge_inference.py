@@ -15,7 +15,7 @@ from jinja2 import Template
 from app.core.configs import EdgeInferenceConfig
 from app.core.file_paths import MODEL_REPOSITORY_PATH
 from app.core.speedmon import SpeedMonitor
-from app.core.utils import ModelInfoBase, ModelInfoWithBinary, parse_model_info
+from app.core.utils import ModelInfoBase, ModelInfoWithBinary, parse_model_info, wait_for_network_connection
 
 logger = logging.getLogger(__name__)
 
@@ -318,6 +318,11 @@ class EdgeInferenceManager:
 
         Returns True if a new model was downloaded and saved, False otherwise.
         """
+        has_connection = wait_for_network_connection(1.0)
+        if not has_connection:
+            logger.debug(f"There is currently no network connection. Skipping model update check for {detector_id}.")
+            return False
+
         logger.info(f"Checking if there are new models available for {detector_id}")
 
         api_token = (

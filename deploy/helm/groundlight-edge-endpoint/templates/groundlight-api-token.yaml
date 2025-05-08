@@ -1,6 +1,4 @@
-{{- if false }}
-{{- required "You must supply a Groundlight API token!" .Values.groundlightApiToken -}}
-{{- end }}
+{{- $check := required "You must supply a Groundlight API token!" .Values.groundlightApiToken }}
 ---
 apiVersion: v1
 kind: Secret

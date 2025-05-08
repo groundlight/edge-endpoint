@@ -1,11 +1,14 @@
 from typing import Any
+from unittest import mock
 
 import pytest
+from fastapi import HTTPException
 from model import (
     BinaryClassificationResult,
     CountingResult,
     Label,
     ModeEnum,
+    MultiClassificationResult,
     ResultTypeEnum,
     Source,
 )
@@ -20,6 +23,7 @@ from app.core.utils import (
     generate_metadata_dict,
     parse_model_info,
     prefixed_ksuid,
+    safe_call_sdk,
 )
 
 
@@ -242,19 +246,24 @@ class TestCreateIQ:
 
     def test_create_multiclass_iq(self):
         """Test creating a basic multiclass IQ."""
-        # TODO this test should test the real functionality once multiclass is supported
-        with pytest.raises(
-            NotImplementedError, match="Multiclass functionality is not yet implemented for the edge endpoint."
-        ):
-            create_iq(
-                detector_id=prefixed_ksuid("det_"),
-                mode=ModeEnum.MULTI_CLASS,
-                mode_configuration={},
-                result_value=1,
-                confidence=0.8,
-                confidence_threshold=self.confidence_threshold,
-                query="Test query",
-            )
+
+        iq = create_iq(
+            detector_id=prefixed_ksuid("det_"),
+            mode=ModeEnum.MULTI_CLASS,
+            mode_configuration={"class_names": ["1", "2", "3"]},
+            result_value=0,
+            confidence=0.8,
+            confidence_threshold=self.confidence_threshold,
+            query="Test query",
+        )
+
+        assert "iq_" in iq.id
+        assert iq.result_type == ResultTypeEnum.multi_classification
+        assert isinstance(iq.result, MultiClassificationResult)
+        assert iq.result.source == Source.ALGORITHM
+        assert iq.result.label == "1"
+        assert "is_from_edge" in iq.metadata
+        assert iq.metadata["is_from_edge"]
 
     def test_create_count_iq_without_configuration(self):
         """Test creating a count IQ with no mode_configuration."""
@@ -262,6 +271,19 @@ class TestCreateIQ:
             create_iq(
                 detector_id=prefixed_ksuid("det_"),
                 mode=ModeEnum.COUNT,
+                mode_configuration=None,
+                result_value=1,
+                confidence=0.8,
+                confidence_threshold=self.confidence_threshold,
+                query="Test query",
+            )
+
+    def test_create_multiclass_iq_without_configuration(self):
+        """Test creating a multiclass IQ with no mode_configuration."""
+        with pytest.raises(ValueError, match="mode_configuration for MultiClass detector shouldn't be None."):
+            create_iq(
+                detector_id=prefixed_ksuid("det_"),
+                mode=ModeEnum.MULTI_CLASS,
                 mode_configuration=None,
                 result_value=1,
                 confidence=0.8,
@@ -345,3 +367,13 @@ class TestParseModelInfo:
         assert isinstance(primary_edge_model_info, ModelInfoNoBinary)
         assert isinstance(oodd_model_info, ModelInfoBase)
         assert isinstance(oodd_model_info, ModelInfoWithBinary)
+
+
+class TestSafeCallSdk:
+    def test_no_sdk_call_with_no_connection(self):
+        """Verifies that no SDK call is made when there is no network connection."""
+        with mock.patch("app.core.utils.wait_for_network_connection", return_value=False):
+            with pytest.raises(HTTPException):
+                mock_callable = mock.Mock()
+                safe_call_sdk(mock_callable)
+                mock_callable.assert_not_called()

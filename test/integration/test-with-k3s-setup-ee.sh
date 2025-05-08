@@ -25,8 +25,6 @@ then
 
 fi
 
-echo $GROUNDLIGHT_ENDPOINT 
-
 # First create a detector to use for testing:
 export DETECTOR_ID=$(poetry run python test/integration/integration.py --mode create_detector)
 echo "created detector with id: $DETECTOR_ID"
@@ -118,7 +116,6 @@ fi
 
 echo "Inference deployment for detector $DETECTOR_ID has successfully rolled out."
 
-export EDGE_SETUP=1
-
+export EDGE_SETUP=1 # Setting this to 1 will make the integration tests use the edge endpoint
 ./test/integration/run_tests.sh
 

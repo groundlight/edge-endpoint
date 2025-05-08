@@ -60,7 +60,7 @@ def detector(gl: Groundlight) -> Detector:
 def test_post_image_query_via_sdk(gl: Groundlight, detector: Detector):
     """Test that submitting an image query using the edge server proceeds without failure."""
     image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
-    iq = gl.submit_image_query(detector=detector.id, image=image_bytes, wait=10.0)
+    iq = gl.submit_image_query(detector=detector.id, image=image_bytes, wait=10.0, human_review="NEVER")
     assert iq is not None, "ImageQuery should not be None."
 
 
@@ -68,7 +68,7 @@ def test_post_image_query_via_sdk(gl: Groundlight, detector: Detector):
 def test_post_image_query_via_sdk_want_async(gl: Groundlight, detector: Detector):
     """Test that submitting an image query with want_async=True forwards directly to the cloud."""
     image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
-    iq = gl.ask_async(detector=detector.id, image=image_bytes)
+    iq = gl.ask_async(detector=detector.id, image=image_bytes, human_review="NEVER")
     assert iq is not None, "ImageQuery should not be None."
     assert iq.id.startswith("iq_"), "ImageQuery id should start with 'iq_' because it was created on the cloud."
     assert iq.result is None, "Result should be None because the query is still being processed."
