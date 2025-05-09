@@ -11,7 +11,6 @@ from fastapi import HTTPException
 from model import (
     ROI,
     BinaryClassificationResult,
-    BoundingBoxModeConfiguration,
     BoundingBoxResult,
     CountingResult,
     CountModeConfiguration,
