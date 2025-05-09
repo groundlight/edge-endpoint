@@ -130,7 +130,7 @@ def parse_inference_response(response: dict) -> dict:
     #
     # Example response:
     # {
-    #     "multi_predictions": None,  # Multiclass / Counting results
+    #     "multi_predictions": None,  # Multiclass / Counting / Bounding Box results
     #     "predictions": {"confidences": [0.54], "labels": [0], "probabilities": [0.45], "scores": [-2.94]},  # Binary results
     #     "secondary_predictions": None,  # Text recognition and Obj detection results
     # }
@@ -141,7 +141,7 @@ def parse_inference_response(response: dict) -> dict:
     if multi_predictions is not None and predictions is not None:
         raise ValueError("Got result with both multi_predictions and predictions.")
     if multi_predictions is not None:
-        # Count or multiclass case
+        # Count, multiclass, or bounding boxes case
         probabilities: list[float] = multi_predictions["probabilities"][0]
         confidence: float = max(probabilities)
         max_prob_index = max(range(len(probabilities)), key=lambda i: probabilities[i])
