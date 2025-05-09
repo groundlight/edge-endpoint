@@ -22,7 +22,7 @@ Filesystem structure:
 import json
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
 
@@ -132,7 +132,7 @@ class ActivityRetriever:
         active_detectors = [
             file.parent.name
             for file in activity_files
-            if _tracker().get_last_file_modification_time(file) > datetime.now() - time_period
+            if _tracker().get_last_file_modification_time(file) > datetime.now(timezone.utc) - time_period
         ]
         return len(active_detectors)
 
@@ -147,11 +147,11 @@ class ActivityRetriever:
 
     def get_last_hour(self) -> str:
         """Get the last hour in UTC."""
-        return (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
+        return (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
 
     def get_detector_activity_metrics(self, detector_id: str) -> int:
         """Get the activity on a detector for the previous hour."""
-        time = self.get_last_hour()
+        time = (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
         logger.info(f"Getting activity for detector {detector_id} at {time}")
 
         detector_folder = _tracker().detector_folder(detector_id)
@@ -191,7 +191,7 @@ def record_activity_for_metrics(detector_id: str, activity_type: str):
 
     logger.debug(f"Recording activity {activity_type} on detector {detector_id}")
 
-    current_hour = datetime.now()
+    current_hour = datetime.now(timezone.utc)
     f = _tracker().hourly_activity_file(activity_type, current_hour, detector_id)
     _tracker().increment_counter_file(f)
 
@@ -201,9 +201,9 @@ def record_activity_for_metrics(detector_id: str, activity_type: str):
 
 def clear_old_activity_files():
     """Clear all activity files that are older than 2 hours."""
-    current_hour = datetime.now().strftime("%Y-%m-%d_%H")
-    last_hour = (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
-    two_hours_ago = (datetime.now() - timedelta(hours=2)).strftime("%Y-%m-%d_%H")
+    current_hour = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H")
+    last_hour = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
+    two_hours_ago = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime("%Y-%m-%d_%H")
     valid_hours = [current_hour, last_hour, two_hours_ago]
 
     # Looking for files that match the pattern <record_name>_YYYY-MM-DD_HH
