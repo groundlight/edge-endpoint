@@ -133,9 +133,6 @@ def _mode_to_result_and_type(
             label=multi_class_mode_configuration.class_names[result_value],
         )
     elif mode == ModeEnum.BOUNDING_BOX:
-        if mode_configuration is None:
-            raise ValueError("mode_configuration for Bounding Box detector shouldn't be None.")
-        BoundingBoxModeConfiguration(**mode_configuration)
         result_type = ResultTypeEnum.bounding_box
         result = BoundingBoxResult(
             confidence=confidence,
