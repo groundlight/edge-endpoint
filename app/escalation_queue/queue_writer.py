@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 class SubmitImageQueryParams(BaseModel):
-    wait: float | None
     patience_time: float | None
     confidence_threshold: float
     human_review: str | None

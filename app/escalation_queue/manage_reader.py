@@ -63,7 +63,7 @@ def consume_queued_escalation(escalation_str: str, gl: Groundlight | None = None
             gl.submit_image_query,
             detector=escalation_info.detector_id,
             image=image_bytes,
-            wait=submit_iq_params.wait,
+            wait=0,  # Never want to wait when escalating from the queue
             patience_time=submit_iq_params.patience_time,
             confidence_threshold=submit_iq_params.confidence_threshold,
             human_review=submit_iq_params.human_review,

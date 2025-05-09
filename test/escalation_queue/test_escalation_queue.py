@@ -3,7 +3,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Generator
+from typing import Any, Generator
 from unittest.mock import Mock, call, patch
 
 import ksuid
@@ -16,21 +16,26 @@ from app.core.utils import get_formatted_timestamp_str
 from app.escalation_queue.constants import MAX_QUEUE_FILE_LINES, MAX_RETRY_ATTEMPTS
 from app.escalation_queue.manage_reader import consume_queued_escalation, read_from_escalation_queue
 from app.escalation_queue.queue_reader import QueueReader
+from app.escalation_queue.queue_utils import safe_escalate_with_queue_write, write_escalation_to_queue
 from app.escalation_queue.queue_writer import EscalationInfo, QueueWriter, SubmitImageQueryParams
 
 ### Helper functions
 
 
-def generate_test_escalation(
-    timestamp_str: str = get_formatted_timestamp_str(),
-    submit_iq_params: SubmitImageQueryParams = SubmitImageQueryParams(
-        wait=None,
+def generate_test_submit_iq_params() -> SubmitImageQueryParams:
+    return SubmitImageQueryParams(
+        wait=0,
         patience_time=None,
         confidence_threshold=0.9,
         human_review=None,
         metadata={"test_key": "test_value"},
         image_query_id=None,
-    ),
+    )
+
+
+def generate_test_escalation(
+    timestamp_str: str = get_formatted_timestamp_str(),
+    submit_iq_params: SubmitImageQueryParams = generate_test_submit_iq_params(),
     detector_id: str = "test_id",
     image_path: str = "test/assets/cat.jpeg",
 ) -> EscalationInfo:
@@ -87,6 +92,22 @@ def test_image_bytes() -> bytes:
 @pytest.fixture
 def test_escalation() -> EscalationInfo:
     return generate_test_escalation()
+
+
+@pytest.fixture
+def test_write_escalation_args(
+    test_image_bytes: bytes, test_submit_iq_params: SubmitImageQueryParams, test_escalation: EscalationInfo
+) -> dict[str, Any]:
+    return {
+        "detector_id": test_escalation.detector_id,
+        "image_bytes": test_image_bytes,
+        "test_submit_iq_params": test_submit_iq_params,
+    }
+
+
+@pytest.fixture
+def test_submit_iq_params() -> SubmitImageQueryParams:
+    return generate_test_submit_iq_params()
 
 
 @pytest.fixture
@@ -470,3 +491,79 @@ def test_queue_management_no_retry_when_no_reason_to(
     read_from_escalation_queue(reader)
     mock_wait_for_connection.assert_called_once()
     mock_consume_escalation.assert_called_once()
+
+
+### Queue utils tests
+
+
+def test_write_escalation_to_queue_successful(
+    test_escalation: EscalationInfo,
+    test_submit_iq_params: SubmitImageQueryParams,
+    test_image_bytes: bytes,
+    writer: QueueWriter,
+    reader: QueueReader,
+):
+    write_escalation_to_queue(writer, **test_write_escalation_args)
+
+    next_escalation_str = reader.get_next_line()
+    assert next_escalation_str is not None
+    next_escalation = EscalationInfo(**json.loads(next_escalation_str))
+    assert next_escalation.detector_id == test_escalation.detector_id
+    assert next_escalation.submit_iq_params == test_submit_iq_params
+    assert Path(next_escalation.image_path_str).read_bytes() == test_image_bytes
+
+
+def test_write_escalation_to_queue_failure_with_retry():
+    # TODO after implementing retry
+    pass
+
+
+def test_safe_escalate_with_queue_write_successful_request(
+    writer: QueueWriter, test_image_bytes: bytes, test_escalation: EscalationInfo
+):
+    """Verifies that safe_escalate_with_queue_write makes the correct SDK call when there's no exception."""
+    mock_gl = Mock()
+    mock_submit_image_query: Mock = mock_gl.submit_image_query
+    safe_escalate_with_queue_write(
+        gl=mock_gl,
+        queue_writer=writer,
+        detector_id=test_escalation.detector_id,
+        image_bytes=test_image_bytes,
+        want_async=False,
+        submit_iq_params=test_escalation.submit_iq_params,
+    )
+    mock_submit_image_query.assert_called_once_with(
+        detector=test_escalation.detector_id,
+        image=test_image_bytes,
+        want_async=False,
+        wait=0,
+        patience_time=test_escalation.submit_iq_params.patience_time,
+        confidence_threshold=test_escalation.submit_iq_params.confidence_threshold,
+        human_review=test_escalation.submit_iq_params.human_review,
+        metadata=test_escalation.submit_iq_params.metadata,
+    )
+
+
+def test_safe_escalate_with_queue_write_properly_writes_on_failure(
+    writer: QueueWriter, test_image_bytes: bytes, test_escalation: EscalationInfo
+):
+    """
+    Verifies that safe_escalate_with_queue_write catches an exception from the SDK call and writes to the queue.
+    """
+    mock_gl = Mock()
+    mock_submit_image_query: Mock = mock_gl.submit_image_query
+    mock_submit_image_query.side_effect = Exception()
+    with patch("app.escalation_queue.queue_utils.write_escalation_to_queue") as mock_write_escalation_to_queue:
+        with pytest.raises(Exception):
+            safe_escalate_with_queue_write(
+                gl=mock_gl,
+                queue_writer=writer,
+                detector_id=test_escalation.detector_id,
+                image_bytes=test_image_bytes,
+                want_async=False,
+                submit_iq_params=test_escalation.submit_iq_params,
+            )
+
+        mock_write_escalation_to_queue.assert_called_once_with(
+            writer=writer, image_bytes=test_image_bytes, submit_iq_params=test_escalation.submit_iq_params
+        )
