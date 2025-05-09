@@ -145,9 +145,13 @@ class ActivityRetriever:
         # the individual detector fields
         return json.dumps(detector_activity)
 
+    def get_last_hour(self) -> str:
+        """Get the last hour in UTC."""
+        return (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
+
     def get_detector_activity_metrics(self, detector_id: str) -> int:
         """Get the activity on a detector for the previous hour."""
-        time = (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
+        time = self.get_last_hour()
         logger.info(f"Getting activity for detector {detector_id} at {time}")
 
         detector_folder = _tracker().detector_folder(detector_id)
