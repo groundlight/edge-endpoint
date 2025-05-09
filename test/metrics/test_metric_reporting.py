@@ -82,6 +82,7 @@ class TestMetricsReporter:
 
         activity_metrics = payload["activity_metrics"]
         assert "last_activity_time" in activity_metrics
+        assert "activity_hour" in activity_metrics
         assert "num_detectors_lifetime" in activity_metrics
         assert "num_detectors_active_1h" in activity_metrics
         assert "num_detectors_active_24h" in activity_metrics

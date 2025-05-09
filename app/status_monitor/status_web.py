@@ -25,8 +25,11 @@ async def startup_event():
     )
     logging.info("Starting status-monitor server...")
     logging.info("Will report metrics to the cloud every hour")
-    scheduler.add_job(reporter.collect_metrics_for_cloud, "cron", hour="*", minute="1")
-    scheduler.add_job(reporter.report_metrics_to_cloud, "cron", hour="*", minute="2", jitter=120)
+    # Every hour, on the hour, collect metrics to send to the cloud.
+    scheduler.add_job(reporter.collect_metrics_for_cloud, "cron", hour="*", minute="0")
+    # Every hour, try to report collected metrics to the cloud. Run at 3 minutes past the hour, with a jitter of 120
+    # seconds, to avoid every edge-endpoint report hitting the server at the exact same time.
+    scheduler.add_job(reporter.report_metrics_to_cloud, "cron", hour="*", minute="3", jitter=120)
     scheduler.add_job(clear_old_activity_files, "interval", seconds=ONE_HOUR_IN_SECONDS)
     scheduler.start()
 
