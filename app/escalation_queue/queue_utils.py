@@ -4,7 +4,8 @@ from groundlight import Groundlight
 from model import ImageQuery
 
 from app.core.utils import get_formatted_timestamp_str, safe_call_sdk
-from app.escalation_queue.queue_writer import EscalationInfo, QueueWriter, SubmitImageQueryParams
+from app.escalation_queue.models import EscalationInfo, SubmitImageQueryParams
+from app.escalation_queue.queue_writer import QueueWriter
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ def write_escalation_to_queue(
         image_path_str=image_path_str,
         submit_iq_params=submit_iq_params,
     )
-    writer.write_escalation(escalation_info)  # TODO retry here?
+    writer.write_escalation(escalation_info)  # TODO retry here? catch error?
 
 
 def safe_escalate_with_queue_write(

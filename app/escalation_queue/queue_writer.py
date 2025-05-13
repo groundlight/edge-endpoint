@@ -2,30 +2,14 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any
 
 import ksuid
-from pydantic import BaseModel
 
 from app.core.utils import get_formatted_timestamp_str
 from app.escalation_queue.constants import DEFAULT_QUEUE_BASE_DIR, MAX_QUEUE_FILE_LINES
+from app.escalation_queue.models import EscalationInfo
 
 logger = logging.getLogger(__name__)
-
-
-class SubmitImageQueryParams(BaseModel):
-    patience_time: float | None
-    confidence_threshold: float
-    human_review: str | None
-    metadata: dict[str, Any] | None
-    image_query_id: str | None
-
-
-class EscalationInfo(BaseModel):
-    timestamp: str
-    detector_id: str
-    image_path_str: str
-    submit_iq_params: SubmitImageQueryParams
 
 
 class QueueWriter:

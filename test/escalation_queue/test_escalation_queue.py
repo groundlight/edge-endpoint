@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -15,9 +16,10 @@ from urllib3.exceptions import MaxRetryError
 from app.core.utils import get_formatted_timestamp_str
 from app.escalation_queue.constants import MAX_QUEUE_FILE_LINES, MAX_RETRY_ATTEMPTS
 from app.escalation_queue.manage_reader import consume_queued_escalation, read_from_escalation_queue
+from app.escalation_queue.models import EscalationInfo, SubmitImageQueryParams
 from app.escalation_queue.queue_reader import QueueReader
 from app.escalation_queue.queue_utils import safe_escalate_with_queue_write, write_escalation_to_queue
-from app.escalation_queue.queue_writer import EscalationInfo, QueueWriter, SubmitImageQueryParams
+from app.escalation_queue.queue_writer import QueueWriter
 
 ### Helper functions
 
@@ -29,7 +31,6 @@ def generate_test_submit_iq_params() -> SubmitImageQueryParams:
         confidence_threshold=0.9,
         human_review=None,
         metadata={"test_key": "test_value"},
-        image_query_id=None,
     )
 
 
@@ -50,6 +51,31 @@ def generate_test_escalation_info(
 
 def escalation_info_to_str(escalation_info: EscalationInfo) -> str:
     return f"{json.dumps(escalation_info.model_dump())}\n"
+
+
+def assert_correct_reader_tracking_format(reader: QueueReader) -> None:
+    """Assert that the reader's tracking file is formatted correctly. Passes if there is no such file."""
+    if reader.current_tracking_file_path is not None:
+        with reader.current_tracking_file_path.open(mode="r") as f:
+            lines = f.readlines()
+            if len(lines) >= 1:  # If there's at least one line in the file...
+                assert len(lines) == 1  # then there should be exactly one.
+                pattern = r"^1*$"  # The line should consist of any number of 1s
+                assert re.fullmatch(pattern, lines[0]) is not None, (
+                    f"The tracking file line: {lines[0]} did not match the expected pattern."
+                )
+
+
+def get_num_tracked_escalations(reader: QueueReader) -> int:
+    """
+    Get the number of escalations recorded in the reader's tracking file.
+    Returns 0 if there is no such file. Otherwise, returns the number of escalations as an int.
+    """
+    if reader.current_tracking_file_path is None:
+        return 0
+    with reader.current_tracking_file_path.open(mode="r") as f:
+        line = f.readline()
+        return len(line)
 
 
 ### Fixtures
@@ -180,19 +206,11 @@ class TestQueueWriter:
 class TestQueueReader:
     def assert_contents_of_next_read_line(
         self, reader: QueueReader, expected_result: EscalationInfo | None
-    ):  # TODO rename
+    ) -> None:  # TODO rename
         """Assert that the next read line matches the expected result."""
         next_escalation_str = reader.get_next_line()
         next_escalation = None if next_escalation_str is None else EscalationInfo(**json.loads(next_escalation_str))
         assert next_escalation == expected_result
-
-    def get_num_tracked_escalations(self, reader: QueueReader) -> int:
-        """Get the number of escalations recorded in the reader's tracking file. Returns 0 if there is no such file."""
-        if reader.current_tracking_file_path is None:
-            return 0
-        with reader.current_tracking_file_path.open(mode="r") as f:
-            line = f.readline()
-            return len(line)
 
     def test_read_with_empty_queue(self, reader: QueueReader):
         """Verify that the reader always returns None when there is nothing in the queue."""
@@ -206,7 +224,7 @@ class TestQueueReader:
 
         self.assert_contents_of_next_read_line(reader, test_escalation_info)
 
-        assert reader.current_file_path != written_to_path
+        assert reader.current_reading_file_path != written_to_path
         assert not written_to_path.exists()
 
     def test_reader_finds_new_file(
@@ -262,11 +280,11 @@ class TestQueueReader:
         for _ in range(num_lines):
             self.assert_contents_of_next_read_line(reader, test_escalation_info)
 
-        previous_reading_path = reader.current_file_path
+        previous_reading_path = reader.current_reading_file_path
         assert previous_reading_path is not None
 
         self.assert_contents_of_next_read_line(reader, None)
-        assert reader.current_file_path is None
+        assert reader.current_reading_file_path is None
         assert not previous_reading_path.exists()
 
     def test_reader_basic_tracking(
@@ -277,12 +295,18 @@ class TestQueueReader:
         for _ in range(num_lines):
             assert writer.write_escalation(test_escalation_info)
 
+        assert get_num_tracked_escalations(reader) == 0
+
         for i in range(num_lines):
             self.assert_contents_of_next_read_line(reader, test_escalation_info)
-            assert self.get_num_tracked_escalations(reader) == i + 1
+            assert_correct_reader_tracking_format(reader)
+            assert (
+                get_num_tracked_escalations(reader) == i
+            )  # Lags one behind because it only writes to the tracking file on the next read
 
         self.assert_contents_of_next_read_line(reader, None)
         assert reader.current_tracking_file_path is None
+        assert get_num_tracked_escalations(reader) == 0
 
 
 class TestConsumeQueuedEscalation:
@@ -365,21 +389,27 @@ class TestReadFromEscalationQueue:
         mock_consume_escalation.assert_not_called()
         mock_wait_for_connection.reset_mock()
         mock_consume_escalation.reset_mock()
+        assert_correct_reader_tracking_format(reader)
+        assert get_num_tracked_escalations(reader) == 0
 
         num_escalations = 3
-        test_escalations = [generate_test_escalation_info(detector_id=f"test_id_{i}") for i in range(num_escalations)]
-        for escalation in test_escalations:
-            assert writer.write_escalation(escalation)
+        test_escalation_infos = [
+            generate_test_escalation_info(detector_id=f"test_id_{i}") for i in range(num_escalations)
+        ]
+        for escalation_info in test_escalation_infos:
+            assert writer.write_escalation(escalation_info)
 
         mock_consume_escalation.return_value = (Mock(), False)
 
         # Ensure the escalations we wrote get consumed
-        for escalation in test_escalations:
+        for i, escalation_info in enumerate(test_escalation_infos):
             read_from_escalation_queue(reader)
             mock_wait_for_connection.assert_called_once()
-            mock_consume_escalation.assert_called_once_with(escalation_info_to_str(escalation))
+            mock_consume_escalation.assert_called_once_with(escalation_info_to_str(escalation_info))
             mock_wait_for_connection.reset_mock()
             mock_consume_escalation.reset_mock()
+            assert_correct_reader_tracking_format(reader)
+            assert get_num_tracked_escalations(reader) == i
 
         # Nothing more in the queue to read
         read_from_escalation_queue(reader)
@@ -387,6 +417,8 @@ class TestReadFromEscalationQueue:
         mock_consume_escalation.assert_not_called()
         mock_wait_for_connection.reset_mock()
         mock_consume_escalation.reset_mock()
+        assert_correct_reader_tracking_format(reader)
+        assert get_num_tracked_escalations(reader) == 0
 
         # Write another escalation and ensure it gets consumed
         test_escalation_info = generate_test_escalation_info()
@@ -394,6 +426,8 @@ class TestReadFromEscalationQueue:
         read_from_escalation_queue(reader)
         mock_wait_for_connection.assert_called_once()
         mock_consume_escalation.assert_called_once_with(escalation_info_to_str(test_escalation_info))
+        assert_correct_reader_tracking_format(reader)
+        assert get_num_tracked_escalations(reader) == 0  # TODO this is confusing
 
     def test_queue_management_retries_successfully(
         self,

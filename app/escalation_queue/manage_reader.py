@@ -10,8 +10,8 @@ from urllib3.exceptions import MaxRetryError
 
 from app.core.utils import safe_call_sdk, wait_for_network_connection
 from app.escalation_queue.constants import MAX_RETRY_ATTEMPTS
+from app.escalation_queue.models import EscalationInfo
 from app.escalation_queue.queue_reader import QueueReader
-from app.escalation_queue.queue_writer import EscalationInfo
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
@@ -93,6 +93,7 @@ def consume_queued_escalation(escalation_str: str, gl: Groundlight | None = None
 
 
 def read_from_escalation_queue(reader: QueueReader) -> None:
+    print("about to get next line")
     queued_escalation = reader.get_next_line()
     if queued_escalation is not None:
         retry_count = 0

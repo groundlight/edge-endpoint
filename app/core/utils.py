@@ -78,7 +78,7 @@ def create_iq(  # noqa: PLR0913
 
     return ImageQuery(
         metadata={"is_from_edge": True},
-        id=prefixed_ksuid(prefix="iq_"),
+        id=generate_iq_id(),
         type=ImageQueryTypeEnum.image_query,
         created_at=datetime.now(timezone.utc),
         query=query,
@@ -299,6 +299,10 @@ def prefixed_ksuid(prefix: str | None = None) -> str:
     k = ksuid.KsuidMs()
     out = f"{prefix}{k}"
     return out
+
+
+def generate_iq_id() -> str:
+    return prefixed_ksuid(prefix="iq_")
 
 
 def pil_image_to_bytes(img: Image.Image, format: str = "JPEG") -> bytes:

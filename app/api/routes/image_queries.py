@@ -15,8 +15,8 @@ from app.core.app_state import (
 )
 from app.core.edge_inference import get_edge_inference_model_name
 from app.core.utils import create_iq, generate_metadata_dict
+from app.escalation_queue.models import SubmitImageQueryParams
 from app.escalation_queue.queue_utils import safe_escalate_with_queue_write, write_escalation_to_queue
-from app.escalation_queue.queue_writer import SubmitImageQueryParams
 from app.metrics.iq_activity import record_activity_for_metrics
 
 logger = logging.getLogger(__name__)
