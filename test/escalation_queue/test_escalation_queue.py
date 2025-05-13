@@ -61,9 +61,9 @@ def assert_correct_reader_tracking_format(reader: QueueReader) -> None:
             if len(lines) >= 1:  # If there's at least one line in the file...
                 assert len(lines) == 1  # then there should be exactly one.
                 pattern = r"^1*$"  # The line should consist of any number of 1s
-                assert re.fullmatch(pattern, lines[0]) is not None, (
-                    f"The tracking file line: {lines[0]} did not match the expected pattern."
-                )
+                assert (
+                    re.fullmatch(pattern, lines[0]) is not None
+                ), f"The tracking file line: {lines[0]} did not match the expected pattern."
 
 
 def get_num_tracked_escalations(reader: QueueReader) -> int:
