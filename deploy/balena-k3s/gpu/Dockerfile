@@ -12,7 +12,7 @@ FROM balenalib/genericx86-64-ext:bullseye-run-20211030
 
 # NOTE: see https://www.nvidia.com/en-us/drivers/unix/ for
 # the latest driver version
-ARG NVIDIA_DRIVER_VERSION="550.127.05"
+ARG NVIDIA_DRIVER_VERSION="570.133.07"
 
 WORKDIR /usr/src
 
