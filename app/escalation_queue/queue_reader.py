@@ -28,8 +28,10 @@ class QueueReader:
         self.current_tracking_file_path: Path | None = None
         self.continuing_from_tracking_file = False
 
-        self.tracking_file_regex = rf"{re.escape(TRACKING_FILE_NAME_PREFIX)}\d{{8}}_\d{{6}}_\d{{6}}-.{{27}}\.txt"
+        # This matches a timestamp in %Y%m%d_%H%M%S_%f format followed by a 27-character KSUID
         self.writing_file_regex = r"\d{8}_\d{6}_\d{6}-.{27}\.txt"
+        # This matches the same as the above, with the addition of the tracking file name prefix
+        self.tracking_file_regex = rf"{re.escape(TRACKING_FILE_NAME_PREFIX)}{self.writing_file_regex}"
 
         self._generator = self._get_line_generator()
 
