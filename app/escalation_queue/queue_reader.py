@@ -1,24 +1,37 @@
 import logging
 import os
+import re
+from itertools import islice
 from pathlib import Path
 from typing import Generator
 
-from app.escalation_queue.constants import DEFAULT_QUEUE_BASE_DIR
+from app.escalation_queue.constants import (
+    DEFAULT_QUEUE_BASE_DIR,
+    READING_DIR_SUFFIX,
+    TRACKING_FILE_NAME_PREFIX,
+    WRITING_DIR_SUFFIX,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class QueueReader:
+    """Manages reading escalation data from a file-based queue system."""
+
     def __init__(self, base_dir: str = DEFAULT_QUEUE_BASE_DIR):
-        self.base_reading_dir = Path(base_dir, "reading")
+        self.base_reading_dir = Path(base_dir, READING_DIR_SUFFIX)
         os.makedirs(self.base_reading_dir, exist_ok=True)  # Ensure base_reading_dir exists
-        self.base_writing_dir = Path(base_dir, "writing")  # It's okay if this doesn't exist (yet)
+        self.base_writing_dir = Path(base_dir, WRITING_DIR_SUFFIX)
+        os.makedirs(self.base_writing_dir, exist_ok=True)  # Ensure base_writing_dir exists
+
         self.current_reading_file_path: Path | None = None
         self.current_tracking_file_path: Path | None = None
+        self.continuing_from_tracking_file = False
+
+        self.tracking_file_regex = rf"{re.escape(TRACKING_FILE_NAME_PREFIX)}\d{{8}}_\d{{6}}_\d{{6}}-.{{27}}\.txt"
+        self.writing_file_regex = r"\d{8}_\d{6}_\d{6}-.{27}\.txt"
 
         self._generator = self._get_line_generator()
-
-        self.tracking_file_name_prefix = "tracking-"
 
     def get_next_line(self) -> str | None:
         """Returns the next line to be read, or None if there are no lines to read."""
@@ -28,10 +41,26 @@ class QueueReader:
             self._generator = self._get_line_generator()  # Recreate the generator so that it can look for a file again
             return None
 
+    def _get_num_tracked_escalations(self) -> int:
+        """
+        Returns the number of escalations recorded in the current tracking file. Returns 0 if there is no such file.
+        """
+        if self.current_tracking_file_path is None:
+            return 0
+        with self.current_tracking_file_path.open(mode="r") as f:
+            return len(f.readline())
+
     def _get_line_generator(self) -> Generator[str, None, None]:
         """
-        Generator for producing lines to be read.
-        The generator chooses a file, moves it to reading directory, reads all lines, repeats.
+        A generator for reading lines written to the escalation queue.
+
+        If there is no file currently being read from, a new file will be chosen and moved to the reading directory.
+        Then, each iteration will return the next line from that file until all lines have been read, at which point the
+        file being read from will be deleted.
+
+        Tracks the number of lines that have been read from the current file to support recovering from a failure or
+        reboot.
+
         If there aren't any files to read, raises StopIteration.
         """
         while True:
@@ -41,47 +70,64 @@ class QueueReader:
                     return  # Triggers a StopIteration exception
                 self.current_reading_file_path = new_file_path
                 self.current_tracking_file_path = self.current_reading_file_path.with_name(
-                    f"{self.tracking_file_name_prefix}{self.current_reading_file_path.name}"
+                    f"{TRACKING_FILE_NAME_PREFIX}{self.current_reading_file_path.name}"
                 )
+                self.continuing_from_tracking_file = continuing_from_tracking_file
 
             with (
                 self.current_reading_file_path.open(mode="r") as reading_fd,
                 self.current_tracking_file_path.open(mode="a") as tracking_fd,
             ):
-                for line in reading_fd:
-                    yield line  # TODO should we write some kind of "complete" symbol for tracking, after we yield?
-                    tracking_fd.write("1")  # Indicates the line has been consumed - don't want to revisit it
+                line_to_start_reading_from = 0
+                if self.continuing_from_tracking_file:
+                    num_previous_escalations = self._get_num_tracked_escalations()
+                    line_to_start_reading_from = num_previous_escalations
+
+                for line in islice(reading_fd, line_to_start_reading_from, None):
+                    yield line
+                    # NOTE that we write to the tracking file after we yield a line, meaning the below code won't be
+                    # executed until the next time the generator is called. This means that at any time, the tracking
+                    # file will have one less entry than has been read/returned from the reader. This is by design
+                    # because something might go wrong after the reader returns a line, causing it to not get escalated.
+                    # We don't want to lose that escalation, so we implement it this way. We allow the possibility of
+                    # reading the same line twice (and handle that case in the consumption code) while guaranteeing that
+                    # we don't miss any.
+                    tracking_fd.write("1")  # Indicates the line that we just yielded has been consumed
                     tracking_fd.flush()  # Write the tracking changes immediately
-                    print("just flushed a 1 to the tracking file")
                 self.current_reading_file_path.unlink()  # Delete file when done reading
-                self.current_tracking_file_path.unlink()  # Delete tracking file when done reading
+                self.current_tracking_file_path.unlink()
                 self.current_reading_file_path = None
                 self.current_tracking_file_path = None
 
     def _choose_new_file(self) -> tuple[None | Path, bool]:
         """
-        Returns a tuple. The first item is a path to the next chosen file to read from, or None if there are no
-        files in the base_writing_dir. If there are files present, the next chosen file will be the oldest one as
-        determined by filename. The second item is a bool which is True if the chosen file was found from an
-        unfinished tracking file, and False otherwise.
+        Attempts to choose a new file to read from.
+
+        Returns a tuple:
+        - The first item is a path to the chosen next file to read from, or None if there are no
+        files in the base writing directory. If there are multiple files present, the next chosen file will be the
+        oldest one as determined by filename.
+        - The second item is a bool which is True if the file was chosen from an unfinished tracking file, and False
+        otherwise.
         """
-        tracking_files = list(self.base_reading_dir.glob(f"{self.tracking_file_name_prefix}*_*-*.txt"))
+        tracking_files = [
+            path for path in self.base_reading_dir.iterdir() if re.fullmatch(self.tracking_file_regex, path.name)
+        ]
         if len(tracking_files) > 0:
-            logger.info("Found at least one unfinished tracking file. Choosing a random one and continuing from there.")
             tracking_path = tracking_files[0]
-            new_reading_path = Path(
-                tracking_path.parent, tracking_path.name.replace(self.tracking_file_name_prefix, "")
-            )
+            new_reading_path = Path(tracking_path.parent, tracking_path.name.replace(TRACKING_FILE_NAME_PREFIX, ""))
             return new_reading_path, True
 
-        queue_files = list(self.base_writing_dir.glob("*_*-*.txt"))  # TODO improve this?
+        queue_files = [
+            path for path in self.base_writing_dir.iterdir() if re.fullmatch(self.writing_file_regex, path.name)
+        ]
         if len(queue_files) == 0:
             return None, False
 
-        oldest_writing_path = Path(sorted(queue_files)[0])
+        oldest_writing_path = sorted(queue_files)[0]
         new_reading_path = (
             oldest_writing_path.replace(  # This will overwrite if the target path exists (which shouldn't happen)
-                oldest_writing_path.parent.parent / "reading" / oldest_writing_path.name
+                oldest_writing_path.parent.parent / READING_DIR_SUFFIX / oldest_writing_path.name
             )
         )
         return new_reading_path, False

@@ -59,6 +59,20 @@ def consume_queued_escalation(escalation_str: str, gl: Groundlight | None = None
 
     submit_iq_params = escalation_info.submit_iq_params
     try:
+        try:
+            safe_call_sdk(gl.get_image_query, id=submit_iq_params.image_query_id)
+            # If the get_image_query call succeeds, an IQ with the same ID exists in the cloud.
+            logger.info(
+                f"An image query with ID {submit_iq_params.image_query_id} already exists in the cloud, so we must "
+                "have already escalated it. Skipping this escalation to avoid creating a duplicate."
+            )
+            return None, False
+        except HTTPException as ex:
+            if ex.status_code != status.HTTP_404_NOT_FOUND:
+                # A 400 response indicates that no image query with the specified ID exists in the cloud, so we can
+                # proceed. We re-raise all other exceptions so that they're caught by the outer except blocks.
+                raise ex
+
         res = safe_call_sdk(
             gl.submit_image_query,
             detector=escalation_info.detector_id,
