@@ -78,7 +78,7 @@ def create_iq(  # noqa: PLR0913
 
     return ImageQuery(
         metadata={"is_from_edge": True},
-        id=prefixed_ksuid(prefix="iq_"),
+        id=generate_iq_id(),
         type=ImageQueryTypeEnum.image_query,
         created_at=datetime.now(timezone.utc),
         query=query,
@@ -145,6 +145,11 @@ def _mode_to_result_and_type(
         raise ValueError(f"Got unrecognized or unsupported detector mode: {mode}")
 
     return result_type, result
+
+
+def get_formatted_timestamp_str() -> str:
+    """Get the current datetime with the highest time precision available."""
+    return datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 
 
 connection_ttl_cache = TTLCache(maxsize=1, ttl=CONNECTION_STATUS_TTL_SECS)
@@ -294,6 +299,10 @@ def prefixed_ksuid(prefix: str | None = None) -> str:
     k = ksuid.KsuidMs()
     out = f"{prefix}{k}"
     return out
+
+
+def generate_iq_id() -> str:
+    return prefixed_ksuid(prefix="iq_")
 
 
 def pil_image_to_bytes(img: Image.Image, format: str = "JPEG") -> bytes:
