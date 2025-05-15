@@ -183,9 +183,9 @@ class TestQueueReader:
                 if len(lines) >= 1:  # If there's at least one line in the file...
                     assert len(lines) == 1  # then there should be exactly one...
                     pattern = r"^1*$"  # and the line should consist exclusively of any number of 1s.
-                    assert (
-                        re.fullmatch(pattern, lines[0]) is not None
-                    ), f"The tracking file line: {lines[0]} did not match the expected pattern."
+                    assert re.fullmatch(pattern, lines[0]) is not None, (
+                        f"The tracking file line: {lines[0]} did not match the expected pattern."
+                    )
 
     def assert_contents_of_next_read_line(self, reader: QueueReader, expected_result: EscalationInfo | None) -> None:
         """Testing function to assert that the next line produced by the reader matches the expected result."""
@@ -367,3 +367,10 @@ class TestQueueReader:
         self.assert_contents_of_next_read_line(second_reader, test_escalation_infos[2])
         # The reader should now have recorded two tracked escalations in the tracking file
         assert second_reader._get_num_tracked_escalations() == 2
+
+        # Now a new reader should continue from the 3rd written escalation in the partially-read file
+        third_reader = generate_queue_reader(test_base_dir)
+        self.assert_contents_of_next_read_line(third_reader, test_escalation_infos[2])
+        self.assert_contents_of_next_read_line(third_reader, test_escalation_infos[3])
+        # The reader should now have recorded three tracked escalations in the tracking file
+        assert third_reader._get_num_tracked_escalations() == 3
