@@ -136,6 +136,11 @@ def _mode_to_result_and_type(
     return result_type, result
 
 
+def get_formatted_timestamp_str() -> str:
+    """Get the current datetime with the highest time precision available."""
+    return datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+
+
 def safe_call_sdk(api_method: Callable, **kwargs):
     """
     This ensures that we correctly handle HTTP error status codes. In some cases,
