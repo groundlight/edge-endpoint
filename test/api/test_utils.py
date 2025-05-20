@@ -1,6 +1,8 @@
 from typing import Any
+from unittest import mock
 
 import pytest
+from fastapi import HTTPException
 from model import (
     BinaryClassificationResult,
     CountingResult,
@@ -21,6 +23,7 @@ from app.core.utils import (
     generate_metadata_dict,
     parse_model_info,
     prefixed_ksuid,
+    safe_call_sdk,
 )
 
 
@@ -364,3 +367,13 @@ class TestParseModelInfo:
         assert isinstance(primary_edge_model_info, ModelInfoNoBinary)
         assert isinstance(oodd_model_info, ModelInfoBase)
         assert isinstance(oodd_model_info, ModelInfoWithBinary)
+
+
+class TestSafeCallSdk:
+    def test_no_sdk_call_with_no_connection(self):
+        """Verifies that no SDK call is made when there is no network connection."""
+        with mock.patch("app.core.utils.wait_for_network_connection", return_value=False):
+            with pytest.raises(HTTPException):
+                mock_callable = mock.Mock()
+                safe_call_sdk(mock_callable)
+                mock_callable.assert_not_called()
