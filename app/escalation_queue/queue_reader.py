@@ -112,6 +112,8 @@ class QueueReader:
         - The second item is a bool which is True if the file was chosen from an unfinished tracking file, and False
           otherwise.
         """
+        # First we look for tracking files, which will exist if the reader was interrupted while in the middle of
+        # processing a file. We finish processing the in-progress files before selecting newly written files.
         tracking_files = [
             path for path in self.base_reading_dir.iterdir() if re.fullmatch(self.tracking_file_regex, path.name)
         ]
@@ -120,6 +122,7 @@ class QueueReader:
             new_reading_path = Path(tracking_path.parent, tracking_path.name.replace(TRACKING_FILE_NAME_PREFIX, ""))
             return new_reading_path, True
 
+        # If there were no tracking files, we look for fresh files to process and select the oldest one.
         queue_files = [
             path for path in self.base_writing_dir.iterdir() if re.fullmatch(self.writing_file_regex, path.name)
         ]

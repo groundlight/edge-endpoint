@@ -183,9 +183,9 @@ class TestQueueReader:
                 if len(lines) >= 1:  # If there's at least one line in the file...
                     assert len(lines) == 1  # then there should be exactly one...
                     pattern = r"^1*$"  # and the line should consist exclusively of any number of 1s.
-                    assert (
-                        re.fullmatch(pattern, lines[0]) is not None
-                    ), f"The tracking file line: {lines[0]} did not match the expected pattern."
+                    assert re.fullmatch(pattern, lines[0]) is not None, (
+                        f"The tracking file line: {lines[0]} did not match the expected pattern."
+                    )
 
     def assert_contents_of_next_read_line(self, reader: QueueReader, expected_result: EscalationInfo | None) -> None:
         """Testing function to assert that the next line produced by the reader matches the expected result."""
@@ -325,6 +325,23 @@ class TestQueueReader:
         assert second_reader.current_reading_file_path == reading_file_in_progress
         assert second_reader.current_tracking_file_path == tracking_file_in_progress
         assert second_reader._get_num_tracked_escalations() == 1
+
+    def test_reader_selects_empty_tracking_file(
+        self, test_base_dir: str, test_writer: QueueWriter, test_escalation_info: EscalationInfo
+    ):
+        """Verify that the reader will select a tracking file even if it contains no tracked escalations."""
+        assert test_writer.write_escalation(test_escalation_info)
+        first_reader = generate_queue_reader(test_base_dir)
+        first_reader.get_next_line()
+        first_tracking_file_path = first_reader.current_tracking_file_path
+
+        # Now there should be an empty tracking file created by the first reader, which the second reader should select
+        assert test_writer.write_escalation(test_escalation_info)
+        second_reader = generate_queue_reader(test_base_dir)
+        second_reader.get_next_line()
+        assert second_reader.current_tracking_file_path is not None
+        assert second_reader.current_tracking_file_path == first_tracking_file_path
+        assert second_reader._get_num_tracked_escalations() == 0
 
     def test_reader_starts_from_correct_intermediate_line(self, test_base_dir: str, test_writer: QueueWriter):
         """Verify that the reader starts at the right spot when resuming from a partially finished file."""
