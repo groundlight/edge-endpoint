@@ -183,9 +183,9 @@ class TestQueueReader:
                 if len(lines) >= 1:  # If there's at least one line in the file...
                     assert len(lines) == 1  # then there should be exactly one...
                     pattern = r"^1*$"  # and the line should consist exclusively of any number of 1s.
-                    assert re.fullmatch(pattern, lines[0]) is not None, (
-                        f"The tracking file line: {lines[0]} did not match the expected pattern."
-                    )
+                    assert (
+                        re.fullmatch(pattern, lines[0]) is not None
+                    ), f"The tracking file line: {lines[0]} did not match the expected pattern."
 
     def assert_contents_of_next_read_line(self, reader: QueueReader, expected_result: EscalationInfo | None) -> None:
         """Testing function to assert that the next line produced by the reader matches the expected result."""
