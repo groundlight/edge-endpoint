@@ -107,10 +107,10 @@ class QueueReader:
 
         Returns a tuple:
         - The first item is a path to the chosen next file to read from, or None if there are no
-        files in the base writing directory. If there are multiple files present, the next chosen file will be the
-        oldest one as determined by filename.
+          files in the base writing directory. If there are multiple files present, the next chosen file will be the
+          oldest one as determined by filename.
         - The second item is a bool which is True if the file was chosen from an unfinished tracking file, and False
-        otherwise.
+          otherwise.
         """
         tracking_files = [
             path for path in self.base_reading_dir.iterdir() if re.fullmatch(self.tracking_file_regex, path.name)
