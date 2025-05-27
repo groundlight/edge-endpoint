@@ -172,6 +172,12 @@ class TestQueueWriter:
 
 
 class TestQueueReader:
+    def read_n_lines(self, reader: QueueReader, n: int) -> None:
+        """Helper function to read n lines from the reader by iterating through it."""
+        for i, _ in enumerate(reader):
+            if i + 1 >= n:
+                break
+
     def assert_correct_reader_tracking_format(self, reader: QueueReader) -> None:
         """
         Testing function to assert that the reader's tracking file is formatted correctly.
@@ -183,13 +189,13 @@ class TestQueueReader:
                 if len(lines) >= 1:  # If there's at least one line in the file...
                     assert len(lines) == 1  # then there should be exactly one...
                     pattern = r"^1*$"  # and the line should consist exclusively of any number of 1s.
-                    assert (
-                        re.fullmatch(pattern, lines[0]) is not None
-                    ), f"The tracking file line: {lines[0]} did not match the expected pattern."
+                    assert re.fullmatch(pattern, lines[0]) is not None, (
+                        f"The tracking file line: {lines[0]} did not match the expected pattern."
+                    )
 
     def assert_contents_of_next_read_line(self, reader: QueueReader, expected_result: EscalationInfo | None) -> None:
         """Testing function to assert that the next line produced by the reader matches the expected result."""
-        next_escalation_str = reader.get_next_line()
+        next_escalation_str = reader._get_next_line()
         next_escalation = None if next_escalation_str is None else EscalationInfo(**json.loads(next_escalation_str))
         assert next_escalation == expected_result
 
@@ -241,16 +247,16 @@ class TestQueueReader:
 
     def test_reader_selects_oldest_file(self, test_base_dir: str, test_reader: QueueReader):
         """Verify that the reader reads from the oldest file first."""
-        test_escalation_1 = generate_test_escalation_info(detector_id="test_id_1")
-        test_escalation_2 = generate_test_escalation_info(detector_id="test_id_2")
+        test_escalation_info_1 = generate_test_escalation_info(detector_id="test_id_1")
+        test_escalation_info_2 = generate_test_escalation_info(detector_id="test_id_2")
 
         first_writer = generate_queue_writer(test_base_dir)
         second_writer = generate_queue_writer(test_base_dir)
-        assert first_writer.write_escalation(test_escalation_1)
-        assert second_writer.write_escalation(test_escalation_2)
+        assert first_writer.write_escalation(test_escalation_info_1)
+        assert second_writer.write_escalation(test_escalation_info_2)
 
-        self.assert_contents_of_next_read_line(test_reader, test_escalation_1)
-        self.assert_contents_of_next_read_line(test_reader, test_escalation_2)
+        self.assert_contents_of_next_read_line(test_reader, test_escalation_info_1)
+        self.assert_contents_of_next_read_line(test_reader, test_escalation_info_2)
 
     def test_reader_deletes_finished_file(
         self, test_reader: QueueReader, test_writer: QueueWriter, test_escalation_info: EscalationInfo
@@ -307,8 +313,7 @@ class TestQueueReader:
             assert first_writer.write_escalation(test_escalation_info)
         # Read two lines from the file
         first_reader = generate_queue_reader(test_base_dir)
-        first_reader.get_next_line()
-        first_reader.get_next_line()
+        self.read_n_lines(first_reader, 2)
         # The reader should now have recorded one tracked escalation in the tracking file
         assert first_reader._get_num_tracked_escalations() == 1
         reading_file_in_progress = first_reader.current_reading_file_path
@@ -320,7 +325,7 @@ class TestQueueReader:
 
         # Ensure a new reader will choose the in progress file over the newly written file
         second_reader = generate_queue_reader(test_base_dir)
-        second_reader.get_next_line()
+        self.read_n_lines(second_reader, 1)
         assert second_reader.continuing_from_tracking_file
         assert second_reader.current_reading_file_path == reading_file_in_progress
         assert second_reader.current_tracking_file_path == tracking_file_in_progress
@@ -332,13 +337,13 @@ class TestQueueReader:
         """Verify that the reader will select a tracking file even if it contains no tracked escalations."""
         assert test_writer.write_escalation(test_escalation_info)
         first_reader = generate_queue_reader(test_base_dir)
-        first_reader.get_next_line()
+        self.read_n_lines(first_reader, 1)
         first_tracking_file_path = first_reader.current_tracking_file_path
 
         # Now there should be an empty tracking file created by the first reader, which the second reader should select
         assert test_writer.write_escalation(test_escalation_info)
         second_reader = generate_queue_reader(test_base_dir)
-        second_reader.get_next_line()
+        self.read_n_lines(second_reader, 1)
         assert second_reader.current_tracking_file_path is not None
         assert second_reader.current_tracking_file_path == first_tracking_file_path
         assert second_reader._get_num_tracked_escalations() == 0
@@ -352,8 +357,8 @@ class TestQueueReader:
 
         # Read two lines from the file
         first_reader = generate_queue_reader(test_base_dir)
-        first_reader.get_next_line()
-        first_reader.get_next_line()
+        self.read_n_lines(first_reader, 2)
+
         # The reader should now have recorded one tracked escalation in the tracking file
         assert first_reader._get_num_tracked_escalations() == 1
 
@@ -391,3 +396,40 @@ class TestQueueReader:
         self.assert_contents_of_next_read_line(third_reader, test_escalation_infos[3])
         # The reader should now have recorded three tracked escalations in the tracking file
         assert third_reader._get_num_tracked_escalations() == 3
+
+    def test_reader_as_generator_basic_reading(
+        self, test_reader: QueueReader, test_writer: QueueWriter, test_escalation_info: EscalationInfo
+    ):
+        """Verify that the reader can be iterated through as a generator for basic reading from a single file."""
+        num_lines = 3
+        for _ in range(num_lines):
+            assert test_writer.write_escalation(test_escalation_info)
+
+        for i, escalation_str in enumerate(test_reader):
+            escalation = EscalationInfo(**json.loads(escalation_str))
+            assert escalation == test_escalation_info
+            if i + 1 >= num_lines:
+                break
+
+    def test_reader_as_generator_reading_from_multiple_files(self, test_base_dir: str, test_reader: QueueReader):
+        """Verify that the reader can be iterated through as a generator for reading from multiple files."""
+        first_writer = generate_queue_writer(test_base_dir)
+        second_writer = generate_queue_writer(test_base_dir)
+        test_escalation_1 = generate_test_escalation_info(detector_id="test_id_1")
+        test_escalation_2 = generate_test_escalation_info(detector_id="test_id_2")
+
+        num_lines_per_writer = 3
+        for _ in range(num_lines_per_writer):
+            assert first_writer.write_escalation(test_escalation_1)
+            assert second_writer.write_escalation(test_escalation_2)
+
+        lines_to_read = num_lines_per_writer * 2
+        for i, escalation_str in enumerate(test_reader):
+            escalation = EscalationInfo(**json.loads(escalation_str))
+            if i + 1 <= num_lines_per_writer:
+                assert escalation == test_escalation_1
+            else:
+                assert escalation == test_escalation_2
+
+            if i + 1 >= lines_to_read:
+                break

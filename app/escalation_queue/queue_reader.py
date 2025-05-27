@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import time
 from itertools import islice
 from pathlib import Path
 from typing import Generator
@@ -33,14 +34,28 @@ class QueueReader:
         # This matches the same as the above, with the addition of the tracking file name prefix
         self.tracking_file_regex = rf"{re.escape(TRACKING_FILE_NAME_PREFIX)}{self.writing_file_regex}"
 
-        self._generator = self._get_line_generator()
+        self._line_generator = self._get_line_generator()
 
-    def get_next_line(self) -> str | None:
+    def __iter__(self):
+        return self._blocking_line_generator()
+
+    def _blocking_line_generator(self) -> Generator[str, None, None]:
+        """Generator that yields lines from the queue, blocking until a line is available."""
+        while True:
+            line = self._get_next_line()
+            if line is not None:
+                yield line
+            else:
+                time.sleep(0.1)
+
+    def _get_next_line(self) -> str | None:
         """Returns the next line to be read, or None if there are no lines to read."""
         try:
-            return next(self._generator)
+            return next(self._line_generator)
         except StopIteration:
-            self._generator = self._get_line_generator()  # Recreate the generator so that it can look for a file again
+            self._line_generator = (
+                self._get_line_generator()
+            )  # Recreate the generator so that it can look for a file again
             return None
 
     def _get_num_tracked_escalations(self) -> int:
