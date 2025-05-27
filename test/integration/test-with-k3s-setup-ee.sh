@@ -25,8 +25,6 @@ then
 
 fi
 
-echo $GROUNDLIGHT_ENDPOINT 
-
 # First create a detector to use for testing:
 export DETECTOR_ID=$(poetry run python test/integration/integration.py --mode create_detector)
 echo "created detector with id: $DETECTOR_ID"
@@ -37,6 +35,11 @@ export EDGE_ENDPOINT_PORT="30108"
 export INFERENCE_FLAVOR="CPU"
 export LIVE_TEST_ENDPOINT="http://localhost:$EDGE_ENDPOINT_PORT"
 export REFRESH_RATE=60 # not actually different than the default, but we may want to tweak this
+
+# Compute the image tag name before we muck with the config file so we get
+# the tag that will correspond to the current commit so it can match the image
+# that was built and pushed to ECR
+export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
 
 # update the config for this detector, such that we always take edge answers
 # but first, save the template to a temporary file
@@ -61,7 +64,6 @@ fi
 
 
 # Set up k3s with our image tag
-export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
 ./deploy/bin/setup-ee.sh
 # restore config file
 mv configs/edge-config.yaml.tmp configs/edge-config.yaml
@@ -114,7 +116,6 @@ fi
 
 echo "Inference deployment for detector $DETECTOR_ID has successfully rolled out."
 
-export EDGE_SETUP=1
-
+export EDGE_SETUP=1 # Setting this to 1 will make the integration tests use the edge endpoint
 ./test/integration/run_tests.sh
 

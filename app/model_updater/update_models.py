@@ -133,7 +133,7 @@ def manage_update_models(
 
     while True:
         start = time.time()
-        logger.info("Starting model update check for existing inference deployments.")
+        logger.debug("Starting model update check for existing inference deployments.")
         for detector_id in edge_inference_manager.detector_inference_configs.keys():
             try:
                 logger.debug(f"Checking new models and inference deployments for detector_id: {detector_id}")
@@ -143,19 +143,19 @@ def manage_update_models(
                     deployment_manager=deployment_manager,
                     db_manager=db_manager,
                 )
-                logger.info(f"Successfully updated model for detector_id: {detector_id}")
+                logger.debug(f"Successfully updated model for detector_id: {detector_id}")
             except Exception as e:
-                logger.error(f"Failed to update model for detector_id: {detector_id}. Error: {e}", exc_info=True)
+                logger.info(f"Failed to update model for detector_id: {detector_id}. Error: {e}", exc_info=True)
 
         elapsed_s = time.time() - start
-        logger.info(f"Model update check completed in {elapsed_s:.2f} seconds.")
+        logger.debug(f"Model update check completed in {elapsed_s:.2f} seconds.")
         if elapsed_s < refresh_rate:
             sleep_duration = refresh_rate - elapsed_s
-            logger.info(f"Sleeping for {sleep_duration:.2f} seconds before next update cycle.")
+            logger.debug(f"Sleeping for {sleep_duration:.2f} seconds before next update cycle.")
             time.sleep(sleep_duration)
 
         # Fetch detector IDs that need to be deployed from the database and add them to the config
-        logger.info("Fetching undeployed detector IDs from the database.")
+        logger.debug("Fetching undeployed detector IDs from the database.")
         undeployed_detector_ids = db_manager.get_inference_deployment_records(deployment_created=False)
         if undeployed_detector_ids:
             logger.info(f"Found {len(undeployed_detector_ids)} undeployed detectors. Updating inference config.")
@@ -165,24 +165,26 @@ def manage_update_models(
                     detector_id=detector_record.detector_id, api_token=detector_record.api_token
                 )
         else:
-            logger.info("No undeployed detectors found.")
+            logger.debug("No undeployed detectors found.")
 
         # Update the status of the inference deployments in the database
         deployment_records = db_manager.get_inference_deployment_records()
-        for record in deployment_records:
-            primary_deployment_name = get_edge_inference_deployment_name(record.detector_id)
-            oodd_deployment_name = get_edge_inference_deployment_name(record.detector_id, is_oodd=True)
+        # using a set to only get unique detector_ids
+        deployed_detector_ids = set(record.detector_id for record in deployment_records)
+        for detector_id in deployed_detector_ids:
+            primary_deployment_name = get_edge_inference_deployment_name(detector_id)
+            oodd_deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd=True)
             primary_deployment_created = (
                 deployment_manager.get_inference_deployment(primary_deployment_name) is not None
             )
             oodd_deployment_created = deployment_manager.get_inference_deployment(oodd_deployment_name) is not None
 
             db_manager.update_inference_deployment_record(
-                model_name=get_edge_inference_model_name(record.detector_id, is_oodd=False),
+                model_name=get_edge_inference_model_name(detector_id, is_oodd=False),
                 fields_to_update={"deployment_created": primary_deployment_created},
             )
             db_manager.update_inference_deployment_record(
-                model_name=get_edge_inference_model_name(record.detector_id, is_oodd=True),
+                model_name=get_edge_inference_model_name(detector_id, is_oodd=True),
                 fields_to_update={"deployment_created": oodd_deployment_created},
             )
 

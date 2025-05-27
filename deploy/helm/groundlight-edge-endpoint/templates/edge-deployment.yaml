@@ -60,35 +60,16 @@ spec:
         command: ["/bin/bash", "/groundlight-edge/deploy/bin/setup_db.sh"]
 
       containers:
-      - name: edge-endpoint
+      - name: nginx
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        command: ["nginx", "-g", "daemon off;"]
         ports:
         - containerPort: 30101
-        env:
-        - name: LOG_LEVEL
-          value: "INFO"
-        # We need this feature flag since we run the edge logic server in two separate environments:
-        # 1. In docker (on the GitHub Actions runner) for testing
-        # 2. In kubernetes (currently a dedicated EC2 instance)
-        # This feature flag is basically good for knowing when to use the python kubernetes API
-        # (i.e., creating deployments, etc.). We don't want to use the python kubernetes API
-        # if we are only running the edge logic server in docker.
-        # TODO: Once we have kubernetes-based tests, we can remove this feature flag.
-        - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
-          value: "1"
-        - name: GROUNDLIGHT_ENDPOINT
-          value: "{{ .Values.upstreamEndpoint }}"
         volumeMounts:
-        - name: edge-config-volume
-          mountPath: /etc/groundlight/edge-config
         - name: nginx-config-volume
           mountPath: /etc/nginx/nginx.conf
           subPath: nginx.conf
-        - name: edge-endpoint-persistent-volume
-          mountPath: /opt/groundlight/edge/sqlite
-        - name: device-info-volume
-          mountPath: /opt/groundlight/device
         startupProbe:
           httpGet:
             path: /health/live  # Checks if the server is up
@@ -111,6 +92,35 @@ spec:
           periodSeconds: 10
           failureThreshold: 4  # after 40 seconds of failure, restart the pod
 
+      - name: edge-endpoint
+        image: *edgeEndpointImage
+        imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        env:
+        - name: LOG_LEVEL
+          value: {{ .Values.logLevel | quote }}
+        # We need this feature flag since we run the edge logic server in two separate environments:
+        # 1. In docker (on the GitHub Actions runner) for testing
+        # 2. In kubernetes (currently a dedicated EC2 instance)
+        # This feature flag is basically good for knowing when to use the python kubernetes API
+        # (i.e., creating deployments, etc.). We don't want to use the python kubernetes API
+        # if we are only running the edge logic server in docker.
+        # TODO: Once we have kubernetes-based tests, we can remove this feature flag.
+        - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
+          value: "1"
+        - name: GROUNDLIGHT_ENDPOINT
+          value: "{{ .Values.upstreamEndpoint }}"
+        volumeMounts:
+        - name: edge-config-volume
+          mountPath: /etc/groundlight/edge-config
+        # TODO: Remove this once we have have removed nginx from the container
+        - name: nginx-config-volume
+          mountPath: /etc/nginx/nginx.conf
+          subPath: dummy-nginx.conf
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/sqlite
+        - name: device-info-volume
+          mountPath: /opt/groundlight/device
+
       - name: status-monitor
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
@@ -119,13 +129,15 @@ spec:
         command: ["./app/bin/launch-status-monitor.sh"]
         env:
         - name: LOG_LEVEL
-          value: "INFO"
+          value: {{ .Values.logLevel | quote }}
         - name: GROUNDLIGHT_API_TOKEN
           valueFrom:
             secretKeyRef:
               name: groundlight-api-token
               key: GROUNDLIGHT_API_TOKEN
               optional: true
+        - name: INFERENCE_FLAVOR
+          value: "{{ .Values.inferenceFlavor }}"
         volumeMounts:
           - name: edge-config-volume
             mountPath: /etc/groundlight/edge-config
@@ -139,7 +151,7 @@ spec:
         args: ["poetry run python -m app.model_updater.update_models"]
         env:
         - name: LOG_LEVEL
-          value: "INFO"
+          value: {{ .Values.logLevel | quote }}
         - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
           value: "1"
         - name: GROUNDLIGHT_ENDPOINT

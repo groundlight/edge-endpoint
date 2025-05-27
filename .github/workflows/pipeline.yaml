@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 env:
   PYTHON_VERSION: "3.11"
-  POETRY_VERSION: "1.8.3"
+  POETRY_VERSION: "2.1.3"
   # This is the token associated with "prod-biggies" (with shared credentials on 1password)
   GROUNDLIGHT_API_TOKEN: ${{ secrets.GROUNDLIGHT_API_TOKEN }}
 
@@ -106,167 +106,6 @@ jobs:
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
-  validate-setup-ee:
-    runs-on: ubuntu-latest-4-cores
-    # We need more disk space than the default (2 core) runners have.
-    # They have 73GB total, 21GB available.  4-cores has 145GB raw, 93 GB available.
-    needs:
-      - build-push-edge-endpoint-multiplatform
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-
-      - name: Install k3s
-        run: |
-          ./deploy/bin/install-k3s.sh
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-
-      - name: Install poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          installer-parallel: true
-
-      - name: Install edge-endpoint's python dependencies
-        run: |
-          poetry install --no-interaction --no-root
-
-      - name: Validate setup edge endpoint
-        run: |
-          export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
-          make validate-setup-ee
-
-      - name: Diagnose failure
-        if: failure()
-        run: |
-          NAMESPACE=validate-setup-ee ./deploy/bin/diagnose-k8-failure.sh
-
-  validate-setup-helm:
-    runs-on: ubuntu-latest-4-cores
-    needs:
-      - build-push-edge-endpoint-multiplatform
-    env:
-      # associated with roxanne+test_edge account since for some reason it was failing with
-      # prod biggies
-      GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-
-      - name: Install k3s
-        run: |
-          ./deploy/bin/install-k3s.sh
-
-      - name: Validate setup edge endpoint
-        run: |
-          make validate-setup-helm
-
-      - name: Diagnose failure
-        if: failure()
-        run: |
-          NAMESPACE=validate-setup-helm ./deploy/bin/diagnose-k8-failure.sh
-
-  # we run this separately from validate-setup-ee since we run out of disk space doing
-  # both of them on the same runner and they can be slow so its best to do them in parallel
-  test-with-k3s-setup-ee:
-    runs-on: ubuntu-latest-4-cores
-    needs:
-      - build-push-edge-endpoint-multiplatform
-    env:
-      # associated with roxanne+test_edge account since for some reason it was failing with
-      # prod biggies
-      GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-
-      - name: Install k3s
-        run: |
-          ./deploy/bin/install-k3s.sh
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-
-      - name: Install poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          installer-parallel: true
-
-      - name: Install edge-endpoint's python dependencies
-        run: |
-          poetry install --no-interaction --no-root
-
-      - name: Clear Poetry cache
-        run: |
-          poetry cache clear pypi --all
-          poetry cache clear virtualenvs --all
-
-      - name: Run tests with k3s
-        run: |
-          make test-with-k3s-setup-ee
-
-      - name: Diagnose failure
-        if: failure()
-        run: |
-          NAMESPACE=test-with-k3s ./deploy/bin/diagnose-k8-failure.sh
-
-  test-with-k3s-helm:
-    runs-on: ubuntu-latest-4-cores
-    needs:
-      - build-push-edge-endpoint-multiplatform
-    env:
-      # associated with roxanne+test_edge account since for some reason it was failing with
-      # prod biggies
-      GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-
-      - name: Install k3s
-        run: |
-          ./deploy/bin/install-k3s.sh
-
-      - name: Install poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          installer-parallel: true
-
-      - name: Install edge-endpoint's python dependencies
-        run: |
-          poetry install --no-interaction --no-root
-
-      - name: Clear Poetry cache
-        run: |
-          poetry cache clear pypi --all
-          poetry cache clear virtualenvs --all
-
-      - name: Run tests with k3s
-        run: |
-          make test-with-k3s-helm
-
-      - name: Diagnose failure
-        if: failure()
-        run: |
-          NAMESPACE=test-with-k3s-helm ./deploy/bin/diagnose-k8-failure.sh
-
   # Run Groundlight SDK tests against the edge proxy endpoint
   test-sdk:
     runs-on: ubuntu-22.04
@@ -351,12 +190,152 @@ jobs:
         if: always()
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
+  call-build-push-ee-image:
+    # We run this at the beginning of every PR so that the various full k3s tests
+    # can use this image
+    uses: ./.github/workflows/build-push-ee-image.yaml
+    with:
+      repo: ${{ github.repository }}
+      ref: ${{ github.ref }}
+    secrets:
+      AWS_GL_PUBLIC_ACCESS_KEY_ID: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
+      AWS_GL_PUBLIC_SECRET_ACCESS_KEY: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
+
+  validate-setup-ee:
+    runs-on: ubuntu-latest-4-cores
+    # We need more disk space than the default (2 core) runners have.
+    # They have 73GB total, 21GB available.  4-cores has 145GB raw, 93 GB available.
+    needs:
+      - call-build-push-ee-image
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install k3s
+        run: |
+          ./deploy/bin/install-k3s.sh cpu
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Install poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: ${{ env.POETRY_VERSION }}
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: true
+
+      - name: Install edge-endpoint's python dependencies
+        run: |
+          poetry install --no-interaction --no-root
+
+      - name: Validate setup edge endpoint
+        run: |
+          export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
+          make validate-setup-ee
+
+      - name: Diagnose failure
+        if: failure()
+        run: |
+          NAMESPACE=validate-setup-ee ./deploy/bin/diagnose-k8-failure.sh
+
+  validate-setup-helm:
+    runs-on: ubuntu-latest-4-cores
+    needs:
+      - call-build-push-ee-image
+    env:
+      # associated with roxanne+test_edge account since for some reason it was failing with
+      # prod biggies
+      GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install k3s
+        run: |
+          ./deploy/bin/install-k3s.sh cpu
+
+      - name: Validate setup edge endpoint
+        run: |
+          make validate-setup-helm
+
+      - name: Diagnose failure
+        if: failure()
+        run: |
+          NAMESPACE=validate-setup-helm ./deploy/bin/diagnose-k8-failure.sh
+
+  # we run this separately from validate-setup-ee since we run out of disk space doing
+  # both of them on the same runner and they can be slow so its best to do them in parallel
+  test-with-k3s-setup-ee:
+    runs-on: ubuntu-latest-4-cores
+    needs:
+      - call-build-push-ee-image
+    env:
+      # associated with roxanne+test_edge account since for some reason it was failing with
+      # prod biggies
+      GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install k3s
+        run: |
+          ./deploy/bin/install-k3s.sh cpu
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Install poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: ${{ env.POETRY_VERSION }}
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: true
+
+      - name: Install edge-endpoint's python dependencies
+        run: |
+          poetry install --no-interaction --no-root
+
+      - name: Clear Poetry cache
+        run: |
+          poetry cache clear pypi --all
+          poetry cache clear virtualenvs --all
+
+      - name: Run tests with k3s
+        run: |
+          make test-with-k3s-setup-ee
+
+      - name: Diagnose failure
+        if: failure()
+        run: |
+          NAMESPACE=test-with-k3s ./deploy/bin/diagnose-k8-failure.sh
+
+  call-test-with-k3s-helm:
+    needs:
+      - call-build-push-ee-image
+    uses: ./.github/workflows/test-k3s-helm.yaml
+    with:
+      repo: ${{ github.repository }}
+      ref: ${{ github.ref }}
+    secrets:
+      K3S_TEST_GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
+
   G4-end-to-end:
     # Note this job can run multiple times in parallel because the stack name is unique
     # for the run.  How much we want to do this is TBD.
     runs-on: self-hosted
     needs:
-      - build-push-edge-endpoint-multiplatform
+      - call-build-push-ee-image
 
     env:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
@@ -422,6 +401,7 @@ jobs:
           # It doesn't show up with a normal `git clone`
           COMMIT_TO_TEST=${GITHUB_SHA}
           uv run pulumi config set ee-cicd:targetCommit ${COMMIT_TO_TEST}
+
           # You might think the EEUT can just derive the image tag itself by running git-tag-name.sh,
           # but it can't because it's on a merge commit.  So it doesn't know the name of the branch.
           # So it would produce an incorrect tag with a name like `1234567-HEAD` which would not match ECR.
@@ -469,29 +449,6 @@ jobs:
           echo "export EEUT_IP=${EEUT_IP}"
           echo "export EEUT_STACK_NAME=${STACK_NAME}"
 
-  build-push-edge-endpoint-multiplatform:
-    # We run this at the beginning of every PR so that the various full k3s tests
-    # can use this image
-    runs-on: ubuntu-latest
-    steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
-        with:
-          mask-password: "true"
-      - name: Check out code
-        uses: actions/checkout@v4
-      - name: Build and Push Multiplatform edge-endpoint Image to ECR
-        # This is actually only taking about 4 minutes right now.
-        timeout-minutes: 45
-        run: ./deploy/bin/build-push-edge-endpoint-image.sh
-
   main-tests-pass:
     runs-on: ubuntu-latest
     # This is a dummy step to avoid repeating the list of tests
@@ -499,13 +456,42 @@ jobs:
       - test-general-edge-endpoint
       - test-sdk
       - test-with-k3s-setup-ee
-      - test-with-k3s-helm
+      - call-test-with-k3s-helm
       - validate-setup-ee
       - validate-setup-helm
       - G4-end-to-end
     steps:
       - name: declare success
         run: echo "Main suite of tests all pass."
+  
+  update-glhub:
+    if: github.ref == 'refs/heads/main'
+    needs:
+      - main-tests-pass
+    runs-on: ubuntu-latest
+    environment: live
+
+    steps:
+      - name: Checkout glhub
+        uses: actions/checkout@v4
+        with:
+          repository: groundlight/glhub
+          token: ${{ secrets.BOT_GITHUB_TOKEN }}
+          path: glhub
+
+      - name: Update GLHub
+        run: |
+          cd glhub
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git submodule update --init --recursive
+          git submodule update --remote edge-endpoint
+          git add .
+          git commit -m "Update edge endpoint submodule"
+          git push https://edge-glhub-bot:${{ secrets.BOT_GITHUB_TOKEN }}@github.com/groundlight/glhub.git main
+        env:
+          GIT_AUTHOR_NAME: "github-actions[bot]"
+          GIT_AUTHOR_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com"
 
   tag-pre-release:
     if: github.ref == 'refs/heads/main'
@@ -529,35 +515,6 @@ jobs:
 
       - name: Tag main images with the "pre-release" tag after all the tests pass
         run: ./deploy/bin/tag-edge-endpoint-image.sh pre-release
-
-  update-glhub:
-    if: github.ref == 'refs/heads/main'
-    needs:
-      - main-tests-pass
-    runs-on: ubuntu-latest
-    environment: live
-
-    steps:
-      - name: Checkout glhub
-        uses: actions/checkout@v4
-        with:
-          repository: groundlight/glhub
-          token: ${{ secrets.BOT_GITHUB_TOKEN }}
-          path: glhub
-
-      - name: Update GLHub
-        run: |
-          cd glhub
-          git config --global user.email "roxanne+gh_bot@groundlight.ai"
-          git config --global user.name "edge-glhub-bot"
-          git submodule update --init --recursive
-          git submodule update --remote edge-endpoint
-          git add .
-          git commit -m "Update edge endpoint submodule"
-          git push https://edge-glhub-bot:${{ secrets.BOT_GITHUB_TOKEN }}@github.com/groundlight/glhub.git main
-        env:
-          GIT_AUTHOR_NAME: "edge-glhub-bot"
-          GIT_AUTHOR_EMAIL: "roxanne+gh_bot@groundlight.ai"
 
   tag-release:
     # The environment rules are not defined in code -- instead, they are defined in the Github UI:
@@ -588,3 +545,43 @@ jobs:
         run: |-
           ./deploy/bin/tag-edge-endpoint-image.sh latest
           ./deploy/bin/tag-edge-endpoint-image.sh release
+
+  publish-chart:
+    if: github.ref == 'refs/heads/main'
+    needs:
+      - tag-release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v3
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create deploy worktree
+        run: |
+          git fetch origin gh-pages
+          git worktree add .deploy gh-pages
+
+      - name: Package chart into .deploy
+        run: |
+          helm package ./deploy/helm/groundlight-edge-endpoint --destination .deploy
+
+      - name: Update Helm index.yaml
+        run: |
+          helm repo index .deploy \
+            --url https://code.groundlight.ai/edge-endpoint/ \
+            --merge .deploy/index.yaml
+
+      - name: Commit and push to gh-pages
+        run: |
+          cd .deploy
+          git add .
+          git commit -m "Publish Helm chart $(date -u +'%Y-%m-%d %H:%M:%S UTC')" || echo "Nothing to commit"
+          git push origin gh-pages

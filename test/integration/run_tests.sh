@@ -48,6 +48,12 @@ else
     exit 1
 fi
 
-echo now we check if the edge model performs well...
+# NOTE this is temporarily reworded because the current implementation of OODD makes this unreliable.
+# echo Now we check if the edge model performs well...
+echo Now we check that we can submit queries to the new inference pod...
 poetry run python test/integration/integration.py -m final -d $DETECTOR_ID
+
+echo Now checking that the edge metrics status page is available...
+poetry run python test/integration/status.py
+
 echo All tests pass :D

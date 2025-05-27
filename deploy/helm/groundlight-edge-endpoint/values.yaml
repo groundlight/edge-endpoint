@@ -25,7 +25,7 @@ imagePullPolicy: "Always"
 # namespace if you've overriden the default value).
 edgeEndpointPort: 30101
 
-# This is used as the base of the name for the PeristentVolume. The full name of the volume is 
+# This is used as the base of the name for the PersistentVolume. The full name of the volume is 
 # created by appending the namespace to this value. Generally, this should not be overridden.
 # The PersistentVolume is used to store the model files and other data that the Edge Endpoint wants
 # to persist between restarts. It is mapped to `/opt/groundlight/edge` on the host.
@@ -44,16 +44,13 @@ groundlightApiToken: ""
 # you can override this value.
 upstreamEndpoint: "https://api.groundlight.ai"
 
-# TODO: remove these values once we retrieve them from Janzu
-# The user must provide the AWS Access Key Id as input or the deployment will fail
-awsAccessKeyId: ""
-# The user must provide the AWS Secret Access Key as input or the deployment will fail
-awsSecretAccessKey: ""
-
 # Currently, all Groundlight services are deployed in the us-west-2 region
 awsRegion: "us-west-2"
 
 ecrRegistry: "767397850842.dkr.ecr.us-west-2.amazonaws.com"
+
+# This sets the log level for all the containers, both edge endpoint and inference.
+logLevel: "INFO"
 
 # These values override the automated settings in _helpers.tpl to keep this short and sweet
 # Don't override these
