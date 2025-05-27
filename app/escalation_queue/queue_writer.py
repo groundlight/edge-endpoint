@@ -54,27 +54,39 @@ class QueueWriter:
 
         Returns True if the write succeeds and False otherwise.
         """
-        if (
-            not self.last_file_path
-            or not self.last_file_path.exists()
-            or self.num_lines_written_to_file >= MAX_QUEUE_FILE_LINES
-        ):
-            new_path = self._generate_new_path()
-            self.last_file_path = new_path
-            self.num_lines_written_to_file = 0
+        is_new_file = False
+        if self.last_file_path is None or self.num_lines_written_to_file >= MAX_QUEUE_FILE_LINES:
+            self._reset_to_new_file()
+            is_new_file = True
 
-        wrote_successfully = self._write_to_path(self.last_file_path, escalation_info)
+        wrote_successfully = self._write_to_path(self.last_file_path, escalation_info, is_new_file)
         if wrote_successfully:
             self.num_lines_written_to_file += 1
         return wrote_successfully
 
-    def _write_to_path(self, path_to_write_to: Path, data: EscalationInfo) -> bool:
+    def _write_to_path(self, path_to_write_to: Path, data: EscalationInfo, is_new_file: bool) -> bool:
         """Writes the provided data to the provided path. Returns True if the write succeeds and False otherwise."""
         try:
-            with path_to_write_to.open(
-                mode="a"
-            ) as writing_fd:  # TODO this could be optimized by opening each file only once, instead of on each write.
-                writing_fd.write(convert_escalation_info_to_str(data))
+            flags = os.O_WRONLY | os.O_APPEND
+            if is_new_file:
+                # If we know the file does not yet exist, we want to create it and open it.
+                flags |= os.O_CREAT
+                fd = os.open(path_to_write_to, flags)
+            else:
+                try:
+                    # If we think the file exists (because we wrote to it before) but aren't certain (because the reader
+                    # could have moved it), we assume it exists and try to open it for appending. If the file doesn't
+                    # exist, this will raise a FileNotFoundError.
+                    fd = os.open(path_to_write_to, flags)
+                except FileNotFoundError:
+                    # If the file doesn't exist (e.g., if the reader moved it) we reset to a new path.
+                    self._reset_to_new_file()
+                    flags |= os.O_CREAT
+                    fd = os.open(self.last_file_path, flags)
+
+            # TODO this could be optimized by opening each file only once, instead of on each write.
+            with os.fdopen(fd, "a") as f:
+                f.write(convert_escalation_info_to_str(data))
             return True
         except OSError as e:
             logger.error(f"Failed to write to {path_to_write_to} with error {e}.")
@@ -85,3 +97,9 @@ class QueueWriter:
         new_file_name = f"{get_formatted_timestamp_str()}-{ksuid.KsuidMs()}.txt"
         new_file_path = Path.joinpath(self.base_writing_dir, new_file_name)
         return new_file_path
+
+    def _reset_to_new_file(self) -> None:
+        """Generates a new path, sets the `last_file_path` to the new path, and resets the line number counter to 0."""
+        new_path = self._generate_new_path()
+        self.last_file_path = new_path
+        self.num_lines_written_to_file = 0
