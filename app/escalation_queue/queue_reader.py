@@ -54,6 +54,15 @@ class QueueReader:
                     # we don't miss any.
                     tracker.write("1")  # Indicates the line that we just yielded has been consumed
                     tracker.flush()  # Write the tracking changes immediately
+
+                # Wait briefly and attempt one final read in case a line was written during processing
+                time.sleep(0.1)
+                final_line = escalations.readline()
+                if final_line.strip():
+                    yield final_line
+                    tracker.write("1")
+                    tracker.flush()
+
             # Delete files when done reading
             data_path.unlink()
             tracker_path.unlink()
@@ -72,7 +81,7 @@ class QueueReader:
                 new_tracking_path = new_reading_path.with_name(f"{TRACKING_FILE_NAME_PREFIX}{new_reading_path.name}")
                 yield new_reading_path, new_tracking_path
             else:
-                self._sleep(0.1)
+                self._wait_for_file_check(0.1)
 
     def _choose_new_file(self) -> None | Path:
         """
@@ -107,9 +116,9 @@ class QueueReader:
 
         return new_reading_path
 
-    def _sleep(self, duration: float) -> None:
+    def _wait_for_file_check(self, duration: float) -> None:
         """
-        Sleeps for the specified duration.
+        Waits for the specified duration.
 
         This method is defined like this to avoid patching `time.sleep` directly in testing.
         """

@@ -189,21 +189,19 @@ class TestQueueReader:
     ):
         """Verify that the reader blocks until a file is available and then reads from it."""
         call_count = 0
-        num_sleep_calls = 3
+        num_wait_calls = 3
 
         def side_effect(duration: float) -> None:
             nonlocal call_count
             call_count += 1
-            if call_count >= num_sleep_calls:
+            if call_count >= num_wait_calls:
                 test_writer.write_escalation(test_escalation_info)
 
-        # To prevent indefinite blocking, patch the _sleep method to write an escalation after being called a certain
+        # To prevent indefinite blocking, patch the wait method to write an escalation after being called a certain
         # number of times.
-        with patch.object(test_reader, "_sleep", side_effect=side_effect) as mock_sleep:
+        with patch.object(test_reader, "_wait_for_file_check", side_effect=side_effect) as mock_wait:
             self.assert_expected_reader_output(test_reader, [test_escalation_info])
-            assert (
-                mock_sleep.call_count == num_sleep_calls
-            )  # Verify that the reader waited for the specified # of times
+            assert mock_wait.call_count == num_wait_calls  # Verify that the reader waited for the specified # of times
 
     def test_reader_moves_file(
         self, test_reader: QueueReader, test_writer: QueueWriter, test_escalation_info: EscalationInfo
