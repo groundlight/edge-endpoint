@@ -68,7 +68,7 @@ source "$VENV_PATH/bin/activate"
 
 # Install required dependencies
 echo "Installing dependencies..."
-pip install -r "$BASE_DIR/requirements.txt" || exit 1
+pip install --upgrade -r "$BASE_DIR/requirements.txt" || exit 1
 
 # Ensure run_cron.sh is executable
 chmod +x "$CRON_SCRIPT"

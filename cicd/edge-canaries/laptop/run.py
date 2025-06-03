@@ -16,9 +16,6 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     level=logging.INFO,
     datefmt="%Y-%m-%d %H:%M:%S",
-    # It seems one of framegrab's dependencies is overriding any logging config that we try to set here: See: https://github.com/groundlight/framegrab/pull/59
-    # force=True fixes this
-    force=True, 
 )
 
 logger = logging.getLogger(__name__)
@@ -69,11 +66,10 @@ for n in range(NUM_IMAGE_QUERIES):
         image=resized_frame,
         human_review="DEFAULT",
         wait=0.0,
-        confidence_threshold=0.75, # let's be conservative about escalation to keep inferences moving quickly
+        confidence_threshold=0.75,
     )
     inference_end = time.time()
     inference_duration = inference_end - inference_start
-    # logger.info(f'inference_duration: {inference_duration:.2f}')
     
     if inference_duration > MAX_EXPECTED_EDGE_INFERENCE_TIME_SEC:
         slow_query_count +=1
