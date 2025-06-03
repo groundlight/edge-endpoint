@@ -10,7 +10,7 @@ Each subdirectory contains an installation script, `install_cron.sh` that config
 
 To deploy on a laptop follow these steps:
 1. Flash Ubuntu onto the laptop. Ubuntu 22.04 is the recommended version. 24.04 does not work because it does not support the Nvidia container runtime.
-1. Install the Edge Endpoint on the laptop following the typical [deployment instructions](deploy/README.md). You don't need to do any special configurations. These tests rely on default configurations.
+1. Install the Edge Endpoint on the laptop following the typical [deployment instructions](deploy/README.md). Configure your detector with a edge_inference_config of `edge_answers_with_escalation`. Specific instructions for doing this can be found in [CONFIGURING-DETECTORS.md](CONFIGURING-DETECTORS.md)
 1. Install the cronjobs: `./laptop/install_cron.sh`. This script will set everything up and tell you where to find the logs. 
 
 ### Tips for getting the laptop to not suspend when lid closes
