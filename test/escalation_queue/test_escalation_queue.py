@@ -2,10 +2,9 @@ import json
 import os
 import shutil
 import tempfile
-from contextlib import contextmanager
 from pathlib import Path
-from typing import Callable, Generator, Iterator
-from unittest.mock import Mock, patch
+from typing import Generator, Iterator
+from unittest.mock import patch
 
 import ksuid
 import pytest
@@ -173,37 +172,15 @@ class TestQueueWriter:
 
 
 class TestQueueReader:
-    @contextmanager
-    def mock_sleep_with_delayed_action(
-        self, reader: QueueReader, action: Callable[[], None], trigger_after_calls: int
-    ) -> Generator[Mock, None, None]:
-        """
-        Context manager that mocks _sleep on a QueueReader and executes an action after N calls.
-
-        Args:
-            reader: The QueueReader instance to patch
-            action: Function to execute after trigger_after_calls
-            trigger_after_calls: Number of sleep calls before executing action
-
-        Returns:
-            The mock sleep object for additional assertions
-        """
-        call_count = 0
-
-        def side_effect(duration: float) -> None:
-            nonlocal call_count
-            call_count += 1
-            if call_count >= trigger_after_calls:
-                action()
-
-        with patch.object(reader, "_sleep", side_effect=side_effect) as mock_sleep:
-            yield mock_sleep
-
-            assert mock_sleep.call_count == trigger_after_calls
-
     def assert_expected_reader_output(
         self, reader_iter: QueueReader | Iterator[str], expected_values: list[EscalationInfo]
     ):
+        """
+        Helper function to assert that the reader produces an expected list of escalations.
+
+        The `reader_iter` argument can be either a QueueReader or an Iterator. The latter case allows previous iteration
+        progress to be preserved between calls.
+        """
         for value, escalation_str in zip(expected_values, reader_iter):
             assert EscalationInfo(**json.loads(escalation_str)) == value
 
@@ -211,10 +188,22 @@ class TestQueueReader:
         self, test_escalation_info: EscalationInfo, test_writer: QueueWriter, test_reader: QueueReader
     ):
         """Verify that the reader blocks until a file is available and then reads from it."""
-        with self.mock_sleep_with_delayed_action(
-            test_reader, lambda: test_writer.write_escalation(test_escalation_info), 3
-        ):
+        call_count = 0
+        num_sleep_calls = 3
+
+        def side_effect(duration: float) -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count >= num_sleep_calls:
+                test_writer.write_escalation(test_escalation_info)
+
+        # To prevent indefinite blocking, patch the _sleep method to write an escalation after being called a certain
+        # number of times.
+        with patch.object(test_reader, "_sleep", side_effect=side_effect) as mock_sleep:
             self.assert_expected_reader_output(test_reader, [test_escalation_info])
+            assert (
+                mock_sleep.call_count == num_sleep_calls
+            )  # Verify that the reader waited for the specified # of times
 
     def test_reader_moves_file(
         self, test_reader: QueueReader, test_writer: QueueWriter, test_escalation_info: EscalationInfo
@@ -262,16 +251,16 @@ class TestQueueReader:
         reading_dir = test_reader.base_reading_dir
         assert reading_dir.is_dir() and not any(reading_dir.iterdir())
 
-        num_files_expected = 2
+        num_files_in_pair = 2
 
         reader_iter = iter(test_reader)  # Reuse the same iterator so we can resume from the same spot
         self.assert_expected_reader_output(reader_iter, [test_escalation_info_1])
         # Reading directory should contain the first pair of reading and tracking files
-        assert len([p for p in reading_dir.iterdir()]) == num_files_expected
+        assert len([p for p in reading_dir.iterdir()]) == num_files_in_pair
 
         self.assert_expected_reader_output(reader_iter, [test_escalation_info_2])
         # Reading directory should contain the second pair of reading and tracking files
-        assert len([p for p in reading_dir.iterdir()]) == num_files_expected
+        assert len([p for p in reading_dir.iterdir()]) == num_files_in_pair
 
     def test_reader_starts_from_correct_intermediate_line(self, test_base_dir: str, test_writer: QueueWriter):
         """Verify that the reader starts at the right spot when resuming from a partially finished file."""
@@ -285,7 +274,7 @@ class TestQueueReader:
         self.assert_expected_reader_output(first_reader, [test_escalation_infos[0], test_escalation_infos[1]])
 
         # Now a new reader should continue from the 2nd written escalation in the partially-read file,
-        # because there's only record of one escalation from that file being finished
+        # because there's only record of one escalation from that file being finished.
         second_reader = generate_queue_reader(test_base_dir)
         self.assert_expected_reader_output(second_reader, [test_escalation_infos[1], test_escalation_infos[2]])
 

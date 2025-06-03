@@ -4,7 +4,7 @@ import re
 import time
 from itertools import islice
 from pathlib import Path
-from typing import Generator, Iterator
+from typing import Generator
 
 from app.escalation_queue.constants import (
     DEFAULT_QUEUE_BASE_DIR,
@@ -30,7 +30,16 @@ class QueueReader:
         # This matches the same as the above, with the addition of the tracking file name prefix
         self.tracking_file_regex = rf"{re.escape(TRACKING_FILE_NAME_PREFIX)}{self.writing_file_regex}"
 
-    def __iter__(self) -> Iterator[str]:
+    def __iter__(self) -> Generator[str, None, None]:
+        """
+        A generator for reading lines written to the escalation queue.
+
+        Blocks until there is a file to read from. Then, each iteration will return the next line from that file until
+        all lines have been read, at which point the file being read from will be deleted.
+
+        Tracks the number of lines that have been read from the current file to support recovering from a failure or
+        reboot.
+        """
         for data_path, tracker_path in self._get_files():
             with data_path.open(mode="r") as escalations, tracker_path.open(mode="a") as tracker:
                 lines_to_skip = len(tracker_path.read_text()) if tracker_path.exists() else 0
@@ -49,12 +58,14 @@ class QueueReader:
             data_path.unlink()
             tracker_path.unlink()
 
-    def _sleep(self, duration: float) -> None:
-        """Simply sleeps for the specified duration. Only exists to make testing cleaner."""
-        time.sleep(duration)
-
     def _get_files(self) -> Generator[tuple[Path, Path], None, None]:
-        """Generator that yields file tuples, blocking until files are available."""  # TODO improve
+        """
+        A generator that yields files containing items in the escalation queue.
+
+        Blocks until there is a file to return. Then, returns a tuple:
+        - The first item is a Path to the chosen next file to read from
+        - The second item is a Path to the associated tracking file
+        """
         while True:
             new_reading_path = self._choose_new_file()
             if new_reading_path is not None:
@@ -95,3 +106,11 @@ class QueueReader:
         oldest_writing_path.rename(new_reading_path)
 
         return new_reading_path
+
+    def _sleep(self, duration: float) -> None:
+        """
+        Sleeps for the specified duration.
+
+        This method is defined like this to avoid patching `time.sleep` directly in testing.
+        """
+        time.sleep(duration)
