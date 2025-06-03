@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Get the absolute path of the repo
-BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VENV_PATH="$BASE_DIR/laptop/.venv"
-PYTHON_SCRIPT="$BASE_DIR/laptop/run.py"
+# Get the absolute path of the laptop directory (where this script is located)
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV_PATH="$BASE_DIR/.venv"
+PYTHON_SCRIPT="$BASE_DIR/run.py"
 LOG_FILE="$HOME/canary_logs/laptop_canary.log"
-ENV_FILE="$BASE_DIR/laptop/.env"
+ENV_FILE="$BASE_DIR/.env"
 
 # Load environment variables from .env
 if [ -f "$ENV_FILE" ]; then

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Get the absolute path of the repo
+# Get the absolute path of the laptop directory (where this script is located)
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_PATH="$BASE_DIR/.venv"
 ENV_FILE="$BASE_DIR/.env"
