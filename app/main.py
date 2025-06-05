@@ -38,6 +38,7 @@ app.include_router(router=health_router)
 scheduler = AsyncIOScheduler()
 
 if PROFILING_ENABLED:
+
     @app.middleware("http")
     async def profile_request(request: Request, call_next: Callable):
         """Profile the current request
@@ -55,7 +56,11 @@ if PROFILING_ENABLED:
         url_to_profile_detector_id = "det_2xpeoK3IVjqsPIMVMhR1PiKPGyi"
 
         # if the `profile=true` HTTP query argument is passed, we profile the request
-        if request.url.path == url_to_profile_path and request.query_params["detector_id"] == url_to_profile_detector_id and request.query_params.get("profile", True):
+        if (
+            request.url.path == url_to_profile_path
+            and request.query_params["detector_id"] == url_to_profile_detector_id
+            and request.query_params.get("profile", True)
+        ):
             logging.info(f"Profiling the request with url.path: {request.url.path} and url: {request.url}")
             # The default profile format is speedscope
             # profile_type = request.query_params.get("profile_format", "speedscope")
@@ -76,6 +81,7 @@ if PROFILING_ENABLED:
 
         # Proceed without profiling
         return await call_next(request)
+
 
 def update_inference_config(app_state: AppState) -> None:
     """Update the App's edge-inference config by querying the database for new detectors."""
