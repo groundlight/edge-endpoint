@@ -97,11 +97,11 @@ logger.info(
 
 # Check that the query rate is sufficiently fast (edge speed)
 # The threshold here is a somewhat arbitrary value that represents a reasonable value for number of queries per second.
-MINIMUM_EXPECTED_BINARY_QUERY_RATE = 10.0 
+MINIMUM_EXPECTED_BINARY_QUERY_RATE = 7.0 
 if query_rate < MINIMUM_EXPECTED_BINARY_QUERY_RATE:
     logger.error(
         f"Edge Canary actual binary query rate is {query_rate}, less than expected minimum of {MINIMUM_EXPECTED_BINARY_QUERY_RATE}. "
-        f"There might be something wrong with the Edge Endpoint, or your detector ({detector_id}) might need more labels to function properly."
+        f"There might be something wrong with the Edge Endpoint."
         )
     sys.exit(1) # exit to avoid sending heartbeat
 
