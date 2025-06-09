@@ -133,6 +133,7 @@ def _mode_to_result_and_type(
         result = MultiClassificationResult(
             confidence=confidence,
             source=source,
+            from_edge=True,
             label=multi_class_mode_configuration.class_names[result_value],
         )
     else:

@@ -275,6 +275,7 @@ class TestCreateIQ:
             result_value=0,
             confidence=0.8,
             confidence_threshold=self.confidence_threshold,
+            is_done_processing=True,
             query="Test query",
         )
 
@@ -283,8 +284,10 @@ class TestCreateIQ:
         assert isinstance(iq.result, MultiClassificationResult)
         assert iq.result.source == Source.ALGORITHM
         assert iq.result.label == "1"
+        assert iq.result.from_edge
         assert "is_from_edge" in iq.metadata
         assert iq.metadata["is_from_edge"]
+        assert iq.done_processing
 
     def test_create_count_iq_without_configuration(self):
         """Test creating a count IQ with no mode_configuration."""
