@@ -1,4 +1,5 @@
 version = 1
+revision = 1
 requires-python = ">=3.10"
 
 [[package]]
@@ -364,7 +365,7 @@ wheels = [
 
 [[package]]
 name = "groundlight"
-version = "0.21.3"
+version = "0.22.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
@@ -376,9 +377,9 @@ dependencies = [
     { name = "typer" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/08/5d/cebcdd06baa37b512e957a784bb99768cdbffccd0374463d778fe8e8c8e6/groundlight-0.21.3.tar.gz", hash = "sha256:17ffca364f1154361af319689226b84c85fdd364ce60b8d214754a951432f483", size = 98582 }
+sdist = { url = "https://files.pythonhosted.org/packages/6d/07/51170db687d401c7a52d2f646e49ca5e2a71a32369f2e9bc6e73360a768b/groundlight-0.22.7.tar.gz", hash = "sha256:6b4c0daafe2768a3b8269a959a3880d0a55137d6126989339e20c9e2ad513a41", size = 106430 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/70/18/a8107e477aaf537e4c2e517d809858af09a43f12680dc7be94b859bb01be/groundlight-0.21.3-py3-none-any.whl", hash = "sha256:6bc1c5fdf8ce6b2a81b9ac02c4ee73c29666dc891110f931ac0b95c7ba884e59", size = 254069 },
+    { url = "https://files.pythonhosted.org/packages/76/4c/8d04836f86f9481a7d85deb2f8ec7b0937cd2c9f63b90aed504402ecee85/groundlight-0.22.7-py3-none-any.whl", hash = "sha256:afcbe9ada5a9d7dee2881ef312aa3646509ca68e27c97857270b15a46eb916bd", size = 314541 },
 ]
 
 [[package]]
@@ -639,7 +640,7 @@ dependencies = [
 requires-dist = [
     { name = "boto3", specifier = ">=1.36.1" },
     { name = "fabric", specifier = ">=3.2.2" },
-    { name = "groundlight", specifier = ">=0.21.3" },
+    { name = "groundlight", specifier = ">=0.22.6,<0.23.0" },
     { name = "pulumi", specifier = ">=3" },
     { name = "pulumi-aws", specifier = ">=6.13.3" },
 ]
@@ -897,7 +898,7 @@ wheels = [
 
 [[package]]
 name = "typer"
-version = "0.12.5"
+version = "0.15.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -905,9 +906,9 @@ dependencies = [
     { name = "shellingham" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c5/58/a79003b91ac2c6890fc5d90145c662fd5771c6f11447f116b63300436bc9/typer-0.12.5.tar.gz", hash = "sha256:f592f089bedcc8ec1b974125d64851029c3b1af145f04aca64d69410f0c9b722", size = 98953 }
+sdist = { url = "https://files.pythonhosted.org/packages/6c/89/c527e6c848739be8ceb5c44eb8208c52ea3515c6cf6406aa61932887bf58/typer-0.15.4.tar.gz", hash = "sha256:89507b104f9b6a0730354f27c39fae5b63ccd0c95b1ce1f1a6ba0cfd329997c3", size = 101559 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a8/2b/886d13e742e514f704c33c4caa7df0f3b89e5a25ef8db02aa9ca3d9535d5/typer-0.12.5-py3-none-any.whl", hash = "sha256:62fe4e471711b147e3365034133904df3e235698399bc4de2b36c8579298d52b", size = 47288 },
+    { url = "https://files.pythonhosted.org/packages/c9/62/d4ba7afe2096d5659ec3db8b15d8665bdcb92a3c6ff0b95e99895b335a9c/typer-0.15.4-py3-none-any.whl", hash = "sha256:eb0651654dcdea706780c466cf06d8f174405a659ffff8f163cfbfee98c0e173", size = 45258 },
 ]
 
 [[package]]

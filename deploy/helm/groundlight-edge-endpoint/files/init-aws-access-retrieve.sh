@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Part one of getting AWS credentials set up.
 # This script runs in a aws-cli container and retrieves the credentials from Janzu.
@@ -10,7 +10,24 @@
 #    be used to create a registry secret in k8s.
 # 3. /shared/done: A marker file to indicate that the script has completed successfully.
 
-#!/bin/bash
+# Note: This script is also used to validate the GROUNDLIGHT_API_TOKEN and GROUNDLIGHT_ENDPOINT
+# settings. If you run it with the first argument being "validate", it will only run through the 
+# check of the curl results and exit with 0 if they are valid or 1 if they are not. In the latter 
+# case, it will also log the results.
+
+if [ "$1" == "validate" ]; then
+  echo "Validating GROUNDLIGHT_API_TOKEN and GROUNDLIGHT_ENDPOINT..."
+  if [ -z "$GROUNDLIGHT_API_TOKEN" ]; then
+    echo "GROUNDLIGHT_API_TOKEN is not set. Exiting."
+    exit 1
+  fi
+
+  if [ -z "$GROUNDLIGHT_ENDPOINT" ]; then
+    echo "GROUNDLIGHT_ENDPOINT is not set. Exiting."
+    exit 1
+  fi
+  validate="yes"
+fi
 
 # This function replicates the Groundlight SDK's logic to clean up user-supplied endpoint URLs 
 sanitize_endpoint_url() {
@@ -63,16 +80,24 @@ sanitize_endpoint_url() {
 sanitized_url=$(sanitize_endpoint_url "${GROUNDLIGHT_ENDPOINT}")
 echo "Sanitized URL: $sanitized_url"
 
-echo "Fetching temporary AWS credentials from Janzu..."
-curl --fail-with-body -sS -L --header "x-api-token: ${GROUNDLIGHT_API_TOKEN}" ${sanitized_url}/reader-credentials > /tmp/credentials.json
+echo "Fetching temporary AWS credentials from the Groundlight cloud service..."
+HTTP_STATUS=$(curl -s -L -o /tmp/credentials.json -w "%{http_code}" --fail-with-body --header "x-api-token: ${GROUNDLIGHT_API_TOKEN}" ${sanitized_url}/reader-credentials)
 
 if [ $? -ne 0 ]; then
-  echo "Failed to fetch credentials from Janzu"
-  echo "Response:"
+  echo "Failed to fetch credentials from the Groundlight cloud service"
+  if [ -n "$HTTP_STATUS" ]; then
+    echo "HTTP Status: $HTTP_STATUS"
+  fi
+  echo -n "Response: "
   cat /tmp/credentials.json; echo
   exit 1
 fi
 
+if [ "$validate" == "yes" ]; then
+
+  echo "API token validation successful. Exiting."
+  exit 0
+fi
 
 export AWS_ACCESS_KEY_ID=$(sed 's/^.*"access_key_id":"\([^"]*\)".*$/\1/' /tmp/credentials.json)
 export AWS_SECRET_ACCESS_KEY=$(sed 's/^.*"secret_access_key":"\([^"]*\)".*$/\1/' /tmp/credentials.json)

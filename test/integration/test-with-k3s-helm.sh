@@ -19,8 +19,6 @@ then
 
 fi
 
-echo $GROUNDLIGHT_ENDPOINT 
-
 # First create a detector to use for testing:
 export DETECTOR_ID=$(poetry run python test/integration/integration.py --mode create_detector)
 echo "created detector with id: $DETECTOR_ID"
@@ -52,19 +50,21 @@ fi
 export HELM_RELEASE_NAME="$DEPLOYMENT_NAMESPACE"
 
 export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
-echo "Using ECR image tag: $IMAGE_TAG"
+echo "Using ECR edge-endpoint image tag: $IMAGE_TAG"
 
 # Run the helm chart
 echo "Installing edge-endpoint helm chart..."
 echo "INFERENCE_FLAVOR: $INFERENCE_FLAVOR"
 echo "DEPLOYMENT_NAMESPACE: $DEPLOYMENT_NAMESPACE"
 echo "IMAGE_TAG: $IMAGE_TAG"
+echo "INFERENCE_IMAGE_TAG: $INFERENCE_IMAGE_TAG"
 helm install -n default ${HELM_RELEASE_NAME} deploy/helm/groundlight-edge-endpoint \
     --set groundlightApiToken=$GROUNDLIGHT_API_TOKEN \
     --set inferenceFlavor=$INFERENCE_FLAVOR \
     --set edgeEndpointPort=$EDGE_ENDPOINT_PORT \
     --set namespace=$DEPLOYMENT_NAMESPACE \
     --set edgeEndpointTag=$IMAGE_TAG \
+    --set inferenceTag=$INFERENCE_IMAGE_TAG \
     --set-file configFile=$EDGE_CONFIG_FILE
 
 echo "Waiting for edge-endpoint pods to rollout..."
@@ -76,7 +76,7 @@ fi
 
 echo "Edge-endpoint pods have successfully rolled out."
 
-echo "Waiting for the inference deployment to rollout (inferencemodel-primary-$DETECTOR_ID) and (inferencemodel-oodd-$DETECTOR_ID)..."
+echo "Waiting for the inference deployments to rollout (inferencemodel-primary-$DETECTOR_ID) and (inferencemodel-oodd-$DETECTOR_ID)..."
 
 export DETECTOR_ID_WITH_DASHES=$(echo ${DETECTOR_ID//_/-} | tr '[:upper:]' '[:lower:]')
 sleep 60
@@ -122,6 +122,7 @@ helm test -n default ${HELM_RELEASE_NAME} --hide-notes
 
 echo "Helm tests completed successfully."
 
+export EDGE_SETUP=1 # Setting this to 1 will make the integration tests use the edge endpoint
 ./test/integration/run_tests.sh
 
 # cleanup

@@ -6,15 +6,15 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
-from app.metrics.metricreporting import metrics_payload, report_metrics_to_cloud
+from app.metrics.iq_activity import clear_old_activity_files
+from app.metrics.metric_reporting import MetricsReporter
 
+ONE_HOUR_IN_SECONDS = 3600
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
-# Environment variable lets us speed up testing
-STATUS_REPORT_INTERVAL = int(os.environ.get("STATUS_REPORT_INTERVAL", 3600))
-
 
 app = FastAPI(title="status-monitor")
 scheduler = AsyncIOScheduler()
+reporter = MetricsReporter()
 
 
 @app.on_event("startup")
@@ -24,15 +24,20 @@ async def startup_event():
         level=LOG_LEVEL, format="%(asctime)s.%(msecs)03d %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
     )
     logging.info("Starting status-monitor server...")
-    scheduler.add_job(report_metrics_to_cloud, "interval", seconds=STATUS_REPORT_INTERVAL)
-    logging.info("Will report metrics to cloud every %d seconds", STATUS_REPORT_INTERVAL)
+    logging.info("Will report metrics to the cloud every hour")
+    # Every hour, on the hour, collect metrics to send to the cloud.
+    scheduler.add_job(reporter.collect_metrics_for_cloud, "cron", hour="*", minute="0")
+    # Every hour, try to report collected metrics to the cloud. Run at 3 minutes past the hour, with a jitter of 120
+    # seconds, to avoid every edge-endpoint report hitting the server at the exact same time.
+    scheduler.add_job(reporter.report_metrics_to_cloud, "cron", hour="*", minute="3", jitter=120)
+    scheduler.add_job(clear_old_activity_files, "interval", seconds=ONE_HOUR_IN_SECONDS)
     scheduler.start()
 
 
 @app.get("/status/metrics.json")
 async def get_metrics():
     """Return system metrics as JSON."""
-    return metrics_payload()
+    return reporter.metrics_payload()
 
 
 @app.get("/status")
