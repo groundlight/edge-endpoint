@@ -4,7 +4,6 @@ import shutil
 import time
 from typing import Optional
 
-import httpx
 import requests
 import yaml
 from cachetools import TTLCache, cached
