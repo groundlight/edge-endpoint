@@ -198,8 +198,8 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         metadata=generate_metadata_dict(results=results, is_edge_audit=True),
                         image_query_id=image_query.id,  # We give the cloud IQ the same ID as the returned edge IQ
                     )
-                    # We keep done_processing=True here because although we may have escalated the query for an audit,
-                    # this is invisible to the user. From their perspective, this is the final answer.
+                    # We keep done_processing=True here because although we escalated the query for an audit, this is
+                    # invisible to the user. From their perspective, this is the final answer.
 
                     # Don't want to escalate to cloud again if we're already auditing the query
                     return image_query
