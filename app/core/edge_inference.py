@@ -44,7 +44,7 @@ def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, co
             logger.error(f"Inference server returned an error: {response.status_code} - {response.text}")
             raise RuntimeError(f"Inference server error: {response.status_code} - {response.text}")
         return response.json()
-    except httpx.RequestError as e:
+    except requests.exceptions.RequestException as e:
         logger.error(f"Failed to connect to {inference_url}: {e}")
         raise RuntimeError("Failed to submit image for inference") from e
 
