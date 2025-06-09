@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 # Simple TTL cache for is_edge_inference_ready checks to avoid having to re-check every time a request is processed.
 # This will be process-specific, so each edge-endpoint worker will have its own cache instance.
-ttl_cache = TTLCache(maxsize=128, ttl=2)
+ttl_cache = TTLCache(maxsize=128, ttl=5)
 
 
 @cached(ttl_cache)
@@ -35,20 +35,19 @@ def is_edge_inference_ready(inference_client_url: str) -> bool:
         return False
 
 
-async def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, content_type: str) -> dict:
+def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, content_type: str) -> dict:
     inference_url = f"http://{inference_client_url}/infer"
     headers = {"Content-Type": content_type}
-    async with httpx.AsyncClient() as client:
-        try:
-            logger.debug(f"Submitting image for inference to {inference_url}")
-            response = await client.post(inference_url, data=image_bytes, headers=headers)
-            if response.status_code != status.HTTP_200_OK:
-                logger.error(f"Inference server returned an error: {response.status_code} - {response.text}")
-                raise RuntimeError(f"Inference server error: {response.status_code} - {response.text}")
-            return response.json()
-        except httpx.RequestError as e:
-            logger.error(f"Failed to connect to {inference_url}: {e}")
-            raise RuntimeError("Failed to submit image for inference") from e
+    try:
+        logger.debug(f"Submitting image for inference to {inference_url}")
+        response = requests.post(inference_url, data=image_bytes, headers=headers)
+        if response.status_code != status.HTTP_200_OK:
+            logger.error(f"Inference server returned an error: {response.status_code} - {response.text}")
+            raise RuntimeError(f"Inference server error: {response.status_code} - {response.text}")
+        return response.json()
+    except httpx.RequestError as e:
+        logger.error(f"Failed to connect to {inference_url}: {e}")
+        raise RuntimeError("Failed to submit image for inference") from e
 
 
 def get_inference_result(primary_response: dict, oodd_response: dict) -> str:
@@ -276,7 +275,7 @@ class EdgeInferenceManager:
             return False
         return True
 
-    async def run_inference(self, detector_id: str, image_bytes: bytes, content_type: str) -> dict:
+    def run_inference(self, detector_id: str, image_bytes: bytes, content_type: str) -> dict:
         """
         Submit an image to the inference server, route to a specific model, and return the results.
         Args:
@@ -296,10 +295,8 @@ class EdgeInferenceManager:
         inference_client_url = self.inference_client_urls[detector_id]
         oodd_inference_client_url = self.oodd_inference_client_urls[detector_id]
 
-        response, oodd_response = await asyncio.gather(
-            submit_image_for_inference(inference_client_url, image_bytes, content_type),
-            submit_image_for_inference(oodd_inference_client_url, image_bytes, content_type),
-        )
+        response = submit_image_for_inference(inference_client_url, image_bytes, content_type)
+        oodd_response = submit_image_for_inference(oodd_inference_client_url, image_bytes, content_type)
 
         output_dict = get_inference_result(response, oodd_response)
 
