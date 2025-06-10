@@ -30,7 +30,7 @@ pre-commit = "^3.8.0"
 pytest = "^8.3.3"
 pytest-cov = "^5.0.0"
 pytest-mock = "^3.14.0"
-requests = "^2.32.3"
+requests = "^2.32.4"
 gputil = "^1.4.0"
 matplotlib = "^3.9.2"
 
