@@ -55,7 +55,7 @@ def create_iq(  # noqa: PLR0913
     :param result_value: The predicted value.
     :param confidence: The confidence of the predicted value.
     :param confidence_threshold: The confidence threshold for the query.
-    :param is_done_processing: Whether this is the final answer for the query.
+    :param is_done_processing: Whether Groundlight has completed all planned escalations.
     :param query: The query string.
     :param patience_time: The acceptable time to wait for a result.
     :param rois: The ROIs associated with the prediction, if applicable.
