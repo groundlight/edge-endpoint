@@ -49,7 +49,7 @@ def run_test_in_venv(
                 dst.write(src.read())
 
             # Create the test script inline
-            test_script = f'''from pathlib import Path
+            test_script = f"""from pathlib import Path
 from groundlight import Groundlight
 
 gl = Groundlight(endpoint="{endpoint}")
@@ -57,7 +57,7 @@ gl = Groundlight(endpoint="{endpoint}")
 det = "{detector_id}"
 iq = gl.submit_image_query(detector=det, image="{asset_file_copy}", wait=0, confidence_threshold=0.5)
 print(iq)
-'''
+"""
 
             test_file_path = os.path.join(tempdir, "test_script.py")
             with open(test_file_path, "w") as f:
