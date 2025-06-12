@@ -8,6 +8,8 @@ from typing import List, Tuple
 import requests
 from packaging.version import parse as parse_version
 
+# This script allows you to test submitting an image query to the edge endpoint across past SDK versions, to ensure that
+# changes made are backwards-compatible. Currently this is not run automatically.
 # NOTE: this is rough test code and may not work exactly as intended.
 
 
