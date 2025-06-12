@@ -8,6 +8,8 @@ from typing import List, Tuple
 import requests
 from packaging.version import parse as parse_version
 
+# NOTE: this is rough test code and may not work exactly as intended.
+
 
 def fetch_package_versions(package_name: str) -> List[str]:
     """Fetch all available versions of a package from PyPI."""
@@ -75,20 +77,24 @@ def main(package: str, asset_path: str, endpoint: str, detector_id: str, max_ver
     versions = fetch_package_versions(package)
     results = []
 
+    # Create logs directory relative to the script's location
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    logs_dir = os.path.join(script_dir, "logs")
+
     # Remove logs directory if it exists, then create it fresh
-    if os.path.exists("logs"):
-        shutil.rmtree("logs")
-    os.makedirs("logs")
+    if os.path.exists(logs_dir):
+        shutil.rmtree(logs_dir)
+    os.makedirs(logs_dir)
 
     for i, version in enumerate(versions[:max_versions], 1):
         print(f"[{i}/{max_versions}] Testing {package}=={version}...")
-        version, success, output = run_test_in_venv(package, version, asset_path, endpoint, detector_id)
+        tested_version, success, output = run_test_in_venv(package, version, asset_path, endpoint, detector_id)
 
-        log_path = os.path.join("logs", f"{version}.log")
+        log_path = os.path.join(logs_dir, f"{version}.log")
         with open(log_path, "w") as f:
             f.write(output)
 
-        results.append((version, success, log_path))
+        results.append((tested_version, success, log_path))
 
     print("\n=== Summary ===")
     for version, success, log_path in results:
@@ -99,9 +105,9 @@ def main(package: str, asset_path: str, endpoint: str, detector_id: str, max_ver
 if __name__ == "__main__":
     if len(sys.argv) != 6:
         print(
-            "Usage: python version_testing.py <package_name> <path_to_image_file> <endpoint> <detector_id> <max_versions>"
+            "Usage: python sdk_version_testing.py <package_name> <path_to_image_file> <endpoint> <detector_id> <max_versions>"
         )
-        print("Example: python version_testing.py groundlight cat.jpeg http://10.44.6.83:30107 det_xyz 10")
+        print("Example: python sdk_version_testing.py groundlight cat.jpeg http://10.11.2.33:30101 det_xyz 10")
         sys.exit(1)
 
     package_name = sys.argv[1]
