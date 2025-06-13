@@ -69,10 +69,8 @@ check_cgroup() {
     fi
 }
 
-check_cgroup
-CGROUP_STATUS=$?
-
-if [ $CGROUP_STATUS -eq 1 ]; then
+check_cgroup || CGROUP_STATUS=1
+if [ "${CGROUP_STATUS:-0}" -eq 1 ]; then
     cat << EOF
 Cgroup memory controller is not properly enabled. K3s requires this to function.
 
@@ -90,6 +88,15 @@ There are two possible fixes depending on your system:
       cgroup_memory=1 cgroup_enable=memory
    
    This enables basic memory cgroup support which works with cgroup v1 systems.
+
+3. For WSL2 on Windows 11 (Ubuntu 22.04+, WSL v0.67.6+):
+   Edit %USERPROFILE%\.wslconfig and add under [wsl2]:
+      kernelCommandLine = cgroup_enable=memory cgroup_memory=1 systemd.unified_cgroup_hierarchy=1
+   Edit /etc/wsl.conf in your Ubuntu distro and add:
+      [boot]
+      systemd=true
+   Restart WSL with:
+      wsl --shutdown
 
 For Raspberry Pi: Edit /boot/cmdline.txt or /boot/firmware/cmdline.txt
 For most other systems: Edit GRUB configuration via /etc/default/grub
