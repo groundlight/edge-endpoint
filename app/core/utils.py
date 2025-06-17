@@ -1,5 +1,6 @@
 import json
 import logging
+import socket
 import time
 from datetime import datetime, timezone
 from io import BytesIO
@@ -7,7 +8,8 @@ from typing import Any, Callable
 
 import cachetools
 import ksuid
-from fastapi import HTTPException
+from cachetools import TTLCache, cached
+from fastapi import HTTPException, status
 from model import (
     ROI,
     BinaryClassificationResult,
@@ -26,6 +28,15 @@ from PIL import Image
 from pydantic import BaseModel, ValidationError
 
 from app.core import constants
+from app.core.constants import (
+    CONNECTION_STATUS_TTL_SECS,
+    CONNECTION_TEST_HOST,
+    CONNECTION_TEST_PORT,
+    DEFAULT_POLLING_EXPONENTIAL_BACKOFF,
+    DEFAULT_POLLING_INITIAL_DELAY,
+    DEFAULT_POLLING_TIMEOUT_SEC,
+    SOCKET_TIMEOUT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +80,7 @@ def create_iq(  # noqa: PLR0913
 
     return ImageQuery(
         metadata={"is_from_edge": True},
-        id=prefixed_ksuid(prefix="iq_"),
+        id=generate_iq_id(),
         type=ImageQueryTypeEnum.image_query,
         created_at=datetime.now(timezone.utc),
         query=query,
@@ -147,20 +158,80 @@ def get_formatted_timestamp_str() -> str:
     return datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 
 
+connection_ttl_cache = TTLCache(maxsize=1, ttl=CONNECTION_STATUS_TTL_SECS)
+
+
+@cached(connection_ttl_cache)
+def is_connected() -> bool:
+    """Check if the system can establish a network connection to the test host. Result is cached for a short time."""
+    try:
+        socket.setdefaulttimeout(SOCKET_TIMEOUT)
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((CONNECTION_TEST_HOST, CONNECTION_TEST_PORT))
+        return True
+    except socket.error:
+        return False
+
+
+def wait_with_exponential_backoff(
+    condition: Callable,
+    initial_delay: float = DEFAULT_POLLING_INITIAL_DELAY,
+    exponential_backoff: float = DEFAULT_POLLING_EXPONENTIAL_BACKOFF,
+    timeout_sec: float = DEFAULT_POLLING_TIMEOUT_SEC,
+) -> bool:
+    """
+    Wait for the condition to be True or the timeout_sec to be reached, with configurable exponential backoff.
+    Returns True if the condition is met within the timeout_sec and False otherwise.
+    """
+    start_time = time.time()
+    next_delay = initial_delay
+    target_delay = 0.0
+    while True:
+        patience_so_far = time.time() - start_time
+        if condition():
+            return True
+        if patience_so_far >= timeout_sec:
+            return False
+        target_delay = min(patience_so_far + next_delay, timeout_sec)
+        sleep_time = max(target_delay - patience_so_far, 0)
+        time.sleep(sleep_time)
+        next_delay *= exponential_backoff
+
+
+def wait_for_network_connection(
+    timeout_sec: float = DEFAULT_POLLING_TIMEOUT_SEC,
+) -> bool:
+    """
+    Wait for network connection with configurable timeout and exponential backoff.
+    Returns True if network connection is achieved within the timeout_sec and False otherwise.
+    """
+    return wait_with_exponential_backoff(is_connected, timeout_sec=timeout_sec)
+
+
+def get_formatted_timestamp_str() -> str:
+    """Get the current datetime with the highest time precision available."""
+    return datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+
+
 def safe_call_sdk(api_method: Callable, **kwargs):
     """
     This ensures that we correctly handle HTTP error status codes. In some cases,
     for instance, 400 error codes from the SDK are forwarded as 500 by FastAPI,
     which is not what we want.
+
+    Waits for network connection for up to one second. If no connection is found, raises a 503 error.
     """
-    try:
-        return api_method(**kwargs)
-    # except groundlight.NotFoundError as ex:
-    #     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(ex))
-    except Exception as ex:
-        if hasattr(ex, "status"):
-            raise HTTPException(status_code=ex.status, detail=str(ex)) from ex
-        raise ex
+    has_connection = wait_for_network_connection(timeout_sec=1.0)  # Wait for connection for up to one second
+    if has_connection:
+        try:
+            return api_method(**kwargs)
+        # except groundlight.NotFoundError as ex:
+        #     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(ex))
+        except Exception as ex:
+            if hasattr(ex, "status"):
+                raise HTTPException(status_code=ex.status, detail=str(ex)) from ex
+            raise ex
+
+    raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="No network connection available.")
 
 
 def _size_of_dict_in_bytes(data: dict[str, Any]) -> int:
@@ -239,6 +310,10 @@ def prefixed_ksuid(prefix: str | None = None) -> str:
     k = ksuid.KsuidMs()
     out = f"{prefix}{k}"
     return out
+
+
+def generate_iq_id() -> str:
+    return prefixed_ksuid(prefix="iq_")
 
 
 def pil_image_to_bytes(img: Image.Image, format: str = "JPEG") -> bytes:
