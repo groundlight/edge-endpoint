@@ -40,9 +40,9 @@ def is_already_escalated(gl: Groundlight, image_query_id: str) -> bool:
         raise ex
 
 
-def consume_queued_escalation(escalation_str: str, gl: Groundlight | None = None) -> tuple[ImageQuery | None, bool]:
+def _escalate_once(escalation_info: EscalationInfo, gl: Groundlight | None = None) -> tuple[ImageQuery | None, bool]:
     """
-    Consumes the escalation string and tries to do the escalation.
+    Consumes the escalation info and attempts to complete the escalation.
     Returns a tuple:
     - The first element is an ImageQuery if the escalation is successful and None otherwise.
     - The second element is a bool which is True if retrying the escalation might succeed, and False if the escalation
@@ -51,12 +51,13 @@ def consume_queued_escalation(escalation_str: str, gl: Groundlight | None = None
     """
     # TODO how to handle when there's no connection and GL client can't be created?
 
-    escalation_info = EscalationInfo(**json.loads(escalation_str))
     logger.info(
         f"Consumed queued escalation for detector {escalation_info.detector_id} at {escalation_info.timestamp}."
     )
 
-    if gl is None:
+    if (
+        gl is None
+    ):  # TODO is allowing a value to be passed just for testing? do we need to do this, or should we just always create it here?
         try:
             gl = _groundlight_client()
         except GroundlightClientError:
@@ -99,75 +100,48 @@ def consume_queued_escalation(escalation_str: str, gl: Groundlight | None = None
         logger.info("This likely means we currently have no internet connection. Will retry.")
         return None, True  # Should retry because the escalation may succeed once connection is restored.
     except HTTPException as ex:
-        if (
-            ex.status_code == status.HTTP_400_BAD_REQUEST
-        ):  # TODO do we want to validate escalation args when it's attempted, so that we don't end up having to scrap it here?
+        if ex.status_code == status.HTTP_400_BAD_REQUEST:
             logger.info(f"Got HTTPException with status code 400. Scrapping the escalation. {ex=}")
             return None, False  # Should not retry because the request is malformed.
         else:
             logger.info(f"Got HTTPException with unhandled status code {ex.status_code}. {ex=}")
-            return (
-                None,
-                True,
-            )  # Should retry because this may have been a one-off issue. TODO do we really want to retry here? What if it's a repeated error? Then need max retry limit.
+            return None, False  # Do not retry.
     except Exception as ex:
         logger.info(f"Got some other kind of exception that we aren't explicitly catching. {ex=}")
-        return (
-            None,
-            True,
-        )  # Should retry because this may have been a one-off issue. TODO same as above - need max retry limit, or could decide to skip these.
+        return None, False  # Do not retry.
+
+
+def consume_queued_escalation(escalation_str: str) -> ImageQuery | None:
+    escalation_info = EscalationInfo(**json.loads(escalation_str))
+
+    should_retry_escalation = True
+    escalation_result = None
+
+    while should_retry_escalation:
+        escalation_result, should_try_again = _escalate_once(escalation_info)
+        if escalation_result is None:
+            logger.info("Escalation failed.")
+            if should_try_again:
+                logger.info("Retrying escalation.")
+                should_retry_escalation = True
+            else:
+                # If there isn't reason to try again, we move on to the next escalation.
+                logger.info("Moving to next item without retrying.")
+                should_retry_escalation = False
+        else:
+            logger.info("Escalation succeeded.")
+            should_retry_escalation = False
+
+    return escalation_result
 
 
 def read_from_escalation_queue(reader: QueueReader) -> None:
     for escalation in reader:
-        should_retry_escalation = True
-        escalation_result = None
-        while should_retry_escalation:
-            escalation_result, should_try_again = consume_queued_escalation(escalation)
-            if escalation_result is None:
-                logger.info("Escalation failed.")
-                if should_try_again:
-                    logger.info("Retrying escalation.")
-                else:
-                    # If there isn't reason to try again, we move on to the next escalation.
-                    logger.info("Moving to next item without retrying.")
-                    should_retry_escalation = False
-            else:
-                logger.info(f"Escalation succeeded. {escalation_result=}")
-                should_retry_escalation = False
-        logger.info(f"Stopping escalation process. Got {escalation_result=}")
-
-
-# def read_from_escalation_queue(reader: QueueReader) -> None:
-#     print("about to get next line")
-#     queued_escalation = reader.get_next_line()
-#     if queued_escalation is not None:
-#         retry_count = 0
-#         should_retry_escalation = True
-#         escalation_result = None
-#         while should_retry_escalation:
-#             wait_for_network_connection(float("inf"))  # Wait for connection before trying to escalate
-
-#             escalation_result, should_try_again = consume_queued_escalation(queued_escalation)
-#             if escalation_result is None:
-#                 logger.info("Escalation failed.")
-#                 if should_try_again:
-#                     retry_count += 1
-#                     if (
-#                         retry_count < MAX_RETRY_ATTEMPTS
-#                     ):  # TODO as of now we will skip an escalation if we gain and then lose connection too many times. Is that okay?
-#                         logger.info(f"Retrying escalation (attempt {retry_count}/{MAX_RETRY_ATTEMPTS})...")
-#                     else:
-#                         logger.info(f"Escalation failed after {MAX_RETRY_ATTEMPTS} attempts. Moving to next item.")
-#                         should_retry_escalation = False
-#                 else:
-#                     # If there isn't reason to try again, we move on to the next escalation.
-#                     logger.info("Moving to next item without retrying.")
-#                     should_retry_escalation = False
-#             else:
-#                 logger.info(f"Escalation succeeded. {escalation_result=}")
-#                 should_retry_escalation = False
-#         logger.info(f"Stopping escalation process. Got {escalation_result=}")
+        result = consume_queued_escalation(escalation)
+        if result is None:
+            logger.info("Escalation permanently failed, moving on.")
+        else:
+            logger.info(f"Escalation succeeded with result {result}.")
 
 
 if __name__ == "__main__":
