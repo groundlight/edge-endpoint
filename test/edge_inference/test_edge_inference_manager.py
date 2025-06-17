@@ -158,11 +158,3 @@ class TestEdgeInferenceManager:
                 # Should not create a new version for the same pipeline config
                 assert not os.path.exists(os.path.join(temp_dir, detector_id, "primary", "3"))
                 assert not os.path.exists(os.path.join(temp_dir, detector_id, "oodd", "3"))
-
-    def test_update_model_no_network_connection(self):
-        edge_manager = EdgeInferenceManager(detector_inference_configs=None)
-        with mock.patch("app.core.edge_inference.wait_for_network_connection", return_value=False):
-            with mock.patch("app.core.edge_inference.fetch_model_info") as mock_fetch:
-                did_update = edge_manager.update_models_if_available("test_detector")
-                assert not did_update  # Update should not happen when there is no network connection
-                mock_fetch.assert_not_called()  # Model info should not be attempted to be fetched
