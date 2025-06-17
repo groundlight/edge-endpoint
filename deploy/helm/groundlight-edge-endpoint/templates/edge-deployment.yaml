@@ -63,12 +63,12 @@ spec:
       - name: nginx
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
-        command: ["nginx", "-g", "daemon off;"]
+        command: ["/bin/bash", "-c", "./app/bin/launch-nginx.sh"]
         ports:
         - containerPort: 30101
         volumeMounts:
         - name: nginx-config-volume
-          mountPath: /etc/nginx/nginx.conf
+          mountPath: /opt/nginx/nginx.conf
           subPath: nginx.conf
         startupProbe:
           httpGet:

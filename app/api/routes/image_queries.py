@@ -162,7 +162,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     elif app_state.edge_inference_manager.inference_is_available(detector_id=detector_id):
         # -- Edge-model Inference --
         logger.debug(f"Local inference is available for {detector_id=}. Running inference...")
-        results = await app_state.edge_inference_manager.run_inference(
+        results = app_state.edge_inference_manager.run_inference(
             detector_id=detector_id, image_bytes=image_bytes, content_type=content_type
         )
         ml_confidence = results["confidence"]
@@ -181,6 +181,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 result_value=results["label"],
                 confidence=ml_confidence,
                 confidence_threshold=confidence_threshold,
+                is_done_processing=True,
                 query=detector_metadata.query,
                 patience_time=patience_time,
                 rois=results["rois"],
@@ -223,6 +224,8 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                     #     metadata=generate_metadata_dict(results=results, is_edge_audit=True),
                     #     image_query_id=image_query.id,
                     # )
+                    # We keep done_processing=True here because although we escalated the query for an audit, this is
+                    # invisible to the user. From their perspective, this is the final answer.
 
                     # Don't want to escalate to cloud again if we're already auditing the query
                     return image_query
@@ -262,6 +265,8 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                     #     metadata=generate_metadata_dict(results=results, is_edge_audit=False),
                     #     image_query_id=image_query.id,  # Ensure the cloud IQ has the same ID as the returned edge IQ
                     # )
+                    # Not done processing because the associated IQ in the cloud could get a better answer
+                    image_query.done_processing = False
                 else:
                     logger.debug(
                         f"Not escalating to cloud due to rate limit on background cloud escalations: {detector_id=}"

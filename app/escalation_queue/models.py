@@ -2,20 +2,20 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from app.core.utils import generate_iq_id
-
 
 class SubmitImageQueryParams(BaseModel):
+    """The parameters of submitting an image query that need to be written to the escalation queue."""
+
     patience_time: float | None
     confidence_threshold: float
     human_review: str | None
     metadata: dict[str, Any] | None
-    image_query_id: str = (
-        generate_iq_id()
-    )  # We always escalate with a specified IQ ID so that we can know if we've already escalated a queued escalation
+    image_query_id: str | None = None
 
 
 class EscalationInfo(BaseModel):
+    """The information about an escalation that needs to be written to the escalation queue."""
+
     timestamp: str
     detector_id: str
     image_path_str: str
