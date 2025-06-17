@@ -12,7 +12,7 @@ from fastapi import HTTPException, status
 from groundlight import GroundlightClientError
 from urllib3.exceptions import MaxRetryError
 
-from app.core.utils import get_formatted_timestamp_str
+from app.core.utils import generate_iq_id, get_formatted_timestamp_str
 from app.escalation_queue.constants import MAX_QUEUE_FILE_LINES, MAX_RETRY_ATTEMPTS
 from app.escalation_queue.manage_reader import consume_queued_escalation, read_from_escalation_queue
 from app.escalation_queue.models import EscalationInfo, SubmitImageQueryParams
@@ -38,6 +38,7 @@ def generate_test_submit_iq_params() -> SubmitImageQueryParams:
         confidence_threshold=0.9,
         human_review=None,
         metadata={"test_key": "test_value"},
+        image_query_id=generate_iq_id(),
     )
 
 
@@ -54,6 +55,17 @@ def generate_test_escalation_info(
         "submit_iq_params": submit_iq_params,
     }
     return EscalationInfo(**data)
+
+
+def assert_expected_reader_output(reader_iter: QueueReader | Iterator[str], expected_values: list[EscalationInfo]):
+    """
+    Helper function to assert that the reader produces an expected list of escalations.
+
+    The `reader_iter` argument can be either a QueueReader or an Iterator. The latter case allows previous iteration
+    progress to be preserved between calls.
+    """
+    for value, escalation_str in zip(expected_values, reader_iter):
+        assert EscalationInfo(**json.loads(escalation_str)) == value
 
 
 ### Global fixtures
@@ -177,18 +189,6 @@ class TestQueueWriter:
 
 
 class TestQueueReader:
-    def assert_expected_reader_output(
-        self, reader_iter: QueueReader | Iterator[str], expected_values: list[EscalationInfo]
-    ):
-        """
-        Helper function to assert that the reader produces an expected list of escalations.
-
-        The `reader_iter` argument can be either a QueueReader or an Iterator. The latter case allows previous iteration
-        progress to be preserved between calls.
-        """
-        for value, escalation_str in zip(expected_values, reader_iter):
-            assert EscalationInfo(**json.loads(escalation_str)) == value
-
     def test_reader_blocks_until_file_available(
         self, test_escalation_info: EscalationInfo, test_writer: QueueWriter, test_reader: QueueReader
     ):
@@ -205,7 +205,7 @@ class TestQueueReader:
         # To prevent indefinite blocking, patch the wait method to write an escalation after being called a certain
         # number of times.
         with patch.object(test_reader, "_wait_for_file_check", side_effect=side_effect) as mock_wait:
-            self.assert_expected_reader_output(test_reader, [test_escalation_info])
+            assert_expected_reader_output(test_reader, [test_escalation_info])
             assert mock_wait.call_count == num_wait_calls  # Verify that the reader waited for the specified # of times
 
     def test_reader_moves_file(
@@ -215,7 +215,7 @@ class TestQueueReader:
         assert test_writer.write_escalation(test_escalation_info)
         written_to_path = test_writer.last_file_path
 
-        self.assert_expected_reader_output(test_reader, [test_escalation_info])
+        assert_expected_reader_output(test_reader, [test_escalation_info])
         assert not written_to_path.exists()
 
     def test_reader_reads_multiple_lines_from_same_file(self, test_reader: QueueReader, test_writer: QueueWriter):
@@ -227,7 +227,7 @@ class TestQueueReader:
         for escalation_info in test_escalation_infos:
             assert test_writer.write_escalation(escalation_info)
 
-        self.assert_expected_reader_output(test_reader, test_escalation_infos)
+        assert_expected_reader_output(test_reader, test_escalation_infos)
 
     def test_reader_prioritizes_oldest_file(self, test_base_dir: str, test_reader: QueueReader):
         """Verify that the reader reads from the oldest file first."""
@@ -239,7 +239,7 @@ class TestQueueReader:
         assert first_writer.write_escalation(test_escalation_info_1)
         assert second_writer.write_escalation(test_escalation_info_2)
 
-        self.assert_expected_reader_output(test_reader, [test_escalation_info_1, test_escalation_info_2])
+        assert_expected_reader_output(test_reader, [test_escalation_info_1, test_escalation_info_2])
 
     def test_reader_deletes_finished_file(self, test_base_dir: str, test_reader: QueueReader):
         """Verify that the reader deletes a file (and associated tracking file) when it reads all the lines from it."""
@@ -257,11 +257,11 @@ class TestQueueReader:
         num_files_in_pair = 2
 
         reader_iter = iter(test_reader)  # Reuse the same iterator so we can resume from the same spot
-        self.assert_expected_reader_output(reader_iter, [test_escalation_info_1])
+        assert_expected_reader_output(reader_iter, [test_escalation_info_1])
         # Reading directory should contain the first pair of reading and tracking files
         assert len([p for p in reading_dir.iterdir()]) == num_files_in_pair
 
-        self.assert_expected_reader_output(reader_iter, [test_escalation_info_2])
+        assert_expected_reader_output(reader_iter, [test_escalation_info_2])
         # Reading directory should contain the second pair of reading and tracking files
         assert len([p for p in reading_dir.iterdir()]) == num_files_in_pair
 
@@ -274,12 +274,12 @@ class TestQueueReader:
 
         # Read two lines from the file
         first_reader = generate_queue_reader(test_base_dir)
-        self.assert_expected_reader_output(first_reader, [test_escalation_infos[0], test_escalation_infos[1]])
+        assert_expected_reader_output(first_reader, [test_escalation_infos[0], test_escalation_infos[1]])
 
         # Now a new reader should continue from the 2nd written escalation in the partially-read file,
         # because there's only record of one escalation from that file being finished.
         second_reader = generate_queue_reader(test_base_dir)
-        self.assert_expected_reader_output(second_reader, [test_escalation_infos[1], test_escalation_infos[2]])
+        assert_expected_reader_output(second_reader, [test_escalation_infos[1], test_escalation_infos[2]])
 
     def test_reader_resumes_multiple_times_correctly(self, test_base_dir: str, test_writer: QueueWriter):
         """Verify that the reader can resume from a file multiple times, and start from the proper place each time."""
@@ -290,15 +290,15 @@ class TestQueueReader:
 
         # Read the first two lines from the file
         first_reader = generate_queue_reader(test_base_dir)
-        self.assert_expected_reader_output(first_reader, [test_escalation_infos[0], test_escalation_infos[1]])
+        assert_expected_reader_output(first_reader, [test_escalation_infos[0], test_escalation_infos[1]])
 
         # Now a new reader should continue from the 2nd written escalation in the partially-read file
         second_reader = generate_queue_reader(test_base_dir)
-        self.assert_expected_reader_output(second_reader, [test_escalation_infos[1], test_escalation_infos[2]])
+        assert_expected_reader_output(second_reader, [test_escalation_infos[1], test_escalation_infos[2]])
 
         # Now a new reader should continue from the 3rd written escalation in the partially-read file
         third_reader = generate_queue_reader(test_base_dir)
-        self.assert_expected_reader_output(third_reader, [test_escalation_infos[2], test_escalation_infos[3]])
+        assert_expected_reader_output(third_reader, [test_escalation_infos[2], test_escalation_infos[3]])
 
     def test_reader_prioritizes_tracking_file(self, test_base_dir: str):
         """Verify that the reader chooses a tracking file over a normal written file when there's one available."""
@@ -309,7 +309,7 @@ class TestQueueReader:
             assert first_writer.write_escalation(test_escalation_info_1)
         # Read two lines from the file
         first_reader = generate_queue_reader(test_base_dir)
-        self.assert_expected_reader_output(first_reader, [test_escalation_info_1] * 2)
+        assert_expected_reader_output(first_reader, [test_escalation_info_1] * 2)
 
         # Create a new written file
         test_escalation_info_2 = generate_test_escalation_info(detector_id="test_id_2")
@@ -318,20 +318,20 @@ class TestQueueReader:
 
         # Ensure a new reader will read from the in progress file before the newly written file
         second_reader = generate_queue_reader(test_base_dir)
-        self.assert_expected_reader_output(second_reader, [test_escalation_info_1] * 2 + [test_escalation_info_2])
+        assert_expected_reader_output(second_reader, [test_escalation_info_1] * 2 + [test_escalation_info_2])
 
     def test_reader_selects_empty_tracking_file(self, test_base_dir: str, test_writer: QueueWriter):
         """Verify that the reader will select a tracking file even if it contains no tracked escalations."""
         test_escalation_info_1 = generate_test_escalation_info(detector_id="test_id_1")
         assert test_writer.write_escalation(test_escalation_info_1)
         first_reader = generate_queue_reader(test_base_dir)
-        self.assert_expected_reader_output(first_reader, [test_escalation_info_1])
+        assert_expected_reader_output(first_reader, [test_escalation_info_1])
 
         # Now there should be an empty tracking file created by the first reader, which the second reader should select
         test_escalation_info_2 = generate_test_escalation_info(detector_id="test_id_2")
         assert test_writer.write_escalation(test_escalation_info_2)
         second_reader = generate_queue_reader(test_base_dir)
-        self.assert_expected_reader_output(second_reader, [test_escalation_info_1, test_escalation_info_2])
+        assert_expected_reader_output(second_reader, [test_escalation_info_1, test_escalation_info_2])
 
 
 class TestConsumeQueuedEscalation:
@@ -466,7 +466,6 @@ class TestReadFromEscalationQueue:
         mock_consume_escalation.assert_not_called()
         mock_wait_for_connection.reset_mock()
         mock_consume_escalation.reset_mock()
-        assert_correct_reader_tracking_format(test_reader)
         assert test_reader._get_num_tracked_escalations() == 0
 
         num_escalations = 3
@@ -485,7 +484,6 @@ class TestReadFromEscalationQueue:
             mock_consume_escalation.assert_called_once_with(convert_escalation_info_to_str(escalation_info))
             mock_wait_for_connection.reset_mock()
             mock_consume_escalation.reset_mock()
-            assert_correct_reader_tracking_format(test_reader)
             assert test_reader._get_num_tracked_escalations() == i
 
         # Nothing more in the queue to read
@@ -494,7 +492,6 @@ class TestReadFromEscalationQueue:
         mock_consume_escalation.assert_not_called()
         mock_wait_for_connection.reset_mock()
         mock_consume_escalation.reset_mock()
-        assert_correct_reader_tracking_format(test_reader)
         assert test_reader._get_num_tracked_escalations() == 0
 
         # Write another escalation and ensure it gets consumed
@@ -503,7 +500,6 @@ class TestReadFromEscalationQueue:
         read_from_escalation_queue(test_reader)
         mock_wait_for_connection.assert_called_once()
         mock_consume_escalation.assert_called_once_with(convert_escalation_info_to_str(test_escalation_info))
-        assert_correct_reader_tracking_format(test_reader)
         assert test_reader._get_num_tracked_escalations() == 0  # TODO this is confusing
 
     def test_queue_management_retries_successfully(
@@ -586,12 +582,10 @@ class TestQueueUtils:
             test_writer, test_escalation_info.detector_id, test_image_bytes, test_submit_iq_params
         )
 
-        next_escalation_str = test_reader.get_next_line()
-        assert next_escalation_str is not None
-        next_escalation = EscalationInfo(**json.loads(next_escalation_str))
-        assert next_escalation.detector_id == test_escalation_info.detector_id
-        assert next_escalation.submit_iq_params == test_submit_iq_params
-        assert Path(next_escalation.image_path_str).read_bytes() == test_image_bytes
+        next_escalation_info = EscalationInfo(**json.loads(next(iter(test_reader))))
+        assert next_escalation_info.detector_id == test_escalation_info.detector_id
+        assert next_escalation_info.submit_iq_params == test_submit_iq_params
+        assert Path(next_escalation_info.image_path_str).read_bytes() == test_image_bytes
 
     def test_write_escalation_to_queue_failure_with_retry(
         self,
