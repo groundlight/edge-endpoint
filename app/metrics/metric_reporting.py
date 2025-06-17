@@ -67,6 +67,7 @@ class MetricsReporter:
 
         activity_metrics = SafeMetricsDict()
         retriever = iq_activity.ActivityRetriever()
+        activity_metrics.add("activity_hour", lambda: retriever.get_last_hour())
         activity_metrics.add("last_activity_time", lambda: retriever.last_activity_time())
         activity_metrics.add("num_detectors_lifetime", lambda: retriever.num_detectors_lifetime())
         activity_metrics.add("num_detectors_active_1h", lambda: retriever.num_detectors_active(timedelta(hours=1)))
