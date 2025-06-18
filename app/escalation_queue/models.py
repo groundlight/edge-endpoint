@@ -10,7 +10,7 @@ class SubmitImageQueryParams(BaseModel):
     confidence_threshold: float
     human_review: str | None
     metadata: dict[str, Any] | None
-    image_query_id: str | None = None
+    image_query_id: str
 
 
 class EscalationInfo(BaseModel):
