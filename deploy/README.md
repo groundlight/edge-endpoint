@@ -47,6 +47,16 @@ helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint
   --set inferenceFlavor=cpu
 ```
 
+For Jetson Orin-based systems (experimental):
+
+```shell
+curl -fsSL https://raw.githubusercontent.com/groundlight/edge-endpoint/refs/heads/main/deploy/bin/install-k3s.sh | bash -s jetson
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint \
+  --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}" \
+  --set inferenceTag="jetson"
+```
+
 You're done. You can skip down to [Verifying the Installation](#verifying-the-installation) to confirm that the Edge Endpoint is running.
 
 ### Setting up Single-Node Kubernetes with k3s
