@@ -40,9 +40,11 @@ def is_already_escalated(gl: Groundlight, image_query_id: str) -> bool:
         raise ex
 
 
-def _escalate_once(escalation_info: EscalationInfo, gl: Groundlight | None = None) -> tuple[ImageQuery | None, bool]:
+def _escalate_once(
+    escalation_info: EscalationInfo, submit_iq_request_time_s: int, gl: Groundlight | None = None
+) -> tuple[ImageQuery | None, bool]:
     """
-    Consumes the escalation info and attempts to complete the escalation.
+    Consumes escalation info for a query and attempts to complete the escalation. TODO update
     Returns a tuple:
     - The first element is an ImageQuery if the escalation is successful and None otherwise.
     - The second element is a bool which is True if retrying the escalation might succeed, and False if the escalation
@@ -55,9 +57,8 @@ def _escalate_once(escalation_info: EscalationInfo, gl: Groundlight | None = Non
         f"Consumed queued escalation for detector {escalation_info.detector_id} at {escalation_info.timestamp}."
     )
 
-    if (
-        gl is None
-    ):  # TODO is allowing a value to be passed just for testing? do we need to do this, or should we just always create it here?
+    # TODO is allowing a value to be passed just for testing? do we need to do this, or should we just always create it here?
+    if gl is None:
         try:
             gl = _groundlight_client()
         except GroundlightClientError:
@@ -91,6 +92,7 @@ def _escalate_once(escalation_info: EscalationInfo, gl: Groundlight | None = Non
             want_async=True,  # Escalations from the queue are always async
             image_query_id=submit_iq_params.image_query_id,
             metadata=submit_iq_params.metadata,
+            request_time=submit_iq_request_time_s,
         )
 
         logger.info("Successfully completed escalation.")
@@ -117,13 +119,16 @@ def consume_queued_escalation(escalation_str: str) -> ImageQuery | None:
     should_retry_escalation = True
     escalation_result = None
 
+    submit_iq_request_time_s = 5  # How long the request should be allowed to try to complete.
+
     while should_retry_escalation:
-        escalation_result, should_try_again = _escalate_once(escalation_info)
+        escalation_result, should_try_again = _escalate_once(escalation_info, request_time=submit_iq_request_time_s)
         if escalation_result is None:
             logger.info("Escalation failed.")
             if should_try_again:
                 logger.info("Retrying escalation.")
                 should_retry_escalation = True
+                submit_iq_request_time_s = 0.5  # Wait less time on retries, since we expect we don't have connection.
             else:
                 # If there isn't reason to try again, we move on to the next escalation.
                 logger.info("Moving to next item without retrying.")
