@@ -11,6 +11,7 @@ from urllib3.exceptions import MaxRetryError
 from app.core.utils import safe_call_sdk
 from app.escalation_queue.models import EscalationInfo
 from app.escalation_queue.queue_reader import QueueReader
+from app.escalation_queue.queue_utils import is_already_escalated
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
@@ -26,21 +27,7 @@ def _groundlight_client() -> Groundlight:  # TODO this is duplicated from metric
     return Groundlight()  # TODO this will likely wait the default 10 seconds when there's no connection
 
 
-def is_already_escalated(gl: Groundlight, image_query_id: str) -> bool:
-    """Checks if an image query with the specified ID already exists in the cloud."""
-    try:
-        safe_call_sdk(gl.get_image_query, id=image_query_id)
-        # If the get_image_query call succeeds, an IQ with the same ID exists in the cloud.
-        return True
-    except HTTPException as ex:
-        if ex.status_code == status.HTTP_404_NOT_FOUND:
-            # A 404 response indicates that no image query with the specified ID exists in the cloud
-            return False
-        # We re-raise all other exceptions so that they're caught by outer except blocks.
-        raise ex
-
-
-def _escalate_once(
+def _escalate_once(  # noqa: PLR0911
     escalation_info: EscalationInfo, submit_iq_request_time_s: int, gl: Groundlight | None = None
 ) -> tuple[ImageQuery | None, bool]:
     """
@@ -98,8 +85,9 @@ def _escalate_once(
         logger.info("Successfully completed escalation.")
         return res, False  # Should not retry because the escalation was successful.
     except MaxRetryError as ex:  # When there's no connection while trying to send request
-        logger.info(f"Got MaxRetryError! {ex=}")
-        logger.info("This likely means we currently have no internet connection. Will retry.")
+        logger.info(
+            f"Got MaxRetryError! {ex=}. This likely means we currently have no internet connection. Will retry."
+        )
         return None, True  # Should retry because the escalation may succeed once connection is restored.
     except HTTPException as ex:
         if ex.status_code == status.HTTP_400_BAD_REQUEST:
@@ -122,7 +110,7 @@ def consume_queued_escalation(escalation_str: str) -> ImageQuery | None:
     submit_iq_request_time_s = 5  # How long the request should be allowed to try to complete.
 
     while should_retry_escalation:
-        escalation_result, should_try_again = _escalate_once(escalation_info, request_time=submit_iq_request_time_s)
+        escalation_result, should_try_again = _escalate_once(escalation_info, submit_iq_request_time_s)
         if escalation_result is None:
             logger.info("Escalation failed.")
             if should_try_again:

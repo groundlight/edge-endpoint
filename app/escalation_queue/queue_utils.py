@@ -1,5 +1,6 @@
 import logging
 
+from fastapi import HTTPException, status
 from groundlight import Groundlight
 from model import ImageQuery
 
@@ -8,6 +9,20 @@ from app.escalation_queue.models import EscalationInfo, SubmitImageQueryParams
 from app.escalation_queue.queue_writer import QueueWriter
 
 logger = logging.getLogger(__name__)
+
+
+def is_already_escalated(gl: Groundlight, image_query_id: str) -> bool:
+    """Checks if an image query with the specified ID already exists in the cloud."""
+    try:
+        safe_call_sdk(gl.get_image_query, id=image_query_id)
+        # If the get_image_query call succeeds, an IQ with the same ID exists in the cloud.
+        return True
+    except HTTPException as ex:
+        if ex.status_code == status.HTTP_404_NOT_FOUND:
+            # A 404 response indicates that no image query with the specified ID exists in the cloud
+            return False
+        # We re-raise all other exceptions so that they're caught by outer except blocks.
+        raise ex
 
 
 def write_escalation_to_queue(

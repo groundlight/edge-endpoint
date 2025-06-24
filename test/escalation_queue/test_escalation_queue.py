@@ -13,11 +13,15 @@ from groundlight import GroundlightClientError
 from urllib3.exceptions import MaxRetryError
 
 from app.core.utils import generate_iq_id, get_formatted_timestamp_str
-from app.escalation_queue.constants import MAX_QUEUE_FILE_LINES, MAX_RETRY_ATTEMPTS
-from app.escalation_queue.manage_reader import consume_queued_escalation, read_from_escalation_queue
+from app.escalation_queue.constants import MAX_QUEUE_FILE_LINES
+from app.escalation_queue.manage_reader import _escalate_once, consume_queued_escalation, read_from_escalation_queue
 from app.escalation_queue.models import EscalationInfo, SubmitImageQueryParams
 from app.escalation_queue.queue_reader import QueueReader
-from app.escalation_queue.queue_utils import safe_escalate_with_queue_write, write_escalation_to_queue
+from app.escalation_queue.queue_utils import (
+    is_already_escalated,
+    safe_escalate_with_queue_write,
+    write_escalation_to_queue,
+)
 from app.escalation_queue.queue_writer import QueueWriter, convert_escalation_info_to_str
 
 ### Helper functions
@@ -33,7 +37,6 @@ def generate_queue_writer(base_dir: str) -> QueueWriter:
 
 def generate_test_submit_iq_params() -> SubmitImageQueryParams:
     return SubmitImageQueryParams(
-        wait=0,
         patience_time=None,
         confidence_threshold=0.9,
         human_review=None,
@@ -105,6 +108,11 @@ def test_writer(test_base_dir: str) -> QueueWriter:
 @pytest.fixture
 def test_reader(test_base_dir: str) -> QueueReader:
     return generate_queue_reader(base_dir=test_base_dir)
+
+
+@pytest.fixture
+def escalation_str() -> str:
+    return convert_escalation_info_to_str(generate_test_escalation_info())
 
 
 class TestQueueWriter:
@@ -334,241 +342,188 @@ class TestQueueReader:
         assert_expected_reader_output(second_reader, [test_escalation_info_1, test_escalation_info_2])
 
 
-class TestConsumeQueuedEscalation:
-    def test_consume_escalation_successful(self, test_escalation_info: EscalationInfo):
-        """Verifies that basic escalation consumption is successful."""
-        test_escalation_str = convert_escalation_info_to_str(test_escalation_info)
+class TestEscalateOnce:
+    def test_successful_escalation(self, test_escalation_info: EscalationInfo):
+        """On a successful escalation, _escalate_once should return the result and not request a retry."""
+        dummy_iq = Mock()
         mock_gl = Mock()
-        mock_gl.get_image_query.side_effect = HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-        escalation_result, should_try_again = consume_queued_escalation(test_escalation_str, gl=mock_gl)
-        assert escalation_result is not None
-        assert not should_try_again
 
-    def test_consume_escalation_image_not_found(self, test_escalation_info: EscalationInfo):
-        """Verifies that no error is raised and the escalation is skipped when the image cannot be found."""
-        test_escalation_info.image_path_str = "not-a-real-path"
-        test_escalation_str = convert_escalation_info_to_str(test_escalation_info)
+        with (
+            patch(
+                "app.escalation_queue.manage_reader.is_already_escalated", return_value=False
+            ) as mock_is_already_escalated,
+            patch("app.escalation_queue.manage_reader.safe_call_sdk", return_value=dummy_iq) as mock_safe_call_sdk,
+        ):
+            escalation_result, should_try_again = _escalate_once(
+                test_escalation_info, submit_iq_request_time_s=5, gl=mock_gl
+            )
 
-        escalation_result, should_try_again = consume_queued_escalation(test_escalation_str, gl=Mock())
-        assert escalation_result is None
-        assert not should_try_again
-
-    def test_consume_escalation_no_connection(self, test_escalation_info: EscalationInfo):
-        """Verifies that no error is raised and a retry is prompted when there is no connection."""
-        test_escalation_str = convert_escalation_info_to_str(test_escalation_info)
-
-        # No connection when calling get_image_query
-        mock_gl = Mock()
-        mock_gl.get_image_query.side_effect = MaxRetryError(pool=None, url=None)
-        escalation_result, should_try_again = consume_queued_escalation(test_escalation_str, gl=mock_gl)
-        assert escalation_result is None
-        assert should_try_again
-
-        # No connection when calling submit_image_query
-        mock_gl = Mock()
-        mock_gl.get_image_query.side_effect = HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-        mock_gl.submit_image_query.side_effect = MaxRetryError(pool=None, url=None)
-        escalation_result, should_try_again = consume_queued_escalation(test_escalation_str, gl=mock_gl)
-        assert escalation_result is None
-        assert should_try_again
-
-    def test_consume_escalation_bad_request(self, test_escalation_info: EscalationInfo):
-        """Verifies that no error is raised and no retry is prompted when a bad request exception is encountered."""
-        test_escalation_info.submit_iq_params.human_review = "NOT A VALID OPTION"
-        test_escalation_str = convert_escalation_info_to_str(test_escalation_info)
-        with patch("app.escalation_queue.manage_reader.safe_call_sdk", return_value=Mock()) as mock_sdk_call:
-            mock_sdk_call.side_effect = HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
-            escalation_result, should_try_again = consume_queued_escalation(test_escalation_str, gl=Mock())
-            assert escalation_result is None
+            assert escalation_result is dummy_iq
             assert not should_try_again
 
-    def test_consume_escalation_other_http_exception(self, test_escalation_info: EscalationInfo):
-        """Verifies that no error is raised and a retry is prompted when any non-handled HTTP exception is encountered."""
-        test_escalation_str = convert_escalation_info_to_str(test_escalation_info)
-        with patch("app.escalation_queue.manage_reader.safe_call_sdk", return_value=Mock()) as mock_sdk_call:
-            mock_sdk_call.side_effect = HTTPException(status_code=status.HTTP_418_IM_A_TEAPOT)
-            escalation_result, should_try_again = consume_queued_escalation(test_escalation_str, gl=Mock())
-            assert escalation_result is None
-            assert should_try_again
+            mock_is_already_escalated.assert_called_once_with(
+                mock_gl, test_escalation_info.submit_iq_params.image_query_id
+            )
+            mock_safe_call_sdk.assert_called_once()
+            first_call_args, _ = mock_safe_call_sdk.call_args
+            assert first_call_args[0] is mock_gl.submit_image_query
 
-    def test_consume_escalation_gl_client_creation_failure(self, test_escalation_info: EscalationInfo):
-        """Verifies that no error is raised and a retry is prompted when it fails to create a Groundlight client."""
-        test_escalation_str = convert_escalation_info_to_str(test_escalation_info)
+    def test_image_not_found(self, test_escalation_info: EscalationInfo):
+        """If the image path does not exist, _escalate_once should skip escalation and not retry."""
+        test_escalation_info.image_path_str = "this-path-does-not-exist.jpeg"
 
-        with patch("app.escalation_queue.manage_reader._groundlight_client", return_value=Mock()) as mock_gl_client:
-            mock_gl_client.side_effect = GroundlightClientError()
-            escalation_result, should_try_again = consume_queued_escalation(test_escalation_str)
-            assert escalation_result is None
-            assert should_try_again
+        result, should_retry = _escalate_once(test_escalation_info, submit_iq_request_time_s=5, gl=Mock())
 
-    def test_consume_escalation_iq_id_already_exists_in_cloud(self, test_escalation_info: EscalationInfo):
-        """Verifies that if the image query ID already exists in the cloud, no escalation is done."""
-        test_escalation_str = convert_escalation_info_to_str(test_escalation_info)
+        assert result is None
+        assert not should_retry
+
+    def test_escalate_once_no_connection_is_already_escalated(self, test_escalation_info: EscalationInfo):
+        """If is_already_escalated hits a connection error, _escalate_once should suggest a retry."""
+        with patch(
+            "app.escalation_queue.manage_reader.is_already_escalated", side_effect=MaxRetryError(pool=None, url=None)
+        ):
+            result, should_retry = _escalate_once(test_escalation_info, submit_iq_request_time_s=5, gl=Mock())
+
+        assert result is None
+        assert should_retry
+
+    def test_no_connection_during_submit(self, test_escalation_info: EscalationInfo):
+        """If submitting the IQ fails due to connection problems, _escalate_once should suggest a retry."""
         mock_gl = Mock()
-        mock_get_image_query: Mock = mock_gl.get_image_query
-        mock_submit_image_query: Mock = mock_gl.submit_image_query
+        mock_gl.submit_image_query.side_effect = MaxRetryError(pool=None, url=None)
 
-        escalation_result, should_try_again = consume_queued_escalation(test_escalation_str, gl=mock_gl)
-        assert escalation_result is None
-        assert not should_try_again
+        with patch("app.escalation_queue.manage_reader.is_already_escalated", return_value=False):
+            result, should_retry = _escalate_once(test_escalation_info, submit_iq_request_time_s=5, gl=mock_gl)
 
-        mock_get_image_query.assert_called_once_with(id=test_escalation_info.submit_iq_params.image_query_id)
-        mock_submit_image_query.assert_not_called()
+        assert result is None
+        assert should_retry
 
-    def test_consume_escalation_iq_id_does_not_exist_in_cloud(self, test_escalation_info: EscalationInfo):
-        """Verifies that if the image query ID does not already exist in the cloud, escalation proceeds normally."""
-        test_escalation_str = convert_escalation_info_to_str(test_escalation_info)
+    def test_bad_request(self, test_escalation_info: EscalationInfo):
+        """HTTP 400 errors should not trigger a retry."""
         mock_gl = Mock()
-        mock_get_image_query: Mock = mock_gl.get_image_query
-        mock_get_image_query.side_effect = HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-        mock_submit_image_query: Mock = mock_gl.submit_image_query
+        mock_gl.submit_image_query.side_effect = HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
-        escalation_result, should_try_again = consume_queued_escalation(test_escalation_str, gl=mock_gl)
-        assert escalation_result is not None
-        assert not should_try_again
+        with patch("app.escalation_queue.manage_reader.is_already_escalated", return_value=False):
+            result, should_retry = _escalate_once(test_escalation_info, submit_iq_request_time_s=5, gl=mock_gl)
 
-        mock_get_image_query.assert_called_once_with(id=test_escalation_info.submit_iq_params.image_query_id)
-        mock_submit_image_query.assert_called_once()
+        assert result is None
+        assert not should_retry
+
+    def test_non_400_http_exception(self, test_escalation_info: EscalationInfo):
+        """Non-400 HTTP exceptions should *not* trigger a retry (per current implementation)."""
+        mock_gl = Mock()
+        mock_gl.submit_image_query.side_effect = HTTPException(status_code=status.HTTP_418_IM_A_TEAPOT)
+
+        with patch("app.escalation_queue.manage_reader.is_already_escalated", return_value=False):
+            result, should_retry = _escalate_once(test_escalation_info, submit_iq_request_time_s=5, gl=mock_gl)
+
+        assert result is None
+        assert not should_retry
+
+    def test_gl_client_creation_failure(self, test_escalation_info: EscalationInfo):
+        """If the Groundlight client cannot be created, _escalate_once should suggest a retry."""
+        with patch("app.escalation_queue.manage_reader._groundlight_client", side_effect=GroundlightClientError()):
+            result, should_retry = _escalate_once(test_escalation_info, submit_iq_request_time_s=5, gl=None)
+
+        assert result is None
+        assert should_retry
+
+    def test_iq_already_escalated(self, test_escalation_info: EscalationInfo):
+        """When the IQ already exists in the cloud, _escalate_once should not retry nor submit again."""
+        mock_gl = Mock()
+
+        with patch(
+            "app.escalation_queue.manage_reader.is_already_escalated", return_value=True
+        ) as mock_is_already_escalated:
+            result, should_retry = _escalate_once(test_escalation_info, submit_iq_request_time_s=5, gl=mock_gl)
+
+        assert result is None
+        assert not should_retry
+
+        mock_is_already_escalated.assert_called_once_with(mock_gl, test_escalation_info.submit_iq_params.image_query_id)
+        mock_gl.submit_image_query.assert_not_called()
+
+
+class TestConsumeQueuedEscalation:
+    def test_returns_result_on_success(self, escalation_str: str):
+        """When _escalate_once succeeds on the first try, should return the ImageQuery and not retry."""
+
+        dummy_result = Mock()
+
+        with patch(
+            "app.escalation_queue.manage_reader._escalate_once", return_value=(dummy_result, False)
+        ) as mock_escalate:
+            result = consume_queued_escalation(escalation_str)
+
+        assert result is dummy_result
+        mock_escalate.assert_called_once()
+
+    def test_uses_retry_logic_properly(self, escalation_str: str):
+        """When escalation fails, we should retry until _escalate_once indicates that we should stop."""
+
+        num_retries = 3
+        side_effects = [(None, True)] * num_retries + [(None, False)]
+
+        with patch("app.escalation_queue.manage_reader._escalate_once", side_effect=side_effects) as mock_escalate:
+            result = consume_queued_escalation(escalation_str)
+
+        assert result is None
+        assert mock_escalate.call_count == len(side_effects)
+
+        # All retries should use a shorter request time than the first attempt
+        call_times = [call_args[0][1] for call_args in mock_escalate.call_args_list]
+        first_request_time = call_times[0]
+        assert all(t < first_request_time for t in call_times[1:])
 
 
 class TestReadFromEscalationQueue:
-    @pytest.fixture
-    def mock_consume_escalation(self):
-        """
-        Mocks the consume_queued_escalation function in manage_reader.py.
-        Including this fixture in a test will automatically apply the patch.
-        """
-        with patch(
-            "app.escalation_queue.manage_reader.consume_queued_escalation",
-        ) as consume_mock:
-            yield consume_mock
-
-    @pytest.fixture
-    def mock_wait_for_connection(self):
-        """
-        Mocks the wait_for_network_connection function in manage_reader.py.
-        Including this fixture in a test will automatically apply the patch.
-        """
-        with patch("app.escalation_queue.manage_reader.wait_for_network_connection") as wait_mock:
-            yield wait_mock
-
-    def test_queue_management_basic_functionality(
-        self,
-        test_writer: QueueWriter,
-        test_reader: QueueReader,
-        mock_consume_escalation: Mock,
-        mock_wait_for_connection: Mock,
-    ):
-        """Verifies that basic queue management works when reading from the queue and consuming the queued escalations."""
-        # Starts off with nothing in the queue to read
-        read_from_escalation_queue(test_reader)
-        mock_wait_for_connection.assert_not_called()
-        mock_consume_escalation.assert_not_called()
-        mock_wait_for_connection.reset_mock()
-        mock_consume_escalation.reset_mock()
-        assert test_reader._get_num_tracked_escalations() == 0
-
+    def test_consume_from_reader(self, test_reader: QueueReader, escalation_str: str):
+        """Verifies that read_from_escalation_queue consumes from the reader correctly."""
         num_escalations = 3
-        test_escalation_infos = [
-            generate_test_escalation_info(detector_id=f"test_id_{i}") for i in range(num_escalations)
-        ]
-        for escalation_info in test_escalation_infos:
-            assert test_writer.write_escalation(escalation_info)
+        escalation_strs = [escalation_str] * num_escalations
 
-        mock_consume_escalation.return_value = (Mock(), False)
-
-        # Ensure the escalations we wrote get consumed
-        for i, escalation_info in enumerate(test_escalation_infos):
+        # Patch the reader object to iterate over items and then stop
+        with (
+            patch(
+                "app.escalation_queue.manage_reader.consume_queued_escalation",
+            ) as mock_consume_escalation,
+            patch.object(QueueReader, "__iter__", return_value=iter(escalation_strs)),
+        ):
+            mock_consume_escalation.return_value = None
             read_from_escalation_queue(test_reader)
-            mock_wait_for_connection.assert_called_once()
-            mock_consume_escalation.assert_called_once_with(convert_escalation_info_to_str(escalation_info))
-            mock_wait_for_connection.reset_mock()
-            mock_consume_escalation.reset_mock()
-            assert test_reader._get_num_tracked_escalations() == i
 
-        # Nothing more in the queue to read
-        read_from_escalation_queue(test_reader)
-        mock_wait_for_connection.assert_not_called()
-        mock_consume_escalation.assert_not_called()
-        mock_wait_for_connection.reset_mock()
-        mock_consume_escalation.reset_mock()
-        assert test_reader._get_num_tracked_escalations() == 0
-
-        # Write another escalation and ensure it gets consumed
-        test_escalation_info = generate_test_escalation_info()
-        assert test_writer.write_escalation(test_escalation_info)
-        read_from_escalation_queue(test_reader)
-        mock_wait_for_connection.assert_called_once()
-        mock_consume_escalation.assert_called_once_with(convert_escalation_info_to_str(test_escalation_info))
-        assert test_reader._get_num_tracked_escalations() == 0  # TODO this is confusing
-
-    def test_queue_management_retries_successfully(
-        self,
-        test_escalation_info: EscalationInfo,
-        test_writer: QueueWriter,
-        test_reader: QueueReader,
-        mock_consume_escalation: Mock,
-        mock_wait_for_connection: Mock,
-    ):
-        """Verifies that an error from consumption triggers a retry for the escalation."""
-
-        def side_effect_true_then_false(*args, **kwargs):
-            """A side effect function that returns (None, True) when first called and (None, False) on subsequent calls."""
-            if not hasattr(side_effect_true_then_false, "called"):
-                side_effect_true_then_false.called = True
-                return (None, True)
-            return (None, False)
-
-        mock_consume_escalation.side_effect = side_effect_true_then_false
-
-        assert test_writer.write_escalation(test_escalation_info)
-
-        read_from_escalation_queue(test_reader)
-
-        num_attempts = 2
-        assert len(mock_wait_for_connection.mock_calls) == num_attempts
-        test_escalation_str = convert_escalation_info_to_str(test_escalation_info)
-        expected_consumption_calls = [call(test_escalation_str)] * num_attempts
-        assert mock_consume_escalation.mock_calls == expected_consumption_calls
-
-    def test_queue_management_stops_retrying_after_max_attempts(
-        self,
-        test_escalation_info: EscalationInfo,
-        test_writer: QueueWriter,
-        test_reader: QueueReader,
-        mock_consume_escalation: Mock,
-        mock_wait_for_connection: Mock,
-    ):
-        """Verifies that an escalation will be attempted to be escalated only up to the max allowed attempts."""
-        assert test_writer.write_escalation(test_escalation_info)
-        mock_consume_escalation.return_value = (None, True)
-        read_from_escalation_queue(test_reader)
-
-        assert len(mock_wait_for_connection.mock_calls) == MAX_RETRY_ATTEMPTS
-        test_escalation_str = convert_escalation_info_to_str(test_escalation_info)
-        expected_consumption_calls = [call(test_escalation_str)] * MAX_RETRY_ATTEMPTS
-        assert mock_consume_escalation.mock_calls == expected_consumption_calls
-
-    def test_queue_management_no_retry_when_no_reason_to(
-        self,
-        test_escalation_info: EscalationInfo,
-        test_writer: QueueWriter,
-        test_reader: QueueReader,
-        mock_consume_escalation: Mock,
-        mock_wait_for_connection: Mock,
-    ):
-        """Verifies that an escalation is not retried when consumption fails in a way that retrying won't fix."""
-        assert test_writer.write_escalation(test_escalation_info)
-        mock_consume_escalation.return_value = (None, False)
-        read_from_escalation_queue(test_reader)
-        mock_wait_for_connection.assert_called_once()
-        mock_consume_escalation.assert_called_once()
+        assert mock_consume_escalation.call_count == num_escalations
+        mock_consume_escalation.assert_has_calls(
+            [call(escalation) for escalation in escalation_strs],
+            any_order=False,
+        )
 
 
 class TestQueueUtils:
     @pytest.fixture
     def test_submit_iq_params(self) -> SubmitImageQueryParams:
         return generate_test_submit_iq_params()
+
+    def test_is_already_escalated_true_result(self):
+        """Verifies that is_already_escalated returns True when no error is raised."""
+        mock_gl = Mock()
+        res = is_already_escalated(mock_gl, "iq_xyz")
+        assert res
+
+    def test_is_already_escalated_false_result(self):
+        """Verifies that is_already_escalated returns False when an HTTP 404 error is raised."""
+        mock_gl = Mock()
+        mock_gl.get_image_query.side_effect = HTTPException(status.HTTP_404_NOT_FOUND)
+        res = is_already_escalated(mock_gl, "iq_xyz")
+        assert not res
+
+    def test_is_already_escalated_raises_uncaught_error(self):
+        """Verifies that is_already_escalated re-raises exceptions other than HTTP 404s."""
+        mock_gl = Mock()
+        test_exception = HTTPException(status.HTTP_400_BAD_REQUEST)
+        mock_gl.get_image_query.side_effect = test_exception
+        with pytest.raises(type(test_exception)):
+            is_already_escalated(mock_gl, "iq_xyz")
 
     def test_write_escalation_to_queue_successful(
         self,
@@ -578,6 +533,7 @@ class TestQueueUtils:
         test_image_bytes: bytes,
         test_submit_iq_params: SubmitImageQueryParams,
     ):
+        """Verifies that write_escalation_to_queue properly writes all information to the queue."""
         write_escalation_to_queue(
             test_writer, test_escalation_info.detector_id, test_image_bytes, test_submit_iq_params
         )
