@@ -16,6 +16,13 @@ BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 
 def get_random_binary_image() -> tuple[np.ndarray, str]:
+    """
+    Used for generating random data to submit to Groundlight for load testing.
+     
+    Randomly generates either a black or white image, with the datetime overlaid.
+    
+    Returns the image and the corresponding label.
+    """
     if random.choice([True, False]):
         image = np.zeros(IMAGE_DIMENSIONS, dtype=np.uint8)  # Black image
         text_color = WHITE
@@ -39,8 +46,14 @@ def generate_random_count_image(
         max_count: int = 10,
         image_width: int = 640,
         image_height: int = 480,
-    ) -> tuple[np.ndarray, ROI]:
-
+    ) -> tuple[np.ndarray, list[ROI]]:
+    """
+    Used for generating random data to submit to Groundlight for load testing.
+     
+    Generates an image with a random number of circles.
+    
+    Returns the image and a list of ROI objects, which can be submitted as a label to Groundlight.
+    """
 
     count = random.randint(0, max_count)
 

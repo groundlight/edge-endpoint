@@ -63,6 +63,9 @@ spec:
       - name: nginx
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        # resources:
+        #   requests:
+        #     memory: "50Mi"
         command: ["/bin/bash", "-c", "./app/bin/launch-nginx.sh"]
         ports:
         - containerPort: 30101
@@ -95,6 +98,9 @@ spec:
       - name: edge-endpoint
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        # resources:
+        #   requests:
+        #     memory: "700Mi"
         env:
         - name: LOG_LEVEL
           value: {{ .Values.logLevel | quote }}
@@ -124,6 +130,9 @@ spec:
       - name: status-monitor
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        # resources:
+          # requests:
+          #   memory: "150Mi"
         ports:
         - containerPort: 8123
         command: ["./app/bin/launch-status-monitor.sh"]
@@ -147,6 +156,9 @@ spec:
       - name: inference-model-updater
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        # resources:
+          # requests:
+          #   memory: "200Mi"
         command: ["/bin/bash", "-c"]
         args: ["poetry run python -m app.model_updater.update_models"]
         env:
