@@ -217,7 +217,8 @@ def main_count(num_detectors: int) -> None:
                 print(f'Encountered error while attempting to submit image query: {e}')
                 time.sleep(1)
                 continue # We couldn't submit the image query, so no need to submit a label
-
+            
+            # Add labels to trigger training and new inference pod rollouts
             if not iq.result.from_edge:
                 add_label_async(gl, iq, len(rois), rois)
                 print(f'Added {len(rois)} ROIs to {iq.id} on {d.id}.')
