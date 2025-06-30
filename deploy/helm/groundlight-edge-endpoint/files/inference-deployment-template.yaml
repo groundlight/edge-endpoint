@@ -64,18 +64,11 @@ spec:
       - name: inference-server
         image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:{{ include "groundlight-edge-endpoint.inferenceTag" . }}
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.inferencePullPolicy" . }}"
-      # resources:
-      #   requests:
-      #     memory: "2000Mi"
-      #   limits:
-      #     memory: "2000Mi"
         env:
         - name: MODEL_REPOSITORY
           value: &modelRepository /opt/groundlight/edge/serving/model-repo
         - name: MODEL_NAME
           value: placeholder-model-name
-        - name: TIM_TEST
-          value: hello
         - name: PINAMOD_DIR
           value: /opt/models/pinamod
         - name: LOG_LEVEL
