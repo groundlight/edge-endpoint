@@ -1,5 +1,5 @@
 # Memory Pressure Test
-Tools to test the Edge Endpoint's resilience under memory pressure by spawning multiple inference pods simultaneously.
+Tools that test the Edge Endpoint's resilience under memory pressure by spawning multiple inference pods simultaneously.
 
 ## To Run
 1. Create an environment: `python3 -m venv .venv`
