@@ -1,0 +1,86 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "groundlight-edge-endpoint.fullname" . }}-k3s-memory-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded    
+spec:
+  template:
+    spec:
+      serviceAccountName: {{ include "groundlight-edge-endpoint.serviceAccountName" . }}-k3s-config
+      hostNetwork: true
+      hostPID: true
+      containers:
+      - name: k3s-memory-configurator
+        image: alpine:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Configuring k3s memory limits with intelligent thresholds..."
+          chroot /host /bin/bash -c '
+          # Get total memory in KB
+          TOTAL_MEM_KB=$(grep MemTotal /proc/meminfo | awk "{print \$2}")
+          TOTAL_MEM_BYTES=$((TOTAL_MEM_KB * 1024))
+          TOTAL_MEM_GB=$((TOTAL_MEM_BYTES / 1024 / 1024 / 1024))
+          
+          echo "Detected ${TOTAL_MEM_GB}GB total memory"
+          
+          # Define percentage thresholds and absolute minimums
+          HARD_PERCENT={{ .Values.k3sConfig.evictionHardPercent }}
+          SOFT_PERCENT={{ .Values.k3sConfig.evictionSoftPercent }}
+          HARD_MIN_GB={{ .Values.k3sConfig.evictionHardMinGB }}
+          SOFT_MIN_GB={{ .Values.k3sConfig.evictionSoftMinGB }}
+          
+          # Calculate percentage-based thresholds in GB
+          HARD_PERCENT_GB=$((TOTAL_MEM_GB * HARD_PERCENT / 100))
+          SOFT_PERCENT_GB=$((TOTAL_MEM_GB * SOFT_PERCENT / 100))
+          
+          # Use whichever is smaller: percentage or absolute minimum
+          if [ $HARD_MIN_GB -lt $HARD_PERCENT_GB ]; then
+            HARD_THRESHOLD="${HARD_MIN_GB}GB"
+            echo "Using hard threshold: ${HARD_MIN_GB}GB (absolute minimum)"
+          else
+            HARD_THRESHOLD="${HARD_PERCENT}%"
+            echo "Using hard threshold: ${HARD_PERCENT}% (~${HARD_PERCENT_GB}GB)"
+          fi
+          
+          if [ $SOFT_MIN_GB -lt $SOFT_PERCENT_GB ]; then
+            SOFT_THRESHOLD="${SOFT_MIN_GB}GB"
+            echo "Using soft threshold: ${SOFT_MIN_GB}GB (absolute minimum)"
+          else
+            SOFT_THRESHOLD="${SOFT_PERCENT}%"
+            echo "Using soft threshold: ${SOFT_PERCENT}% (~${SOFT_PERCENT_GB}GB)"
+          fi
+          
+          mkdir -p /etc/rancher/k3s
+          cat > /etc/rancher/k3s/config.yaml << EOF
+          kubelet-arg:
+            - "eviction-hard=memory.available<${HARD_THRESHOLD}"
+            - "eviction-soft=memory.available<${SOFT_THRESHOLD}"
+            - "eviction-soft-grace-period=memory.available={{ .Values.k3sConfig.evictionGracePeriod }}"
+          EOF
+          
+          echo "Generated k3s config:"
+          cat /etc/rancher/k3s/config.yaml
+          echo "Restarting k3s..."
+          systemctl restart k3s
+          echo "k3s memory configuration completed"
+          '
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: host-root
+          mountPath: /host
+      volumes:
+      - name: host-root
+        hostPath:
+          path: /
+      restartPolicy: OnFailure
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
