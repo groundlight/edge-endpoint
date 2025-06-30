@@ -43,19 +43,21 @@ spec:
           
           # Use whichever is smaller: percentage or absolute minimum
           if [ $HARD_MIN_GB -lt $HARD_PERCENT_GB ]; then
-            HARD_THRESHOLD="${HARD_MIN_GB}GB"
-            echo "Using hard threshold: ${HARD_MIN_GB}GB (absolute minimum)"
+            HARD_MIN_GI=$((HARD_MIN_GB * 1000000000 / 1073741824))
+            HARD_THRESHOLD="${HARD_MIN_GI}Gi"
+            echo "Using hard threshold: ${HARD_MIN_GB}GB (${HARD_THRESHOLD}) - absolute minimum"
           else
             HARD_THRESHOLD="${HARD_PERCENT}%"
-            echo "Using hard threshold: ${HARD_PERCENT}% (~${HARD_PERCENT_GB}GB)"
+            echo "Using hard threshold: ${HARD_THRESHOLD} (~${HARD_PERCENT_GB}GB)"
           fi
           
           if [ $SOFT_MIN_GB -lt $SOFT_PERCENT_GB ]; then
-            SOFT_THRESHOLD="${SOFT_MIN_GB}GB"
-            echo "Using soft threshold: ${SOFT_MIN_GB}GB (absolute minimum)"
+            SOFT_MIN_GI=$((SOFT_MIN_GB * 1000000000 / 1073741824))
+            SOFT_THRESHOLD="${SOFT_MIN_GI}Gi"
+            echo "Using soft threshold: ${SOFT_MIN_GB}GB (${SOFT_THRESHOLD}) - absolute minimum"
           else
             SOFT_THRESHOLD="${SOFT_PERCENT}%"
-            echo "Using soft threshold: ${SOFT_PERCENT}% (~${SOFT_PERCENT_GB}GB)"
+            echo "Using soft threshold: ${SOFT_THRESHOLD} (~${SOFT_PERCENT_GB}GB)"
           fi
           
           mkdir -p /etc/rancher/k3s
