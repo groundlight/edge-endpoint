@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 # This will be process-specific, so each edge-endpoint worker will have its own cache instance.
 ttl_cache = TTLCache(maxsize=128, ttl=5)
 
+LAST_MODEL_UPDATE_TIME = 0
+
 
 @cached(ttl_cache)
 def is_edge_inference_ready(inference_client_url: str) -> bool:
@@ -501,6 +503,14 @@ def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[i
     if isinstance(model_info, ModelInfoWithBinary):
         edge_binary_ksuid = get_current_model_ksuid(model_dir, version)
         if edge_binary_ksuid and model_info.model_binary_id == edge_binary_ksuid:
+            # Update model if the last model update was more than 5 minutes ago
+            if time.time() - LAST_MODEL_UPDATE_TIME > 300:
+                logger.info(
+                    f"The edge binary in {model_dir} is the same as the cloud binary, but the last model update was more than 5 minutes ago, so we need to update the model."
+                )
+                LAST_MODEL_UPDATE_TIME = time.time()
+                return True
+
             logger.info(
                 f"The edge binary in {model_dir} is the same as the cloud binary, so we don't need to update the model."
             )
@@ -516,6 +526,7 @@ def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[i
     logger.info(
         f"The model in {model_dir} needs to be updated, the current edge model is different from the cloud model."
     )
+    LAST_MODEL_UPDATE_TIME = time.time()
     return True
 
 
