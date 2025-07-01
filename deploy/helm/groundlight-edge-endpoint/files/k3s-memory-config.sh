@@ -7,7 +7,7 @@ echo "Configuring k3s memory limits with intelligent thresholds..."
 
 # Check if this is a single-node k3s setup. We only want to set eviction policies on single-node k3s setups.
 NODE_COUNT=$(kubectl get nodes --no-headers | wc -l)
-IS_K3S=$(ps aux | grep -q "[k]3s" && echo "true" || echo "false")
+IS_K3S=$(kubectl version 2>/dev/null | grep -q "k3s" && echo "true" || echo "false")
 
 echo "Detected ${NODE_COUNT} nodes, k3s: ${IS_K3S}"
 
