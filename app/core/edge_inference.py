@@ -496,6 +496,9 @@ def save_model_to_repository(
 
 def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[int]) -> bool:
     """Determines if the model needs to be updated based on the received and current model info."""
+
+    global LAST_MODEL_UPDATE_TIME
+
     if version is None:
         logger.info(f"No current model version found in {model_dir}, updating model")
         return True
