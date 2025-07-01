@@ -24,6 +24,25 @@ spec:
         - |
           echo "Configuring k3s memory limits with intelligent thresholds..."
           chroot /host /bin/bash -c '
+
+          # Check if this is a single-node k3s setup
+          NODE_COUNT=$(kubectl get nodes --no-headers | wc -l)
+          IS_K3S=$(ps aux | grep -q "[k]3s" && echo "true" || echo "false")
+
+          echo "Detected ${NODE_COUNT} nodes, k3s: ${IS_K3S}"
+
+          if [ "$NODE_COUNT" -gt 1 ]; then
+            echo "Multi-node cluster detected (${NODE_COUNT} nodes). Skipping memory limits - let the cluster handle resource management."
+            exit 0
+          fi
+
+          if [ "$IS_K3S" != "true" ]; then
+            echo "Regular Kubernetes cluster detected. Skipping memory limits - using cluster-native resource management."
+            exit 0
+          fi
+
+          echo "Single-node k3s detected. Applying memory limits to prevent OOM crashes..."
+
           # Get total memory in KB
           TOTAL_MEM_KB=$(grep MemTotal /proc/meminfo | awk "{print \$2}")
           TOTAL_MEM_BYTES=$((TOTAL_MEM_KB * 1024))
@@ -43,19 +62,21 @@ spec:
           
           # Use whichever is smaller: percentage or absolute minimum
           if [ $HARD_MIN_GB -lt $HARD_PERCENT_GB ]; then
-            HARD_THRESHOLD="${HARD_MIN_GB}GB"
-            echo "Using hard threshold: ${HARD_MIN_GB}GB (absolute minimum)"
+            HARD_MIN_GI=$((HARD_MIN_GB * 1000000000 / 1073741824))
+            HARD_THRESHOLD="${HARD_MIN_GI}Gi"
+            echo "Using hard threshold: ${HARD_MIN_GB}GB (${HARD_THRESHOLD}) - absolute minimum"
           else
             HARD_THRESHOLD="${HARD_PERCENT}%"
-            echo "Using hard threshold: ${HARD_PERCENT}% (~${HARD_PERCENT_GB}GB)"
+            echo "Using hard threshold: ${HARD_THRESHOLD} (~${HARD_PERCENT_GB}GB)"
           fi
           
           if [ $SOFT_MIN_GB -lt $SOFT_PERCENT_GB ]; then
-            SOFT_THRESHOLD="${SOFT_MIN_GB}GB"
-            echo "Using soft threshold: ${SOFT_MIN_GB}GB (absolute minimum)"
+            SOFT_MIN_GI=$((SOFT_MIN_GB * 1000000000 / 1073741824))
+            SOFT_THRESHOLD="${SOFT_MIN_GI}Gi"
+            echo "Using soft threshold: ${SOFT_MIN_GB}GB (${SOFT_THRESHOLD}) - absolute minimum"
           else
             SOFT_THRESHOLD="${SOFT_PERCENT}%"
-            echo "Using soft threshold: ${SOFT_PERCENT}% (~${SOFT_PERCENT_GB}GB)"
+            echo "Using soft threshold: ${SOFT_THRESHOLD} (~${SOFT_PERCENT_GB}GB)"
           fi
           
           mkdir -p /etc/rancher/k3s

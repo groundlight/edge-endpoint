@@ -62,8 +62,8 @@ k3sConfig:
   enabled: true
   evictionHardPercent: "15"
   evictionSoftPercent: "25" 
-  evictionHardMinGB: "2"
-  evictionSoftMinGB: "4"
+  evictionHardMinGB: "4"
+  evictionSoftMinGB: "8"
   evictionGracePeriod: "10s"
 
 serviceAccount:
