@@ -511,7 +511,7 @@ def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[i
                 logger.info(
                     f"The edge binary in {model_dir} is the same as the cloud binary, but the last model update was more than 5 minutes ago, so we need to update the model."
                 )
-                time.time()
+                LAST_MODEL_UPDATE_TIME = time.time()
                 return True
 
             logger.info(
