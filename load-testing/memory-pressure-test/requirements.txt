@@ -1,2 +1,0 @@
-groundlight
-opencv-python
