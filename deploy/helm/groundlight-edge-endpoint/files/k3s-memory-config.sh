@@ -5,7 +5,7 @@
 
 echo "Configuring k3s memory limits with intelligent thresholds..."
 
-# Check if this is a single-node k3s setup
+# Check if this is a single-node k3s setup. We only want to set eviction policies on single-node k3s setups.
 NODE_COUNT=$(kubectl get nodes --no-headers | wc -l)
 IS_K3S=$(ps aux | grep -q "[k]3s" && echo "true" || echo "false")
 
@@ -23,7 +23,7 @@ fi
 
 echo "Single-node k3s detected. Applying memory limits to prevent OOM crashes..."
 
-# Get total memory in KB
+# Get total memory in KB and convert to GB
 TOTAL_MEM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
 TOTAL_MEM_BYTES=$((TOTAL_MEM_KB * 1024))
 TOTAL_MEM_GB=$((TOTAL_MEM_BYTES / 1024 / 1024 / 1024))
@@ -40,9 +40,9 @@ SOFT_MIN_GB={{ .Values.k3sConfig.evictionSoftMinGB }}
 HARD_PERCENT_GB=$((TOTAL_MEM_GB * HARD_PERCENT / 100))
 SOFT_PERCENT_GB=$((TOTAL_MEM_GB * SOFT_PERCENT / 100))
 
-# Use whichever is smaller: percentage or absolute minimum
+# Use whichever is smaller: percentage or absolute minimum. Convert from GB to Gi.
 if [ $HARD_MIN_GB -lt $HARD_PERCENT_GB ]; then
-  HARD_MIN_GI=$(((HARD_MIN_GB * 1000000000 + 1073741824 - 1) / 1073741824))
+  HARD_MIN_GI=$(((HARD_MIN_GB * 1000000000 + 1073741824 - 1) / 1073741824)) # round up
   HARD_THRESHOLD="${HARD_MIN_GI}Gi"
   echo "Using hard threshold: ${HARD_MIN_GB}GB (${HARD_THRESHOLD}) - absolute minimum"
 else
@@ -51,7 +51,7 @@ else
 fi
 
 if [ $SOFT_MIN_GB -lt $SOFT_PERCENT_GB ]; then
-  SOFT_MIN_GI=$(((SOFT_MIN_GB * 1000000000 + 1073741824 - 1) / 1073741824))
+  SOFT_MIN_GI=$(((SOFT_MIN_GB * 1000000000 + 1073741824 - 1) / 1073741824)) # round up
   SOFT_THRESHOLD="${SOFT_MIN_GI}Gi"
   echo "Using soft threshold: ${SOFT_MIN_GB}GB (${SOFT_THRESHOLD}) - absolute minimum"
 else
@@ -59,14 +59,13 @@ else
   echo "Using soft threshold: ${SOFT_THRESHOLD} (~${SOFT_PERCENT_GB}GB)"
 fi
 
-# Add the eviction arguments to the k3s config file
-CONFIG_FILE="/etc/rancher/k3s/config.yaml"
-EVICTION_ARG_MARKER="# Groundlight Edge Endpoint memory management"
+# Add the eviction arguments to the k3s config file, keep pre-existing user config (if any)
 
 # Create directory if it doesn't exist
 mkdir -p /etc/rancher/k3s
 
 # Define our eviction arguments with marker comments
+EVICTION_ARG_MARKER="# Groundlight Edge Endpoint memory management"
 EVICTION_ARGS=$(cat << EOF
   - "eviction-hard=memory.available<${HARD_THRESHOLD}" $EVICTION_ARG_MARKER
   - "eviction-soft=memory.available<${SOFT_THRESHOLD}" $EVICTION_ARG_MARKER
@@ -75,6 +74,7 @@ EOF
 )
 
 # If config file doesn't exist, create it with our args
+CONFIG_FILE="/etc/rancher/k3s/config.yaml"
 if [ ! -f "$CONFIG_FILE" ]; then
     cat > "$CONFIG_FILE" << EOF
 kubelet-arg:
@@ -83,10 +83,10 @@ EOF
     exit 0
 fi
 
-# Remove any existing eviction args (marked with our comment)
+# Remove any existing eviction args (marked with EVICTION_ARG_MARKER)
 sed -i "/$EVICTION_ARG_MARKER/d" "$CONFIG_FILE"
 
-# Check if kubelet-arg section exists
+# Check if kubelet-arg section exists (the user might have added their own config here)
 if grep -q "^kubelet-arg:" "$CONFIG_FILE"; then
     # Append our args to existing kubelet-arg section
     # Find the line number of kubelet-arg and insert after it
