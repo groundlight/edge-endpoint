@@ -63,6 +63,8 @@ spec:
       - name: nginx
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        # Allocate some memory for this container. System-critical containers have memory requests so 
+        # that they are never evicted, even when the system is under memory pressure. 
         resources:
           requests:
             memory: "50Mi"
@@ -98,6 +100,8 @@ spec:
       - name: edge-endpoint
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        # Allocate some memory for this container. System-critical containers have memory requests so 
+        # that they are never evicted, even when the system is under memory pressure. 
         resources:
           requests:
             memory: "700Mi"
@@ -130,6 +134,8 @@ spec:
       - name: status-monitor
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        # Allocate some memory for this container. System-critical containers have memory requests so 
+        # that they are never evicted, even when the system is under memory pressure. 
         resources:
           requests:
             memory: "150Mi"
@@ -156,6 +162,8 @@ spec:
       - name: inference-model-updater
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        # Allocate some memory for this container. System-critical containers have memory requests so 
+        # that they are never evicted, even when the system is under memory pressure. 
         resources:
           requests:
             memory: "200Mi"
