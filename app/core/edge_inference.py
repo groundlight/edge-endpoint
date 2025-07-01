@@ -529,7 +529,7 @@ def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[i
     logger.info(
         f"The model in {model_dir} needs to be updated, the current edge model is different from the cloud model."
     )
-    time.time()
+    LAST_MODEL_UPDATE_TIME = time.time()
     return True
 
 
