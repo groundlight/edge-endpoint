@@ -6,7 +6,7 @@ from typing import Optional
 
 import requests
 import yaml
-from cachetools import TTLCache, cached
+from cachetools import TTLCache
 from fastapi import HTTPException, status
 from jinja2 import Template
 
@@ -21,8 +21,10 @@ logger = logging.getLogger(__name__)
 # This will be process-specific, so each edge-endpoint worker will have its own cache instance.
 ttl_cache = TTLCache(maxsize=128, ttl=5)
 
+LAST_MODEL_UPDATE_TIME = 0
 
-@cached(ttl_cache)
+
+# @cached(ttl_cache)
 def is_edge_inference_ready(inference_client_url: str) -> bool:
     model_ready_url = f"http://{inference_client_url}/health/ready"
     try:
@@ -494,6 +496,9 @@ def save_model_to_repository(
 
 def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[int]) -> bool:
     """Determines if the model needs to be updated based on the received and current model info."""
+
+    global LAST_MODEL_UPDATE_TIME
+
     if version is None:
         logger.info(f"No current model version found in {model_dir}, updating model")
         return True
@@ -501,6 +506,14 @@ def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[i
     if isinstance(model_info, ModelInfoWithBinary):
         edge_binary_ksuid = get_current_model_ksuid(model_dir, version)
         if edge_binary_ksuid and model_info.model_binary_id == edge_binary_ksuid:
+            # Update model if the last model update was more than 5 minutes ago
+            if time.time() - LAST_MODEL_UPDATE_TIME > 300:
+                logger.info(
+                    f"The edge binary in {model_dir} is the same as the cloud binary, but the last model update was more than 5 minutes ago, so we need to update the model."
+                )
+                LAST_MODEL_UPDATE_TIME = time.time()
+                return True
+
             logger.info(
                 f"The edge binary in {model_dir} is the same as the cloud binary, so we don't need to update the model."
             )
@@ -516,6 +529,7 @@ def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[i
     logger.info(
         f"The model in {model_dir} needs to be updated, the current edge model is different from the cloud model."
     )
+    LAST_MODEL_UPDATE_TIME = time.time()
     return True
 
 
