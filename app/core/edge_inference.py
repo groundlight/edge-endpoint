@@ -24,7 +24,7 @@ ttl_cache = TTLCache(maxsize=128, ttl=5)
 LAST_MODEL_UPDATE_TIME = 0
 
 
-@cached(ttl_cache)
+# @cached(ttl_cache)
 def is_edge_inference_ready(inference_client_url: str) -> bool:
     model_ready_url = f"http://{inference_client_url}/health/ready"
     try:
