@@ -59,52 +59,26 @@ else
   echo "Using soft threshold: ${SOFT_THRESHOLD} (~${SOFT_PERCENT_GB}GB)"
 fi
 
-# Add the eviction arguments to the k3s config file, keep pre-existing user config (if any)
-
-# Create directory if it doesn't exist
+# Configure k3s, preserve user-defined config (if any)
 mkdir -p /etc/rancher/k3s
-
-# Define our eviction arguments with marker comments
-EVICTION_ARG_MARKER="# Groundlight Edge Endpoint memory management"
-EVICTION_ARGS=$(cat << EOF
-  - "eviction-hard=memory.available<${HARD_THRESHOLD}" $EVICTION_ARG_MARKER
-  - "eviction-soft=memory.available<${SOFT_THRESHOLD}" $EVICTION_ARG_MARKER
-  - "eviction-soft-grace-period=memory.available={{ .Values.k3sConfig.evictionGracePeriod }}" $EVICTION_ARG_MARKER
-EOF
-)
-
-# If config file doesn't exist, create it with our args
 CONFIG_FILE="/etc/rancher/k3s/config.yaml"
-if [ ! -f "$CONFIG_FILE" ]; then
-    cat > "$CONFIG_FILE" << EOF
-kubelet-arg:
-$EVICTION_ARGS
-EOF
-    exit 0
+MARKER="# Groundlight Edge Endpoint memory management"
+
+# Remove old eviction settings
+if [ -f "$CONFIG_FILE" ]; then
+  sed -i "/$MARKER/d" "$CONFIG_FILE"
 fi
 
-# Remove any existing eviction args (marked with EVICTION_ARG_MARKER)
-sed -i "/$EVICTION_ARG_MARKER/d" "$CONFIG_FILE"
-
-# Check if kubelet-arg section exists (the user might have added their own config here)
-if grep -q "^kubelet-arg:" "$CONFIG_FILE"; then
-    # Append our args to existing kubelet-arg section
-    # Find the line number of kubelet-arg and insert after it
-    awk -v eviction_args="$EVICTION_ARGS" '
-    /^kubelet-arg:/ {
-        print $0
-        print eviction_args
-        next
-    }
-    { print }
-    ' "$CONFIG_FILE" > /tmp/updated_config && mv /tmp/updated_config "$CONFIG_FILE"
-else
-    # No kubelet-arg section exists, add it
-    cat >> "$CONFIG_FILE" << EOF
-kubelet-arg:
-$EVICTION_ARGS
-EOF
+# Ensure kubelet-arg section exists
+if [ ! -f "$CONFIG_FILE" ] || ! grep -q "^kubelet-arg:" "$CONFIG_FILE"; then
+  echo "kubelet-arg:" >> "$CONFIG_FILE"
 fi
+
+# Insert eviction settings right after kubelet-arg: line
+sed -i "/^kubelet-arg:/a\\
+  - \"eviction-hard=memory.available<${HARD_THRESHOLD}\" $MARKER\\
+  - \"eviction-soft=memory.available<${SOFT_THRESHOLD}\" $MARKER\\
+  - \"eviction-soft-grace-period=memory.available=10s\" $MARKER" "$CONFIG_FILE"
 
 # Report the results
 echo "Generated k3s config:"
