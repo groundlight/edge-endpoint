@@ -6,7 +6,7 @@ from typing import Optional
 
 import requests
 import yaml
-from cachetools import TTLCache, cached
+from cachetools import TTLCache
 from fastapi import HTTPException, status
 from jinja2 import Template
 
