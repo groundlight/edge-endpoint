@@ -29,26 +29,13 @@ command:
 
 Some trial and error will likely be necessary to figure out the ideal configuration.
 
-After setting these config options, you should run/re-run the edge-endpoint installation command to deploy with your new configuration. 
+After setting these config options, you should run/re-run the upgrade command to deploy with your new configuration. 
 
 #### If using setup-ee.sh: 
 
 Run/re-run the [setup edge endpoint script](/deploy/bin/setup-ee.sh). You can monitor the inference pod's logs to see when all of the workers have finished starting up (if the number of workers is high, this will likely be after the pod reports being ready). 
 
 #### If using helm:
-
-Add the Groundlight Helm Repository:
-
-```
-helm repo add edge-endpoint https://code.groundlight.ai/edge-endpoint/
-helm repo update
-```
-
-Point Helm to the k3s cluster:
-
-```
-export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-```
 
 Reinstall the endpoint and set the configFile to the `edge-config.yaml` that you just modified:
 
