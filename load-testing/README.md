@@ -33,7 +33,7 @@ After setting these config options, you should run/re-run the upgrade command to
 
 #### If using setup-ee.sh: 
 
-Run/re-run the [setup edge endpoint script](/deploy/bin/setup-ee.sh). You can monitor the inference pod's logs to see when all of the workers have finished starting up (if the number of workers is high, this will likely be after the pod reports being ready). 
+Run/re-run the [setup edge endpoint script](/deploy/bin/setup-ee.sh).
 
 #### If using helm:
 
