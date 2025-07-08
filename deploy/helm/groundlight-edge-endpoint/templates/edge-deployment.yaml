@@ -120,6 +120,8 @@ spec:
           mountPath: /opt/groundlight/edge/sqlite
         - name: device-info-volume
           mountPath: /opt/groundlight/device
+        - name: escalation-queue-volume
+          mountPath: /opt/groundlight/queue
 
       - name: status-monitor
         image: *edgeEndpointImage
@@ -150,7 +152,7 @@ spec:
         command: ["./app/bin/launch-escalation-queue-reader.sh"]
         env:
         - name: LOG_LEVEL
-          value: "INFO"
+          value: {{ .Values.logLevel | quote }}
         - name: GROUNDLIGHT_API_TOKEN
           valueFrom:
             secretKeyRef:
@@ -228,5 +230,5 @@ spec:
           type: DirectoryOrCreate
       - name: escalation-queue-volume
         hostPath:
-          path: /opt/groundlight/queue
+          path: /opt/groundlight/queue/{{ .Values.namespace }}
           type: DirectoryOrCreate

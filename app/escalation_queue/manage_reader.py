@@ -75,7 +75,7 @@ def _escalate_once(  # noqa: PLR0911
             want_async=True,  # Escalations from the queue are always async
             image_query_id=submit_iq_params.image_query_id,
             metadata=submit_iq_params.metadata,
-            request_time=submit_iq_request_time_s,
+            request_timeout=submit_iq_request_time_s,
         )
 
         logger.info("Successfully completed escalation.")
@@ -97,9 +97,11 @@ def _escalate_once(  # noqa: PLR0911
         return None, False  # Do not retry.
 
 
-def consume_queued_escalation(escalation_str: str) -> ImageQuery | None:
+def consume_queued_escalation(escalation_str: str, delete_image: bool | None = True) -> ImageQuery | None:
     """
     Attempts to escalate a queued escalation, retrying based on whether the escalation might succeed in the future.
+
+    The `delete_image` argument is used by tests only, and otherwise defaults to True.
     """
     escalation_info = EscalationInfo(**json.loads(escalation_str))
 
@@ -120,8 +122,13 @@ def consume_queued_escalation(escalation_str: str) -> ImageQuery | None:
                 # If there isn't reason to try again, we move on to the next escalation.
                 logger.info("Moving to next item without retrying.")
                 should_retry_escalation = False
-        else:
+        else:  # Successfully escalated.
             should_retry_escalation = False
+
+    if delete_image:
+        # Delete image when moving on from the escalation (whether it was successfully completed or not).
+        image_path = Path(escalation_info.image_path_str)
+        image_path.unlink()
 
     return escalation_result
 
