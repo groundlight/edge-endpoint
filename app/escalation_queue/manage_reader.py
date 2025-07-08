@@ -21,36 +21,32 @@ logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
-def _groundlight_client() -> Groundlight:  # TODO this is duplicated from metricreporting.py
-    """Returns a Groundlight client instance with EE-wide credentials for reporting metrics."""
+def _groundlight_client() -> Groundlight:  # TODO this is duplicated from metric_reporting.py - do we care?
+    """Returns a Groundlight client instance with EE-wide credentials for escalating from the queue."""
     # Don't specify an API token here - it will use the environment variable.
-    return Groundlight()  # TODO this will likely wait the default 10 seconds when there's no connection
+    return Groundlight()  # TODO this will wait the default 10 seconds when there's no connection
 
 
 def _escalate_once(  # noqa: PLR0911
-    escalation_info: EscalationInfo, submit_iq_request_time_s: int, gl: Groundlight | None = None
+    escalation_info: EscalationInfo, submit_iq_request_time_s: int
 ) -> tuple[ImageQuery | None, bool]:
     """
-    Consumes escalation info for a query and attempts to complete the escalation. TODO update
+    Consumes escalation info for a query and attempts to complete the escalation.
     Returns a tuple:
     - The first element is an ImageQuery if the escalation is successful and None otherwise.
     - The second element is a bool which is True if retrying the escalation might succeed, and False if the escalation
         should not be tried again.
             - For example, if the image could not be loaded, there is no point in retrying.
     """
-    # TODO how to handle when there's no connection and GL client can't be created?
-
     logger.info(
         f"Consumed queued escalation for detector {escalation_info.detector_id} at {escalation_info.timestamp}."
     )
 
-    # TODO is allowing a value to be passed just for testing? do we need to do this, or should we just always create it here?
-    if gl is None:
-        try:
-            gl = _groundlight_client()
-        except GroundlightClientError:
-            logger.info("Got GroundlightClientError while trying to create the client. Will retry.")
-            return None, True  # Should retry because the escalation may succeed once connection is restored.
+    try:
+        gl = _groundlight_client()
+    except GroundlightClientError as ex:  # TODO make sure this is the only error that needs to be caught here
+        logger.info(f"Got error {ex=} while trying to create the Groundlight client. Will retry.")
+        return None, True  # Should retry because the escalation may succeed once connection is restored.
 
     image_path = Path(escalation_info.image_path_str)
     try:
@@ -102,6 +98,9 @@ def _escalate_once(  # noqa: PLR0911
 
 
 def consume_queued_escalation(escalation_str: str) -> ImageQuery | None:
+    """
+    Attempts to escalate a queued escalation, retrying based on whether the escalation might succeed in the future.
+    """
     escalation_info = EscalationInfo(**json.loads(escalation_str))
 
     should_retry_escalation = True
@@ -122,14 +121,16 @@ def consume_queued_escalation(escalation_str: str) -> ImageQuery | None:
                 logger.info("Moving to next item without retrying.")
                 should_retry_escalation = False
         else:
-            logger.info("Escalation succeeded.")
             should_retry_escalation = False
 
     return escalation_result
 
 
 def read_from_escalation_queue(reader: QueueReader) -> None:
+    """Reads escalations from the queue reader and attempts to escalates them."""
+    # Because the QueueReader will block until it has something to yield, this will loop forever
     for escalation in reader:
+        logger.info(f"Got escalation {escalation} from reader.")
         result = consume_queued_escalation(escalation)
         if result is None:
             logger.info("Escalation permanently failed, moving on.")

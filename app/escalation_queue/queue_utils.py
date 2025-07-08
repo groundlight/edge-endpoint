@@ -21,7 +21,7 @@ def is_already_escalated(gl: Groundlight, image_query_id: str) -> bool:
         if ex.status_code == status.HTTP_404_NOT_FOUND:
             # A 404 response indicates that no image query with the specified ID exists in the cloud
             return False
-        # We re-raise all other exceptions so that they're caught by outer except blocks.
+        # We re-raise all other exceptions so that they can be caught by outer except blocks.
         raise ex
 
 
@@ -73,6 +73,9 @@ def safe_escalate_with_queue_write(
         # might not be successful upon retry (e.g., if the request is malformed, it will error again). But the
         # escalation queue process will handle these errors and skip the escalation if it can't succceed, so we can
         # safely write it to the queue no matter what the exception here was.
-        logger.info(f"Writing the escalation to the queue because there was an exception while escalating: {ex=}.")
+        logger.info(
+            f"Writing an escalation for detector {detector_id} to the queue because there was an exception while "
+            f"escalating: {ex=}."
+        )
         write_escalation_to_queue(writer=queue_writer, image_bytes=image_bytes, submit_iq_params=submit_iq_params)
         raise ex
