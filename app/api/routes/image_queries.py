@@ -126,14 +126,6 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             )
         logger.debug(f"Submitting ask_async image query to cloud API server for {detector_id=}")
         record_activity_for_metrics(detector_id, activity_type="escalations")
-        # return safe_call_sdk(
-        #     gl.ask_async,
-        #     detector=detector_id,
-        #     image=image_bytes,
-        #     patience_time=patience_time,
-        #     confidence_threshold=confidence_threshold,
-        #     human_review=human_review,
-        # )
         submit_iq_params = SubmitImageQueryParams(
             patience_time=patience_time,
             confidence_threshold=confidence_threshold,
@@ -152,7 +144,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
     confidence_threshold = confidence_threshold or detector_metadata.confidence_threshold
 
-    # for holding edge results if and when available
+    # For holding edge results if and when available
     results = None
 
     if require_human_review:
@@ -212,20 +204,9 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         image_bytes=image_bytes,
                         submit_iq_params=submit_iq_params,
                     )
-                    # background_tasks.add_task(
-                    #     safe_call_sdk,
-                    #     gl.submit_image_query,
-                    #     detector=detector_id,
-                    #     image=image_bytes,
-                    #     wait=0,
-                    #     patience_time=patience_time,
-                    #     confidence_threshold=confidence_threshold,
-                    #     want_async=True,
-                    #     metadata=generate_metadata_dict(results=results, is_edge_audit=True),
-                    #     image_query_id=image_query.id,
-                    # )
-                    # We keep done_processing=True here because although we escalated the query for an audit, this is
-                    # invisible to the user. From their perspective, this is the final answer.
+
+                    # We keep done_processing=True here for `image_query` because although we escalated the query for
+                    # an audit, this is invisible to the user. From their perspective, this is the final answer.
 
                     # Don't want to escalate to cloud again if we're already auditing the query
                     return image_query
@@ -243,7 +224,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         confidence_threshold=confidence_threshold,
                         human_review=None,
                         metadata=generate_metadata_dict(results=results, is_edge_audit=False),
-                        image_query_id=image_query.id,
+                        image_query_id=image_query.id,  # We give the cloud IQ the same ID as the returned edge IQ
                     )
                     background_tasks.add_task(
                         write_escalation_to_queue,
@@ -252,20 +233,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         image_bytes=image_bytes,
                         submit_iq_params=submit_iq_params,
                     )
-                    # background_tasks.add_task(
-                    #     safe_call_sdk,
-                    #     gl.submit_image_query,  # This has to be submit_image_query in order to specify image_query_id
-                    #     detector=detector_id,
-                    #     image=image_bytes,
-                    #     wait=0,
-                    #     patience_time=patience_time,
-                    #     confidence_threshold=confidence_threshold,
-                    #     human_review=human_review,
-                    #     want_async=True,
-                    #     metadata=generate_metadata_dict(results=results, is_edge_audit=False),
-                    #     image_query_id=image_query.id,  # Ensure the cloud IQ has the same ID as the returned edge IQ
-                    # )
-                    # Not done processing because the associated IQ in the cloud could get a better answer
+                    # Not done processing because the IQ in the cloud could get a better answer once escalated
                     image_query.done_processing = False
                 else:
                     logger.debug(
@@ -312,16 +280,6 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
     logger.debug(f"Submitting image query to cloud for {detector_id=}")
     record_activity_for_metrics(detector_id, activity_type="escalations")
-    # return safe_call_sdk(
-    #     gl.submit_image_query,
-    #     detector=detector_id,
-    #     image=image_bytes,
-    #     wait=0,  # wait on the client, not here
-    #     patience_time=patience_time,
-    #     confidence_threshold=confidence_threshold,
-    #     human_review=human_review,
-    #     metadata=generate_metadata_dict(results=results, is_edge_audit=False),
-    # )
     submit_iq_params = SubmitImageQueryParams(
         patience_time=patience_time,
         confidence_threshold=confidence_threshold,
