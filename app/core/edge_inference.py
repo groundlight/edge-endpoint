@@ -381,7 +381,12 @@ def fetch_model_info(detector_id: str, api_token: Optional[str] = None) -> tuple
 
     logger.debug(f"Fetching model info for {detector_id}")
 
-    url = f"https://api.groundlight.ai/edge-api/v1/fetch-model-urls/{detector_id}/"
+    # Get endpoint from env var
+    groundlight_endpoint = os.environ.get("GROUNDLIGHT_ENDPOINT", "https://api.groundlight.ai/")
+    if not groundlight_endpoint.endswith("/"):
+        groundlight_endpoint += "/"
+    url = f"{groundlight_endpoint}edge-api/v1/fetch-model-urls/{detector_id}/"
+
     headers = {"x-api-token": api_token}
     response = requests.get(url, headers=headers, timeout=10)
     logger.debug(f'fetch-model-urls response.text = "{response.text}", response.status_code = {response.status_code}')
