@@ -56,3 +56,16 @@ logLevel: "INFO"
 # Don't override these
 nameOverride: "edge-endpoint"
 fullnameOverride: "edge-endpoint"
+
+# Set some sensible limits on memory usage to avoid system crashing
+k3sConfig:
+  enabled: true
+  evictionHardPercent: "15"
+  evictionSoftPercent: "25" 
+  evictionHardMinGB: "4"
+  evictionSoftMinGB: "8"
+  evictionGracePeriod: "10s"
+
+serviceAccount:
+  create: true
+  name: ""
