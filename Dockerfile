@@ -95,8 +95,8 @@ WORKDIR ${APP_ROOT}
 # Copy the remaining files
 COPY /app ${APP_ROOT}/app/
 COPY /deploy ${APP_ROOT}/deploy/
-COPY /THIRD_PARTY_LICENSES.md ${APP_ROOT}/THIRD_PARTY_LICENSES.md
-COPY /LICENSE ${APP_ROOT}/LICENSE
+COPY /licenses ${APP_ROOT}/licenses/
+COPY /README.md ${APP_ROOT}/README.md
 
 COPY --from=production-dependencies-build-stage ${APP_ROOT}/configs/nginx.conf /etc/nginx/nginx.conf
 
