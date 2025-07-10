@@ -134,7 +134,12 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             image_query_id=generate_iq_id(),
         )
         return safe_escalate_with_queue_write(
-            gl=gl, detector_id=detector_id, image_bytes=image_bytes, want_async=True, submit_iq_params=submit_iq_params
+            gl=gl,
+            queue_writer=app_state.queue_writer,
+            detector_id=detector_id,
+            image_bytes=image_bytes,
+            want_async=True,
+            submit_iq_params=submit_iq_params,
         )
 
     # Confirm the existence of the detector in GL, get relevant metadata
