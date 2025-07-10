@@ -120,7 +120,6 @@ def consume_queued_escalation(escalation_str: str, delete_image: bool | None = T
                 submit_iq_request_time_s = 0.5  # Wait less time on retries, since we expect we don't have connection.
             else:
                 # If there isn't reason to try again, we move on to the next escalation.
-                logger.info("Moving to next item without retrying.")
                 should_retry_escalation = False
         else:  # Successfully escalated.
             should_retry_escalation = False
