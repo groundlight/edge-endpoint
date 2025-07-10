@@ -619,5 +619,8 @@ class TestQueueUtils:
                 )
 
             mock_write_escalation_to_queue.assert_called_once_with(
-                writer=test_writer, image_bytes=test_image_bytes, submit_iq_params=test_escalation_info.submit_iq_params
+                writer=test_writer,
+                detector_id=test_escalation_info.detector_id,
+                image_bytes=test_image_bytes,
+                submit_iq_params=test_escalation_info.submit_iq_params,
             )
