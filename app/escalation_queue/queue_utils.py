@@ -77,5 +77,7 @@ def safe_escalate_with_queue_write(
             f"Writing an escalation for detector {detector_id} to the queue because there was an exception while "
             f"escalating: {ex=}."
         )
-        write_escalation_to_queue(writer=queue_writer, image_bytes=image_bytes, submit_iq_params=submit_iq_params)
+        write_escalation_to_queue(
+            writer=queue_writer, detector_id=detector_id, image_bytes=image_bytes, submit_iq_params=submit_iq_params
+        )
         raise ex
