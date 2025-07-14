@@ -4,6 +4,5 @@
 .git
 .gitignore
 Dockerfile
-README.md
 test_coverage_reports/
 deploy/balena-k3s/build

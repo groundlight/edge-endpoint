@@ -74,3 +74,9 @@ Each inferencemodel pod contains one container.
 * `Cloud API:` This is the upstream API that we use as a fallback in case the edge logic server encounters problems. It is set to `https://api.groundlight.ai`.
 
 * `Endpoint url:` This is the URL where the endpoint's functionality is exposed to the SDK or applications.  (i.e., the upstream you can set for the Groundlight application). This is set to `http://localhost:30101`.
+
+## Attribution
+
+This product includes software developed by third parties, which is subject to their respective open-source licenses.
+
+See [THIRD_PARTY_LICENSES.md](./licenses/THIRD_PARTY_LICENSES.md) for details and license texts.
