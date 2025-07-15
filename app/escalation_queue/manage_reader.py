@@ -21,22 +21,29 @@ logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
-def _groundlight_client() -> Groundlight:  # TODO this is duplicated from metric_reporting.py - do we care?
+def _groundlight_client() -> Groundlight:
     """Returns a Groundlight client instance with EE-wide credentials for escalating from the queue."""
     # Don't specify an API token here - it will use the environment variable.
-    return Groundlight()  # TODO this will wait the default 10 seconds when there's no connection
+    return Groundlight()  # NOTE this will wait the default 10 seconds when there's no connection.
 
 
 def _escalate_once(  # noqa: PLR0911
-    escalation_info: EscalationInfo, submit_iq_request_time_s: int
+    escalation_info: EscalationInfo, submit_iq_request_timeout_s: int
 ) -> tuple[ImageQuery | None, bool]:
     """
     Consumes escalation info for a query and attempts to complete the escalation.
-    Returns a tuple:
-    - The first element is an ImageQuery if the escalation is successful and None otherwise.
-    - The second element is a bool which is True if retrying the escalation might succeed, and False if the escalation
-        should not be tried again.
-            - For example, if the image could not be loaded, there is no point in retrying.
+
+    Args:
+        escalation_info (EscalationInfo): Information required to perform the escalation.
+        submit_iq_request_timeout_s (int): Timeout in seconds for the image query submission request. This will be
+            passed to submit_image_query as the request_timeout.
+
+    Returns:
+        tuple[ImageQuery | None, bool]:
+            - The first element is an ImageQuery if the escalation is successful and None otherwise.
+            - The second element is a bool: True if retrying the escalation might succeed, False if the escalation
+              should not be tried again.
+              For example, if the image could not be loaded, there is no point in retrying.
     """
     logger.info(
         f"Consumed queued escalation for detector {escalation_info.detector_id} at {escalation_info.timestamp}."
@@ -75,7 +82,7 @@ def _escalate_once(  # noqa: PLR0911
             want_async=True,  # Escalations from the queue are always async
             image_query_id=submit_iq_params.image_query_id,
             metadata=submit_iq_params.metadata,
-            request_timeout=submit_iq_request_time_s,
+            request_timeout=submit_iq_request_timeout_s,
         )
 
         logger.info("Successfully completed escalation.")
@@ -108,16 +115,18 @@ def consume_queued_escalation(escalation_str: str, delete_image: bool | None = T
     should_retry_escalation = True
     escalation_result = None
 
-    submit_iq_request_time_s = 5  # How long the request should be allowed to try to complete.
+    submit_iq_request_timeout_s = 5  # How long the image query request should be allowed to try to complete.
 
     while should_retry_escalation:
-        escalation_result, should_try_again = _escalate_once(escalation_info, submit_iq_request_time_s)
+        escalation_result, should_try_again = _escalate_once(escalation_info, submit_iq_request_timeout_s)
         if escalation_result is None:
             logger.info("Escalation failed.")
             if should_try_again:
                 logger.info("Retrying escalation.")
                 should_retry_escalation = True
-                submit_iq_request_time_s = 0.5  # Wait less time on retries, since we expect we don't have connection.
+                submit_iq_request_timeout_s = (
+                    0.5  # Wait less time on retries, since we expect we don't have connection.
+                )
             else:
                 # If there isn't reason to try again, we move on to the next escalation.
                 should_retry_escalation = False
@@ -127,7 +136,7 @@ def consume_queued_escalation(escalation_str: str, delete_image: bool | None = T
     if delete_image:
         # Delete image when moving on from the escalation (whether it was successfully completed or not).
         image_path = Path(escalation_info.image_path_str)
-        image_path.unlink()
+        image_path.unlink(missing_ok=True)
 
     return escalation_result
 

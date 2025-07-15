@@ -31,16 +31,20 @@ def write_escalation_to_queue(
     image_bytes: bytes,
     submit_iq_params: SubmitImageQueryParams,
 ) -> None:
-    timestamp = get_formatted_timestamp_str()
-    image_path_str = writer.write_image_bytes(image_bytes, detector_id, timestamp)
+    """Writes an escalation to the queue. On failure, logs an error and does NOT raise an exception."""
+    try:  # We don't want this to ever raise an exception because it's called synchronously before we return an answer.
+        timestamp = get_formatted_timestamp_str()
+        image_path_str = writer.write_image_bytes(image_bytes, detector_id, timestamp)
 
-    escalation_info = EscalationInfo(
-        timestamp=timestamp,
-        detector_id=detector_id,
-        image_path_str=image_path_str,
-        submit_iq_params=submit_iq_params,
-    )
-    writer.write_escalation(escalation_info)  # TODO retry here? catch error?
+        escalation_info = EscalationInfo(
+            timestamp=timestamp,
+            detector_id=detector_id,
+            image_path_str=image_path_str,
+            submit_iq_params=submit_iq_params,
+        )
+        writer.write_escalation(escalation_info)
+    except Exception as e:
+        logger.error(f"Failed to write escalation to queue for detector {detector_id} with error {e}.")
 
 
 def safe_escalate_with_queue_write(

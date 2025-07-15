@@ -202,8 +202,9 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         metadata=generate_metadata_dict(results=results, is_edge_audit=True),
                         image_query_id=image_query.id,  # We give the cloud IQ the same ID as the returned edge IQ
                     )
-                    background_tasks.add_task(
-                        write_escalation_to_queue,
+                    # We write to the queue synchronously because it should be fast. But this could be done as a
+                    # background task if it becomes slow.
+                    write_escalation_to_queue(
                         writer=app_state.queue_writer,
                         detector_id=detector_id,
                         image_bytes=image_bytes,
@@ -231,8 +232,9 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         metadata=generate_metadata_dict(results=results, is_edge_audit=False),
                         image_query_id=image_query.id,  # We give the cloud IQ the same ID as the returned edge IQ
                     )
-                    background_tasks.add_task(
-                        write_escalation_to_queue,
+                    # We write to the queue synchronously because it should be fast. But this could be done as a
+                    # background task if it becomes slow.
+                    write_escalation_to_queue(
                         writer=app_state.queue_writer,
                         detector_id=detector_id,
                         image_bytes=image_bytes,
