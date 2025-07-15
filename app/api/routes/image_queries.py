@@ -1,5 +1,4 @@
 import logging
-import random
 from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
@@ -9,12 +8,10 @@ from model import ImageQuery
 from app.core.app_state import (
     AppState,
     get_app_state,
-    get_detector_metadata,
     get_groundlight_sdk_instance,
-    refresh_detector_metadata_if_needed,
 )
 from app.core.edge_inference import get_edge_inference_model_name
-from app.core.utils import create_iq, generate_metadata_dict, safe_call_sdk
+from app.core.utils import create_iq
 from app.metrics.iq_activity import record_activity_for_metrics
 
 logger = logging.getLogger(__name__)
@@ -98,16 +95,13 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         HTTPException: If there are issues with the request parameters or processing.
     """
     logger.info("Running post_image_query...")
-    
+
     await validate_query_params_for_edge(request)
 
     require_human_review = human_review == "ALWAYS"
     detector_inference_config = app_state.edge_inference_manager.detector_inference_configs.get(detector_id)
     return_edge_prediction = (
         detector_inference_config.always_return_edge_prediction if detector_inference_config is not None else False
-    )
-    disable_cloud_escalation = (
-        detector_inference_config.disable_cloud_escalation if detector_inference_config is not None else False
     )
 
     if require_human_review and return_edge_prediction:
@@ -130,7 +124,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     # background_tasks.add_task(refresh_detector_metadata_if_needed, detector_id, gl)
 
     # confidence_threshold = confidence_threshold or detector_metadata.confidence_threshold
-    confidence_threshold = 0.9 # Set an arbitrary threshold since we cannot get one from the cloud TODO is this okay?
+    confidence_threshold = 0.9  # Set an arbitrary threshold since we cannot get one from the cloud TODO is this okay?
 
     # for holding edge results if and when available
     results = None
@@ -156,13 +150,13 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
             image_query = create_iq(
                 detector_id=detector_id,
-                mode=ModeEnum.BINARY, # URCap only supports binary
-                mode_configuration=None, # None works for binary detectors
+                mode=ModeEnum.BINARY,  # URCap only supports binary
+                mode_configuration=None,  # None works for binary detectors
                 result_value=results["label"],
                 confidence=ml_confidence,
                 confidence_threshold=confidence_threshold,
                 is_done_processing=True,
-                query='', # We cannot fetch this, but do we really need it?
+                query="",  # We cannot fetch this, but do we really need it?
                 patience_time=patience_time,
                 rois=results["rois"],
                 text=results["text"],
@@ -175,7 +169,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         # Create an edge-inference deployment record, which may be used to spin up an edge-inference server.
         logger.debug(f"Local inference not available for {detector_id=}. Creating inference deployment record.")
         if gl is None:
-            return 
+            return
         api_token = gl.api_client.configuration.api_key["ApiToken"]
         primary_model_name = get_edge_inference_model_name(detector_id=detector_id, is_oodd=False)
         oodd_model_name = get_edge_inference_model_name(detector_id=detector_id, is_oodd=True)
