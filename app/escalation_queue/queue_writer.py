@@ -41,6 +41,7 @@ class QueueWriter:
         """
         image_file_name = f"{detector_id}-{timestamp}-{ksuid.KsuidMs()}"
         image_path = Path.joinpath(self.base_image_dir, image_file_name)
+        image_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure directory of target path exists.
         image_path.write_bytes(image_bytes)
 
         return str(image_path.resolve())
@@ -67,6 +68,8 @@ class QueueWriter:
     def _write_to_path(self, path_to_write_to: Path, data: EscalationInfo, is_new_file: bool) -> bool:
         """Writes the provided data to the provided path. Returns True if the write succeeds and False otherwise."""
         try:
+            path_to_write_to.parent.mkdir(parents=True, exist_ok=True)  # Ensure directory of target path exists.
+
             flags = os.O_WRONLY | os.O_APPEND
             if is_new_file:
                 # If we know the file does not yet exist, we want to create it and open it.
