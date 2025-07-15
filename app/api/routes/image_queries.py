@@ -3,7 +3,7 @@ import random
 from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
-from groundlight import Groundlight
+from groundlight import Groundlight, ModeEnum
 from model import ImageQuery
 
 from app.core.app_state import (
@@ -97,6 +97,8 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     Raises:
         HTTPException: If there are issues with the request parameters or processing.
     """
+    logger.info("Running post_image_query...")
+    
     await validate_query_params_for_edge(request)
 
     require_human_review = human_review == "ALWAYS"
@@ -117,28 +119,18 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     record_activity_for_metrics(detector_id, activity_type="iqs")
 
     if want_async:  # just submit to the cloud w/ ask_async
-        if return_edge_prediction:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Async requests are not supported when 'always_return_edge_prediction' is set to True.",
-            )
-        logger.debug(f"Submitting ask_async image query to cloud API server for {detector_id=}")
-        record_activity_for_metrics(detector_id, activity_type="escalations")
-        return safe_call_sdk(
-            gl.ask_async,
-            detector=detector_id,
-            image=image_bytes,
-            patience_time=patience_time,
-            confidence_threshold=confidence_threshold,
-            human_review=human_review,
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Async requests are not supported on edge-only mode.",
         )
 
     # Confirm the existence of the detector in GL, get relevant metadata
-    detector_metadata = get_detector_metadata(detector_id=detector_id, gl=gl)  # NOTE: API call (once, then cached)
+    # detector_metadata = get_detector_metadata(detector_id=detector_id, gl=gl)  # NOTE: API call (once, then cached)
     # Schedule a background task to refresh the detector metadata if it's too old
-    background_tasks.add_task(refresh_detector_metadata_if_needed, detector_id, gl)
+    # background_tasks.add_task(refresh_detector_metadata_if_needed, detector_id, gl)
 
-    confidence_threshold = confidence_threshold or detector_metadata.confidence_threshold
+    # confidence_threshold = confidence_threshold or detector_metadata.confidence_threshold
+    confidence_threshold = 0.9 # Set an arbitrary threshold since we cannot get one from the cloud TODO is this okay?
 
     # for holding edge results if and when available
     results = None
@@ -164,79 +156,26 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
             image_query = create_iq(
                 detector_id=detector_id,
-                mode=detector_metadata.mode,
-                mode_configuration=detector_metadata.mode_configuration,
+                mode=ModeEnum.BINARY, # URCap only supports binary
+                mode_configuration=None, # None works for binary detectors
                 result_value=results["label"],
                 confidence=ml_confidence,
                 confidence_threshold=confidence_threshold,
                 is_done_processing=True,
-                query=detector_metadata.query,
+                query='', # We cannot fetch this, but do we really need it?
                 patience_time=patience_time,
                 rois=results["rois"],
                 text=results["text"],
             )
 
-            # Skip cloud operations if escalation is disabled
-            if disable_cloud_escalation:
-                return image_query
-
-            if is_confident_enough:  # Audit confident edge predictions at the specified rate
-                if random.random() < app_state.edge_config.global_config.confident_audit_rate:
-                    logger.debug(
-                        f"Auditing confident edge prediction with confidence {ml_confidence} for detector {detector_id=}."
-                    )
-                    record_activity_for_metrics(detector_id, activity_type="audits")
-                    background_tasks.add_task(
-                        safe_call_sdk,
-                        gl.submit_image_query,
-                        detector=detector_id,
-                        image=image_bytes,
-                        wait=0,
-                        patience_time=patience_time,
-                        confidence_threshold=confidence_threshold,
-                        want_async=True,
-                        metadata=generate_metadata_dict(results=results, is_edge_audit=True),
-                        image_query_id=image_query.id,  # We give the cloud IQ the same ID as the returned edge IQ
-                    )
-                    # We keep done_processing=True here because although we escalated the query for an audit, this is
-                    # invisible to the user. From their perspective, this is the final answer.
-
-                    # Don't want to escalate to cloud again if we're already auditing the query
-                    return image_query
-
-            # Escalate after returning edge prediction if escalation is enabled and we have low confidence.
-            if not is_confident_enough:
-                # Only escalate if we haven't escalated on this detector too recently.
-                if app_state.edge_inference_manager.escalation_cooldown_complete(detector_id=detector_id):
-                    logger.debug(
-                        f"Escalating to cloud due to low confidence: {ml_confidence} < thresh={confidence_threshold}"
-                    )
-                    record_activity_for_metrics(detector_id, activity_type="escalations")
-                    background_tasks.add_task(
-                        safe_call_sdk,
-                        gl.submit_image_query,  # This has to be submit_image_query in order to specify image_query_id
-                        detector=detector_id,
-                        image=image_bytes,
-                        wait=0,
-                        patience_time=patience_time,
-                        confidence_threshold=confidence_threshold,
-                        human_review=human_review,
-                        want_async=True,
-                        metadata=generate_metadata_dict(results=results, is_edge_audit=False),
-                        image_query_id=image_query.id,  # Ensure the cloud IQ has the same ID as the returned edge IQ
-                    )
-                    # Not done processing because the associated IQ in the cloud could get a better answer
-                    image_query.done_processing = False
-                else:
-                    logger.debug(
-                        f"Not escalating to cloud due to rate limit on background cloud escalations: {detector_id=}"
-                    )
-
+            # Skip cloud operations
             return image_query
     else:
         # -- Edge-inference is not available --
         # Create an edge-inference deployment record, which may be used to spin up an edge-inference server.
         logger.debug(f"Local inference not available for {detector_id=}. Creating inference deployment record.")
+        if gl is None:
+            return 
         api_token = gl.api_client.configuration.api_key["ApiToken"]
         primary_model_name = get_edge_inference_model_name(detector_id=detector_id, is_oodd=False)
         oodd_model_name = get_edge_inference_model_name(detector_id=detector_id, is_oodd=True)
@@ -266,19 +205,19 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 ),
             )
 
-    # Fall back to submitting the image to the cloud
-    if disable_cloud_escalation:
-        raise AssertionError("Cloud escalation is disabled.")  # ...should never reach this point
+    # # Fall back to submitting the image to the cloud
+    # if disable_cloud_escalation:
+    #     raise AssertionError("Cloud escalation is disabled.")  # ...should never reach this point
 
-    logger.debug(f"Submitting image query to cloud for {detector_id=}")
-    record_activity_for_metrics(detector_id, activity_type="escalations")
-    return safe_call_sdk(
-        gl.submit_image_query,
-        detector=detector_id,
-        image=image_bytes,
-        wait=0,  # wait on the client, not here
-        patience_time=patience_time,
-        confidence_threshold=confidence_threshold,
-        human_review=human_review,
-        metadata=generate_metadata_dict(results=results, is_edge_audit=False),
-    )
+    # logger.debug(f"Submitting image query to cloud for {detector_id=}")
+    # record_activity_for_metrics(detector_id, activity_type="escalations")
+    # return safe_call_sdk(
+    #     gl.submit_image_query,
+    #     detector=detector_id,
+    #     image=image_bytes,
+    #     wait=0,  # wait on the client, not here
+    #     patience_time=patience_time,
+    #     confidence_threshold=confidence_threshold,
+    #     human_review=human_review,
+    #     metadata=generate_metadata_dict(results=results, is_edge_audit=False),
+    # )
