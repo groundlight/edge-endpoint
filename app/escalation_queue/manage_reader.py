@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import time
 from functools import lru_cache
 from pathlib import Path
 
@@ -18,6 +19,10 @@ logging.basicConfig(
     level=LOG_LEVEL, format="%(asctime)s.%(msecs)03d %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
 )
 logger = logging.getLogger(__name__)
+
+# Increasing lengths of time to wait before retrying an escalation, to avoid hammering the cloud
+# service if it's down for some reason.
+RETRY_WAIT_TIMES = [0, 1, 5, 10, 30]
 
 
 @lru_cache(maxsize=1)
@@ -117,17 +122,21 @@ def consume_queued_escalation(escalation_str: str, delete_image: bool | None = T
     escalation_result = None
 
     submit_iq_request_timeout_s = 5  # How long the image query request should be allowed to try to complete.
+    retry_count = 0
 
     while should_retry_escalation:
         escalation_result, should_try_again = _escalate_once(escalation_info, submit_iq_request_timeout_s)
         if escalation_result is None:
             logger.info("Escalation failed.")
             if should_try_again:
-                logger.info("Retrying escalation.")
                 should_retry_escalation = True
                 submit_iq_request_timeout_s = (
                     0.5  # Wait less time on retries, since we expect we don't have connection.
                 )
+                wait_time = RETRY_WAIT_TIMES[min(retry_count, len(RETRY_WAIT_TIMES) - 1)]
+                logger.info(f"Retrying escalation. Waiting {wait_time} seconds before next retry.")
+                time.sleep(wait_time)
+                retry_count += 1
             else:
                 # If there isn't reason to try again, we move on to the next escalation.
                 should_retry_escalation = False

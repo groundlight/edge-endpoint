@@ -14,7 +14,12 @@ from urllib3.exceptions import MaxRetryError
 
 from app.core.utils import generate_iq_id, get_formatted_timestamp_str
 from app.escalation_queue.constants import MAX_QUEUE_FILE_LINES
-from app.escalation_queue.manage_reader import _escalate_once, consume_queued_escalation, read_from_escalation_queue
+from app.escalation_queue.manage_reader import (
+    RETRY_WAIT_TIMES,
+    _escalate_once,
+    consume_queued_escalation,
+    read_from_escalation_queue,
+)
 from app.escalation_queue.models import EscalationInfo, SubmitImageQueryParams
 from app.escalation_queue.queue_reader import QueueReader
 from app.escalation_queue.queue_utils import (
@@ -466,7 +471,10 @@ class TestConsumeQueuedEscalation:
         num_retries = 3
         side_effects = [(None, True)] * num_retries + [(None, False)]
 
-        with patch("app.escalation_queue.manage_reader._escalate_once", side_effect=side_effects) as mock_escalate:
+        with (
+            patch("app.escalation_queue.manage_reader._escalate_once", side_effect=side_effects) as mock_escalate,
+            patch("app.escalation_queue.manage_reader.time.sleep") as mock_sleep,  # Avoid waiting during the test
+        ):
             result = consume_queued_escalation(escalation_str, delete_image=False)
 
         assert result is None
@@ -476,6 +484,11 @@ class TestConsumeQueuedEscalation:
         call_times = [call_args[0][1] for call_args in mock_escalate.call_args_list]
         first_request_time = call_times[0]
         assert all(t < first_request_time for t in call_times[1:])
+
+        # Check that time.sleep was called with the expected wait time for each retry
+        expected_waits = RETRY_WAIT_TIMES[:num_retries]
+        actual_waits = [call_args[0][0] for call_args in mock_sleep.call_args_list]
+        assert actual_waits == expected_waits
 
     def test_deletes_image_on_completion(self, test_escalation_info: EscalationInfo):
         """The image for the escalation should be deleted if delete_image is not set to False."""
