@@ -21,7 +21,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Increasing lengths of time to wait before retrying an escalation, to avoid hammering the cloud
-# service if it's down for some reason.
+# service if it's down for some reason or if the user's throttling limit is reached.
 RETRY_WAIT_TIMES = [0, 1, 5, 10, 30]
 
 
@@ -102,6 +102,14 @@ def _escalate_once(  # noqa: PLR0911
         if ex.status_code == status.HTTP_400_BAD_REQUEST:
             logger.info(f"Got HTTPException with status code 400. Scrapping the escalation. {ex=}")
             return None, False  # Should not retry because the request is malformed.
+        elif ex.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
+            logger.info(
+                "Got HTTPException with status code 429. This likely means we have hit our throttling limit. Will "
+                "retry."
+            )
+            # NOTE This could inspect the 'retry-after' key in the header response to find the exact time needed to
+            # wait. For now we just do our normal retry backoff.
+            return None, True  # Should retry because the escalation may succeed after some time has passed.
         else:
             logger.info(f"Got HTTPException with unhandled status code {ex.status_code}. {ex=}")
             return None, False  # Do not retry.
@@ -130,9 +138,7 @@ def consume_queued_escalation(escalation_str: str, delete_image: bool | None = T
             logger.info("Escalation failed.")
             if should_try_again:
                 should_retry_escalation = True
-                submit_iq_request_timeout_s = (
-                    0.5  # Wait less time on retries, since we expect we don't have connection.
-                )
+                submit_iq_request_timeout_s = 1  # Wait less time on retries, since we expect we don't have connection.
                 wait_time = RETRY_WAIT_TIMES[min(retry_count, len(RETRY_WAIT_TIMES) - 1)]
                 logger.info(f"Retrying escalation. Waiting {wait_time} seconds before next retry.")
                 time.sleep(wait_time)
