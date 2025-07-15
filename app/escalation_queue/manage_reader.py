@@ -65,6 +65,8 @@ def _escalate_once(  # noqa: PLR0911
 
     submit_iq_params = escalation_info.submit_iq_params
     try:
+        # Ideally we'd just try to submit the IQ and catch the error if it already exists in the cloud. But currently
+        # trying to do that would trigger an alert in the cloud, so instead we include this extra API call to check.
         if is_already_escalated(gl, submit_iq_params.image_query_id):
             logger.info(
                 f"An image query with ID {submit_iq_params.image_query_id} already exists in the cloud, so we must "
