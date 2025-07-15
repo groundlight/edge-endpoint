@@ -46,7 +46,8 @@ def _escalate_once(  # noqa: PLR0911
               For example, if the image could not be loaded, there is no point in retrying.
     """
     logger.info(
-        f"Consumed queued escalation for detector {escalation_info.detector_id} at {escalation_info.timestamp}."
+        f"Consumed queued escalation with ID {escalation_info.submit_iq_params.image_query_id} for detector "
+        f"{escalation_info.detector_id} with timestamp {escalation_info.timestamp}."
     )
 
     try:
@@ -84,8 +85,6 @@ def _escalate_once(  # noqa: PLR0911
             metadata=submit_iq_params.metadata,
             request_timeout=submit_iq_request_timeout_s,
         )
-
-        logger.info("Successfully completed escalation.")
         return res, False  # Should not retry because the escalation was successful.
     except MaxRetryError as ex:  # When there's no connection while trying to send request
         logger.info(
@@ -145,12 +144,12 @@ def read_from_escalation_queue(reader: QueueReader) -> None:
     """Reads escalations from the queue reader and attempts to escalates them."""
     # Because the QueueReader will block until it has something to yield, this will loop forever
     for escalation in reader:
-        logger.info(f"Got escalation {escalation} from reader.")
+        logger.info("Got queued escalation from reader.")
         result = consume_queued_escalation(escalation)
         if result is None:
             logger.info("Escalation permanently failed, moving on.")
         else:
-            logger.info(f"Escalation succeeded with result {result}.")
+            logger.info(f"Escalation succeeded for escalation with ID {result.id}.")
 
 
 if __name__ == "__main__":
