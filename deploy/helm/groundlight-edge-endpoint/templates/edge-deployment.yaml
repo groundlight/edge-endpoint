@@ -164,6 +164,11 @@ spec:
       - name: escalation-queue-reader
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        # Allocate some memory for this container. System-critical containers have memory requests so 
+        # that they are never evicted, even when the system is under memory pressure. 
+        resources:
+          requests:
+            memory: "100Mi"
         command: ["./app/bin/launch-escalation-queue-reader.sh"]
         env:
         - name: LOG_LEVEL
