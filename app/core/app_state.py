@@ -95,9 +95,7 @@ def get_groundlight_sdk_instance(request: Request):
     The SDK handles validation of the API token token itself, so there's no
     need to do that here.
     """
-    logger.info("running get_groundlight_sdk_instance")
     api_token = request.headers.get("x-api-token")
-    logger.info("get_groundlight_sdk_instance", api_token)
     return _get_groundlight_sdk_instance_internal(api_token)
 
 

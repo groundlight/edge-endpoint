@@ -1,5 +1,4 @@
 import logging
-import random
 from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
@@ -9,12 +8,9 @@ from model import ImageQuery
 from app.core.app_state import (
     AppState,
     get_app_state,
-    get_detector_metadata,
     get_groundlight_sdk_instance,
-    refresh_detector_metadata_if_needed,
 )
-from app.core.edge_inference import get_edge_inference_model_name
-from app.core.utils import create_iq, generate_metadata_dict, safe_call_sdk
+from app.core.utils import create_iq
 from app.metrics.iq_activity import record_activity_for_metrics
 
 logger = logging.getLogger(__name__)
@@ -64,6 +60,8 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     app_state: AppState = Depends(get_app_state),
 ):
     """
+    MODIFIED TO ONLY SUPPORT EDGE INFERENCE 
+    
     Submit an image query for a given detector.
 
     This function attempts to run inference locally on the edge, if possible,
@@ -97,18 +95,11 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     Raises:
         HTTPException: If there are issues with the request parameters or processing.
     """
-    logger.info("Running post_image_query...")
     
     await validate_query_params_for_edge(request)
 
-    require_human_review = human_review == "ALWAYS"
-    detector_inference_config = app_state.edge_inference_manager.detector_inference_configs.get(detector_id)
-    return_edge_prediction = (
-        detector_inference_config.always_return_edge_prediction if detector_inference_config is not None else False
-    )
-    disable_cloud_escalation = (
-        detector_inference_config.disable_cloud_escalation if detector_inference_config is not None else False
-    )
+    require_human_review = False
+    return_edge_prediction = True
 
     if require_human_review and return_edge_prediction:
         raise HTTPException(
@@ -118,28 +109,18 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
     record_activity_for_metrics(detector_id, activity_type="iqs")
 
-    if want_async:  # just submit to the cloud w/ ask_async
+    if want_async:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Async requests are not supported on edge-only mode.",
         )
 
-    # Confirm the existence of the detector in GL, get relevant metadata
-    # detector_metadata = get_detector_metadata(detector_id=detector_id, gl=gl)  # NOTE: API call (once, then cached)
-    # Schedule a background task to refresh the detector metadata if it's too old
-    # background_tasks.add_task(refresh_detector_metadata_if_needed, detector_id, gl)
-
-    # confidence_threshold = confidence_threshold or detector_metadata.confidence_threshold
-    confidence_threshold = 0.9 # Set an arbitrary threshold since we cannot get one from the cloud TODO is this okay?
+    confidence_threshold = 0.9 # Set an arbitrary value since we cannot get one from the cloud. 
 
     # for holding edge results if and when available
     results = None
 
-    if require_human_review:
-        # If human review is required, we should skip edge inference completely
-        logger.debug("Received human_review=ALWAYS. Skipping edge inference.")
-        record_activity_for_metrics(detector_id, activity_type="escalations")
-    elif app_state.edge_inference_manager.inference_is_available(detector_id=detector_id):
+    if app_state.edge_inference_manager.inference_is_available(detector_id=detector_id):
         # -- Edge-model Inference --
         logger.debug(f"Local inference is available for {detector_id=}. Running inference...")
         results = app_state.edge_inference_manager.run_inference(
@@ -147,56 +128,22 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         )
         ml_confidence = results["confidence"]
 
-        is_confident_enough = ml_confidence >= confidence_threshold
-        if return_edge_prediction or is_confident_enough:  # Return the edge prediction
-            if return_edge_prediction:
-                logger.debug(f"Returning edge prediction without cloud escalation. {detector_id=}")
-            else:
-                logger.debug(f"Edge detector confidence sufficient. {detector_id=}")
+        return create_iq(
+            detector_id=detector_id,
+            mode=ModeEnum.BINARY, # URCap only supports binary
+            mode_configuration=None, # None works for binary detectors
+            result_value=results["label"],
+            confidence=ml_confidence,
+            confidence_threshold=confidence_threshold,
+            is_done_processing=True,
+            query='', # We cannot fetch this, but do we really need it?
+            patience_time=patience_time,
+            rois=results["rois"],
+            text=results["text"],
+        )
 
-            image_query = create_iq(
-                detector_id=detector_id,
-                mode=ModeEnum.BINARY, # URCap only supports binary
-                mode_configuration=None, # None works for binary detectors
-                result_value=results["label"],
-                confidence=ml_confidence,
-                confidence_threshold=confidence_threshold,
-                is_done_processing=True,
-                query='', # We cannot fetch this, but do we really need it?
-                patience_time=patience_time,
-                rois=results["rois"],
-                text=results["text"],
-            )
-
-            # Skip cloud operations
-            return image_query
     else:
         # -- Edge-inference is not available --
-        # Create an edge-inference deployment record, which may be used to spin up an edge-inference server.
-        logger.debug(f"Local inference not available for {detector_id=}. Creating inference deployment record.")
-        if gl is None:
-            return 
-        api_token = gl.api_client.configuration.api_key["ApiToken"]
-        primary_model_name = get_edge_inference_model_name(detector_id=detector_id, is_oodd=False)
-        oodd_model_name = get_edge_inference_model_name(detector_id=detector_id, is_oodd=True)
-
-        app_state.db_manager.create_or_update_inference_deployment_record(
-            deployment={
-                "model_name": primary_model_name,
-                "detector_id": detector_id,
-                "api_token": api_token,
-                "deployment_created": False,
-            }
-        )
-        app_state.db_manager.create_or_update_inference_deployment_record(
-            deployment={
-                "model_name": oodd_model_name,
-                "detector_id": detector_id,
-                "api_token": api_token,
-                "deployment_created": False,
-            }
-        )
-
         if return_edge_prediction:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -204,20 +151,3 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                     f"Edge predictions are required, but an edge-inference server is not available for {detector_id=}."
                 ),
             )
-
-    # # Fall back to submitting the image to the cloud
-    # if disable_cloud_escalation:
-    #     raise AssertionError("Cloud escalation is disabled.")  # ...should never reach this point
-
-    # logger.debug(f"Submitting image query to cloud for {detector_id=}")
-    # record_activity_for_metrics(detector_id, activity_type="escalations")
-    # return safe_call_sdk(
-    #     gl.submit_image_query,
-    #     detector=detector_id,
-    #     image=image_bytes,
-    #     wait=0,  # wait on the client, not here
-    #     patience_time=patience_time,
-    #     confidence_threshold=confidence_threshold,
-    #     human_review=human_review,
-    #     metadata=generate_metadata_dict(results=results, is_edge_audit=False),
-    # )
