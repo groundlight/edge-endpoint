@@ -6,7 +6,7 @@ from functools import lru_cache
 import cachetools
 import yaml
 from fastapi import Request
-from groundlight import Groundlight, ApiTokenError
+from groundlight import ApiTokenError, Groundlight
 from model import Detector
 
 from .configs import EdgeInferenceConfig, RootEdgeConfig
@@ -88,6 +88,7 @@ def _get_groundlight_sdk_instance_internal(api_token: str):
         return Groundlight(api_token=api_token)
     except ApiTokenError:
         return None
+
 
 def get_groundlight_sdk_instance(request: Request):
     """
