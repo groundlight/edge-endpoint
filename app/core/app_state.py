@@ -86,7 +86,8 @@ def get_detector_inference_configs(
 def _get_groundlight_sdk_instance_internal(api_token: str):
     try:
         return Groundlight(api_token=api_token)
-    except ApiTokenError:
+    except Exception:
+        logger.warning('Unable to instantiate Groundlight client.', exc_info=True)
         return None
 
 
