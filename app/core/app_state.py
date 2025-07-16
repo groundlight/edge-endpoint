@@ -87,6 +87,7 @@ def _get_groundlight_sdk_instance_internal(api_token: str):
     try:
         return Groundlight(api_token=api_token)
     except Exception:
+        # Handle the case where Groundlight is no longer responsive.
         logger.warning('Unable to instantiate Groundlight client.', exc_info=True)
         return None
 
