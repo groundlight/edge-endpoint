@@ -60,8 +60,8 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     app_state: AppState = Depends(get_app_state),
 ):
     """
-    MODIFIED TO ONLY SUPPORT EDGE INFERENCE 
-    
+    MODIFIED TO ONLY SUPPORT EDGE INFERENCE
+
     Submit an image query for a given detector.
 
     This function attempts to run inference locally on the edge, if possible,
@@ -95,7 +95,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     Raises:
         HTTPException: If there are issues with the request parameters or processing.
     """
-    
+
     await validate_query_params_for_edge(request)
 
     require_human_review = False
@@ -115,7 +115,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             detail="Async requests are not supported on edge-only mode.",
         )
 
-    confidence_threshold = 0.9 # Set an arbitrary value since we cannot get one from the cloud. 
+    confidence_threshold = 0.9  # Set an arbitrary value since we cannot get one from the cloud.
 
     # for holding edge results if and when available
     results = None
@@ -130,17 +130,38 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
         return create_iq(
             detector_id=detector_id,
-            mode=ModeEnum.BINARY, # URCap only supports binary
-            mode_configuration=None, # None works for binary detectors
+            mode=ModeEnum.BINARY,  # URCap only supports binary
+            mode_configuration=None,  # None works for binary detectors
             result_value=results["label"],
             confidence=ml_confidence,
             confidence_threshold=confidence_threshold,
             is_done_processing=True,
-            query='', # We cannot fetch this, but we don't need it, so we'll leave it blank
+            query="",  # We cannot fetch this, but we don't need it, so we'll leave it blank
             patience_time=patience_time,
             rois=results["rois"],
             text=results["text"],
         )
+        is_confident_enough = ml_confidence >= confidence_threshold
+        if return_edge_prediction or is_confident_enough:  # Return the edge prediction
+            if return_edge_prediction:
+                logger.debug(f"Returning edge prediction without cloud escalation. {detector_id=}")
+            else:
+                logger.debug(f"Edge detector confidence sufficient. {detector_id=}")
+
+            create_iq(
+                detector_id=detector_id,
+                mode=ModeEnum.BINARY,  # URCap only supports binary
+                mode_configuration=None,  # None works for binary detectors
+                result_value=results["label"],
+                confidence=ml_confidence,
+                confidence_threshold=confidence_threshold,
+                is_done_processing=True,
+                query="",  # We cannot fetch this, but do we really need it?
+                patience_time=patience_time,
+                rois=results["rois"],
+                text=results["text"],
+            )
+
     else:
         # -- Edge-inference is not available --
         if return_edge_prediction:
