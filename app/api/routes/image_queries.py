@@ -2,13 +2,12 @@ import logging
 from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
-from groundlight import Groundlight, ModeEnum
+from groundlight import ModeEnum
 from model import ImageQuery
 
 from app.core.app_state import (
     AppState,
     get_app_state,
-    get_groundlight_sdk_instance,
 )
 from app.core.utils import create_iq
 from app.metrics.iq_activity import record_activity_for_metrics
@@ -98,7 +97,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             mode_configuration=None,  # None works for binary detectors
             result_value=results["label"],
             confidence=ml_confidence,
-            confidence_threshold=0.9, # an arbitrary value because this function requires it. The RPC server won't use it.
+            confidence_threshold=0.9,  # an arbitrary value because this function requires it. The RPC server won't use it.
             is_done_processing=True,
             query="",  # We cannot fetch this, but we don't need it, so we'll leave it blank
             patience_time=patience_time,
