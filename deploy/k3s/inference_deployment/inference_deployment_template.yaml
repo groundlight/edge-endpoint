@@ -46,7 +46,9 @@ spec:
       - name: sync-pinamod
         image: amazon/aws-cli:latest
         # Sync models from S3 to the local hostmapped filesystem.
-        command: ['sh', '-c', 'aws s3 sync s3://pinamod-artifacts-public/pinamod $PINAMOD_DIR --delete']
+        # Always exit with an exit code of 0, so that even if we are unable to get sync models, the
+        # rest of the pod can continue to function
+        command: ['sh', '-c', 'aws s3 sync s3://pinamod-artifacts-public/pinamod $PINAMOD_DIR --delete || true']
         env:
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
