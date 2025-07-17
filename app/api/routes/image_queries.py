@@ -56,54 +56,33 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     confidence_threshold: Optional[float] = Query(None, ge=0, le=1),
     human_review: Optional[Literal["DEFAULT", "ALWAYS", "NEVER"]] = Query(None),
     want_async: bool = Query(False),
-    gl: Groundlight = Depends(get_groundlight_sdk_instance),
     app_state: AppState = Depends(get_app_state),
 ):
     """
-    MODIFIED TO ONLY SUPPORT EDGE INFERENCE
+    Submit an image query for edge inference only.
 
-    Submit an image query for a given detector.
-
-    This function attempts to run inference locally on the edge, if possible,
-    before potentially escalating to the cloud.
+    This function runs inference locally on the edge. If edge inference is not available
+    for the detector, it returns a 503 error.
 
     Args:
         detector_id (str): The unique identifier of the detector to use, e.g., 'det_12345'.
         content_type (str): The content type of the image, e.g., 'image/jpeg'.
         image_bytes (bytes): The raw binary data of the image.
-        patience_time (Optional[float]): Maximum time (in seconds) to wait for a confident answer.
-            Longer patience times increase the likelihood of obtaining a confident answer.
-            During this period, Groundlight may update ML predictions and prioritize human review if necessary.
-            This is a soft server-side timeout. If not set, the detector's default patience time is used.
-        confidence_threshold (Optional[float]): The minimum confidence level required for an answer.
-            If not set, the detector's default confidence threshold is used.
-        human_review (Optional[Literal["DEFAULT", "ALWAYS", "NEVER"]]):
-            - "DEFAULT" or None: Send for human review only if the ML prediction is not confident.
-            - "ALWAYS": Always send for human review.
-            - "NEVER": Never send for human review.
-        want_async (bool): If True, returns immediately after query submission without waiting for a prediction.
-            The returned ImageQuery will have a 'result' of None. Requires 'wait' to be set to 0.
-
-    Dependencies:
-        gl (Groundlight): Application's Groundlight SDK instance.
-        app_state (AppState): Application's state manager.
-        background_tasks (BackgroundTasks): FastAPI background tasks manager for asynchronous operations.
+        patience_time (Optional[float]): Not used in edge-only mode, but kept for API compatibility.
+        confidence_threshold (Optional[float]): Not used in edge-only mode, but kept for API compatibility.
+        human_review (Optional[Literal["DEFAULT", "ALWAYS", "NEVER"]]): Not used in edge-only mode, but kept for API compatibility.
+        want_async (bool): Not used in edge-only mode, but kept for API compatibility.
 
     Returns:
-        ImageQuery: The submitted image query, potentially with results depending on the mode of operation.
+        ImageQuery: The submitted image query with edge inference results.
 
     Raises:
-        HTTPException: If there are issues with the request parameters or processing.
+        HTTPException: 503 error if edge inference is not available for the detector.
     """
 
     await validate_query_params_for_edge(request)
 
     record_activity_for_metrics(detector_id, activity_type="iqs")
-
-    confidence_threshold = 0.9  # Set an arbitrary value since we cannot get one from the cloud.
-
-    # for holding edge results if and when available
-    results = None
 
     if app_state.edge_inference_manager.inference_is_available(detector_id=detector_id):
         # -- Edge-model Inference --
@@ -119,7 +98,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             mode_configuration=None,  # None works for binary detectors
             result_value=results["label"],
             confidence=ml_confidence,
-            confidence_threshold=confidence_threshold,
+            confidence_threshold=0.9, # an arbitrary value because this function requires it. The RPC server won't use it.
             is_done_processing=True,
             query="",  # We cannot fetch this, but we don't need it, so we'll leave it blank
             patience_time=patience_time,
