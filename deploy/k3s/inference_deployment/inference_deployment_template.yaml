@@ -55,17 +55,18 @@ spec:
             secretKeyRef:
               name: aws-credentials
               key: aws_access_key_id
+              optional: true  # allow the container to come up even if credentials have expired
         - name: AWS_SECRET_ACCESS_KEY
           valueFrom:
             secretKeyRef:
               name: aws-credentials
               key: aws_secret_access_key
+              optional: true # allow the container to come up even if credentials have expired
         - name: PINAMOD_DIR
           value: /opt/models/pinamod
         volumeMounts:
         - name: pina-models
           mountPath: /opt/models
-
       containers:
       - name: inference-server
         image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:latest
