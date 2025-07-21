@@ -36,7 +36,7 @@ RUN apt-get update && \
     sqlite3 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
-    curl -sSL https://install.python-poetry.org | python - && \
+    POETRY_HOME=${POETRY_HOME} curl -sSL https://install.python-poetry.org | python - && \
     curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
     install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl && \
     rm kubectl
@@ -95,6 +95,8 @@ WORKDIR ${APP_ROOT}
 # Copy the remaining files
 COPY /app ${APP_ROOT}/app/
 COPY /deploy ${APP_ROOT}/deploy/
+COPY /licenses ${APP_ROOT}/licenses/
+COPY /README.md ${APP_ROOT}/README.md
 
 COPY --from=production-dependencies-build-stage ${APP_ROOT}/configs/nginx.conf /etc/nginx/nginx.conf
 
