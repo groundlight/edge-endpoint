@@ -9,12 +9,13 @@ edge_inference_configs: # These configs define detector-specific behavior and ca
     enabled: true
     always_return_edge_prediction: false
     disable_cloud_escalation: false
+    min_time_between_escalations: 0
 
   edge_answers_with_escalation: # Always return the edge model's predictions, but still escalate to cloud if unconfident.
     enabled: true
     always_return_edge_prediction: true
     disable_cloud_escalation: false
-    min_time_between_escalations: 2.0
+    min_time_between_escalations: 0
 
   no_cloud: # Always return the edge model's prediction and never escalate to the cloud.
     enabled: true
@@ -27,5 +28,9 @@ edge_inference_configs: # These configs define detector-specific behavior and ca
 detectors: # Each entry here defines the edge configuration for a detector.
   # To configure a detector, add an entry for it below with its detector ID and the name of the edge inference config
   # you want to use. You can use or modify one of the existing edge inference configs listed above, or define your own.
-    - detector_id: ""
+    - detector_id: "det_2mIZTxUnJDhhUtJbUXavUevW15K" # edge_test_cat
       edge_inference_config: "default"
+    - detector_id: "det_2yNfwyb7xPjXB1fSBXCmy9IwGqx"
+      edge_inference_config: "edge_answers_with_escalation"
+    - detector_id: "det_2yNfwEEn2dwAtgkv4ejhEj6LCQo"
+      edge_inference_config: "no_cloud"
