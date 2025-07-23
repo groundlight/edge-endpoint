@@ -12,7 +12,6 @@ from urllib3.exceptions import MaxRetryError
 from app.core.utils import safe_call_sdk
 from app.escalation_queue.models import EscalationInfo
 from app.escalation_queue.queue_reader import QueueReader
-from app.escalation_queue.queue_utils import is_already_escalated
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
@@ -70,15 +69,6 @@ def _escalate_once(  # noqa: PLR0911
 
     submit_iq_params = escalation_info.submit_iq_params
     try:
-        # Ideally we'd just try to submit the IQ and catch the error if it already exists in the cloud. But currently
-        # trying to do that would trigger an alert in the cloud, so instead we include this extra API call to check.
-        if is_already_escalated(gl, submit_iq_params.image_query_id):
-            logger.info(
-                f"An image query with ID {submit_iq_params.image_query_id} already exists in the cloud, so we must "
-                "have already escalated it. Skipping this escalation to avoid creating a duplicate."
-            )
-            return None, False  # Scrap escalation if it was previously completed.
-
         res = safe_call_sdk(
             gl.submit_image_query,
             detector=escalation_info.detector_id,
@@ -100,8 +90,11 @@ def _escalate_once(  # noqa: PLR0911
         return None, True  # Should retry because the escalation may succeed once connection is restored.
     except HTTPException as ex:
         if ex.status_code == status.HTTP_400_BAD_REQUEST:
-            logger.info(f"Got HTTPException with status code 400. Scrapping the escalation. {ex=}")
-            return None, False  # Should not retry because the request is malformed.
+            logger.info(
+                f"Got HTTPException with status code 400. This could be because we already escalated this query. "
+                f"Scrapping the escalation. {ex=}"
+            )
+            return None, False  # Should not retry because the request is bad.
         elif ex.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
             logger.info(
                 "Got HTTPException with status code 429. This likely means we have hit our throttling limit. Will "
