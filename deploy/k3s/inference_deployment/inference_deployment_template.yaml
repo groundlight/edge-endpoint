@@ -46,9 +46,7 @@ spec:
       - name: sync-pinamod
         image: amazon/aws-cli:latest
         # Sync models from S3 to the local hostmapped filesystem.
-        # Always exit with an exit code of 0, so that even if we are unable to get sync models, the
-        # rest of the pod can continue to function
-        command: ['sh', '-c', 'aws s3 sync s3://pinamod-artifacts-public/pinamod $PINAMOD_DIR --delete']
+        command: ['sh', '-c', 'aws s3 sync s3://pinamod-artifacts-lkq/pinamod $PINAMOD_DIR --delete']
         env:
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
@@ -67,7 +65,8 @@ spec:
           mountPath: /opt/models
       containers:
       - name: inference-server
-        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:latest
+        # image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:latest
+        image: 557423365154.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:dev
         imagePullPolicy: Always
         env:
         - name: MODEL_REPOSITORY
