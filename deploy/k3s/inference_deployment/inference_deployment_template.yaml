@@ -81,7 +81,7 @@ spec:
         - name: EDGE_ENDPOINT_STATE_DIR
           value: /opt/groundlight/edge/serving/model-repo
         volumeMounts:
-        - name: edge-endpoint-state
+        - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/serving/model-repo        
       containers:
       - name: inference-server
@@ -145,8 +145,4 @@ spec:
       - name: pina-models
         hostPath:
           path: /opt/groundlight/edge/pinamod-public
-          type: Directory
-      - name: edge-endpoint-state
-        hostPath:
-          path: /opt/groundlight/edge/serving/model-repo
           type: Directory

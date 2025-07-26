@@ -313,39 +313,40 @@ class EdgeInferenceManager:
 
         Returns True if a new model was downloaded and saved, False otherwise.
         """
-        logger.info(f"Checking if there are new models available for {detector_id}")
+        # logger.info(f"Checking if there are new models available for {detector_id}")
 
-        api_token = (
-            self.detector_inference_configs[detector_id].api_token
-            if self.detector_configured_for_edge_inference(detector_id)
-            else None
-        )
+        # api_token = (
+        #     self.detector_inference_configs[detector_id].api_token
+        #     if self.detector_configured_for_edge_inference(detector_id)
+        #     else None
+        # )
 
         # fallback to env var if we don't have a token in the config
-        api_token = api_token or os.environ.get("GROUNDLIGHT_API_TOKEN", None)
+        # api_token = api_token or os.environ.get("GROUNDLIGHT_API_TOKEN", None)
 
-        edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
+        # edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
 
-        edge_version, oodd_version = get_current_model_versions(self.MODEL_REPOSITORY, detector_id)
-        primary_edge_model_dir = get_primary_edge_model_dir(self.MODEL_REPOSITORY, detector_id)
-        oodd_model_dir = get_oodd_model_dir(self.MODEL_REPOSITORY, detector_id)
+        # edge_version, oodd_version = get_current_model_versions(self.MODEL_REPOSITORY, detector_id)
+        # primary_edge_model_dir = get_primary_edge_model_dir(self.MODEL_REPOSITORY, detector_id)
+        # oodd_model_dir = get_oodd_model_dir(self.MODEL_REPOSITORY, detector_id)
 
-        update_primary_model = should_update(edge_model_info, primary_edge_model_dir, edge_version)
-        update_oodd_model = should_update(oodd_model_info, oodd_model_dir, oodd_version)
+        # update_primary_model = should_update(edge_model_info, primary_edge_model_dir, edge_version)
+        # update_oodd_model = should_update(oodd_model_info, oodd_model_dir, oodd_version)
 
-        if not update_primary_model and not update_oodd_model:
-            logger.debug(f"No new models available for {detector_id}")
-            return False
+        # if not update_primary_model and not update_oodd_model:
+        #     logger.debug(f"No new models available for {detector_id}")
+        #     return False
 
-        logger.info(f"At least one new model is available for {detector_id}, saving models to repository.")
-        save_models_to_repository(
-            detector_id=detector_id,
-            edge_model_buffer=get_model_buffer(edge_model_info) if update_primary_model else None,
-            edge_model_info=edge_model_info if update_primary_model else None,
-            oodd_model_buffer=get_model_buffer(oodd_model_info) if update_oodd_model else None,
-            oodd_model_info=oodd_model_info if update_oodd_model else None,
-            repository_root=self.MODEL_REPOSITORY,
-        )
+        # logger.info(f"At least one new model is available for {detector_id}, saving models to repository.")
+        # Commenting this out so that the Edge Endpoint doesn't attempt to contact the cloud service
+        # save_models_to_repository(
+        #     detector_id=detector_id,
+        #     edge_model_buffer=get_model_buffer(edge_model_info) if update_primary_model else None,
+        #     edge_model_info=edge_model_info if update_primary_model else None,
+        #     oodd_model_buffer=get_model_buffer(oodd_model_info) if update_oodd_model else None,
+        #     oodd_model_info=oodd_model_info if update_oodd_model else None,
+        #     repository_root=self.MODEL_REPOSITORY,
+        # )
         return True
 
     def escalation_cooldown_complete(self, detector_id: str) -> bool:
