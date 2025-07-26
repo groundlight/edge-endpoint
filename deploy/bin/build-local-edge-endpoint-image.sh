@@ -25,7 +25,8 @@ set -e
 
 cd "$(dirname "$0")"
 
-ECR_ACCOUNT=${ECR_ACCOUNT:-767397850842}
+# ECR_ACCOUNT=${ECR_ACCOUNT:-767397850842}
+ECR_ACCOUNT=${ECR_ACCOUNT:-557423365154}
 ECR_REGION=${ECR_REGION:-us-west-2}
 TAG=dev # In local mode, we always use the 'dev' tag
 EDGE_ENDPOINT_IMAGE=${EDGE_ENDPOINT_IMAGE:-edge-endpoint}  # v0.2.0 (fastapi inference server) compatible images
