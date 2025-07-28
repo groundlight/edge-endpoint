@@ -20,3 +20,4 @@ class EscalationInfo(BaseModel):
     detector_id: str
     image_path_str: str
     submit_iq_params: SubmitImageQueryParams
+    request_id: str

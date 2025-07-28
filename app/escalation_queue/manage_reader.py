@@ -12,6 +12,7 @@ from urllib3.exceptions import MaxRetryError
 from app.core.utils import safe_call_sdk
 from app.escalation_queue.models import EscalationInfo
 from app.escalation_queue.queue_reader import QueueReader
+from app.escalation_queue.request_cache import RequestCache
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
@@ -111,13 +112,22 @@ def _escalate_once(  # noqa: PLR0911
         return None, False  # Do not retry.
 
 
-def consume_queued_escalation(escalation_str: str, delete_image: bool | None = True) -> ImageQuery | None:
+def consume_queued_escalation(
+    escalation_str: str, request_cache: RequestCache, delete_image: bool | None = True
+) -> ImageQuery | None:
     """
     Attempts to escalate a queued escalation, retrying based on whether the escalation might succeed in the future.
 
     The `delete_image` argument is used by tests only, and otherwise defaults to True.
     """
     escalation_info = EscalationInfo(**json.loads(escalation_str))
+
+    if request_cache.contains(escalation_info.request_id):
+        logger.info(
+            "Skipping escalation because we've already done an escalation related to request ID "
+            f"{escalation_info.request_id}."
+        )
+        return None
 
     should_retry_escalation = True
     escalation_result = None
@@ -142,6 +152,10 @@ def consume_queued_escalation(escalation_str: str, delete_image: bool | None = T
         else:  # Successfully escalated.
             should_retry_escalation = False
 
+    # Once we're done with this escalation, add the request ID to the cache so that we don't try to escalate duplicate
+    # requests (stemming from, e.g., client-side retries).
+    request_cache.add(escalation_info.request_id)
+
     if delete_image:
         # Delete image when moving on from the escalation (whether it was successfully completed or not).
         image_path = Path(escalation_info.image_path_str)
@@ -150,14 +164,14 @@ def consume_queued_escalation(escalation_str: str, delete_image: bool | None = T
     return escalation_result
 
 
-def read_from_escalation_queue(reader: QueueReader) -> None:
+def read_from_escalation_queue(reader: QueueReader, request_cache: RequestCache) -> None:
     """Reads escalations from the queue reader and attempts to escalates them."""
     # Because the QueueReader will block until it has something to yield, this will loop forever
     for escalation in reader:
         logger.info("Got queued escalation from reader.")
-        result = consume_queued_escalation(escalation)
+        result = consume_queued_escalation(escalation, request_cache)
         if result is None:
-            logger.info("Escalation permanently failed, moving on.")
+            logger.info("Escalation permanently failed or skipped, moving on.")
         else:
             logger.info(f"Escalation succeeded for escalation with ID {result.id}.")
 
@@ -166,4 +180,5 @@ if __name__ == "__main__":
     logger.info("Starting escalation queue reader.")
 
     queue_reader = QueueReader()
-    read_from_escalation_queue(queue_reader)
+    request_cache = RequestCache()
+    read_from_escalation_queue(queue_reader, request_cache)

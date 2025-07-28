@@ -12,7 +12,7 @@ from fastapi import HTTPException, status
 from groundlight import GroundlightClientError
 from urllib3.exceptions import MaxRetryError
 
-from app.core.utils import generate_iq_id, get_formatted_timestamp_str
+from app.core.utils import generate_iq_id, generate_request_id, get_formatted_timestamp_str
 from app.escalation_queue.constants import MAX_QUEUE_FILE_LINES
 from app.escalation_queue.manage_reader import (
     RETRY_WAIT_TIMES,
@@ -27,6 +27,7 @@ from app.escalation_queue.queue_utils import (
     write_escalation_to_queue,
 )
 from app.escalation_queue.queue_writer import QueueWriter, convert_escalation_info_to_str
+from app.escalation_queue.request_cache import RequestCache
 
 ### Helper functions
 
@@ -54,12 +55,14 @@ def generate_test_escalation_info(
     submit_iq_params: SubmitImageQueryParams = generate_test_submit_iq_params(),
     detector_id: str = "test_id",
     image_path: str = "test/assets/cat.jpeg",
+    request_id: str = generate_request_id(),
 ) -> EscalationInfo:
     data = {
         "timestamp": timestamp_str,
         "detector_id": detector_id,
         "image_path_str": image_path,
         "submit_iq_params": submit_iq_params,
+        "request_id": request_id,
     }
     return EscalationInfo(**data)
 
@@ -81,6 +84,11 @@ def assert_expected_reader_output(reader_iter: QueueReader | Iterator[str], expe
 @pytest.fixture
 def timestamp_str() -> str:
     return get_formatted_timestamp_str()
+
+
+@pytest.fixture
+def test_request_id() -> str:
+    return generate_request_id()
 
 
 @pytest.fixture
@@ -112,6 +120,11 @@ def test_writer(test_base_dir: str) -> QueueWriter:
 @pytest.fixture
 def test_reader(test_base_dir: str) -> QueueReader:
     return generate_queue_reader(base_dir=test_base_dir)
+
+
+@pytest.fixture
+def test_request_cache(test_base_dir: str) -> RequestCache:
+    return RequestCache(test_base_dir)
 
 
 @pytest.fixture
@@ -418,20 +431,31 @@ class TestEscalateOnce:
 
 
 class TestConsumeQueuedEscalation:
-    def test_returns_result_on_success(self, test_escalation_info: EscalationInfo):
+    def test_returns_result_on_success(self, test_request_cache: RequestCache, test_escalation_info: EscalationInfo):
         """When _escalate_once succeeds on the first try, should return the ImageQuery and not retry."""
         escalation_str = convert_escalation_info_to_str(test_escalation_info)
         dummy_result = Mock()
 
-        with patch(
-            "app.escalation_queue.manage_reader._escalate_once", return_value=(dummy_result, False)
-        ) as mock_escalate:
-            result = consume_queued_escalation(escalation_str, delete_image=False)
+        # The request ID for the escalation should not be in the request cache
+        assert not test_request_cache.contains(test_escalation_info.request_id)
+
+        with (
+            patch(
+                "app.escalation_queue.manage_reader._escalate_once", return_value=(dummy_result, False)
+            ) as mock_escalate,
+            patch.object(test_request_cache, "contains", wraps=test_request_cache.contains) as mock_contains,
+        ):
+            result = consume_queued_escalation(escalation_str, test_request_cache, delete_image=False)
 
         assert result is dummy_result
         mock_escalate.assert_called_once()
 
-    def test_uses_retry_logic_properly(self, test_escalation_info: EscalationInfo):
+        # The request ID should now be in the request cache
+        assert test_request_cache.contains(test_escalation_info.request_id)
+        # The request ID should have been checked against the request cache
+        mock_contains.assert_called_once_with(test_escalation_info.request_id)
+
+    def test_uses_retry_logic_properly(self, test_request_cache: RequestCache, test_escalation_info: EscalationInfo):
         """When escalation fails, we should retry until _escalate_once indicates that we should stop."""
         escalation_str = convert_escalation_info_to_str(test_escalation_info)
 
@@ -442,7 +466,7 @@ class TestConsumeQueuedEscalation:
             patch("app.escalation_queue.manage_reader._escalate_once", side_effect=side_effects) as mock_escalate,
             patch("app.escalation_queue.manage_reader.time.sleep") as mock_sleep,  # Avoid waiting during the test
         ):
-            result = consume_queued_escalation(escalation_str, delete_image=False)
+            result = consume_queued_escalation(escalation_str, test_request_cache, delete_image=False)
 
         assert result is None
         assert mock_escalate.call_count == len(side_effects)
@@ -457,7 +481,10 @@ class TestConsumeQueuedEscalation:
         actual_waits = [call_args[0][0] for call_args in mock_sleep.call_args_list]
         assert actual_waits == expected_waits
 
-    def test_deletes_image_on_completion(self, test_escalation_info: EscalationInfo):
+        # The escalation should be in the request cache
+        assert test_request_cache.contains(test_escalation_info.request_id)
+
+    def test_deletes_image_on_completion(self, test_request_cache: RequestCache, test_escalation_info: EscalationInfo):
         """The image for the escalation should be deleted if delete_image is not set to False."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_image_path = Path(temp_dir) / "temp_image.jpeg"
@@ -471,7 +498,7 @@ class TestConsumeQueuedEscalation:
             with patch(
                 "app.escalation_queue.manage_reader._escalate_once", return_value=(dummy_result, False)
             ) as mock_escalate:
-                result = consume_queued_escalation(escalation_str)
+                result = consume_queued_escalation(escalation_str, test_request_cache)
 
             assert result is dummy_result
             mock_escalate.assert_called_once()
@@ -479,12 +506,40 @@ class TestConsumeQueuedEscalation:
             # The image should be deleted after the escalation is finished being consumed
             assert not temp_image_path.exists()
 
+    def test_skips_duplicate_request(self, test_request_id, test_request_cache: RequestCache):
+        """When the request ID of an escalation is already in the cache, we should skip the escalation."""
+        # Create two escalation infos with a shared request ID, indicating they stem from the same request
+        escalation_info_1 = generate_test_escalation_info(request_id=test_request_id)
+        escalation_info_2 = generate_test_escalation_info(request_id=test_request_id)
+
+        escalation_str_1 = convert_escalation_info_to_str(escalation_info_1)
+        escalation_str_2 = convert_escalation_info_to_str(escalation_info_2)
+
+        with patch("app.escalation_queue.manage_reader._escalate_once", return_value=(None, False)) as mock_escalate_1:
+            consume_queued_escalation(escalation_str_1, test_request_cache, delete_image=False)
+
+        mock_escalate_1.assert_called_once()
+
+        # The request ID should now be in the request cache
+        assert test_request_cache.contains(escalation_info_1.request_id)
+
+        with patch("app.escalation_queue.manage_reader._escalate_once") as mock_escalate_2:
+            consume_queued_escalation(escalation_str_2, test_request_cache, delete_image=False)
+
+        # Should not have attempted to escalate the second escalation because it has a duplicate request ID
+        mock_escalate_2.assert_not_called()
+
+        # The request ID should still be in the request cache
+        assert test_request_cache.contains(escalation_info_1.request_id)
+
 
 class TestReadFromEscalationQueue:
     def test_consume_from_reader(self, test_reader: QueueReader, escalation_str: str):
         """Verifies that read_from_escalation_queue consumes from the reader correctly."""
         num_escalations = 3
         escalation_strs = [escalation_str] * num_escalations
+
+        mock_request_cache = Mock()
 
         # Patch the reader object to iterate over items and then stop
         with (
@@ -494,11 +549,11 @@ class TestReadFromEscalationQueue:
             patch.object(QueueReader, "__iter__", return_value=iter(escalation_strs)),
         ):
             mock_consume_escalation.return_value = None
-            read_from_escalation_queue(test_reader)
+            read_from_escalation_queue(test_reader, mock_request_cache)
 
         assert mock_consume_escalation.call_count == num_escalations
         mock_consume_escalation.assert_has_calls(
-            [call(escalation) for escalation in escalation_strs],
+            [call(escalation, mock_request_cache) for escalation in escalation_strs],
             any_order=False,
         )
 
@@ -518,7 +573,11 @@ class TestQueueUtils:
     ):
         """Verifies that write_escalation_to_queue properly writes all information to the queue."""
         write_escalation_to_queue(
-            test_writer, test_escalation_info.detector_id, test_image_bytes, test_submit_iq_params
+            test_writer,
+            test_escalation_info.detector_id,
+            test_image_bytes,
+            test_submit_iq_params,
+            test_escalation_info.request_id,
         )
 
         next_escalation_info = EscalationInfo(**json.loads(next(iter(test_reader))))
@@ -529,6 +588,7 @@ class TestQueueUtils:
     def test_write_escalation_to_queue_catches_exception(
         self,
         test_writer: QueueWriter,
+        test_escalation_info: EscalationInfo,
         test_image_bytes: bytes,
         test_submit_iq_params: SubmitImageQueryParams,
     ):
@@ -537,7 +597,13 @@ class TestQueueUtils:
             patch.object(test_writer, "write_image_bytes", Mock(side_effect=Exception())),
             patch("app.escalation_queue.queue_utils.logger") as mock_logger,
         ):
-            write_escalation_to_queue(test_writer, "test_id", test_image_bytes, test_submit_iq_params)
+            write_escalation_to_queue(
+                test_writer,
+                test_escalation_info.detector_id,
+                test_image_bytes,
+                test_submit_iq_params,
+                test_escalation_info.request_id,
+            )
             assert mock_logger.error.called
 
     def test_safe_escalate_with_queue_write_successful_request(
@@ -553,6 +619,7 @@ class TestQueueUtils:
             image_bytes=test_image_bytes,
             want_async=False,
             submit_iq_params=test_escalation_info.submit_iq_params,
+            request_id=test_escalation_info.request_id,
         )
         mock_submit_image_query.assert_called_once_with(
             detector=test_escalation_info.detector_id,
@@ -583,6 +650,7 @@ class TestQueueUtils:
                     image_bytes=test_image_bytes,
                     want_async=False,
                     submit_iq_params=test_escalation_info.submit_iq_params,
+                    request_id=test_escalation_info.request_id,
                 )
 
             mock_write_escalation_to_queue.assert_called_once_with(
@@ -590,4 +658,5 @@ class TestQueueUtils:
                 detector_id=test_escalation_info.detector_id,
                 image_bytes=test_image_bytes,
                 submit_iq_params=test_escalation_info.submit_iq_params,
+                request_id=test_escalation_info.request_id,
             )
