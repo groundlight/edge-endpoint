@@ -16,6 +16,10 @@ class RequestCache:
     A simple file-based cache for request IDs.
     Each cached request ID is represented as an empty file in the cache directory.
     The cache evicts the oldest entry when the maximum size is exceeded.
+
+    This is used to detect and skip duplicate escalations in the queue, which can arise from the way the Groundlight SDK
+    does retries for failed requests. If we implement a different way of preventing retries on the edge in the future,
+    this can be removed.
     """
 
     def __init__(

@@ -180,5 +180,13 @@ if __name__ == "__main__":
     logger.info("Starting escalation queue reader.")
 
     queue_reader = QueueReader()
+    # We cache recently escalated request IDs so that we can avoid escalating entries in the queue that come from the
+    # same initial request. If a client sends a request to the edge and receives an exception such as an HTTP 504 error,
+    # the Groundlight SDK will automatically retry the request, sending the same query parameters to the edge afresh
+    # each time. This could result in escalating the same request to the cloud multiple times, since each instance of
+    # the query would be written to the queue with a different image query ID. Because the request ID is constant
+    # between retries, we can use that to detect and skip duplicate entries in the queue. If we implement a different
+    # way of preventing retries on the edge in the future, this can be removed.
     request_cache = RequestCache()
+
     read_from_escalation_queue(queue_reader, request_cache)
