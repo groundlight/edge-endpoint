@@ -42,7 +42,6 @@ spec:
       initContainers:
         - name: database-prep
           image: &edgeEndpointImage 557423365154.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:dev
-          # image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:dev
           imagePullPolicy: Always
           volumeMounts:
             - name: edge-endpoint-persistent-volume

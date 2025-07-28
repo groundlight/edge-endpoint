@@ -18,7 +18,6 @@ spec:
             - name: registry-credentials
           containers:
           - name: ecr
-            # image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${IMAGE_TAG}
             image: 557423365154.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:dev
             command: [
               "/bin/sh",

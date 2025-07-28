@@ -85,7 +85,6 @@ spec:
           mountPath: /opt/groundlight/edge/serving/model-repo        
       containers:
       - name: inference-server
-        # image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:latest
         image: 557423365154.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:dev
         imagePullPolicy: Always
         env:

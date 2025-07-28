@@ -9,7 +9,6 @@ set -e  # Exit immediately on error
 set -o pipefail
 
 ECR_ACCOUNT=${ECR_ACCOUNT:-557423365154}
-# ECR_ACCOUNT=${ECR_ACCOUNT:-767397850842}
 ECR_REGION=${ECR_REGION:-us-west-2}
 
 # Ensure that you're in the same directory as this script before running it
