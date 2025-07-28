@@ -313,40 +313,18 @@ class EdgeInferenceManager:
 
         Returns True if a new model was downloaded and saved, False otherwise.
         """
-        # logger.info(f"Checking if there are new models available for {detector_id}")
 
-        # api_token = (
-        #     self.detector_inference_configs[detector_id].api_token
-        #     if self.detector_configured_for_edge_inference(detector_id)
-        #     else None
-        # )
+        edge_version, oodd_version = get_current_model_versions(self.MODEL_REPOSITORY, detector_id)
+        primary_edge_model_dir = get_primary_edge_model_dir(self.MODEL_REPOSITORY, detector_id)
+        oodd_model_dir = get_oodd_model_dir(self.MODEL_REPOSITORY, detector_id)
 
-        # fallback to env var if we don't have a token in the config
-        # api_token = api_token or os.environ.get("GROUNDLIGHT_API_TOKEN", None)
+        update_primary_model = should_update(primary_edge_model_dir, edge_version)
+        update_oodd_model = should_update(oodd_model_dir, oodd_version)
 
-        # edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
+        if not update_primary_model and not update_oodd_model:
+            logger.debug(f"No new models available for {detector_id}")
+            return False
 
-        # edge_version, oodd_version = get_current_model_versions(self.MODEL_REPOSITORY, detector_id)
-        # primary_edge_model_dir = get_primary_edge_model_dir(self.MODEL_REPOSITORY, detector_id)
-        # oodd_model_dir = get_oodd_model_dir(self.MODEL_REPOSITORY, detector_id)
-
-        # update_primary_model = should_update(edge_model_info, primary_edge_model_dir, edge_version)
-        # update_oodd_model = should_update(oodd_model_info, oodd_model_dir, oodd_version)
-
-        # if not update_primary_model and not update_oodd_model:
-        #     logger.debug(f"No new models available for {detector_id}")
-        #     return False
-
-        # logger.info(f"At least one new model is available for {detector_id}, saving models to repository.")
-        # Commenting this out so that the Edge Endpoint doesn't attempt to contact the cloud service
-        # save_models_to_repository(
-        #     detector_id=detector_id,
-        #     edge_model_buffer=get_model_buffer(edge_model_info) if update_primary_model else None,
-        #     edge_model_info=edge_model_info if update_primary_model else None,
-        #     oodd_model_buffer=get_model_buffer(oodd_model_info) if update_oodd_model else None,
-        #     oodd_model_info=oodd_model_info if update_oodd_model else None,
-        #     repository_root=self.MODEL_REPOSITORY,
-        # )
         return True
 
     def escalation_cooldown_complete(self, detector_id: str) -> bool:
@@ -493,32 +471,13 @@ def save_model_to_repository(
     )
 
 
-def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[int]) -> bool:
+def should_update(model_dir: str, version: Optional[int]) -> bool:
     """Determines if the model needs to be updated based on the received and current model info."""
     if version is None:
         logger.info(f"No current model version found in {model_dir}, updating model")
         return True
-
-    if isinstance(model_info, ModelInfoWithBinary):
-        edge_binary_ksuid = get_current_model_ksuid(model_dir, version)
-        if edge_binary_ksuid and model_info.model_binary_id == edge_binary_ksuid:
-            logger.info(
-                f"The edge binary in {model_dir} is the same as the cloud binary, so we don't need to update the model."
-            )
-            return False
     else:
-        current_pipeline_config = get_current_pipeline_config(model_dir, version)
-        if current_pipeline_config and current_pipeline_config == yaml.safe_load(model_info.pipeline_config):
-            logger.info(
-                f"The current pipeline_config in {model_dir} is the same as the received pipeline_config and we have no model binary, so we don't need to update the model."
-            )
-            return False
-
-    logger.info(
-        f"The model in {model_dir} needs to be updated, the current edge model is different from the cloud model."
-    )
-    return True
-
+        return False
 
 def get_current_model_versions(repository_root: str, detector_id: str) -> tuple[Optional[int], Optional[int]]:
     """Edge inference server model_repositories contain model versions in subdirectories. These subdirectories
