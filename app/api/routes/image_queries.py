@@ -14,7 +14,7 @@ from app.core.app_state import (
     refresh_detector_metadata_if_needed,
 )
 from app.core.edge_inference import get_edge_inference_model_name
-from app.core.utils import create_iq, generate_iq_id, generate_metadata_dict
+from app.core.utils import create_iq, generate_iq_id, generate_metadata_dict, generate_request_id
 from app.escalation_queue.models import SubmitImageQueryParams
 from app.escalation_queue.queue_utils import safe_escalate_with_queue_write, write_escalation_to_queue
 from app.metrics.iq_activity import record_activity_for_metrics
@@ -101,6 +101,10 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     """
     await validate_query_params_for_edge(request)
 
+    # The request ID is automatically set on requests from the Groundlight SDK. If it doesn't exist (e.g., if this
+    # request was sent directly and not through the SDK) we generate one in the same way that the SDK does.
+    request_id = request.headers.get("x-request-id") or generate_request_id()
+
     require_human_review = human_review == "ALWAYS"
     detector_inference_config = app_state.edge_inference_manager.detector_inference_configs.get(detector_id)
     return_edge_prediction = (
@@ -140,6 +144,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             image_bytes=image_bytes,
             want_async=True,
             submit_iq_params=submit_iq_params,
+            request_id=request_id,
         )
 
     # Confirm the existence of the detector in GL, get relevant metadata
@@ -209,6 +214,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         detector_id=detector_id,
                         image_bytes=image_bytes,
                         submit_iq_params=submit_iq_params,
+                        request_id=request_id,
                     )
 
                     # We keep done_processing=True here for `image_query` because although we escalated the query for
@@ -239,6 +245,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         detector_id=detector_id,
                         image_bytes=image_bytes,
                         submit_iq_params=submit_iq_params,
+                        request_id=request_id,
                     )
                     # Not done processing because the IQ in the cloud could get a better answer once escalated
                     image_query.done_processing = False
@@ -301,4 +308,5 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         image_bytes=image_bytes,
         want_async=False,
         submit_iq_params=submit_iq_params,
+        request_id=request_id,
     )

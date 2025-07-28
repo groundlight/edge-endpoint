@@ -12,7 +12,7 @@ from urllib3.exceptions import MaxRetryError
 from app.core.utils import safe_call_sdk
 from app.escalation_queue.models import EscalationInfo
 from app.escalation_queue.queue_reader import QueueReader
-from app.escalation_queue.queue_utils import is_already_escalated
+from app.escalation_queue.request_cache import RequestCache
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
@@ -70,15 +70,6 @@ def _escalate_once(  # noqa: PLR0911
 
     submit_iq_params = escalation_info.submit_iq_params
     try:
-        # Ideally we'd just try to submit the IQ and catch the error if it already exists in the cloud. But currently
-        # trying to do that would trigger an alert in the cloud, so instead we include this extra API call to check.
-        if is_already_escalated(gl, submit_iq_params.image_query_id):
-            logger.info(
-                f"An image query with ID {submit_iq_params.image_query_id} already exists in the cloud, so we must "
-                "have already escalated it. Skipping this escalation to avoid creating a duplicate."
-            )
-            return None, False  # Scrap escalation if it was previously completed.
-
         res = safe_call_sdk(
             gl.submit_image_query,
             detector=escalation_info.detector_id,
@@ -100,8 +91,11 @@ def _escalate_once(  # noqa: PLR0911
         return None, True  # Should retry because the escalation may succeed once connection is restored.
     except HTTPException as ex:
         if ex.status_code == status.HTTP_400_BAD_REQUEST:
-            logger.info(f"Got HTTPException with status code 400. Scrapping the escalation. {ex=}")
-            return None, False  # Should not retry because the request is malformed.
+            logger.info(
+                f"Got HTTPException with status code 400. This could be because we already escalated this query. "
+                f"Scrapping the escalation. {ex=}"
+            )
+            return None, False  # Should not retry because the request is bad.
         elif ex.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
             logger.info(
                 "Got HTTPException with status code 429. This likely means we have hit our throttling limit. Will "
@@ -118,13 +112,22 @@ def _escalate_once(  # noqa: PLR0911
         return None, False  # Do not retry.
 
 
-def consume_queued_escalation(escalation_str: str, delete_image: bool | None = True) -> ImageQuery | None:
+def consume_queued_escalation(
+    escalation_str: str, request_cache: RequestCache, delete_image: bool | None = True
+) -> ImageQuery | None:
     """
     Attempts to escalate a queued escalation, retrying based on whether the escalation might succeed in the future.
 
     The `delete_image` argument is used by tests only, and otherwise defaults to True.
     """
     escalation_info = EscalationInfo(**json.loads(escalation_str))
+
+    if request_cache.contains(escalation_info.request_id):
+        logger.info(
+            "Skipping escalation because we've already done an escalation related to request ID "
+            f"{escalation_info.request_id}."
+        )
+        return None
 
     should_retry_escalation = True
     escalation_result = None
@@ -149,6 +152,10 @@ def consume_queued_escalation(escalation_str: str, delete_image: bool | None = T
         else:  # Successfully escalated.
             should_retry_escalation = False
 
+    # Once we're done with this escalation, add the request ID to the cache so that we don't try to escalate duplicate
+    # requests (stemming from, e.g., client-side retries).
+    request_cache.add(escalation_info.request_id)
+
     if delete_image:
         # Delete image when moving on from the escalation (whether it was successfully completed or not).
         image_path = Path(escalation_info.image_path_str)
@@ -157,14 +164,14 @@ def consume_queued_escalation(escalation_str: str, delete_image: bool | None = T
     return escalation_result
 
 
-def read_from_escalation_queue(reader: QueueReader) -> None:
+def read_from_escalation_queue(reader: QueueReader, request_cache: RequestCache) -> None:
     """Reads escalations from the queue reader and attempts to escalates them."""
     # Because the QueueReader will block until it has something to yield, this will loop forever
     for escalation in reader:
         logger.info("Got queued escalation from reader.")
-        result = consume_queued_escalation(escalation)
+        result = consume_queued_escalation(escalation, request_cache)
         if result is None:
-            logger.info("Escalation permanently failed, moving on.")
+            logger.info("Escalation permanently failed or skipped, moving on.")
         else:
             logger.info(f"Escalation succeeded for escalation with ID {result.id}.")
 
@@ -173,4 +180,13 @@ if __name__ == "__main__":
     logger.info("Starting escalation queue reader.")
 
     queue_reader = QueueReader()
-    read_from_escalation_queue(queue_reader)
+    # We cache recently escalated request IDs so that we can avoid escalating entries in the queue that come from the
+    # same initial request. If a client sends a request to the edge and receives an exception such as an HTTP 504 error,
+    # the Groundlight SDK will automatically retry the request, sending the same query parameters to the edge afresh
+    # each time. This could result in escalating the same request to the cloud multiple times, since each instance of
+    # the query would be written to the queue with a different image query ID. Because the request ID is constant
+    # between retries, we can use that to detect and skip duplicate entries in the queue. If we implement a different
+    # way of preventing retries on the edge in the future, this can be removed.
+    request_cache = RequestCache()
+
+    read_from_escalation_queue(queue_reader, request_cache)

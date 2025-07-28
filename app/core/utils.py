@@ -1,6 +1,7 @@
 import json
 import logging
 import time
+import uuid
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any, Callable
@@ -243,6 +244,11 @@ def prefixed_ksuid(prefix: str | None = None) -> str:
 
 def generate_iq_id() -> str:
     return prefixed_ksuid(prefix="iq_")
+
+
+def generate_request_id() -> str:
+    """Generates a request ID in the same way that the Groundlight SDK does, as of July 2025."""
+    return "req_uu" + uuid.uuid4().hex
 
 
 def pil_image_to_bytes(img: Image.Image, format: str = "JPEG") -> bytes:

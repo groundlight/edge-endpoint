@@ -1,6 +1,5 @@
 import logging
 
-from fastapi import HTTPException, status
 from groundlight import Groundlight
 from model import ImageQuery
 
@@ -11,25 +10,8 @@ from app.escalation_queue.queue_writer import QueueWriter
 logger = logging.getLogger(__name__)
 
 
-def is_already_escalated(gl: Groundlight, image_query_id: str) -> bool:
-    """Checks if an image query with the specified ID already exists in the cloud."""
-    try:
-        safe_call_sdk(gl.get_image_query, id=image_query_id)
-        # If the get_image_query call succeeds, an IQ with the same ID exists in the cloud.
-        return True
-    except HTTPException as ex:
-        if ex.status_code == status.HTTP_404_NOT_FOUND:
-            # A 404 response indicates that no image query with the specified ID exists in the cloud
-            return False
-        # We re-raise all other exceptions so that they can be caught by outer except blocks.
-        raise ex
-
-
 def write_escalation_to_queue(
-    writer: QueueWriter,
-    detector_id: str,
-    image_bytes: bytes,
-    submit_iq_params: SubmitImageQueryParams,
+    writer: QueueWriter, detector_id: str, image_bytes: bytes, submit_iq_params: SubmitImageQueryParams, request_id: str
 ) -> None:
     """Writes an escalation to the queue. On failure, logs an error and does NOT raise an exception."""
     try:  # We don't want this to ever raise an exception because it's called synchronously before we return an answer.
@@ -41,6 +23,7 @@ def write_escalation_to_queue(
             detector_id=detector_id,
             image_path_str=image_path_str,
             submit_iq_params=submit_iq_params,
+            request_id=request_id,
         )
         writer.write_escalation(escalation_info)
     except Exception as e:
@@ -54,6 +37,7 @@ def safe_escalate_with_queue_write(
     image_bytes: bytes,
     want_async: bool,
     submit_iq_params: SubmitImageQueryParams,
+    request_id: str,
 ) -> ImageQuery:
     """
     This attempts to escalate an image query via the SDK. If it fails, it will catch the exception and write the
@@ -82,6 +66,10 @@ def safe_escalate_with_queue_write(
             f"escalating: {ex=}."
         )
         write_escalation_to_queue(
-            writer=queue_writer, detector_id=detector_id, image_bytes=image_bytes, submit_iq_params=submit_iq_params
+            writer=queue_writer,
+            detector_id=detector_id,
+            image_bytes=image_bytes,
+            submit_iq_params=submit_iq_params,
+            request_id=request_id,
         )
         raise ex
