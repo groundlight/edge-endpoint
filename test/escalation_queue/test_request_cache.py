@@ -25,7 +25,7 @@ def test_initialization_creates_directory(temp_cache_dir: str):
     cache_dir = Path(temp_cache_dir) / "subdir"
     assert not cache_dir.exists()
 
-    cache = RequestCache(str(cache_dir), max_entries=DEFAULT_REQUEST_CACHE_MAX_ENTRIES)
+    RequestCache(str(cache_dir), max_entries=DEFAULT_REQUEST_CACHE_MAX_ENTRIES)
     assert cache_dir.exists()
     assert cache_dir.is_dir()
 
