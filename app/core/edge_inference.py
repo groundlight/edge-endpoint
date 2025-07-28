@@ -479,6 +479,7 @@ def should_update(model_dir: str, version: Optional[int]) -> bool:
     else:
         return False
 
+
 def get_current_model_versions(repository_root: str, detector_id: str) -> tuple[Optional[int], Optional[int]]:
     """Edge inference server model_repositories contain model versions in subdirectories. These subdirectories
     are named with integers. This function returns the highest integer in the model repository directory.
