@@ -150,7 +150,9 @@ class AppState:
         # the minimal image include OODD inference, and do not need to be adjusted separately.
         self.separate_oodd_inference = not USE_MINIMAL_IMAGE
         detector_inference_configs = get_detector_inference_configs(root_edge_config=self.edge_config)
-        self.edge_inference_manager = EdgeInferenceManager(detector_inference_configs=detector_inference_configs)
+        self.edge_inference_manager = EdgeInferenceManager(
+            detector_inference_configs=detector_inference_configs, separate_oodd_inference=self.separate_oodd_inference
+        )
         self.db_manager = DatabaseManager()
         self.is_ready = False
 

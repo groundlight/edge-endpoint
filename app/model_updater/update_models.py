@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 
 TEN_MINUTES = 60 * 10
 
-
 USE_MINIMAL_IMAGE = os.environ.get("USE_MINIMAL_IMAGE", "false") == "true"
 
 
