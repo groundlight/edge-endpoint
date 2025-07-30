@@ -21,6 +21,8 @@ MAX_SDK_INSTANCES_CACHE_SIZE = 1000
 MAX_DETECTOR_IDS_CACHE_SIZE = 1000
 STALE_METADATA_THRESHOLD_SEC = 30  # 30 seconds
 
+USE_MINIMAL_IMAGE = os.environ.get("USE_MINIMAL_IMAGE", "false") == "true"
+
 
 def load_edge_config() -> RootEdgeConfig:
     """
@@ -148,6 +150,7 @@ class AppState:
         self.edge_inference_manager = EdgeInferenceManager(detector_inference_configs=detector_inference_configs)
         self.db_manager = DatabaseManager()
         self.is_ready = False
+        self.minimal_inference_enabled = USE_MINIMAL_IMAGE
 
 
 def get_app_state(request: Request) -> AppState:

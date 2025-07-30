@@ -48,21 +48,24 @@ def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, co
         raise RuntimeError("Failed to submit image for inference") from e
 
 
-def get_inference_result(primary_response: dict, oodd_response: dict) -> str:
+def get_inference_result(primary_response: dict, oodd_response: dict | None) -> str:
     """
-    Get the final inference result from the primary and OODD responses.
+    Get the final inference result from the primary and OODD responses. If the OODD response is None, we return the
+    parsed primary response without confidence adjustment.
     """
     primary_num_classes = get_num_classes(primary_response)
 
-    primary_output_dict = parse_inference_response(primary_response)
-    logger.debug(f"Primary inference server response: {primary_output_dict}.")
-    oodd_output_dict = parse_inference_response(oodd_response)
-    logger.debug(f"OODD inference server response: {oodd_output_dict}.")
+    output_dict = parse_inference_response(primary_response)
+    logger.debug(f"Primary inference server response: {output_dict}.")
+    
+    if oodd_response is not None:
+        oodd_output_dict = parse_inference_response(oodd_response)
+        logger.debug(f"OODD inference server response: {oodd_output_dict}.")
 
-    combined_output_dict = adjust_confidence_with_oodd(primary_output_dict, oodd_output_dict, primary_num_classes)
-    logger.debug(f"Combined (primary + OODD) inference result: {combined_output_dict}.")
+        output_dict = adjust_confidence_with_oodd(output_dict, oodd_output_dict, primary_num_classes)
+        logger.debug(f"Combined (primary + OODD) inference result: {output_dict}.")
 
-    return combined_output_dict
+    return output_dict
 
 
 def get_num_classes(response: dict) -> int:
@@ -217,21 +220,24 @@ class EdgeInferenceManager:
             for detector_id, detector_inference_config in self.detector_inference_configs.items()
         }
 
-    def update_inference_config(self, detector_id: str, api_token: str) -> None:
+    def update_inference_config(self, detector_id: str, use_minimal_image: bool, api_token: str) -> None:
         """
         Adds a new detector to the inference config at runtime. This is useful when new
         detectors are added to the database and we want to create an inference deployment for them.
         Args:
             detector_id: ID of the detector on which to run local edge inference
+            use_minimal_image: Whether or not to use the minimal image for inference
             api_token: API token required to fetch inference models
 
         """
         if detector_id not in self.detector_inference_configs.keys():
             self.detector_inference_configs[detector_id] = EdgeInferenceConfig(enabled=True, api_token=api_token)
             self.inference_client_urls[detector_id] = get_edge_inference_service_name(detector_id) + ":8000"
-            self.oodd_inference_client_urls[detector_id] = (
-                get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
-            )
+            if not use_minimal_image:
+                logger.info(f"Not using minimal image, updating OODD inference URL for {detector_id}")
+                self.oodd_inference_client_urls[detector_id] = (
+                    get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
+                )
             logger.info(f"Set up edge inference for {detector_id}")
 
     def detector_configured_for_edge_inference(self, detector_id: str) -> bool:
@@ -260,26 +266,31 @@ class EdgeInferenceManager:
         """
         try:
             inference_client_url = self.inference_client_urls[detector_id]
-            oodd_inference_client_url = self.oodd_inference_client_urls[detector_id]
+            oodd_inference_client_url = (
+                self.oodd_inference_client_urls[detector_id]
+                if os.environ.get("USE_MINIMAL_IMAGE", "false") == "false"
+                else None
+            )
         except KeyError:
             logger.info(f"Failed to look up inference clients for {detector_id}")
             return False
 
-        inference_clients_are_ready = is_edge_inference_ready(inference_client_url) and is_edge_inference_ready(
-            oodd_inference_client_url
+        inference_clients_are_ready = is_edge_inference_ready(inference_client_url) and (
+            oodd_inference_client_url is None or is_edge_inference_ready(oodd_inference_client_url)
         )
         if not inference_clients_are_ready:
             logger.debug("Edge inference server and/or OODD inference server is not ready")
             return False
         return True
 
-    def run_inference(self, detector_id: str, image_bytes: bytes, content_type: str) -> dict:
+    def run_inference(self, detector_id: str, image_bytes: bytes, content_type: str, minimal_inference_enabled: bool) -> dict:
         """
         Submit an image to the inference server, route to a specific model, and return the results.
         Args:
             detector_id: ID of the detector on which to run local edge inference
             image_bytes: The serialized image to submit for inference
             content_type: The content type of the image
+            minimal_inference_enabled: Whether to run the minimal version of inference, which does not use a separate OODD pod
         Returns:
             Dictionary of inference results with keys:
                 - "score": float
@@ -291,10 +302,12 @@ class EdgeInferenceManager:
         start_time = time.perf_counter()
 
         inference_client_url = self.inference_client_urls[detector_id]
-        oodd_inference_client_url = self.oodd_inference_client_urls[detector_id]
-
         response = submit_image_for_inference(inference_client_url, image_bytes, content_type)
-        oodd_response = submit_image_for_inference(oodd_inference_client_url, image_bytes, content_type)
+
+        oodd_response = None
+        if not minimal_inference_enabled:
+            oodd_inference_client_url = self.oodd_inference_client_urls[detector_id]
+            oodd_response = submit_image_for_inference(oodd_inference_client_url, image_bytes, content_type)
 
         output_dict = get_inference_result(response, oodd_response)
 
