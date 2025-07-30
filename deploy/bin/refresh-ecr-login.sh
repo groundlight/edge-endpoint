@@ -5,7 +5,7 @@ set -e
 K=${KUBECTL_CMD:-"kubectl"}
 # No need to explicitly pick the namespace - this normally runs in its own namespace
 
-ECR_REGISTRY="767397850842.dkr.ecr.us-west-2.amazonaws.com"
+ECR_REGISTRY="557423365154.dkr.ecr.us-west-2.amazonaws.com"
 # TODO: We should probably put this in DNS
 
 ECR_PASSWORD=$(aws ecr get-login-password --region us-west-2)

@@ -13,7 +13,7 @@
 #
 # Note: Ensure you have the necessary AWS credentials and Docker installed.
 
-ECR_ACCOUNT=${ECR_ACCOUNT:-767397850842}
+ECR_ACCOUNT=${ECR_ACCOUNT:-557423365154}
 ECR_REGION=${ECR_REGION:-us-west-2}
 
 set -e
