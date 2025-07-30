@@ -84,7 +84,11 @@ def get_detector_inference_configs(
 
 @lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
 def _get_groundlight_sdk_instance_internal(api_token: str):
-    return Groundlight(api_token=api_token)
+    try:
+        return Groundlight(api_token=api_token)
+    except Exception:
+        logger.warning("Unable to instantiate Groundlight client.", exc_info=True)
+        return None
 
 
 def get_groundlight_sdk_instance(request: Request):

@@ -46,7 +46,7 @@ spec:
       - name: sync-pinamod
         image: amazon/aws-cli:latest
         # Sync models from S3 to the local hostmapped filesystem.
-        command: ['sh', '-c', 'aws s3 sync s3://pinamod-artifacts-public/pinamod $PINAMOD_DIR --delete']
+        command: ['sh', '-c', 'mkdir -p $PINAMOD_DIR && aws s3 sync s3://pinamod-artifacts-lkq/pinamod $PINAMOD_DIR --delete']
         env:
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
@@ -63,10 +63,29 @@ spec:
         volumeMounts:
         - name: pina-models
           mountPath: /opt/models
-
+      - name: sync-edge-endpoint-state
+        image: amazon/aws-cli:latest
+        # Sync edge endpoint state from S3 to the local hostmapped filesystem.
+        command: ['sh', '-c', 'mkdir -p $EDGE_ENDPOINT_STATE_DIR && aws s3 sync s3://edge-endpoint-state/model-repo $EDGE_ENDPOINT_STATE_DIR --delete']
+        env:
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: aws_access_key_id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: aws_secret_access_key
+        - name: EDGE_ENDPOINT_STATE_DIR
+          value: /opt/groundlight/edge/serving/model-repo
+        volumeMounts:
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/serving/model-repo        
       containers:
       - name: inference-server
-        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:latest
+        image: 557423365154.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:dev
         imagePullPolicy: Always
         env:
         - name: MODEL_REPOSITORY
@@ -76,7 +95,7 @@ spec:
         - name: PINAMOD_DIR
           value: /opt/models/pinamod
         - name: LOAD_ALL_PIPELINES  # Load only the pipelines that are needed for edge inference.
-          value: "false"
+          value: "true"
         command:
           [
             "poetry", "run", "python3", "-m", "uvicorn", "serving.edge_inference_server.fastapi_server:app",
