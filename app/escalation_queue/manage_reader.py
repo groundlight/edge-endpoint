@@ -57,9 +57,12 @@ def _escalate_once(  # noqa: PLR0911
 
     try:
         gl = _groundlight_client()
-    except GroundlightClientError as ex:  # TODO make sure this is the only error that needs to be caught here
+    except GroundlightClientError as ex:
+        # We don't catch API token related exceptions here, since we want those to visibly fail. A
+        # GroundlightClientError exception will be raised for other kinds of errors, including when the client could
+        # not be created due to no internet connection.
         logger.info(f"Got error {ex=} while trying to create the Groundlight client. Will retry.")
-        return None, True  # Should retry because the escalation may succeed once connection is restored.
+        return None, True  # Should retry because the escalation may succeed if connection is down and gets restored.
 
     image_path = Path(escalation_info.image_path_str)
     try:
@@ -84,9 +87,9 @@ def _escalate_once(  # noqa: PLR0911
             request_timeout=submit_iq_request_timeout_s,
         )
         return res, False  # Should not retry because the escalation was successful.
-    except MaxRetryError as ex:  # When there's no connection while trying to send request
+    except MaxRetryError as ex:  # When there's no connection while trying to send the request.
         logger.info(
-            f"Got MaxRetryError! {ex=}. This likely means we currently have no internet connection. Will retry."
+            f"Got MaxRetryError, {ex=}. This likely means we currently have no internet connection. Will retry."
         )
         return None, True  # Should retry because the escalation may succeed once connection is restored.
     except HTTPException as ex:
