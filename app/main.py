@@ -41,7 +41,6 @@ def update_inference_config(app_state: AppState) -> None:
         for detector_record in detectors:
             app_state.edge_inference_manager.update_inference_config(
                 detector_id=detector_record.detector_id,  # type: ignore
-                use_minimal_image=app_state.minimal_inference_enabled,
                 api_token=detector_record.api_token,  # type: ignore
             )
 
