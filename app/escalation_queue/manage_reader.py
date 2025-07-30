@@ -87,11 +87,11 @@ def _escalate_once(  # noqa: PLR0911
             request_timeout=submit_iq_request_timeout_s,
         )
         return res, False  # Should not retry because the escalation was successful.
-    except MaxRetryError as ex:  # When there's no connection while trying to send the request.
-        logger.info(
-            f"Got MaxRetryError, {ex=}. This likely means we currently have no internet connection. Will retry."
-        )
-        return None, True  # Should retry because the escalation may succeed once connection is restored.
+    except MaxRetryError as ex:
+        # Raised when the SDK tried to retry the request but did not succeed. This is the exception raised when there's
+        # no internet connection, which is probably the most likely cause.
+        logger.info(f"Got MaxRetryError, {ex=}. This could mean we currently have no internet connection. Will retry.")
+        return None, True  # Should retry because the escalation could succeed in the future.
     except HTTPException as ex:
         if ex.status_code == status.HTTP_400_BAD_REQUEST:
             logger.info(
