@@ -280,13 +280,13 @@ class EdgeInferenceManager:
             not self.separate_oodd_inference or is_edge_inference_ready(oodd_inference_client_url)
         )
         if not inference_clients_are_ready:
-            logger.debug(f"Edge inference server and/or OODD inference server is not ready. {inference_client_url=}, {oodd_inference_client_url=}")
+            logger.debug(
+                f"Edge inference server and/or OODD inference server is not ready. {inference_client_url=}, {oodd_inference_client_url=}"
+            )
             return False
         return True
 
-    def run_inference(
-        self, detector_id: str, image_bytes: bytes, content_type: str
-    ) -> dict:
+    def run_inference(self, detector_id: str, image_bytes: bytes, content_type: str) -> dict:
         """
         Submit an image to the inference server, route to a specific model, and return the results.
         Args:
@@ -475,7 +475,7 @@ def save_models_to_repository(
         old_primary_model_version = get_current_model_version(repository_root, detector_id)
         new_primary_model_version = 1 if old_primary_model_version is None else old_primary_model_version + 1
         save_model_to_repository(edge_model_buffer, edge_model_info, edge_model_dir, new_primary_model_version)
-    
+
     if oodd_model_info:
         oodd_model_dir = get_oodd_model_dir(repository_root, detector_id)
         os.makedirs(oodd_model_dir, exist_ok=True)
@@ -541,7 +541,11 @@ def get_current_model_version(repository_root: str, detector_id: str, is_oodd: b
     are named with integers. This function returns the highest integer in the model repository directory.
     """
     logger.debug(f"Checking for current model versions for {detector_id} with is_oodd={is_oodd}")
-    model_dir = get_oodd_model_dir(repository_root, detector_id) if is_oodd else get_primary_edge_model_dir(repository_root, detector_id)
+    model_dir = (
+        get_oodd_model_dir(repository_root, detector_id)
+        if is_oodd
+        else get_primary_edge_model_dir(repository_root, detector_id)
+    )
 
     # If the primary or oodd directories don't exist, we'll update both models. This will happen when the edge endpoint
     # switches from the old model repository format to the new one.

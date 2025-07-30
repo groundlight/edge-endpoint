@@ -74,9 +74,10 @@ def _check_new_models_and_inference_deployments(
             deployment_manager.update_inference_deployment(detector_id=detector_id, is_oodd=True)
 
         poll_start = time.time()
-        while not deployment_manager.is_inference_deployment_rollout_complete(
-            deployment_name=edge_deployment_name
-        ) or (separate_oodd_inference and not deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name)):
+        while not deployment_manager.is_inference_deployment_rollout_complete(deployment_name=edge_deployment_name) or (
+            separate_oodd_inference
+            and not deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name)
+        ):
             time.sleep(5)
             if time.time() - poll_start > TEN_MINUTES:
                 raise TimeoutError("Inference deployments are not ready within time limit")
@@ -87,9 +88,10 @@ def _check_new_models_and_inference_deployments(
         logger.info(f"Cleaning up old model versions for {detector_id}")
         delete_old_model_versions(detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2)
 
-    if deployment_manager.is_inference_deployment_rollout_complete(
-        deployment_name=edge_deployment_name
-    ) and (not separate_oodd_inference or deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name)):
+    if deployment_manager.is_inference_deployment_rollout_complete(deployment_name=edge_deployment_name) and (
+        not separate_oodd_inference
+        or deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name)
+    ):
         # Database transaction to update the deployment_created field for the detector_id
         # At this time, we are sure that the deployment for the detector has been successfully created and rolled out.
 
@@ -221,5 +223,5 @@ if __name__ == "__main__":
         deployment_manager=deployment_manager,
         db_manager=db_manager,
         refresh_rate=refresh_rate,
-        separate_oodd_inference = not USE_MINIMAL_IMAGE,
+        separate_oodd_inference=not USE_MINIMAL_IMAGE,
     )
