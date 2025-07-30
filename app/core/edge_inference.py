@@ -188,7 +188,7 @@ class EdgeInferenceManager:
         self,
         detector_inference_configs: dict[str, EdgeInferenceConfig] | None,
         verbose: bool = False,
-        separate_oodd_inference: bool = False,
+        separate_oodd_inference: bool = True,
     ) -> None:
         """
         Initializes the edge inference manager.
@@ -196,6 +196,7 @@ class EdgeInferenceManager:
             detector_inference_configs: Dictionary of detector IDs to EdgeInferenceConfig objects
             edge_config: RootEdgeConfig object
             verbose: Whether to print verbose logs from the inference server client
+            separate_oodd_inference: Whether to run inference separately for the OODD model
         """
         self.verbose = verbose
         self.detector_inference_configs, self.inference_client_urls, self.oodd_inference_client_urls = {}, {}, {}
@@ -229,7 +230,6 @@ class EdgeInferenceManager:
         detectors are added to the database and we want to create an inference deployment for them.
         Args:
             detector_id: ID of the detector on which to run local edge inference
-            separate_oodd_inference: Whether to run inference separately for the OODD model
             api_token: API token required to fetch inference models
 
         """

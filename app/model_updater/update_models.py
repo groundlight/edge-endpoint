@@ -48,7 +48,7 @@ def _check_new_models_and_inference_deployments(
     :param edge_inference_manager: the edge inference manager object.
     :param deployment_manager: the inference deployment manager object.
     :param db_manager: the database manager object.
-    :param separate_oodd_inference: whether to run inference separately for an
+    :param separate_oodd_inference: whether or not to run inference separately for an OODD model
     """
     # Download and write new model to model repo on disk
     new_model = edge_inference_manager.update_models_if_available(detector_id=detector_id)
