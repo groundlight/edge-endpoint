@@ -44,6 +44,7 @@ def safe_escalate_with_queue_write(
     escalation to the queue, then raise the exception.
     """
     try:
+        logger.info("About to do safe_call_sdk inside safe_escalate_with_queue_write!")
         return safe_call_sdk(
             gl.submit_image_query,
             detector=detector_id,
