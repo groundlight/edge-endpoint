@@ -248,7 +248,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 "deployment_created": False,
             }
         )
-        
+
         if not app_state.minimal_inference_enabled:
             oodd_model_name = get_edge_inference_model_name(detector_id=detector_id, is_oodd=True)
             app_state.db_manager.create_or_update_inference_deployment_record(

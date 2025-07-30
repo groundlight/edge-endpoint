@@ -57,7 +57,7 @@ def get_inference_result(primary_response: dict, oodd_response: dict | None) -> 
 
     output_dict = parse_inference_response(primary_response)
     logger.debug(f"Primary inference server response: {output_dict}.")
-    
+
     if oodd_response is not None:
         oodd_output_dict = parse_inference_response(oodd_response)
         logger.debug(f"OODD inference server response: {oodd_output_dict}.")
@@ -283,7 +283,9 @@ class EdgeInferenceManager:
             return False
         return True
 
-    def run_inference(self, detector_id: str, image_bytes: bytes, content_type: str, minimal_inference_enabled: bool) -> dict:
+    def run_inference(
+        self, detector_id: str, image_bytes: bytes, content_type: str, minimal_inference_enabled: bool
+    ) -> dict:
         """
         Submit an image to the inference server, route to a specific model, and return the results.
         Args:
