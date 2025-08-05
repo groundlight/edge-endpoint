@@ -17,7 +17,7 @@ flowchart LR
             QUEUE_WRITE[Write to<br/>Escalation Queue]
         end
         
-        subgraph "escalation-queue-reader container  "
+        subgraph "escalation-queue-reader container \n"
             QUEUE_READ[Queue Reader<br/>Background Service]
             CLOUD_SUBMIT[Submit to<br/>Groundlight Cloud]
         end
