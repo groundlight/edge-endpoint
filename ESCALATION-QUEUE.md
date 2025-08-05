@@ -9,6 +9,7 @@ The escalation queue provides a persistent, reliable mechanism for handling imag
 The escalation queue system operates across two containers within the edge-endpoint pod:
 
 ```mermaid
+%%{init: {"flowchart": {"subGraphTitleMargin": {"top": 0, "bottom": 10}}}}%%
 flowchart LR
     subgraph POD ["edge-endpoint pod"]
         subgraph CONT1 ["edge-endpoint container"]
@@ -18,8 +19,8 @@ flowchart LR
         end
         
         subgraph CONT2 ["escalation-queue-reader container"]
-            QUEUE_READ[Queue Reader<br/>Background Service]
-            CLOUD_SUBMIT[Submit to<br/>Groundlight Cloud]
+            QUEUE_READ["    Queue Reader    <br/>    Background Service    "]
+            CLOUD_SUBMIT["    Submit to    <br/>    Groundlight Cloud    "]
         end
     end
     
@@ -44,17 +45,11 @@ flowchart LR
     classDef nodeBackground fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000000
     classDef nodeResponse fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000000
     
-    %% Subgraph styling (big container backgrounds)
-    classDef subgraphOffWhite fill:#fafafa,stroke:#424242,stroke-width:1px
-    
     %% Apply node styles (individual rectangles/shapes)
     class EDGE,DECISION,QUEUE_WRITE nodeMain
     class QUEUE nodeStorage
     class QUEUE_READ,CLOUD_SUBMIT nodeBackground
     class RESPONSE nodeResponse
-    
-    %% Apply subgraph styles (big container backgrounds)
-    class POD,STORAGE subgraphOffWhite
 ```
 
 ## Key Features
