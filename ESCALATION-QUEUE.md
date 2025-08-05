@@ -54,7 +54,7 @@ flowchart LR
     class RESPONSE nodeResponse
     
     %% Apply subgraph styles (big container backgrounds)
-    class POD,CONT1,STORAGE subgraphOffWhite
+    class POD,STORAGE subgraphOffWhite
 ```
 
 ## Key Features
