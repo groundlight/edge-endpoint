@@ -42,8 +42,8 @@ flowchart LR
     %% Styling with darker text
     classDef main fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px,color:#000000
     classDef storage fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000000
-    classDef background fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000000
-    classDef response fill:#fafafa,stroke:#424242,stroke-width:2px,color:#000000
+    classDef background fill:#fafafa,stroke:#1565c0,stroke-width:2px,color:#000000
+    classDef response fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000000
     
     class EDGE,DECISION,QUEUE_WRITE main
     class QUEUE storage
