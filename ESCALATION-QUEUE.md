@@ -10,20 +10,20 @@ The escalation queue system operates across two containers within the edge-endpo
 
 ```mermaid
 flowchart LR
-    subgraph "edge-endpoint pod"
-        subgraph "edge-endpoint container"
+    subgraph POD ["edge-endpoint pod"]
+        subgraph CONT1 ["edge-endpoint container"]
             EDGE[Edge Endpoint<br/>Image Query Processing]
             DECISION{Needs<br/>Escalation?}
             QUEUE_WRITE[Write to<br/>Escalation Queue]
         end
         
-        subgraph "escalation-queue-reader container \n"
+        subgraph CONT2 ["escalation-queue-reader container"]
             QUEUE_READ[Queue Reader<br/>Background Service]
             CLOUD_SUBMIT[Submit to<br/>Groundlight Cloud]
         end
     end
     
-    subgraph "Local Persistent Storage"
+    subgraph STORAGE ["Local Persistent Storage"]
         QUEUE[File-based Queue<br/>Persistent Storage]
     end
     
@@ -38,16 +38,25 @@ flowchart LR
     QUEUE --> |Continuously monitors<br/>and processes| QUEUE_READ
     QUEUE_READ --> CLOUD_SUBMIT
     
-    %% Styling with darker text
-    classDef main fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px,color:#000000
-    classDef storage fill:#fafafa,stroke:#7b1fa2,stroke-width:2px,color:#000000
-    classDef background fill:#fafafa,stroke:#1565c0,stroke-width:2px,color:#000000
-    classDef response fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000000
+    %% Individual node styling
+    classDef nodeMain fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px,color:#000000
+    classDef nodeStorage fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000000
+    classDef nodeBackground fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000000
+    classDef nodeResponse fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000000
     
-    class EDGE,DECISION,QUEUE_WRITE main
-    class QUEUE storage
-    class QUEUE_READ,CLOUD_SUBMIT background
-    class RESPONSE response
+    %% Subgraph styling
+    classDef subgraphOffWhite fill:#fafafa,stroke:#424242,stroke-width:2px,color:#000000
+    classDef subgraphDefault fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px,color:#000000
+    
+    %% Apply node styles
+    class EDGE,DECISION,QUEUE_WRITE nodeMain
+    class QUEUE nodeStorage
+    class QUEUE_READ,CLOUD_SUBMIT nodeBackground
+    class RESPONSE nodeResponse
+    
+    %% Apply subgraph styles
+    class POD,CONT1 subgraphDefault
+    class CONT2,STORAGE subgraphOffWhite
 ```
 
 ## Key Features
