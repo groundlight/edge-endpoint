@@ -44,18 +44,16 @@ flowchart LR
     classDef nodeBackground fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000000
     classDef nodeResponse fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000000
     
-    %% Subgraph styling
-    classDef subgraphOffWhite fill:#fafafa,stroke:#424242,stroke-width:2px,color:#000000
-    classDef subgraphDefault fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px,color:#000000
+    %% Subgraph styling (big container backgrounds)
+    classDef subgraphOffWhite fill:#fafafa,stroke:#424242,stroke-width:1px
     
-    %% Apply node styles
+    %% Apply node styles (individual rectangles/shapes)
     class EDGE,DECISION,QUEUE_WRITE nodeMain
     class QUEUE nodeStorage
     class QUEUE_READ,CLOUD_SUBMIT nodeBackground
     class RESPONSE nodeResponse
     
-    %% Apply subgraph styles
-    class POD,CONT1 subgraphDefault
+    %% Apply subgraph styles (big container backgrounds to off-white)
     class CONT2,STORAGE subgraphOffWhite
 ```
 
