@@ -53,8 +53,8 @@ flowchart LR
     class QUEUE_READ,CLOUD_SUBMIT nodeBackground
     class RESPONSE nodeResponse
     
-    %% Apply subgraph styles (big container backgrounds to off-white)
-    class CONT2,STORAGE subgraphOffWhite
+    %% Apply subgraph styles (big container backgrounds)
+    class POD,CONT1,STORAGE subgraphOffWhite
 ```
 
 ## Key Features
