@@ -153,7 +153,6 @@ def main_binary(num_detectors: int) -> None:
         for d in detectors:
             image, label = u.get_random_binary_image()
             
-            print('-' * 5, f'Submitting image query to {d.id}...')
             try:
                 iq = gl.submit_image_query(
                     detector=d,
@@ -190,13 +189,16 @@ def main_count(num_detectors: int) -> None:
                 group_name=GROUP_NAME,
                 confidence_threshold=0.75,
                 )
+
+        gl.update_detector_confidence_threshold(detector, 0.0)
+        detector.confidence_threshold = 0.0
         
         detectors.append(detector)
         
     # Send load to the detectors to trigger inference pod creation
     for i in range(LOAD_GENERATION_ITERATIONS):
         print('-' * 20, f'Iteration {i}', '-' * 20)
-        for d in detectors:
+        for n, d in enumerate(detectors):
             image, rois = u.generate_random_count_image(
                 class_name=class_name,
                 max_count=max_count,
@@ -204,14 +206,18 @@ def main_count(num_detectors: int) -> None:
                 image_height=480,
             )
             
-            print('-' * 5, f'Submitting image query to {d.id}...')
             try:
+                t1 = time.time()
                 iq = gl.submit_image_query(
                     detector=d,
                     image=image,
+                    confidence_threshold=0.0,
                     wait=0.0,
                     human_review="NEVER",
                 )
+                t2 = time.time()
+                elapsed_time = t2 - t1
+                print(f'{n}: ({elapsed_time:.2f} sec)', end=' ')
                 pprint_iq(iq, d.confidence_threshold)
             except Exception as e:
                 print(f'Encountered error while attempting to submit image query: {e}')
@@ -221,7 +227,7 @@ def main_count(num_detectors: int) -> None:
             # Add labels to trigger training and new inference pod rollouts
             if not iq.result.from_edge:
                 add_label_async(gl, iq, len(rois), rois)
-                print(f'Added {len(rois)} ROIs to {iq.id} on {d.id}.')
+                print(f'    --added {len(rois)} ROIs to {iq.id} on {d.id}.')
 
 if __name__ == "__main__":
     args = parse_arguments()
