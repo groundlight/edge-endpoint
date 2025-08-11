@@ -15,6 +15,7 @@ flowchart LR
         subgraph CONT1 ["edge-endpoint container"]
             EDGE[Edge Endpoint<br/>Image Query Processing]
             DECISION{Needs<br/>Escalation?}
+            SYNC_ESC[Try Direct<br/>Cloud Escalation]
             QUEUE_WRITE[Write to<br/>Escalation Queue]
         end
         
@@ -27,11 +28,15 @@ flowchart LR
     subgraph STORAGE ["Local Persistent Storage"]
         QUEUE[File-based Queue<br/>Persistent Storage]
     end
+
+    RESPONSE[Return to Client]
     
     %% Main Flow
     EDGE --> DECISION
     DECISION -->|"Asynchronous<br/>(low confidence, audit)"| QUEUE_WRITE
-    DECISION -->|"Synchronous<br/>(direct return)"| RESPONSE[Return to Client]
+    DECISION -->|"Synchronous<br/>(direct return)"| SYNC_ESC[Try Direct<br/>Cloud Escalation]
+    SYNC_ESC -->|"Success"| RESPONSE[Return to Client]
+    SYNC_ESC -->|"Failure<br/>(network error, etc.)"| QUEUE_WRITE
     QUEUE_WRITE --> QUEUE
     QUEUE_WRITE --> RESPONSE
     
@@ -50,6 +55,7 @@ flowchart LR
     class QUEUE nodeStorage
     class QUEUE_READ,CLOUD_SUBMIT nodeBackground
     class RESPONSE nodeResponse
+    class SYNC_ESC nodeMain
 ```
 
 ## Key Features
