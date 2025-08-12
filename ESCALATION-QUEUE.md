@@ -23,20 +23,3 @@ If an escalation fails, we want to retry the request if we think it might eventu
 | `HTTPException (429 Too Many Requests)`    | Yes    | Throttled; once enough time passes, the escalation should succeed. |
 | `HTTPException (other status)`             | No     | Unknown HTTP error; unknown whether a retry would help. |
 | `Exception` (any other)                    | No     | Unexpected error; unknown whether a retry would help. |
-
-
-## Key Features
-
-### Persistence
-- Escalations are stored in local persistent storage that survives container restarts
-- Queue processing can resume after interruptions without losing escalation requests
-
-### Asynchronous Processing
-- Client requests return immediately after queue writing (non-blocking)
-- Background container continuously processes queued escalations
-- Separates fast request handling from slower cloud communication
-
-### Reliability
-- File-based queue with atomic operations prevents data loss
-- Retry logic with exponential backoff handles network failures
-- Duplicate detection prevents processing the same request multiple times
