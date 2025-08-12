@@ -196,7 +196,9 @@ def main_count(num_detectors: int) -> None:
         detectors.append(detector)
         
     # Send load to the detectors to trigger inference pod creation
+    test_start = time.time()
     for i in range(LOAD_GENERATION_ITERATIONS):
+        num_edge_infereces = 0
         print('-' * 20, f'Iteration {i}', '-' * 20)
         for n, d in enumerate(detectors):
             image, rois = u.generate_random_count_image(
@@ -205,7 +207,7 @@ def main_count(num_detectors: int) -> None:
                 image_width=640,
                 image_height=480,
             )
-            
+            print(f'{n}:', end=' ', flush=True)
             try:
                 t1 = time.time()
                 iq = gl.submit_image_query(
@@ -217,17 +219,25 @@ def main_count(num_detectors: int) -> None:
                 )
                 t2 = time.time()
                 elapsed_time = t2 - t1
-                print(f'{n}: ({elapsed_time:.2f} sec)', end=' ')
+                print(f'({elapsed_time:.2f} sec)', end=' ')
                 pprint_iq(iq, d.confidence_threshold)
             except Exception as e:
                 print(f'Encountered error while attempting to submit image query: {e}')
                 time.sleep(1)
                 continue # We couldn't submit the image query, so no need to submit a label
-            
+
             # Add labels to trigger training and new inference pod rollouts
-            if not iq.result.from_edge:
+            if not iq.result.from_edge and iq.result.confidence < d.confidence_threshold:
                 add_label_async(gl, iq, len(rois), rois)
                 print(f'    --added {len(rois)} ROIs to {iq.id} on {d.id}.')
+
+            if iq.result.from_edge:
+                num_edge_infereces += 1
+
+            if num_edge_infereces == num_detectors:
+                test_end = time.time()
+                print(f'All {num_detectors} edge inference pods came online in {test_end - test_start:.2f} seconds.')
+                return
 
 if __name__ == "__main__":
     args = parse_arguments()

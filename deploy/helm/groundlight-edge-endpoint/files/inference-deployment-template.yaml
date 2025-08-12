@@ -77,28 +77,11 @@ spec:
           value: "false"
         command: ["/bin/bash", "-c"]
         args:
-          - |
-            # Dynamic GPU detection and assignment
-            if command -v nvidia-smi >/dev/null 2>&1; then
-              GPU_COUNT=$(nvidia-smi --list-gpus | wc -l)
-              echo "Detected $GPU_COUNT GPU(s)"
-              
-              if [ "$GPU_COUNT" -eq 1 ]; then
-                export CUDA_VISIBLE_DEVICES=0
-                echo "Single GPU detected, using GPU 0"
-              elif [ "$GPU_COUNT" -gt 1 ]; then
-                # Randomly select a GPU (0 to GPU_COUNT-1)
-                SELECTED_GPU=$((RANDOM % GPU_COUNT))
-                export CUDA_VISIBLE_DEVICES=$SELECTED_GPU
-                echo "Multiple GPUs detected, randomly selected GPU $SELECTED_GPU out of $GPU_COUNT"
-              else
-                echo "No GPUs detected, running on CPU"
-                export CUDA_VISIBLE_DEVICES=""
-              fi
-            else
-              echo "nvidia-smi not available, running on CPU"
-              export CUDA_VISIBLE_DEVICES=""
-            fi
+        - |
+            SELECTED_GPU=$(
+              {{- tpl (.Files.Get "files/randomly-select-gpu.sh") . | nindent 12 }}
+            )
+            export CUDA_VISIBLE_DEVICES=$SELECTED_GPU
             
             # Start the inference server
             poetry run python3 -m uvicorn serving.edge_inference_server.fastapi_server:app \
