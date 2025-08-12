@@ -1,67 +1,43 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Enable Toxiproxy for the Edge Endpoint by:
-# 1) Deploying toxiproxy (Deployment + Service) in the given namespace
-# 2) Configuring a proxy 'gl' to forward to the current IP of api.groundlight.ai:443
-# 3) Patching the EE Deployment to map api.groundlight.ai -> Toxiproxy ClusterIP via hostAliases
+# Requires:
+# - kubectl context pointing at the target cluster
+# - DEPLOYMENT_NAMESPACE set to the namespace where edge endpoint is installed
 
-NAMESPACE=${1:-edge}
-EE_DEPLOYMENT=${2:-edge-endpoint}
-CLOUD_HOST=${3:-api.groundlight.ai}
-
-echo "Applying Toxiproxy resources in namespace: $NAMESPACE"
-kubectl -n "$NAMESPACE" apply -f "$(dirname "$0")/toxiproxy.yaml"
-
-echo "Waiting for toxiproxy Deployment to be ready..."
-kubectl -n "$NAMESPACE" rollout status deploy/toxiproxy --timeout=120s
-
-echo "Resolving current IP for $CLOUD_HOST from cluster..."
-UPSTREAM_IP=$(kubectl -n "$NAMESPACE" run dnsutils-ttx --rm -i --restart=Never --image=busybox:1.36 --command -- \
-  sh -c 'nslookup "$1" 2>/dev/null | awk "/^Address /{print $3}" | tail -n1' -- "$CLOUD_HOST" \
-  | grep -Eo '([0-9]{1,3}\\.){3}[0-9]{1,3}' | head -n1)
-if [ -z "$UPSTREAM_IP" ]; then
-  echo "Failed to resolve $CLOUD_HOST inside cluster" >&2
+if [[ -z "${DEPLOYMENT_NAMESPACE:-}" ]]; then
+  echo "ERROR: DEPLOYMENT_NAMESPACE must be set (e.g., export DEPLOYMENT_NAMESPACE=edge)" >&2
   exit 1
 fi
-echo "Resolved $CLOUD_HOST -> $UPSTREAM_IP"
 
-ADMIN_SVC=toxiproxy
-ADMIN_PORT=8474
+KNS="-n ${DEPLOYMENT_NAMESPACE}"
 
-echo "Recreating proxy gl in toxiproxy: 0.0.0.0:443 -> $UPSTREAM_IP:443"
-kubectl -n "$NAMESPACE" run toxiproxy-bootstrap --rm -i --restart=Never --image=curlimages/curl:8.9.1 --command -- sh -c \
-  "\
-  curl -sX DELETE http://$ADMIN_SVC:$ADMIN_PORT/proxies/gl >/dev/null 2>&1 || true; \
-  curl -sX POST http://$ADMIN_SVC:$ADMIN_PORT/proxies \
-    -H 'Content-Type: application/json' \
-    -d '{\"name\":\"gl\",\"listen\":\"0.0.0.0:443\",\"upstream\":\"$UPSTREAM_IP:443\"}'; \
-  "
+echo "[1/5] Ensuring namespace exists: ${DEPLOYMENT_NAMESPACE}"
+kubectl get ns "${DEPLOYMENT_NAMESPACE}" >/dev/null 2>&1 || kubectl create ns "${DEPLOYMENT_NAMESPACE}"
 
-CLUSTER_IP=$(kubectl -n "$NAMESPACE" get svc toxiproxy -o jsonpath='{.spec.clusterIP}')
-if [ -z "$CLUSTER_IP" ]; then
-  echo "Failed to get toxiproxy Service ClusterIP" >&2
-  exit 1
-fi
-echo "Toxiproxy Service ClusterIP: $CLUSTER_IP"
+echo "[2/5] Deploying Toxiproxy"
+kubectl apply ${KNS} -f "$(dirname "$0")/k8s-toxiproxy.yaml"
 
-PATCH=$(cat <<EOF
-{
-  "spec": {
-    "template": {
-      "spec": {
-        "hostAliases": [
-          {"ip": "$CLUSTER_IP", "hostnames": ["$CLOUD_HOST"]}
-        ]
-      }
-    }
-  }
-}
-EOF
-)
+echo "[3/5] Waiting for Toxiproxy pod to be Ready"
+kubectl wait ${KNS} --for=condition=Available deploy/toxiproxy --timeout=90s
 
-echo "Patching Deployment/$EE_DEPLOYMENT to add hostAliases mapping $CLOUD_HOST -> $CLUSTER_IP"
-kubectl -n "$NAMESPACE" patch deploy "$EE_DEPLOYMENT" --type merge -p "$PATCH"
+echo "[4/5] Creating/Updating Toxiproxy proxy for api.groundlight.ai:443"
+# Use an in-cluster curl pod to reach the ClusterIP service
+kubectl run --rm -i curl-tmp ${KNS} --restart=Never --image=curlimages/curl:8.5.0 -- \
+  -sS -X POST http://toxiproxy:8474/proxies \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"api_groundlight_ai","listen":"0.0.0.0:10443","upstream":"api.groundlight.ai:443","enabled":true}' || true
 
-echo "Done. EE traffic to $CLOUD_HOST will now be routed via Toxiproxy."
+kubectl run --rm -i curl-tmp ${KNS} --restart=Never --image=curlimages/curl:8.5.0 -- \
+  -sS -X POST http://toxiproxy:8474/proxies/api_groundlight_ai \
+  -H 'Content-Type: application/json' \
+  -d '{"upstream":"api.groundlight.ai:443","enabled":true}' >/dev/null
 
+echo "[5/5] Patching edge-endpoint Deployment hostAliases to direct api.groundlight.ai to Toxiproxy"
+SVC_IP=$(kubectl get svc toxiproxy ${KNS} -o jsonpath='{.spec.clusterIP}')
+kubectl patch deploy edge-endpoint ${KNS} --type merge -p "{\"spec\":{\"template\":{\"spec\":{\"hostAliases\":[{\"ip\":\"${SVC_IP}\",\"hostnames\":[\"api.groundlight.ai\"]}]}}}}"
+
+echo "Waiting for rollout to complete..."
+kubectl rollout status deploy/edge-endpoint ${KNS} --timeout=120s
+
+echo "Done enabling Toxiproxy."
