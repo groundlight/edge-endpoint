@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Random GPU Selection for Kubernetes Deployment
 # Randomly selects a GPU from available GPUs and outputs the selected GPU ID
+# Used for evenly distributing inference pods across multiple GPUs
 # Usage: SELECTED_GPU=$(./randomly-select-gpu.sh)
 
 if command -v nvidia-smi >/dev/null 2>&1; then
