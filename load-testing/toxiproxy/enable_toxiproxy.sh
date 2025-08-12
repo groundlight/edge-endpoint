@@ -18,7 +18,7 @@ kubectl -n "$NAMESPACE" rollout status deploy/toxiproxy --timeout=120s
 
 echo "Resolving current IP for $CLOUD_HOST from cluster..."
 UPSTREAM_IP=$(kubectl -n "$NAMESPACE" run dnsutils-ttx --rm -i --restart=Never --image=busybox:1.36 --command -- \
-  sh -c "nslookup $CLOUD_HOST 2>/dev/null | awk '/^Address /{print \\$3}' | tail -n1" \
+  sh -c 'nslookup "$1" 2>/dev/null | awk "/^Address /{print $3}" | tail -n1' -- "$CLOUD_HOST" \
   | grep -Eo '([0-9]{1,3}\\.){3}[0-9]{1,3}' | head -n1)
 if [ -z "$UPSTREAM_IP" ]; then
   echo "Failed to resolve $CLOUD_HOST inside cluster" >&2
