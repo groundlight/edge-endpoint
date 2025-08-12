@@ -8,7 +8,7 @@ NAMESPACE=${1:-edge}
 
 echo "Disabling outage toxic in namespace=${NAMESPACE}"
 kubectl -n "$NAMESPACE" run toxiproxy-curl --rm -i --restart=Never --image=curlimages/curl:8.9.1 --command -- sh -c \
-  "curl -sX POST http://toxiproxy:8474/toxics/gl/outage/disable || true"
+  "curl -sX POST http://toxiproxy:8474/proxies/gl/toxics/outage -H 'Content-Type: application/json' -d '{\"enabled\":false}' || true"
 
 echo "Outage toxic disabled."
 
