@@ -12,14 +12,16 @@ Escalations from the queue are entirely asynchronous and the response from the c
 
 ## Retrying failed escalations
 
-If an escalation fails, we want to retry the request if we think it might eventually succeed and give up otherwise. Here's how we interpret errors from the escalation process:
+If an escalation fails, we want to retry the request if we think it might eventually succeed and give up otherwise.
+
+How we interpret errors:
 
 | Exception                                  | Retry? | Explanation |
 | :--------------------------------------    | :----: | :---------- |
 | `GroundlightClientError` (on client init)  | Yes    | Client initialization failed (often no internet or transient SDK/client issue). We retry since it may start working again (e.g., when connectivity returns). |
 | `FileNotFoundError` (on image load)        | No     | Image file is missing, so we can't submit the image query. |
-| `MaxRetryError`                            | Yes    | SDK exhausted HTTP retries (likely network issue); we retry because it could succeed if the network comes back. |
+| `MaxRetryError`                            | Yes    | SDK exhausted HTTP retries (likely network issue); we retry because the request could succeed when the network comes back. |
 | `HTTPException (400 Bad Request)`          | No     | Bad request (often a duplicate escalation or invalid request parameters); the request will not succeed even if retried. |
-| `HTTPException (429 Too Many Requests)`    | Yes    | Throttled; once enough time passes, the escalation should succeed. |
+| `HTTPException (429 Too Many Requests)`    | Yes    | Throttled; once enough time passes, the request should succeed. |
 | `HTTPException (other status)`             | No     | Unknown HTTP error; unknown whether a retry would help. |
 | `Exception` (any other)                    | No     | Unexpected error; unknown whether a retry would help. |

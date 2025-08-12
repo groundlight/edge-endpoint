@@ -12,7 +12,7 @@ There is a single pod for the main logic of the edge endpoint and one pod for ea
 
 There are currently two models for each detector: a __primary__ model that answers the query and an out-of-domain (__OODD__) model that tells us that something has changed in the image that may mean that the primary model will no longer be effective. Each of these models is served by its own pod, so there are two inference pods for each detector.
 
-The edge endpoint pod divides its work between four containers:
+The edge endpoint pod divides its work between five containers:
 
 | Container               | Function                                                                                                                                                |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -20,6 +20,7 @@ The edge endpoint pod divides its work between four containers:
 | Edge Endpoint           | Receive inference requests and determine whether to handle them locally or send them to the cloud.                                                      |
 | Inference Model Updater | Keep track of which models are in use, download model data, and start pods to serve inference on those models, updating to the latest models regularly. |
 | Status Monitor          | Aggregate usage stats and upload them to the cloud periodically.                                                                                        |
+| Escalation Queue Reader | Monitor the file-based queue and escalate queued escalations.                                                                                           |
 
 ## Network flow
 
@@ -115,6 +116,8 @@ However, there are a number of special cases to consider:
 
 For details on configuring these options, see the page [CONFIGURING DETECTORS](CONFIGURING-DETECTORS.md).
 
+Asynchronous and failed synchronous escalations will be written to the escalation queue and subsequently escalated by the queue reader. See the page [ESCALATION QUEUE](ESCALATION-QUEUE.md) for more information.
+
 The following diagram shows the flow of inference requests:
 
 <img src="images/edge-endpoint-inference-flow.excalidraw.png" alt="Inference flow" width="800"/>
@@ -132,4 +135,4 @@ The following diagram shows the communication flow between the containers with t
 
 <img src="images/Edge container communication.excalidraw.png" alt="Communication between containers" width="800"/>
 
-
+Additionally, the `edge-endpoint` container writes to the escalation queue via a file-based queue system. See [ESCALATION QUEUE](ESCALATION-QUEUE.md) for more information.
