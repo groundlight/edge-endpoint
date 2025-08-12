@@ -17,7 +17,9 @@ echo "Waiting for toxiproxy Deployment to be ready..."
 kubectl -n "$NAMESPACE" rollout status deploy/toxiproxy --timeout=120s
 
 echo "Resolving current IP for $CLOUD_HOST from cluster..."
-UPSTREAM_IP=$(kubectl -n "$NAMESPACE" run dnsutils-ttx --rm -i --restart=Never --image=busybox:1.36 --command -- sh -c "nslookup $CLOUD_HOST 2>/dev/null | awk '/^Address /{print \$3}' | tail -n1")
+UPSTREAM_IP=$(kubectl -n "$NAMESPACE" run dnsutils-ttx --rm -i --restart=Never --image=busybox:1.36 --command -- \
+  sh -c "nslookup $CLOUD_HOST 2>/dev/null | awk '/^Address /{print \\$3}' | tail -n1" \
+  | grep -Eo '([0-9]{1,3}\\.){3}[0-9]{1,3}' | head -n1)
 if [ -z "$UPSTREAM_IP" ]; then
   echo "Failed to resolve $CLOUD_HOST inside cluster" >&2
   exit 1
@@ -27,9 +29,14 @@ echo "Resolved $CLOUD_HOST -> $UPSTREAM_IP"
 ADMIN_SVC=toxiproxy
 ADMIN_PORT=8474
 
-echo "Creating proxy gl in toxiproxy: 0.0.0.0:443 -> $UPSTREAM_IP:443"
+echo "Recreating proxy gl in toxiproxy: 0.0.0.0:443 -> $UPSTREAM_IP:443"
 kubectl -n "$NAMESPACE" run toxiproxy-bootstrap --rm -i --restart=Never --image=curlimages/curl:8.9.1 --command -- sh -c \
-  "curl -sX POST http://$ADMIN_SVC:$ADMIN_PORT/proxies -H 'Content-Type: application/json' -d '{\"name\":\"gl\",\"listen\":\"0.0.0.0:443\",\"upstream\":\"$UPSTREAM_IP:443\"}' || true"
+  "\
+  curl -sX DELETE http://$ADMIN_SVC:$ADMIN_PORT/proxies/gl >/dev/null 2>&1 || true; \
+  curl -sX POST http://$ADMIN_SVC:$ADMIN_PORT/proxies \
+    -H 'Content-Type: application/json' \
+    -d '{\"name\":\"gl\",\"listen\":\"0.0.0.0:443\",\"upstream\":\"$UPSTREAM_IP:443\"}'; \
+  "
 
 CLUSTER_IP=$(kubectl -n "$NAMESPACE" get svc toxiproxy -o jsonpath='{.spec.clusterIP}')
 if [ -z "$CLUSTER_IP" ]; then
