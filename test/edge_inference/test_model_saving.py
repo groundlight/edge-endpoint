@@ -243,6 +243,30 @@ def test_delete_old_model_versions():
         assert os.path.exists(os.path.join(oodd_model_dir, "4"))
 
 
+def test_delete_old_model_versions_with_no_oodd_folder():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        detector_id = "test_detector"
+        primary_model_dir = os.path.join(temp_dir, detector_id, "primary")
+        oodd_model_dir = os.path.join(temp_dir, detector_id, "oodd")
+
+        # Save 3 mock model version folders to set up
+        os.makedirs(os.path.join(primary_model_dir, "1"))
+        os.makedirs(os.path.join(primary_model_dir, "2"))
+        os.makedirs(os.path.join(primary_model_dir, "3"))
+
+        # Keep 2 latest model versions, delete the first one for primary. Ensure deletion runs
+        # without an issue when the oodd folder does not exist.
+        delete_old_model_versions(detector_id=detector_id, repository_root=temp_dir, num_to_keep=2)
+
+        # Version 1 for primary should be deleted, and the oodd folder should not exist
+        assert not os.path.exists(os.path.join(primary_model_dir, "1"))
+        assert not os.path.exists(oodd_model_dir)
+
+        # Versions 2 and 3 for primary should be kept
+        assert os.path.exists(os.path.join(primary_model_dir, "2"))
+        assert os.path.exists(os.path.join(primary_model_dir, "3"))
+
+
 def test_switch_to_new_model_repository_format():
     with tempfile.TemporaryDirectory() as temp_dir:
         detector_id = "test_detector"
