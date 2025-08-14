@@ -69,13 +69,14 @@ def parse_arguments():
         help=f'Detector mode'
     )
 
+    parser.add_argument(
+        '--confidence-threshold',
+        type=float,
+        default=0.0,
+        help="Confidence threshold for inference. Defaults to 0.0, because this script isn't designed to test ML performance."
+    )
+
     return parser.parse_args()
-    
-def unique_string() -> str:
-    """
-    Generates a unique string for giving unique names to detectors.
-    """
-    return str(uuid.uuid4())[:8]
     
 def add_label_async(
     gl: Groundlight, 
@@ -155,6 +156,21 @@ def get_or_create_count_detectors(
         detectors.append(detector)
 
     return detectors
+
+
+def set_detector_confidence_threshold(gl: Groundlight, detector: Detector, confidence_threshold: float) -> None:
+    """
+    Set the confidence threshold for a detector.
+    """
+    gl.set_detector_confidence_threshold(detector, confidence_threshold)
+    detector.confidence_threshold = confidence_threshold
+
+def set_detectors_confidence_threshold(gl: Groundlight, detectors: list[Detector], confidence_threshold: float) -> None:
+    """
+    Set the confidence threshold for a list of detectors.
+    """
+    for detector in detectors:
+        set_detector_confidence_threshold(gl, detector, confidence_threshold)
                 
 def main(num_detectors: int, get_or_create_detectors: Callable, generate_random_image: Callable, kwargs) -> None:
     """
@@ -165,8 +181,9 @@ def main(num_detectors: int, get_or_create_detectors: Callable, generate_random_
     # Start a timer to measure how long it takes for all edge inference pods to come online
     test_start = time.time()
 
-    # create the detectors
+    # create the detectors and adjust confidence thresholds
     detectors = get_or_create_detectors(gl, num_detectors, **kwargs)
+    set_detectors_confidence_threshold(gl, detectors, args.confidence_threshold)
         
     # Send load to the detectors to trigger inference pod creation
     for i in range(LOAD_GENERATION_ITERATIONS):

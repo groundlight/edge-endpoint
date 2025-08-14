@@ -4,6 +4,13 @@
 # Selects GPU with lowest memory usage and outputs the selected GPU ID
 # Usage: SELECTED_GPU=$(./select-gpu.sh)
 
+# NOTE: In practice, this selection method doesn't seem to work as well as `randomly-select-gpu.sh`. 
+# The problem with this approach is that there is a significant delay between the time a GPU is 
+# selected and the VRAM is actually allocated on that GPU. Therefore, if you start many inference pods 
+# at the same time (as we often do), the result is that many pods get assigned to the same GPU, and 
+# some the pods will crash and have to restart. 
+# Perhaps there is a way to adapt this method to work better, but for now we'll leave this script here unused. 
+
 if command -v nvidia-smi >/dev/null 2>&1; then
   GPU_COUNT=$(nvidia-smi --list-gpus | wc -l)
   echo "Detected $GPU_COUNT GPU(s)" >&2
