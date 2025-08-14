@@ -75,17 +75,12 @@ spec:
           value: {{ .Values.logLevel | quote }}
         - name: LOAD_ALL_PIPELINES  # Load only the pipelines that are needed for edge inference.
           value: "false"
+        - name: INFERENCE_FLAVOR
+          value: "{{ .Values.inferenceFlavor }}"
         command: ["/bin/bash", "-c"]
         args:
         - |
-            SELECTED_GPU=$(
-              {{- tpl (.Files.Get "files/randomly-select-gpu.sh") . | nindent 12 }}
-            )
-            export CUDA_VISIBLE_DEVICES=$SELECTED_GPU
-            
-            # Start the inference server
-            poetry run python3 -m uvicorn serving.edge_inference_server.fastapi_server:app \
-              --host 0.0.0.0 --port 8000 --workers 1
+          {{- tpl (.Files.Get "files/launch-inference-server.sh") . | nindent 10 }}
         volumeMounts:
         - name: edge-endpoint-persistent-volume
           mountPath: *modelRepository

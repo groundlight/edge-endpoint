@@ -112,7 +112,6 @@ def get_or_create_binary_detectors(
             name=detector_name,
             query=query,
             group_name=GROUP_NAME,
-            confidence_threshold=0.75,
         )
         print(f"{n + 1}: Got or created {detector.id}")
         detectors.append(detector)
@@ -132,7 +131,6 @@ def get_or_create_count_detectors(
     detectors: list[Detector] = []
 
     query_text = f"Count all the {class_name}s"
-    confidence_threshold = 0.75
 
     for n in range(num_detectors):
         detector_name = f"{class_name.title()} Counter - {n}"
@@ -144,7 +142,6 @@ def get_or_create_count_detectors(
                 class_name,
                 max_count=max_count,
                 group_name=GROUP_NAME,
-                confidence_threshold=confidence_threshold,
             )
             print(f"Created {detector.id}")
         except ApiException as e:
@@ -162,7 +159,7 @@ def set_detector_confidence_threshold(gl: Groundlight, detector: Detector, confi
     """
     Set the confidence threshold for a detector.
     """
-    gl.set_detector_confidence_threshold(detector, confidence_threshold)
+    gl.update_detector_confidence_threshold(detector, confidence_threshold)
     detector.confidence_threshold = confidence_threshold
 
 def set_detectors_confidence_threshold(gl: Groundlight, detectors: list[Detector], confidence_threshold: float) -> None:
@@ -171,6 +168,7 @@ def set_detectors_confidence_threshold(gl: Groundlight, detectors: list[Detector
     """
     for detector in detectors:
         set_detector_confidence_threshold(gl, detector, confidence_threshold)
+        print(f'Adjusted {detector.id} confidence threshold to {confidence_threshold}')
                 
 def main(num_detectors: int, get_or_create_detectors: Callable, generate_random_image: Callable, kwargs) -> None:
     """
