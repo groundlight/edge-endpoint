@@ -34,7 +34,6 @@ spec:
     spec:
       containers:
         - name: toxiproxy
-          # Using a widely available image. You can pin to a specific version if desired.
           image: ghcr.io/shopify/toxiproxy:2.6.0
           imagePullPolicy: IfNotPresent
           args: ["-host=0.0.0.0", "-port", "8474"]

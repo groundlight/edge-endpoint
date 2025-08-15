@@ -3,7 +3,7 @@
 Opt-in tools to simulate network impairment between the Edge Endpoint (EE) and the Groundlight cloud. These scripts do NOT modify Helm templates; they operate with `kubectl` against a running cluster and are fully reversible.
 
 Requirements:
-- Linux/Kubernetes
+- So far, only tested on Ubuntu 22 - but no reason to think it can't work on other versions
 - `kubectl` configured to the target cluster
 - `DEPLOYMENT_NAMESPACE` set (e.g., `export DEPLOYMENT_NAMESPACE=edge`)
 
