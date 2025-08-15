@@ -18,6 +18,13 @@ A synchronous escalation occurs when the edge endpoint needs to escalate an imag
 
 An asynchronous escalation is done when the edge endpoint is going to return an image query created on the edge to the client but there's reason for the image query to also be escalated to the cloud. This happens in two cases: either a) if the edge answer is confident but the query is randomly selected for an audit or b) if the edge answer is unconfident but will be returned to the client anyways due to the detector configuration. In either of these cases, the worker in the `edge-endpoint` container will write the escalation to the queue before returning a response to the client. 
 
+The below table summarizes this logic:
+
+| Type of escalation | Reason                                             | Writes to queue? |
+| :----------------- | :------------------------------------------------- | :--------------: |
+| Synchronous        | Need cloud answer to fulfill client request        | Only on failure  |
+| Asynchronous       | Unconfident edge answer or random audit  |       Yes        |
+
 In the `escalation-queue-reader` container, a separate process continuously monitors the queue and attempts to escalate the queued items.
 
 The following diagram shows a more detailed flow:
