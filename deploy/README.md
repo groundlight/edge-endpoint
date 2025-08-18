@@ -252,7 +252,9 @@ NAME                                    READY   STATUS    RESTARTS   AGE
 edge-endpoint-594d645588-5mf28          2/2     Running   0          4s
 ```
 
-If you configured detectors in the [edge config file](/configs/edge-config.yaml), you should also see 2 pods for each of them (one for primary inference and one for out of domain detection), e.g.:
+If you configured detectors in the [edge config file](/configs/edge-config.yaml), you should also see `inferencemodel` pod(s) for each detector. 
+In minimal mode, there should only be one `inferencemodel` pod per detector. 
+When not running in minimal mode, there will be two `inferencemodel` pods per detector, one for primary inference and one for out of domain detection, e.g.:
 
 ```
 NAME                                                                        READY   STATUS    RESTARTS   AGE
