@@ -276,7 +276,7 @@ class EdgeInferenceManager:
             logger.info(f"Failed to look up inference clients for {detector_id}")
             return False
 
-        # primary inference client is ready, and if we're doing separate OODD inference, the OODD 
+        # primary inference client is ready, and if we're doing separate OODD inference, the OODD
         # inference client is also ready
         inference_clients_are_ready = is_edge_inference_ready(inference_client_url) and (
             not self.separate_oodd_inference or is_edge_inference_ready(oodd_inference_client_url)
