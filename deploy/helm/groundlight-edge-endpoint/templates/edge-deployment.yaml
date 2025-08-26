@@ -119,6 +119,8 @@ spec:
           value: "1"
         - name: GROUNDLIGHT_ENDPOINT
           value: "{{ .Values.upstreamEndpoint }}"
+        - name: USE_MINIMAL_IMAGE
+          value: "{{ .Values.useMinimalImage }}"
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
@@ -205,6 +207,8 @@ spec:
             secretKeyRef:
               name: groundlight-api-token
               key: GROUNDLIGHT_API_TOKEN
+        - name: USE_MINIMAL_IMAGE
+          value: "{{ .Values.useMinimalImage }}"
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config

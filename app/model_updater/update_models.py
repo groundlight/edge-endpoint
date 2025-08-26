@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 TEN_MINUTES = 60 * 10
 
+USE_MINIMAL_IMAGE = os.environ.get("USE_MINIMAL_IMAGE", "false") == "true"
+
 
 def sleep_forever(message: str | None = None):
     while True:
@@ -33,6 +35,7 @@ def _check_new_models_and_inference_deployments(
     edge_inference_manager: EdgeInferenceManager,
     deployment_manager: InferenceDeploymentManager,
     db_manager: DatabaseManager,
+    separate_oodd_inference: bool,
 ) -> None:
     """
     Check if there are new models available for the detector_id. If so, update the inference deployment
@@ -44,34 +47,36 @@ def _check_new_models_and_inference_deployments(
     :param edge_inference_manager: the edge inference manager object.
     :param deployment_manager: the inference deployment manager object.
     :param db_manager: the database manager object.
-
+    :param separate_oodd_inference: whether or not to run inference separately for an OODD model
     """
     # Download and write new model to model repo on disk
     new_model = edge_inference_manager.update_models_if_available(detector_id=detector_id)
 
     edge_deployment_name = get_edge_inference_deployment_name(detector_id)
-    oodd_deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd=True)
-
     edge_deployment = deployment_manager.get_inference_deployment(deployment_name=edge_deployment_name)
-    oodd_deployment = deployment_manager.get_inference_deployment(deployment_name=oodd_deployment_name)
     if edge_deployment is None:
         logger.info(f"Creating a new edge inference deployment for {detector_id}")
         deployment_manager.create_inference_deployment(detector_id=detector_id)
 
-    if oodd_deployment is None:
-        logger.info(f"Creating a new oodd inference deployment for {detector_id}")
-        deployment_manager.create_inference_deployment(detector_id=detector_id, is_oodd=True)
+    if separate_oodd_inference:
+        oodd_deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd=True)
+        oodd_deployment = deployment_manager.get_inference_deployment(deployment_name=oodd_deployment_name)
+        if oodd_deployment is None:
+            logger.info(f"Creating a new oodd inference deployment for {detector_id}")
+            deployment_manager.create_inference_deployment(detector_id=detector_id, is_oodd=True)
 
     if new_model:
         # Update inference deployment and rollout a new pod
         logger.info(f"Updating inference deployment for {detector_id}")
         deployment_manager.update_inference_deployment(detector_id=detector_id)
-        deployment_manager.update_inference_deployment(detector_id=detector_id, is_oodd=True)
+        if separate_oodd_inference:
+            deployment_manager.update_inference_deployment(detector_id=detector_id, is_oodd=True)
 
         poll_start = time.time()
-        while not deployment_manager.is_inference_deployment_rollout_complete(
-            deployment_name=edge_deployment_name
-        ) or not deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name):
+        while not deployment_manager.is_inference_deployment_rollout_complete(deployment_name=edge_deployment_name) or (
+            separate_oodd_inference
+            and not deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name)
+        ):
             time.sleep(5)
             if time.time() - poll_start > TEN_MINUTES:
                 raise TimeoutError("Inference deployments are not ready within time limit")
@@ -82,23 +87,24 @@ def _check_new_models_and_inference_deployments(
         logger.info(f"Cleaning up old model versions for {detector_id}")
         delete_old_model_versions(detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2)
 
-    if deployment_manager.is_inference_deployment_rollout_complete(
-        deployment_name=edge_deployment_name
-    ) and deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name):
+    if deployment_manager.is_inference_deployment_rollout_complete(deployment_name=edge_deployment_name) and (
+        not separate_oodd_inference
+        or deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name)
+    ):
         # Database transaction to update the deployment_created field for the detector_id
         # At this time, we are sure that the deployment for the detector has been successfully created and rolled out.
 
         primary_model_name = get_edge_inference_model_name(detector_id)
-        oodd_model_name = get_edge_inference_model_name(detector_id, is_oodd=True)
-
         db_manager.update_inference_deployment_record(
             model_name=primary_model_name,
             fields_to_update={"deployment_created": True, "deployment_name": edge_deployment_name},
         )
-        db_manager.update_inference_deployment_record(
-            model_name=oodd_model_name,
-            fields_to_update={"deployment_created": True, "deployment_name": oodd_deployment_name},
-        )
+        if separate_oodd_inference:
+            oodd_model_name = get_edge_inference_model_name(detector_id, is_oodd=True)
+            db_manager.update_inference_deployment_record(
+                model_name=oodd_model_name,
+                fields_to_update={"deployment_created": True, "deployment_name": oodd_deployment_name},
+            )
 
 
 def manage_update_models(
@@ -106,6 +112,7 @@ def manage_update_models(
     deployment_manager: InferenceDeploymentManager,
     db_manager: DatabaseManager,
     refresh_rate: float,
+    separate_oodd_inference: bool,
 ) -> None:
     """
     Periodically update inference models for detectors.
@@ -125,6 +132,7 @@ def manage_update_models(
     :param deployment_manager: the inference deployment manager object.
     :param db_manager: the database manager object.
     :param refresh_rate: the time interval (in seconds) between model update calls.
+    :param separate_oodd_inference: whether to run inference separately for an OODD model.
     """
     deploy_detector_level_inference = bool(int(os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", 0)))
     if not deploy_detector_level_inference:
@@ -142,6 +150,7 @@ def manage_update_models(
                     edge_inference_manager=edge_inference_manager,
                     deployment_manager=deployment_manager,
                     db_manager=db_manager,
+                    separate_oodd_inference=separate_oodd_inference,
                 )
                 logger.debug(f"Successfully updated model for detector_id: {detector_id}")
             except Exception as e:
@@ -162,7 +171,8 @@ def manage_update_models(
             for detector_record in undeployed_detector_ids:
                 logger.debug(f"Updating inference config for detector_id: {detector_record.detector_id}")
                 edge_inference_manager.update_inference_config(
-                    detector_id=detector_record.detector_id, api_token=detector_record.api_token
+                    detector_id=detector_record.detector_id,
+                    api_token=detector_record.api_token,
                 )
         else:
             logger.debug("No undeployed detectors found.")
@@ -173,20 +183,21 @@ def manage_update_models(
         deployed_detector_ids = set(record.detector_id for record in deployment_records)
         for detector_id in deployed_detector_ids:
             primary_deployment_name = get_edge_inference_deployment_name(detector_id)
-            oodd_deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd=True)
             primary_deployment_created = (
                 deployment_manager.get_inference_deployment(primary_deployment_name) is not None
             )
-            oodd_deployment_created = deployment_manager.get_inference_deployment(oodd_deployment_name) is not None
-
             db_manager.update_inference_deployment_record(
                 model_name=get_edge_inference_model_name(detector_id, is_oodd=False),
                 fields_to_update={"deployment_created": primary_deployment_created},
             )
-            db_manager.update_inference_deployment_record(
-                model_name=get_edge_inference_model_name(detector_id, is_oodd=True),
-                fields_to_update={"deployment_created": oodd_deployment_created},
-            )
+
+            if separate_oodd_inference:
+                oodd_deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd=True)
+                oodd_deployment_created = deployment_manager.get_inference_deployment(oodd_deployment_name) is not None
+                db_manager.update_inference_deployment_record(
+                    model_name=get_edge_inference_model_name(detector_id, is_oodd=True),
+                    fields_to_update={"deployment_created": oodd_deployment_created},
+                )
 
 
 if __name__ == "__main__":
@@ -211,4 +222,5 @@ if __name__ == "__main__":
         deployment_manager=deployment_manager,
         db_manager=db_manager,
         refresh_rate=refresh_rate,
+        separate_oodd_inference=not USE_MINIMAL_IMAGE,
     )

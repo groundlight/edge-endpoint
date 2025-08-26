@@ -376,9 +376,9 @@ def parse_model_info(
     Parse the response from the fetch model urls endpoint. Attempt to parse both the edge and oodd models
     with their ML binaries, and fall back to no binary cases if that fails.
     """
-    # The ModelInfo fields are named correspondingly to the response keys for the edge model, so we can use the
-    # pydantic model to validate and parse the response. The OODD keys will be ignored, since they aren't in the
-    # model fields
+    # The ModelInfo field names correspond to the response keys for the edge model, so we can use
+    # the pydantic model to validate and parse the response. The OODD specific keys will be ignored,
+    # since they aren't in the model fields.
     try:
         edge_model_info = ModelInfoWithBinary(**fetch_model_response)
     except ValidationError:
