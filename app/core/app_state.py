@@ -9,6 +9,8 @@ from fastapi import Request
 from groundlight import Groundlight
 from model import Detector
 
+from app.escalation_queue.queue_writer import QueueWriter
+
 from .configs import EdgeInferenceConfig, RootEdgeConfig
 from .database import DatabaseManager
 from .edge_inference import EdgeInferenceManager
@@ -156,6 +158,7 @@ class AppState:
         )
         self.db_manager = DatabaseManager()
         self.is_ready = False
+        self.queue_writer = QueueWriter()
 
 
 def get_app_state(request: Request) -> AppState:

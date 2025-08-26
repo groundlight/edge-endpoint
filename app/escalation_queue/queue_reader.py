@@ -64,8 +64,8 @@ class QueueReader:
                     tracker.flush()
 
             # Delete files when done reading
-            data_path.unlink()
-            tracker_path.unlink()
+            data_path.unlink(missing_ok=True)
+            tracker_path.unlink(missing_ok=True)
 
     def _get_files(self) -> Generator[tuple[Path, Path], None, None]:
         """

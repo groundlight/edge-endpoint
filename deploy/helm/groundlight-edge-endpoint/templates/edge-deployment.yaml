@@ -132,6 +132,8 @@ spec:
           mountPath: /opt/groundlight/edge/sqlite
         - name: device-info-volume
           mountPath: /opt/groundlight/device
+        - name: escalation-queue-volume
+          mountPath: /opt/groundlight/queue
 
       - name: status-monitor
         image: *edgeEndpointImage
@@ -160,6 +162,28 @@ spec:
             mountPath: /etc/groundlight/edge-config
           - name: device-info-volume
             mountPath: /opt/groundlight/device
+      
+      - name: escalation-queue-reader
+        image: *edgeEndpointImage
+        imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        # Allocate some memory for this container. System-critical containers have memory requests so 
+        # that they are never evicted, even when the system is under memory pressure. 
+        resources:
+          requests:
+            memory: "100Mi"
+        command: ["./app/bin/launch-escalation-queue-reader.sh"]
+        env:
+        - name: LOG_LEVEL
+          value: {{ .Values.logLevel | quote }}
+        - name: GROUNDLIGHT_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: groundlight-api-token
+              key: GROUNDLIGHT_API_TOKEN
+              optional: true
+        volumeMounts:
+          - name: escalation-queue-volume
+            mountPath: /opt/groundlight/queue
 
       - name: inference-model-updater
         image: *edgeEndpointImage
@@ -232,4 +256,8 @@ spec:
       - name: device-info-volume
         hostPath:
           path: /opt/groundlight/device
+          type: DirectoryOrCreate
+      - name: escalation-queue-volume
+        hostPath:
+          path: /opt/groundlight/queue/{{ .Values.namespace }}
           type: DirectoryOrCreate
