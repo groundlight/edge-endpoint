@@ -252,7 +252,8 @@ NAME                                    READY   STATUS    RESTARTS   AGE
 edge-endpoint-594d645588-5mf28          2/2     Running   0          4s
 ```
 
-If you configured detectors in the [edge config file](/configs/edge-config.yaml), you should also see 2 pods for each of them (one for primary inference and one for out of domain detection), e.g.:
+If you configured detectors in the [edge config file](/configs/edge-config.yaml), you should also see `inferencemodel` pod(s) for each detector.
+By default, there will be two `inferencemodel` pods per detector (one for primary inference and one for out of domain detection), e.g.:
 
 ```
 NAME                                                                        READY   STATUS    RESTARTS   AGE
@@ -260,6 +261,8 @@ edge-endpoint-594d645588-5mf28                                              2/2 
 inferencemodel-primary-det-3jemxiunjuekdjzbuxavuevw15k-5d8b454bcb-xqf8m     1/1     Running   0          2s
 inferencemodel-oodd-det-3jemxiunjuekdjzbuxavuevw15k-5d8b454bcb-xqf8m        1/1     Running   0          2s
 ```
+
+In minimal mode, there should only be one `inferencemodel` pod per detector (only primary inference, no separate OODD pod). 
 
 We currently have a hard-coded docker image from ECR in the [edge-endpoint](/edge-endpoint/deploy/k3s/edge_deployment.yaml)
 deployment. If you want to make modifications to the edge endpoint code and push a different

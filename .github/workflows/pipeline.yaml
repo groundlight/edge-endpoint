@@ -269,6 +269,32 @@ jobs:
         run: |
           NAMESPACE=validate-setup-helm ./deploy/bin/diagnose-k8-failure.sh
 
+  validate-setup-helm-minimal:
+    runs-on: ubuntu-latest-4-cores
+    needs:
+      - call-build-push-ee-image
+    env:
+      # associated with roxanne+test_edge account since for some reason it was failing with
+      # prod biggies
+      GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
+      USE_MINIMAL_IMAGE: true
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install k3s
+        run: |
+          ./deploy/bin/install-k3s.sh cpu
+
+      - name: Validate setup edge endpoint
+        run: |
+          make validate-setup-helm
+
+      - name: Diagnose failure
+        if: failure()
+        run: |
+          NAMESPACE=validate-setup-helm ./deploy/bin/diagnose-k8-failure.sh
+
   # we run this separately from validate-setup-ee since we run out of disk space doing
   # both of them on the same runner and they can be slow so its best to do them in parallel
   test-with-k3s-setup-ee:

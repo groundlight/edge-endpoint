@@ -66,11 +66,18 @@ Inside the edge-endpoint pod there are two containers: one for the edge logic an
 * `inference-model-updater` container: This container checks for changes to the models being used for edge inference and updates them when new versions are available.
 * `status-monitor` container: This container serves the status page, and reports metrics to the cloud.
 
-Each detector will have 2 inferencemodel pods, one for the primary model and one for the out of domain detection (OODD) model.
-Each inferencemodel pod contains one container.
+By default, each detector will have 2 `inferencemodel` pods, one for the primary model and one for the out of domain detection (OODD) model.
+When running in minimal mode, only a single `inferencemodel` pod is used, which uses a single model to perform both primary and OODD inference. 
+Each `inferencemodel` pod contains one container.
 
 * `inference-server container`: This container holds the edge model
 
 * `Cloud API:` This is the upstream API that we use as a fallback in case the edge logic server encounters problems. It is set to `https://api.groundlight.ai`.
 
 * `Endpoint url:` This is the URL where the endpoint's functionality is exposed to the SDK or applications.  (i.e., the upstream you can set for the Groundlight application). This is set to `http://localhost:30101`.
+
+## Attribution
+
+This product includes software developed by third parties, which is subject to their respective open-source licenses.
+
+See [THIRD_PARTY_LICENSES.md](./licenses/THIRD_PARTY_LICENSES.md) for details and license texts.

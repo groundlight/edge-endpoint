@@ -4,7 +4,8 @@ from unittest import mock
 
 import pytest
 
-from app.core.edge_inference import EdgeInferenceManager
+from app.core.configs import EdgeInferenceConfig
+from app.core.edge_inference import EdgeInferenceManager, get_edge_inference_service_name
 from app.core.utils import ModelInfoBase, ModelInfoNoBinary, ModelInfoWithBinary
 
 
@@ -94,6 +95,11 @@ def oodd_model_info_no_binary() -> ModelInfoNoBinary:
     )
 
 
+@pytest.fixture
+def detector_inference_config():
+    return {"test_detector": EdgeInferenceConfig()}
+
+
 class TestEdgeInferenceManager:
     def test_update_model_with_binary(self, edge_model_info_with_binary, oodd_model_info_with_binary):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -158,3 +164,46 @@ class TestEdgeInferenceManager:
                 # Should not create a new version for the same pipeline config
                 assert not os.path.exists(os.path.join(temp_dir, detector_id, "primary", "3"))
                 assert not os.path.exists(os.path.join(temp_dir, detector_id, "oodd", "3"))
+
+    def test_run_inference_with_oodd(self, detector_inference_config):
+        mock_response = {
+            "multi_predictions": None,
+            "predictions": {"confidences": [0.54], "labels": [0]},
+            "secondary_predictions": None,
+        }
+
+        with mock.patch("app.core.edge_inference.submit_image_for_inference") as mock_submit:
+            mock_submit.return_value = mock_response
+            # separate_oodd_inference is True by default
+            edge_manager = EdgeInferenceManager(detector_inference_configs=detector_inference_config)
+            edge_manager.run_inference("test_detector", b"test_image", "image/jpeg")
+            primary_inference_client_url = get_edge_inference_service_name("test_detector") + ":8000"
+            oodd_inference_client_url = get_edge_inference_service_name("test_detector", is_oodd=True) + ":8000"
+
+            # Assert that run inference was called twice, once for primary and once for OODD
+            assert mock_submit.call_count == 2
+            calls = mock_submit.call_args_list
+            primary_call = mock.call(primary_inference_client_url, b"test_image", "image/jpeg")
+            oodd_call = mock.call(oodd_inference_client_url, b"test_image", "image/jpeg")
+
+            assert primary_call in calls
+            assert oodd_call in calls
+
+    def test_run_inference_without_oodd(self, detector_inference_config):
+        mock_response = {
+            "multi_predictions": None,
+            "predictions": {"confidences": [0.54], "labels": [0]},
+            "secondary_predictions": None,
+        }
+
+        with mock.patch("app.core.edge_inference.submit_image_for_inference") as mock_submit:
+            mock_submit.return_value = mock_response
+            edge_manager = EdgeInferenceManager(
+                detector_inference_configs=detector_inference_config, separate_oodd_inference=False
+            )
+            edge_manager.run_inference("test_detector", b"test_image", "image/jpeg")
+            primary_inference_client_url = get_edge_inference_service_name("test_detector") + ":8000"
+
+            # Assert that the mock_submit was called only once for primary inference, never for OODD
+            assert mock_submit.call_count == 1
+            mock_submit.assert_called_once_with(primary_inference_client_url, b"test_image", "image/jpeg")

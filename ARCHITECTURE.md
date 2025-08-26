@@ -10,7 +10,9 @@ The edge endpoint is implemented as a set of Kubernetes resources (defined by th
 
 There is a single pod for the main logic of the edge endpoint and one pod for each inference model.
 
-There are currently two models for each detector: a __primary__ model that answers the query and an out-of-domain (__OODD__) model that tells us that something has changed in the image that may mean that the primary model will no longer be effective. Each of these models is served by its own pod, so there are two inference pods for each detector.
+By default, there are currently two models for each detector: a __primary__ model that answers the query and an out-of-domain detection (__OODD__) model that tells us that something has changed in the image that may mean that the primary model will no longer be effective. Each of these models is served by its own pod, so there are two inference pods for each detector.
+
+When running in minimal mode, out of domain detection is performed within the primary inference model. Only a single model pod per detector is required when the edge endpoint is run in minimal mode.
 
 The edge endpoint pod divides its work between four containers:
 
@@ -25,9 +27,13 @@ The edge endpoint pod divides its work between four containers:
 
 By default, the edge endpoint exposes the Groundlight API on port 30101 on the local machine.
 
-The following diagram shows how HTTP requests are handled by the edge endpoint. 
+The following diagram shows how HTTP requests are handled by the edge endpoint when not running in minimal mode.
 
 <img src="images/Client request processing.excalidraw.png" alt="Client request processing" width="800"/>
+
+In minimal mode, the HTTP request path is largely the same, but only a single inference pod is used.
+
+<img src="images/Minimal client request processing.excalidraw.png" alt="Minimal client request processing" width="800"/>
 
 (The inference model updater does not handle any requests. See below in [Communication between the edge endpoint containers](#communication-between-the-edge-endpoint-containers) for more details.)
 
