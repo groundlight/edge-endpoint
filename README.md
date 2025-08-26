@@ -66,8 +66,9 @@ Inside the edge-endpoint pod there are two containers: one for the edge logic an
 * `inference-model-updater` container: This container checks for changes to the models being used for edge inference and updates them when new versions are available.
 * `status-monitor` container: This container serves the status page, and reports metrics to the cloud.
 
-Each detector will have 2 inferencemodel pods, one for the primary model and one for the out of domain detection (OODD) model.
-Each inferencemodel pod contains one container.
+By default, each detector will have 2 `inferencemodel` pods, one for the primary model and one for the out of domain detection (OODD) model.
+When running in minimal mode, only a single `inferencemodel` pod is used, which uses a single model to perform both primary and OODD inference. 
+Each `inferencemodel` pod contains one container.
 
 * `inference-server container`: This container holds the edge model
 
