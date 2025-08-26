@@ -276,6 +276,8 @@ class EdgeInferenceManager:
             logger.info(f"Failed to look up inference clients for {detector_id}")
             return False
 
+        # primary inference client is ready, and if we're doing separate OODD inference, the OODD 
+        # inference client is also ready
         inference_clients_are_ready = is_edge_inference_ready(inference_client_url) and (
             not self.separate_oodd_inference or is_edge_inference_ready(oodd_inference_client_url)
         )
@@ -547,8 +549,7 @@ def get_current_model_version(repository_root: str, detector_id: str, is_oodd: b
         else get_primary_edge_model_dir(repository_root, detector_id)
     )
 
-    # If the primary or oodd directories don't exist, we'll update both models. This will happen when the edge endpoint
-    # switches from the old model repository format to the new one.
+    # If the model directory doesn't exist, we'll update the model
     model_version = None
 
     if os.path.exists(model_dir):
