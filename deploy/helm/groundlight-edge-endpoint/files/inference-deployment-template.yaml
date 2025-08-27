@@ -77,10 +77,8 @@ spec:
           value: "false"
         - name: INFERENCE_FLAVOR
           value: "{{ .Values.inferenceFlavor }}"
-        command: ["/bin/bash", "-c"]
-        args:
-        - |
-          {{- tpl (.Files.Get "files/launch-inference-server.sh") . | nindent 10 }}
+        - name: WORKERS  # Number of uvicorn workers for the inference server
+          value: "1"
         volumeMounts:
         - name: edge-endpoint-persistent-volume
           mountPath: *modelRepository
