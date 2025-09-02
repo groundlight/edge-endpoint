@@ -73,61 +73,75 @@ poetry run python disable_latency.py
 Behavior details:
 - If a latency toxic already exists (HTTP 409), the script will update its attributes and inform you.
 
-## Outage functionality
+## Timeout functionality
 
-Simulate a total outage in two modes:
-- `refuse` → disables the proxy so connections are refused immediately (RST)
-- `blackhole` → adds timeout toxics so connections hang up to a configured duration
+Add timeout toxics so connections hang up to a configured duration. You can target upstream (EE → cloud), downstream (cloud → EE), or both directions.
 
 Examples:
 
 ```bash
-# Refuse connections (disable the proxy)
-poetry run python enable_outage.py --mode refuse
+# Enable 30s timeout on both streams (default)
+poetry run python enable_timeout.py --timeout-ms 30000 --timeout-stream both
 
-# Blackhole connections for 30s on both streams (default)
-poetry run python enable_outage.py --mode blackhole --blackhole-ms 30000 --blackhole-stream both
-
-# Blackhole only upstream traffic for 10s
-poetry run python enable_outage.py --mode blackhole --blackhole-ms 10000 --blackhole-stream up
+# Enable 10s timeout only on upstream traffic
+poetry run python enable_timeout.py --timeout-ms 10000 --timeout-stream up
 ```
 
-Disable outage (re-enable proxy and remove timeout toxics):
+Disable timeout (re-enable proxy and remove timeout toxics):
 
 ```bash
-poetry run python disable_outage.py
+poetry run python disable_timeout.py
 ```
 
 Behavior details:
 - If a timeout toxic already exists (HTTP 409), the script will update its attributes and inform you.
 
-## Flap outage functionality
+## Outage functionality
 
-Continuously alternate between UP (normal) and DOWN (outage) periods.
+Refuse all connections by disabling the proxy (RST).
+
+Examples:
+
+```bash
+# Refuse connections (disable the proxy)
+poetry run python enable_outage.py
+```
+
+Disable outage (re-enable proxy):
+
+```bash
+poetry run python disable_outage.py
+```
+
+## Flap impairment functionality
+
+Continuously alternate between UP (normal) and DOWN (impairment) periods. Supports:
+- `refuse` (disable proxy)
+- `timeout` (add/remove timeout toxics)
 
 Arguments:
-- `--mode` refuse|blackhole (default: blackhole)
+- `--mode` refuse|timeout (default: timeout)
 - `--up-ms` milliseconds the connection stays healthy each cycle (default: 15000)
-- `--down-ms` milliseconds the outage lasts each cycle (default: 15000)
-- `--blackhole-ms` timeout used during blackhole DOWN periods (default: 30000)
-- `--blackhole-stream` up|down|both for blackhole mode (default: both)
+- `--down-ms` milliseconds the impairment lasts each cycle (default: 15000)
+- `--timeout-ms` timeout used during timeout DOWN periods (default: 30000)
+- `--timeout-stream` up|down|both for timeout mode (default: both)
 - `--iterations` number of cycles to run, where a cycle is one up period and one down period; 0 means run until manually stopped (default: 0)
 
 Examples:
 
 ```bash
-# Flap blackhole outage: 10s up, 5s down, 20s timeout, upstream only
-poetry run python flap_outage.py \
-  --mode blackhole --up-ms 10000 --down-ms 5000 --blackhole-ms 20000 --blackhole-stream up
+# Flap timeout: 10s up, 5s down, 20s timeout, upstream only
+poetry run python flap_impairment.py \
+  --mode timeout --up-ms 10000 --down-ms 5000 --timeout-ms 20000 --timeout-stream up
 
-# Flap refuse outage for 5 cycles, 5s up / 5s down
-poetry run python flap_outage.py \
+# Flap refuse for 5 cycles, 5s up / 5s down
+poetry run python flap_impairment.py \
   --mode refuse --up-ms 5000 --down-ms 5000 --iterations 5
 ```
 
 Behavior details:
-- During UP periods, timeout toxics are removed (for blackhole mode) or the proxy is enabled (for refuse mode).
-- During DOWN periods, timeout toxics are added (blackhole) or the proxy is disabled (refuse).
+- During UP periods, timeout toxics are removed (for timeout mode) or the proxy is enabled (for refuse mode).
+- During DOWN periods, timeout toxics are added (timeout) or the proxy is disabled (refuse).
 - Use Ctrl+C to stop; the script cleans up on exit.
 
 ## Troubleshooting
