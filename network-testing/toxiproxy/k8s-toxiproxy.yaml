@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: toxiproxy
+  labels:
+    app: toxiproxy
+spec:
+  selector:
+    app: toxiproxy
+  ports:
+    - name: admin
+      port: 8474
+      targetPort: 8474
+    - name: tls
+      port: 443
+      targetPort: 10443
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: toxiproxy
+  labels:
+    app: toxiproxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: toxiproxy
+  template:
+    metadata:
+      labels:
+        app: toxiproxy
+    spec:
+      containers:
+        - name: toxiproxy
+          image: ghcr.io/shopify/toxiproxy:2.6.0
+          imagePullPolicy: IfNotPresent
+          args: ["-host=0.0.0.0", "-port", "8474"]
+          ports:
+            - name: admin
+              containerPort: 8474
+            # The proxy for Groundlight API will listen here; exposed as Service port 443
+            - name: proxy-listen
+              containerPort: 10443
+          readinessProbe:
+            httpGet:
+              path: /version
+              port: 8474
+            initialDelaySeconds: 2
+            periodSeconds: 2
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: /version
+              port: 8474
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 6

@@ -6,11 +6,12 @@ if [[ -z "${DEPLOYMENT_NAMESPACE:-}" ]]; then
   exit 1
 fi
 
-MODE="refuse"         # refuse|blackhole
-UP_MS=5000             # how long cloud is reachable
-DOWN_MS=5000           # how long cloud is unreachable
+MODE="blackhole"         # refuse|blackhole
+UP_MS=15000             # how long cloud is reachable
+DOWN_MS=15000           # how long cloud is unreachable
 BH_MS=30000            # blackhole timeout to apply when down
-ITERATIONS=2           # 0 = infinite until Ctrl+C
+BH_STREAM="up"        # which stream(s) to apply timeout to when down: up|down|both
+ITERATIONS=0           # 0 = infinite until Ctrl+C
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -18,6 +19,7 @@ while [[ $# -gt 0 ]]; do
     --up-ms) UP_MS="${2:-5000}"; shift 2;;
     --down-ms) DOWN_MS="${2:-5000}"; shift 2;;
     --blackhole-ms) BH_MS="${2:-30000}"; shift 2;;
+    --blackhole-stream) BH_STREAM="${2:-both}"; shift 2;;
     --iterations) ITERATIONS="${2:-0}"; shift 2;;
     *) echo "Unknown arg: $1"; exit 1;;
   esac
@@ -78,7 +80,13 @@ cleanup() {
 }
 trap cleanup INT TERM
 
-echo "Starting outage flapping: mode=${MODE} up=${UP_MS}ms down=${DOWN_MS}ms (blackhole-ms=${BH_MS})"
+# Validate BH_STREAM
+case "${BH_STREAM}" in
+  up|down|both) ;;
+  *) echo "Invalid --blackhole-stream value: ${BH_STREAM}. Use one of: up|down|both" >&2; exit 1;;
+esac
+
+echo "Starting outage flapping: mode=${MODE} up=${UP_MS}ms down=${DOWN_MS}ms (blackhole-ms=${BH_MS}, stream=${BH_STREAM})"
 
 COUNT=0
 while :; do
@@ -96,8 +104,16 @@ while :; do
   if [[ "${MODE}" == "refuse" ]]; then
     run_curl_code POST "http://toxiproxy:8474/proxies/api_groundlight_ai" '{"enabled": false}' >/dev/null
   else
-    create_or_update_timeout_toxic outage_timeout_up upstream "${BH_MS}" || true
-    create_or_update_timeout_toxic outage_timeout_down downstream "${BH_MS}" || true
+    if [[ "${BH_STREAM}" == "up" || "${BH_STREAM}" == "both" ]]; then
+      create_or_update_timeout_toxic outage_timeout_up upstream "${BH_MS}" || true
+    else
+      run_curl_code DELETE "http://toxiproxy:8474/proxies/api_groundlight_ai/toxics/outage_timeout_up" >/dev/null
+    fi
+    if [[ "${BH_STREAM}" == "down" || "${BH_STREAM}" == "both" ]]; then
+      create_or_update_timeout_toxic outage_timeout_down downstream "${BH_MS}" || true
+    else
+      run_curl_code DELETE "http://toxiproxy:8474/proxies/api_groundlight_ai/toxics/outage_timeout_down" >/dev/null
+    fi
   fi
   echo -n "x"; sleep_ms "${DOWN_MS}"
 
