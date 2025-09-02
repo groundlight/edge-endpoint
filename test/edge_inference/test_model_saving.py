@@ -139,6 +139,58 @@ def test_save_model_with_no_binary_to_repository():
         assert not should_update(oodd_model_info, os.path.join(temp_dir, detector_id, "oodd"), 2)
 
 
+def test_save_model_with_no_oodd_to_repository():
+    test_predictor_metadata = """{"text_query":"there is a dog","mode":"BINARY"}"""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        detector_id = "test_detector"
+        model_info = {
+            "pipeline_config": "test_pipeline_config",
+            "predictor_metadata": test_predictor_metadata,
+            "model_binary_id": None,
+            "model_binary_url": None,
+            "oodd_pipeline_config": "test_oodd_pipeline_config",
+            "oodd_model_binary_id": None,
+            "oodd_model_binary_url": None,
+        }
+        edge_model_info, _ = parse_model_info(model_info)
+        save_models_to_repository(
+            detector_id=detector_id,
+            edge_model_buffer=None,
+            edge_model_info=edge_model_info,
+            oodd_model_buffer=None,
+            oodd_model_info=None,
+            repository_root=temp_dir,
+        )
+
+        # Validate directory structure and contents -- should save primary model, but not oodd model
+        validate_model_directory(temp_dir, detector_id, 1, edge_model_info)
+        assert not os.path.exists(os.path.join(temp_dir, detector_id, "oodd"))
+
+        # A new version should be saved when the pipeline_config changes
+        model_info = {
+            "pipeline_config": "test_pipeline_config_2",
+            "predictor_metadata": test_predictor_metadata,
+            "model_binary_id": None,
+            "model_binary_url": None,
+            "oodd_pipeline_config": "test_oodd_pipeline_config_2",
+            "oodd_model_binary_id": None,
+            "oodd_model_binary_url": None,
+        }
+        edge_model_info, _ = parse_model_info(model_info)
+        assert should_update(edge_model_info, os.path.join(temp_dir, detector_id, "primary"), 1)
+        save_models_to_repository(
+            detector_id=detector_id,
+            edge_model_buffer=None,
+            edge_model_info=edge_model_info,
+            oodd_model_buffer=None,
+            oodd_model_info=None,
+            repository_root=temp_dir,
+        )
+
+        validate_model_directory(temp_dir, detector_id, 2, edge_model_info)
+        assert not os.path.exists(os.path.join(temp_dir, detector_id, "oodd"))
+
+
 def test_delete_old_model_versions():
     with tempfile.TemporaryDirectory() as temp_dir:
         detector_id = "test_detector"
@@ -189,6 +241,30 @@ def test_delete_old_model_versions():
         assert os.path.exists(os.path.join(oodd_model_dir, "3"))
         assert os.path.exists(os.path.join(primary_model_dir, "4"))
         assert os.path.exists(os.path.join(oodd_model_dir, "4"))
+
+
+def test_delete_old_model_versions_with_no_oodd_folder():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        detector_id = "test_detector"
+        primary_model_dir = os.path.join(temp_dir, detector_id, "primary")
+        oodd_model_dir = os.path.join(temp_dir, detector_id, "oodd")
+
+        # Save 3 mock model version folders to set up
+        os.makedirs(os.path.join(primary_model_dir, "1"))
+        os.makedirs(os.path.join(primary_model_dir, "2"))
+        os.makedirs(os.path.join(primary_model_dir, "3"))
+
+        # Keep 2 latest model versions, delete the first one for primary. Ensure deletion runs
+        # without an issue when the oodd folder does not exist.
+        delete_old_model_versions(detector_id=detector_id, repository_root=temp_dir, num_to_keep=2)
+
+        # Version 1 for primary should be deleted, and the oodd folder should not exist
+        assert not os.path.exists(os.path.join(primary_model_dir, "1"))
+        assert not os.path.exists(oodd_model_dir)
+
+        # Versions 2 and 3 for primary should be kept
+        assert os.path.exists(os.path.join(primary_model_dir, "2"))
+        assert os.path.exists(os.path.join(primary_model_dir, "3"))
 
 
 def test_switch_to_new_model_repository_format():
