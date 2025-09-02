@@ -41,11 +41,10 @@ def main() -> int:
                 http_request("DELETE", f"{base_url}/proxies/api_groundlight_ai/toxics/timeout_down")
         print("\nFlapping stopped. Cleaned up.")
 
-    print(
-        "Starting impairment flapping: "
-        f"mode={mode} up={up_ms}ms down={down_ms}ms "
-        f"(timeout-ms={to_ms}, stream={to_stream})"
-    )
+    msg = f"Starting impairment flapping: mode={mode} up={up_ms}ms down={down_ms}ms"
+    if mode == "timeout":
+        msg += f" (timeout-ms={to_ms}, stream={to_stream})"
+    print(msg)
 
     count = 0
     try:
