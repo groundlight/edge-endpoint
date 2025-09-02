@@ -2,6 +2,8 @@
 
 Toxiproxy is a programmable network proxy for simulating network conditions (latency, timeouts, outages) between services. In the edge endpoint deployment, these scripts deploy a Toxiproxy instance in your Kubernetes namespace and patch the `edge-endpoint` Deployment to route `api.groundlight.ai` traffic through Toxiproxy. This allows you to introduce controlled impairments for testing resilience and behavior under failure.
 
+Applying a "toxic" via the scripts detailed below will affect behavior for requests made to `api.groundlight.ai` from the edge endpoint. Requests made to other destinations will be unaffected.
+
 - Admin API: Toxiproxy exposes an HTTP admin API on port 8474 used by these scripts.
 - Routing: The scripts create a proxy `api_groundlight_ai` listening on 10443 and upstreaming to `api.groundlight.ai:443`. A `hostAliases` patch points `api.groundlight.ai` to the Toxiproxy Service IP so all containers in the `edge-endpoint` pod route through it.
 - Access: Scripts use a temporary `kubectl port-forward` to call the in-cluster admin API. No ports are exposed outside the cluster.
