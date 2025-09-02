@@ -3,8 +3,7 @@ import json
 import sys
 
 from common import get_namespace, http_request, port_forward_service, service_exists
-
-HTTP_NOT_FOUND = 404
+from fastapi import status
 
 
 def main() -> int:
@@ -15,10 +14,18 @@ def main() -> int:
         return 0
 
     with port_forward_service(ns) as base_url:
-        r = http_request("GET", f"{base_url}/proxies/api_groundlight_ai")
-        if r.status_code == HTTP_NOT_FOUND:
+        r_proxy = http_request("GET", f"{base_url}/proxies/api_groundlight_ai")
+        if r_proxy.status_code == status.HTTP_404_NOT_FOUND:
             print("Proxy 'api_groundlight_ai' not found. Run enable_toxiproxy.py first.")
             return 0
+
+        try:
+            proxy_info = r_proxy.json()
+            enabled = proxy_info.get("enabled")
+            state = "enabled" if enabled else "disabled"
+            print(f"Proxy 'api_groundlight_ai' is {state}.")
+        except Exception:
+            pass
 
         r = http_request("GET", f"{base_url}/proxies/api_groundlight_ai/toxics")
         body = r.text

@@ -62,6 +62,19 @@ def require_namespace_exists(ns: str) -> None:
         sys.exit(1)
 
 
+def require_toxiproxy_installed(ns: str, exit_code: int = 1) -> None:
+    """Exit if the `toxiproxy` service is not present in the namespace.
+
+    - exit_code: 0 for soft no-op (informational), 1 for error.
+    Prints a consistent guidance message instructing how to enable toxiproxy.
+    """
+    if not service_exists("toxiproxy", ns):
+        msg = f"Toxiproxy is not installed in namespace {ns}. Run enable_toxiproxy.py first."
+        stream = sys.stderr if exit_code != 0 else sys.stdout
+        print(msg, file=stream)
+        sys.exit(exit_code)
+
+
 @contextmanager
 def port_forward_service(
     ns: str,

@@ -6,7 +6,7 @@ from common import (
     get_namespace,
     http_request,
     port_forward_service,
-    service_exists,
+    require_toxiproxy_installed,
     sleep_ms,
 )
 
@@ -14,9 +14,9 @@ from common import (
 def main() -> int:
     ns = get_namespace()
 
-    if not service_exists("toxiproxy", ns):
-        print(f"Toxiproxy is not installed in namespace {ns}. Run enable_toxiproxy.py first.", file=sys.stderr)
-        return 1
+    require_toxiproxy_installed(
+        ns, exit_code=1, message=f"Toxiproxy is not installed in namespace {ns}. Run enable_toxiproxy.py first."
+    )
 
     parser = argparse.ArgumentParser(description="Flap simulated outage via Toxiproxy")
     parser.add_argument("--mode", choices=["refuse", "blackhole"], default="blackhole")

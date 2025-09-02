@@ -2,15 +2,14 @@
 import argparse
 import sys
 
-from common import get_namespace, http_request, port_forward_service, service_exists
+from common import get_namespace, http_request, port_forward_service, require_toxiproxy_installed
+from fastapi import status
 
 
 def main() -> int:
     ns = get_namespace()
 
-    if not service_exists("toxiproxy", ns):
-        print(f"Toxiproxy is not installed in namespace {ns}. Run enable_toxiproxy.py first.", file=sys.stderr)
-        return 1
+    require_toxiproxy_installed(ns, exit_code=1)
 
     parser = argparse.ArgumentParser(description="Enable simulated outage via Toxiproxy")
     parser.add_argument("--mode", choices=["refuse", "blackhole"], default="blackhole")
@@ -21,7 +20,7 @@ def main() -> int:
     if args.mode == "refuse":
         with port_forward_service(ns) as base_url:
             r = http_request("POST", f"{base_url}/proxies/api_groundlight_ai", {"enabled": False})
-            if r.status_code in {200, 201}:
+            if r.status_code in {status.HTTP_200_OK, status.HTTP_201_CREATED}:
                 print("Outage enabled: proxy disabled (connections will be refused).")
                 return 0
             else:
@@ -45,13 +44,23 @@ def main() -> int:
                     "attributes": {"timeout": bh_ms},
                 },
             )
-            if r.status_code not in {200, 201}:
-                r = http_request(
+            if r.status_code in {status.HTTP_200_OK, status.HTTP_201_CREATED}:
+                pass
+            elif r.status_code == status.HTTP_409_CONFLICT:
+                r_upd = http_request(
                     "POST",
                     f"{base_url}/proxies/api_groundlight_ai/toxics/outage_timeout_up",
                     {"attributes": {"timeout": bh_ms}},
                 )
-            if r.status_code not in {200, 201}:
+                if r_upd.status_code in {200, 201}:
+                    print("Toxic outage_timeout_up already existed; attributes updated.")
+                else:
+                    print(
+                        f"Toxic outage_timeout_up already exists; failed to update attributes (HTTP {r_upd.status_code}).",
+                        file=sys.stderr,
+                    )
+                    return 1
+            else:
                 print("Failed to ensure upstream timeout toxic", file=sys.stderr)
                 return 1
         else:
@@ -68,13 +77,23 @@ def main() -> int:
                     "attributes": {"timeout": bh_ms},
                 },
             )
-            if r.status_code not in {200, 201}:
-                r = http_request(
+            if r.status_code in {status.HTTP_200_OK, status.HTTP_201_CREATED}:
+                pass
+            elif r.status_code == status.HTTP_409_CONFLICT:
+                r_upd = http_request(
                     "POST",
                     f"{base_url}/proxies/api_groundlight_ai/toxics/outage_timeout_down",
                     {"attributes": {"timeout": bh_ms}},
                 )
-            if r.status_code not in {200, 201}:
+                if r_upd.status_code in {status.HTTP_200_OK, status.HTTP_201_CREATED}:
+                    print("Toxic outage_timeout_down already existed; attributes updated.")
+                else:
+                    print(
+                        f"Toxic outage_timeout_down already exists; failed to update attributes (HTTP {r_upd.status_code}).",
+                        file=sys.stderr,
+                    )
+                    return 1
+            else:
                 print("Failed to ensure downstream timeout toxic", file=sys.stderr)
                 return 1
         else:
