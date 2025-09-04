@@ -1,0 +1,219 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mitm-proxy-nginx-config
+data:
+  nginx.conf: |
+    events {
+        worker_connections 1024;
+    }
+    
+    http {
+        # Logging
+        access_log /var/log/nginx/access.log;
+        error_log /var/log/nginx/error.log;
+        
+        # Basic settings
+        sendfile on;
+        tcp_nopush on;
+        tcp_nodelay on;
+        keepalive_timeout 65;
+        types_hash_max_size 2048;
+        
+        # MIME types
+        include /etc/nginx/mime.types;
+        default_type application/octet-stream;
+        
+        # Proxy settings for handling large model downloads
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        client_max_body_size 10G;
+        
+        # SSL settings
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+        ssl_prefer_server_ciphers on;
+        
+        # Upstream server (where to serve content from when intercepted)
+        # This could be a local file server or another service
+        upstream backend {
+            server 127.0.0.1:8080;  # Will serve local content
+        }
+        
+        # HTTPS server block for intercepted domains
+        server {
+            listen 443 ssl;
+            server_name _;  # Catch-all for any domain
+            
+            # SSL certificate (will be mounted from secret)
+            ssl_certificate /etc/ssl/certs/mitm-proxy.crt;
+            ssl_certificate_key /etc/ssl/private/mitm-proxy.key;
+            
+            # Proxy all requests to backend
+            location / {
+                proxy_pass http://backend;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                
+                # Handle large downloads
+                proxy_max_temp_file_size 0;
+            }
+        }
+        
+        # Simple file server for serving replacement content
+        server {
+            listen 8080;
+            server_name localhost;
+            
+            location / {
+                root /var/www/html;
+                autoindex on;
+                
+                # CORS headers for cross-origin requests
+                add_header Access-Control-Allow-Origin *;
+                add_header Access-Control-Allow-Methods "GET, POST, OPTIONS";
+                add_header Access-Control-Allow-Headers "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range";
+            }
+        }
+    }
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mitm-proxy
+spec:
+  # Use a fixed ClusterIP in the 10.43.x.x range
+  # Picking something unlikely to conflict - using .77.123
+  clusterIP: 10.43.77.123
+  selector:
+    app: mitm-proxy
+  ports:
+  - name: https
+    port: 443
+    targetPort: 443
+    protocol: TCP
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mitm-proxy
+  labels:
+    app: mitm-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mitm-proxy
+  template:
+    metadata:
+      labels:
+        app: mitm-proxy
+    spec:
+      initContainers:
+      # Generate self-signed certificate for the domains we want to intercept
+      - name: cert-generator
+        image: alpine/openssl:latest
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          # Generate CA key and certificate
+          openssl genrsa -out /certs/ca.key 4096
+          openssl req -new -x509 -days 365 -key /certs/ca.key -out /certs/ca.crt \
+            -subj "/C=US/ST=CA/L=SF/O=MITM-Proxy/CN=MITM-Proxy-CA"
+          
+          # Generate server key and certificate signing request
+          openssl genrsa -out /certs/mitm-proxy.key 2048
+          openssl req -new -key /certs/mitm-proxy.key -out /certs/mitm-proxy.csr \
+            -subj "/C=US/ST=CA/L=SF/O=MITM-Proxy/CN=*.hf.co"
+          
+          # Create extensions file for SAN (Subject Alternative Names)
+          cat > /certs/extensions.conf << EOF
+          [v3_req]
+          keyUsage = keyEncipherment, dataEncipherment
+          extendedKeyUsage = serverAuth
+          subjectAltName = @alt_names
+          
+          [alt_names]
+          DNS.1 = *.hf.co
+          DNS.2 = hf.co
+          DNS.3 = *.huggingface.co
+          DNS.4 = huggingface.co
+          DNS.5 = localhost
+          EOF
+          
+          # Generate server certificate signed by our CA
+          openssl x509 -req -in /certs/mitm-proxy.csr -CA /certs/ca.crt -CAkey /certs/ca.key \
+            -CAcreateserial -out /certs/mitm-proxy.crt -days 365 \
+            -extensions v3_req -extfile /certs/extensions.conf
+          
+          # Set proper permissions
+          chmod 644 /certs/*.crt
+          chmod 600 /certs/*.key
+          
+          echo "Certificates generated successfully"
+          ls -la /certs/
+        volumeMounts:
+        - name: certs-volume
+          mountPath: /certs
+      
+      containers:
+      - name: nginx-proxy
+        image: nginx:1.25-alpine
+        ports:
+        - containerPort: 443
+          name: https
+        - containerPort: 8080
+          name: http
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+        - name: certs-volume
+          mountPath: /etc/ssl/certs
+          readOnly: true
+        - name: certs-volume
+          mountPath: /etc/ssl/private
+          readOnly: true
+        - name: content-volume
+          mountPath: /var/www/html
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 30
+      
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: mitm-proxy-nginx-config
+      - name: certs-volume
+        emptyDir: {}
+      - name: content-volume
+        emptyDir: {}
