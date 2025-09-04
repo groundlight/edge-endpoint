@@ -231,4 +231,6 @@ spec:
           path: /opt/groundlight/ee-mitm-proxy/shared-cert
           type: DirectoryOrCreate
       - name: content-volume
-        emptyDir: {}
+        hostPath:
+          path: /opt/groundlight/ee-mitm-proxy/content
+          type: DirectoryOrCreate
