@@ -191,7 +191,9 @@ $MAYBE_SUDO mkdir -p /opt/groundlight/edge/pinamod-public
 
 #TODO: We should probably make this more automatic, like *.yaml or something.
 apply_yaml deploy/k3s/service_account.yaml
-apply_yaml deploy/k3s/mitm_proxy/mitm_proxy.yaml
+# Apply MITM proxy directly without envsubst to preserve nginx variables ($$host, $$uri, etc.)
+# envsubst would convert $$host to $ (empty) which breaks nginx config
+$K apply -f deploy/k3s/mitm_proxy/mitm_proxy.yaml
 apply_yaml deploy/k3s/inference_deployment/warmup_inference_model.yaml
 apply_yaml deploy/k3s/edge_deployment/edge_deployment.yaml
 apply_yaml deploy/k3s/refresh_creds.yaml

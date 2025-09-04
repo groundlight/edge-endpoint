@@ -5,7 +5,7 @@ metadata:
   name: mitm-proxy-nginx-config
   # A "Meddler in the Middle" to intercept requests to Hugging Face and serve them from our local file server.
 data:
-  nginx.conf: |
+  nginx.conf: |-
     events {
         worker_connections 1024;
     }
@@ -25,6 +25,7 @@ data:
         # MIME types
         include /etc/nginx/mime.types;
         default_type application/octet-stream;
+        
         
         # Proxy settings for handling large model downloads
         proxy_connect_timeout 60s;
@@ -57,10 +58,10 @@ data:
             # Proxy all requests to backend
             location / {
                 proxy_pass http://backend;
-                proxy_set_header Host $$host;
-                proxy_set_header X-Real-IP $$remote_addr;
-                proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto $$scheme;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
                 
                 # Handle large downloads
                 proxy_max_temp_file_size 0;
@@ -72,10 +73,10 @@ data:
             listen 8080;
             server_name localhost;
             
+            # Serve files based on Host header - simple static approach
             location / {
-                # Use the Host header to determine which directory to serve from
-                root /var/www/html/$$host;
-                try_files $$uri $$uri/ =404;
+                root /var/www/html;
+                try_files $uri $uri/ =404;
                 autoindex on;
                 
                 # CORS headers for cross-origin requests
