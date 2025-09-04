@@ -367,6 +367,63 @@ to resolve this, simply run the script `deploy/bin/fix-g4-routing.sh`.
 
 The issue should be permanently resolved at this point. You shouldn't need to run the script again on that node, 
 even after rebooting.
+## MITM (Meddler-in-the-Middle) Proxy for External Dependencies
+
+The edge endpoint includes a built-in MITM (meddler-in-the-middle) proxy to handle situations where external model repositories or dependencies become unavailable. This proxy automatically intercepts HTTPS requests to specific domains and serves replacement content from a local cache.
+
+### How It Works
+
+1. **Automatic Deployment**: The meddler-in-the-middle proxy is deployed automatically as part of the standard edge endpoint setup
+2. **Domain Interception**: Currently configured to intercept requests to:
+   - `huggingface.co`
+   - `cdn-lfs.hf.co`
+3. **Certificate Trust**: Automatically injects the proxy's CA certificate into inference containers so HTTPS requests work seamlessly
+4. **Content Serving**: Serves replacement files from S3 bucket `s3://pinamod-artifacts-public/hf-proxy/`
+
+### Architecture
+
+The meddler-in-the-middle proxy consists of several components:
+
+- **Proxy Service**: nginx-based HTTPS proxy at ClusterIP `10.43.77.123`
+- **Certificate Management**: Automatic generation and injection of CA certificates
+- **Content Sync**: Downloads replacement content from S3 to local storage
+- **Domain Redirection**: Uses Kubernetes `hostAliases` to redirect DNS lookups
+
+### Content Structure
+
+Replacement content in S3 should be organized by hostname:
+
+```
+s3://pinamod-artifacts-public/hf-proxy/
+├── huggingface.co/
+│   ├── model-name/
+│   │   ├── config.json
+│   │   └── pytorch_model.bin
+│   └── ...
+└── cdn-lfs.hf.co/
+    ├── repo-id/
+    │   └── model.safetensors
+    └── ...
+```
+
+### Adding New Domains
+
+To intercept additional domains:
+
+1. Add the domain to `hostAliases` in both:
+   - `deploy/k3s/edge_deployment/edge_deployment.yaml`
+   - `deploy/k3s/inference_deployment/inference_deployment_template.yaml`
+
+2. Update the nginx certificate generation in `deploy/k3s/mitm_proxy/mitm_proxy.yaml` to include the new domain in the Subject Alternative Names (SAN)
+
+3. Add the replacement content to the appropriate directory structure in S3
+
+### Troubleshooting
+
+- **Certificate Issues**: Check that `/opt/groundlight/ee-mitm-proxy/shared-cert/ca.crt` exists on the host
+- **Content Not Found**: Verify the S3 content structure matches the expected hostname/path layout
+- **DNS Not Redirecting**: Confirm `hostAliases` are properly configured in the pod specs
+
 ## Pushing/Pulling Images from Elastic Container Registry (ECR)
 
 We currently have a hard-coded docker image in our k3s deployment, which is not ideal.
