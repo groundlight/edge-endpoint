@@ -47,7 +47,7 @@ spec:
           maxUnavailable: 0  # Aim for no downtime during rollout
 
       initContainers:
-      - name: patch-certifi
+      - name: create-ca-bundle
         image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:latest
         imagePullPolicy: Always
         command: ["/bin/bash", "-c"]
@@ -67,22 +67,29 @@ spec:
             exit 1
           fi
           
-          echo "Found CA certificate, patching certifi bundle..."
-          CERTIFI_PATH=$(python -c "import certifi; print(certifi.where())")
-          echo "Certifi bundle location: $CERTIFI_PATH"
+          echo "Found CA certificate, creating patched CA bundle..."
           
-          # Backup original certifi bundle
-          cp "$CERTIFI_PATH" "$CERTIFI_PATH.backup"
+          # Get the original certifi bundle
+          ORIGINAL_CERTIFI=$(python -c "import certifi; print(certifi.where())")
+          echo "Original certifi bundle location: $ORIGINAL_CERTIFI"
           
-          # Append our CA certificate
-          cat /shared-cert/ca.crt >> "$CERTIFI_PATH"
+          # Create our patched bundle in the shared volume
+          echo "Creating patched CA bundle at /shared-ca-bundle/cacert.pem"
+          cp "$ORIGINAL_CERTIFI" /shared-ca-bundle/cacert.pem
           
-          echo "Successfully patched certifi bundle with MITM CA certificate"
-          echo "Certifi bundle now contains $(wc -l < "$CERTIFI_PATH") lines"
+          # Append our MITM CA certificate
+          echo "" >> /shared-ca-bundle/cacert.pem
+          echo "# MITM Proxy CA Certificate" >> /shared-ca-bundle/cacert.pem
+          cat /shared-cert/ca.crt >> /shared-ca-bundle/cacert.pem
+          
+          echo "Successfully created patched CA bundle"
+          echo "Bundle contains $(wc -l < /shared-ca-bundle/cacert.pem) lines"
         volumeMounts:
         - name: shared-cert-volume
           mountPath: /shared-cert
           readOnly: true
+        - name: shared-ca-bundle-volume
+          mountPath: /shared-ca-bundle
 
       # NOTE: the sync-pinamod container is duplicated in the warmup_inference_model.yaml Job
       # TODO: refactor to share code between the Job and the initContainer in the Deployment
@@ -134,6 +141,13 @@ spec:
           value: /opt/models/pinamod
         - name: LOAD_ALL_PIPELINES  # Load only the pipelines that are needed for edge inference.
           value: "false"
+        # Point Python to our patched CA bundle for HTTPS requests
+        - name: REQUESTS_CA_BUNDLE
+          value: /shared-ca-bundle/cacert.pem
+        - name: SSL_CERT_FILE
+          value: /shared-ca-bundle/cacert.pem
+        - name: CURL_CA_BUNDLE
+          value: /shared-ca-bundle/cacert.pem
         command:
           [
             "poetry", "run", "python3", "-m", "uvicorn", "serving.edge_inference_server.fastapi_server:app",
@@ -146,6 +160,9 @@ spec:
           mountPath: *modelRepository
         - name: pina-models
           mountPath: /opt/models
+          readOnly: true
+        - name: shared-ca-bundle-volume
+          mountPath: /shared-ca-bundle
           readOnly: true
         ports:
         - containerPort: 8000
@@ -190,4 +207,8 @@ spec:
       - name: hf-content
         hostPath:
           path: /opt/groundlight/ee-mitm-proxy/content
+          type: DirectoryOrCreate
+      - name: shared-ca-bundle-volume
+        hostPath:
+          path: /opt/groundlight/ee-mitm-proxy/ca-bundle
           type: DirectoryOrCreate
