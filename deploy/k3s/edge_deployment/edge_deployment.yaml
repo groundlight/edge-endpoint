@@ -39,6 +39,12 @@ spec:
       # This service account is used by the edge logic to access the Kubernetes API
       # from within the pod. See deploy/k3s/service_account.yaml for more details
       serviceAccountName: edge-endpoint-service-account
+      # Redirect external model download requests to our MITM proxy
+      hostAliases:
+      - ip: "10.43.77.123"
+        hostnames:
+        - "huggingface.co"
+        - "cdn-lfs.hf.co"
       initContainers:
         - name: database-prep
           image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${IMAGE_TAG}

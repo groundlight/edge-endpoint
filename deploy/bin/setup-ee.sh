@@ -134,6 +134,9 @@ $K create configmap setup-db --from-file=$(pwd)/deploy/bin/setup_db.sh -n ${DEPL
 # Clean up existing deployments and services (if they exist)
 $K delete --ignore-not-found deployment edge-endpoint
 $K delete --ignore-not-found service edge-endpoint-service
+$K delete --ignore-not-found deployment mitm-proxy
+$K delete --ignore-not-found service mitm-proxy
+$K delete --ignore-not-found configmap mitm-proxy-nginx-config
 $K delete --ignore-not-found job warmup-inference-model
 $K get deployments -o custom-columns=":metadata.name" --no-headers=true | \
     grep "inferencemodel" | \
@@ -188,6 +191,7 @@ $MAYBE_SUDO mkdir -p /opt/groundlight/edge/pinamod-public
 
 #TODO: We should probably make this more automatic, like *.yaml or something.
 apply_yaml deploy/k3s/service_account.yaml
+apply_yaml deploy/k3s/mitm_proxy/mitm_proxy.yaml
 apply_yaml deploy/k3s/inference_deployment/warmup_inference_model.yaml
 apply_yaml deploy/k3s/edge_deployment/edge_deployment.yaml
 apply_yaml deploy/k3s/refresh_creds.yaml

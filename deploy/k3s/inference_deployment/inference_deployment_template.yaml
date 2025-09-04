@@ -32,6 +32,12 @@ spec:
         instance: placeholder-inference-instance-name
     spec:
       runtimeClassName: nvidia  # Required for GPU use in k3s
+      # Redirect external model download requests to our MITM proxy
+      hostAliases:
+      - ip: "10.43.77.123"
+        hostnames:
+        - "huggingface.co"
+        - "cdn-lfs.hf.co"
       imagePullSecrets:
       - name: registry-credentials
       strategy:
