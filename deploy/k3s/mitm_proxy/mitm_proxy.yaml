@@ -73,7 +73,9 @@ data:
             server_name localhost;
             
             location / {
-                root /var/www/html;
+                # Use the Host header to determine which directory to serve from
+                root /var/www/html/$host;
+                try_files $uri $uri/ =404;
                 autoindex on;
                 
                 # CORS headers for cross-origin requests

@@ -89,8 +89,17 @@ spec:
       - name: sync-pinamod
         image: amazon/aws-cli:latest
         imagePullPolicy: IfNotPresent
-        # Sync models from S3 to the local hostmapped filesystem.
-        command: ['sh', '-c', 'aws s3 sync s3://pinamod-artifacts-public/pinamod $PINAMOD_DIR --delete']
+        # Sync models and HF proxy content from S3 to the local hostmapped filesystem.
+        command: ['sh', '-c']
+        args:
+        - |
+          echo "Syncing pinamod models..."
+          aws s3 sync s3://pinamod-artifacts-public/pinamod $PINAMOD_DIR --delete
+          
+          echo "Syncing HF proxy content..."
+          aws s3 sync s3://pinamod-artifacts-public/hf-proxy $HF_CONTENT_DIR --delete
+          
+          echo "Sync complete"
         env:
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
@@ -104,9 +113,13 @@ spec:
               key: aws_secret_access_key
         - name: PINAMOD_DIR
           value: /opt/models/pinamod
+        - name: HF_CONTENT_DIR
+          value: /opt/hf-content
         volumeMounts:
         - name: pina-models
           mountPath: /opt/models
+        - name: hf-content
+          mountPath: /opt/hf-content
 
       containers:
       - name: inference-server
@@ -173,4 +186,8 @@ spec:
       - name: shared-cert-volume
         hostPath:
           path: /opt/groundlight/ee-mitm-proxy/shared-cert
+          type: DirectoryOrCreate
+      - name: hf-content
+        hostPath:
+          path: /opt/groundlight/ee-mitm-proxy/content
           type: DirectoryOrCreate
