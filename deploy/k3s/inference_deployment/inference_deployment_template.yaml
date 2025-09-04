@@ -74,6 +74,17 @@ spec:
           value: &modelRepository /opt/groundlight/edge/serving/model-repo
         - name: MODEL_NAME
           value: placeholder-model-name
+        # necessary to access pretrained model weights stored in S3
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: aws_access_key_id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: aws_secret_access_key
         - name: PINAMOD_DIR
           value: /opt/models/pinamod
         - name: LOAD_ALL_PIPELINES  # Load only the pipelines that are needed for edge inference.

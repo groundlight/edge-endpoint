@@ -89,6 +89,9 @@ spec:
         - name: pina-models
           mountPath: /opt/models
           readOnly: true
+        # necessary to access pretrained model weights stored in S3
+        - name: aws-credentials
+          mountPath: /root/.aws
         ports:
         - containerPort: 8000
           name: http-fastapi
