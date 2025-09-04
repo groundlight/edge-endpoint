@@ -45,6 +45,7 @@ spec:
       # TODO: refactor to share code between the Job and the initContainer in the Deployment
       - name: sync-pinamod
         image: amazon/aws-cli:latest
+        imagePullPolicy: IfNotPresent
         # Sync models from S3 to the local hostmapped filesystem.
         command: ['sh', '-c', 'aws s3 sync s3://pinamod-artifacts-public/pinamod $PINAMOD_DIR --delete']
         env:
