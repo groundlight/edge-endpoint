@@ -3,6 +3,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: mitm-proxy-nginx-config
+  # A "Meddler in the Middle" to intercept requests to Hugging Face and serve them from our local file server.
 data:
   nginx.conf: |
     events {
@@ -163,11 +164,19 @@ spec:
           chmod 644 /certs/*.crt
           chmod 600 /certs/*.key
           
+          # Copy CA cert to shared location for other pods to use
+          cp /certs/ca.crt /shared-cert/ca.crt
+          chmod 644 /shared-cert/ca.crt
+          
           echo "Certificates generated successfully"
           ls -la /certs/
+          echo "CA certificate copied to shared location:"
+          ls -la /shared-cert/
         volumeMounts:
         - name: certs-volume
           mountPath: /certs
+        - name: shared-cert-volume
+          mountPath: /shared-cert
       
       containers:
       - name: nginx-proxy
@@ -215,5 +224,9 @@ spec:
           name: mitm-proxy-nginx-config
       - name: certs-volume
         emptyDir: {}
+      - name: shared-cert-volume
+        hostPath:
+          path: /opt/groundlight/ee-mitm-proxy/shared-cert
+          type: DirectoryOrCreate
       - name: content-volume
         emptyDir: {}
