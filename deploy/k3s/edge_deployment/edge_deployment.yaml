@@ -46,43 +46,6 @@ spec:
         - "huggingface.co"
         - "cdn-lfs.hf.co"
       initContainers:
-        - name: patch-certifi
-          image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${IMAGE_TAG}
-          imagePullPolicy: Always
-          command: ["/bin/bash", "-c"]
-          args:
-          - |
-            echo "Waiting for MITM proxy CA certificate..."
-            TIMEOUT=30
-            ELAPSED=0
-            while [ ! -f /shared-cert/ca.crt ] && [ $ELAPSED -lt $TIMEOUT ]; do
-              echo "CA cert not found, waiting... ($ELAPSED/$TIMEOUT seconds)"
-              sleep 2
-              ELAPSED=$((ELAPSED + 2))
-            done
-            
-            if [ ! -f /shared-cert/ca.crt ]; then
-              echo "Timeout waiting for CA certificate after $TIMEOUT seconds"
-              exit 1
-            fi
-            
-            echo "Found CA certificate, patching certifi bundle..."
-            CERTIFI_PATH=$(python -c "import certifi; print(certifi.where())")
-            echo "Certifi bundle location: $CERTIFI_PATH"
-            
-            # Backup original certifi bundle
-            cp "$CERTIFI_PATH" "$CERTIFI_PATH.backup"
-            
-            # Append our CA certificate
-            cat /shared-cert/ca.crt >> "$CERTIFI_PATH"
-            
-            echo "Successfully patched certifi bundle with MITM CA certificate"
-            echo "Certifi bundle now contains $(wc -l < "$CERTIFI_PATH") lines"
-          volumeMounts:
-          - name: shared-cert-volume
-            mountPath: /shared-cert
-            readOnly: true
-
         - name: database-prep
           image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${IMAGE_TAG}
           imagePullPolicy: Always
@@ -243,8 +206,4 @@ spec:
         - name: escalation-queue-volume
           hostPath:
             path: /opt/groundlight/queue/${DEPLOYMENT_NAMESPACE}
-            type: DirectoryOrCreate
-        - name: shared-cert-volume
-          hostPath:
-            path: /opt/groundlight/ee-mitm-proxy/shared-cert
             type: DirectoryOrCreate
