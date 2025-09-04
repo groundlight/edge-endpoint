@@ -57,10 +57,10 @@ data:
             # Proxy all requests to backend
             location / {
                 proxy_pass http://backend;
-                proxy_set_header Host $host;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto $scheme;
+                proxy_set_header Host $$host;
+                proxy_set_header X-Real-IP $$remote_addr;
+                proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $$scheme;
                 
                 # Handle large downloads
                 proxy_max_temp_file_size 0;
@@ -74,8 +74,8 @@ data:
             
             location / {
                 # Use the Host header to determine which directory to serve from
-                root /var/www/html/$host;
-                try_files $uri $uri/ =404;
+                root /var/www/html/$$host;
+                try_files $$uri $$uri/ =404;
                 autoindex on;
                 
                 # CORS headers for cross-origin requests
