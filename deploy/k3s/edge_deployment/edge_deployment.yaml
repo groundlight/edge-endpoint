@@ -53,7 +53,7 @@ spec:
           args:
           - |
             echo "Waiting for MITM proxy CA certificate..."
-            TIMEOUT=60
+            TIMEOUT=30
             ELAPSED=0
             while [ ! -f /shared-cert/ca.crt ] && [ $ELAPSED -lt $TIMEOUT ]; do
               echo "CA cert not found, waiting... ($ELAPSED/$TIMEOUT seconds)"
