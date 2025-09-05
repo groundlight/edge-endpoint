@@ -76,13 +76,10 @@ spec:
           value: {{ .Values.logLevel | quote }}
         - name: LOAD_ALL_PIPELINES  # Load only the pipelines that are needed for edge inference.
           value: "false"
-        command:
-          [
-            "poetry", "run", "python3", "-m", "uvicorn", "serving.edge_inference_server.fastapi_server:app",
-            "--host", "0.0.0.0",
-            "--port", "8000",
-            "--workers", "1"
-          ]
+        - name: INFERENCE_FLAVOR
+          value: "{{ .Values.inferenceFlavor }}"
+        - name: WORKERS  # Number of uvicorn workers for the inference server
+          value: "1"
         volumeMounts:
         - name: edge-endpoint-persistent-volume
           mountPath: *modelRepository
