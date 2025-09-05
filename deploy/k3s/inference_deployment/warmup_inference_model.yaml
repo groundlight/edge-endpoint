@@ -13,7 +13,7 @@ spec:
         image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:latest
         command: ["echo", "Successfully pulled image to warm cache"]
       - name: sync-pinamod
-        image: amazon/aws-cli:latest
+        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${IMAGE_TAG}
         imagePullPolicy: IfNotPresent
         # Sync models from S3 to the local hostmapped filesystem.
         command: ['sh', '-c', 'aws --region us-west-2 s3 sync s3://pinamod-artifacts-public/pinamod $PINAMOD_DIR --delete']
