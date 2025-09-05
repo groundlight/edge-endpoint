@@ -122,7 +122,7 @@ if [[ "${INFERENCE_FLAVOR}" == "CPU" ]]; then
     rm temp_inference_deployment_template.yaml
 else
     echo "Preparing inference deployments with GPU flavor"
-    envsubst < deploy/k3s/inference_deployment/inference_deployment_template.yaml > /tmp/inf_dep.tmp
+    envsubst '$IMAGE_TAG' < deploy/k3s/inference_deployment/inference_deployment_template.yaml > /tmp/inf_dep.tmp
     $K create configmap inference-deployment-template \
             --from-file=/tmp/inf_dep.tmp
     rm /tmp/inf_dep.tmp
