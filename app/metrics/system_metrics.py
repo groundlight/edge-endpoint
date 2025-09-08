@@ -32,11 +32,24 @@ def get_inference_flavor() -> str:
     return inference_flavor
 
 
+def get_namespace() -> str:
+    """
+    Get the namespace of the EE.
+    
+    Use the NAMESPACE environment variable if it exists (helm setup method), otherwise use the
+    DEPLOYMENT_NAMESPACE environment variable (setup-ee.sh method). If neither exist, default to 
+    the namespace "edge"
+    """
+    namespace = os.getenv("NAMESPACE", os.getenv("DEPLOYMENT_NAMESPACE", "edge"))
+    return namespace
+
+
 def get_deployments() -> str:
     config.load_incluster_config()
     v1_apps = client.AppsV1Api()
 
-    deployments = v1_apps.list_namespaced_deployment(namespace=os.getenv("NAMESPACE", "edge"))
+    namespace = get_namespace()
+    deployments = v1_apps.list_namespaced_deployment(namespace=namespace)
 
     deployment_names = []
     for dep in deployments.items:
@@ -47,7 +60,8 @@ def get_deployments() -> str:
 def get_pods() -> str:
     config.load_incluster_config()
     v1_core = client.CoreV1Api()
-    pods = v1_core.list_namespaced_pod(namespace=os.getenv("NAMESPACE", "edge"))
+    namespace = get_namespace()
+    pods = v1_core.list_namespaced_pod(namespace=namespace)
 
     # Convert the pods dict to a JSON string to prevent opensearch from indexing all
     # the individual pod fields
@@ -57,7 +71,8 @@ def get_pods() -> str:
 def get_container_images() -> str:
     config.load_incluster_config()
     v1_core = client.CoreV1Api()
-    pods = v1_core.list_namespaced_pod(namespace=os.getenv("NAMESPACE", "edge"))
+    namespace = get_namespace()
+    pods = v1_core.list_namespaced_pod(namespace=namespace)
 
     containers = {}
     for pod in pods.items:
