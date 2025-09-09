@@ -114,6 +114,8 @@ spec:
                   name: groundlight-api-token
                   key: GROUNDLIGHT_API_TOKEN
                   optional: true
+            - name: DEPLOYMENT_NAMESPACE
+              value: ${DEPLOYMENT_NAMESPACE}
           volumeMounts:
             - name: edge-config-volume
               mountPath: /etc/groundlight/edge-config
