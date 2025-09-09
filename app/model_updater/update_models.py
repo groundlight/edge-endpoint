@@ -66,8 +66,8 @@ def _check_new_models_and_inference_deployments(
     new_model = edge_inference_manager.update_models_if_available(detector_id=detector_id)
 
     if not new_model:
-        logger.info(f'No new model available for {detector_id}. Skipping...')
-        time.sleep(10) # TODO remove this debugging
+        logger.info(f"No new model available for {detector_id}. Skipping...")
+        time.sleep(10)  # TODO remove this debugging
         return
     else:
         logger.info(f"New model available for {detector_id}. Updating inference deployment...")
@@ -193,7 +193,9 @@ def manage_update_models(
         undeployed_inference_deployments = db_manager.get_inference_deployment_records(deployment_created=False)
         if undeployed_inference_deployments:
             unique_detectors = {record.detector_id: record.api_token for record in undeployed_inference_deployments}
-            logger.info(f"Found {len(undeployed_inference_deployments)} undeployed inference deployment(s) for {len(unique_detectors)} detector(s). Updating inference config.")
+            logger.info(
+                f"Found {len(undeployed_inference_deployments)} undeployed inference deployment(s) for {len(unique_detectors)} detector(s). Updating inference config."
+            )
             for detector_id, api_token in unique_detectors.items():
                 logger.debug(f"Updating inference config for detector_id: {detector_id}")
                 edge_inference_manager.update_inference_config(
