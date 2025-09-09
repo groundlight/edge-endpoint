@@ -231,20 +231,24 @@ class InferenceDeploymentManager:
         """Check rollout status using standard Kubernetes deployment conditions."""
         deployment = self.get_inference_deployment(deployment_name)
         if deployment is None:
-            logger.info('is_rollout_in_progress, no deployment found')
+            logger.info("is_rollout_in_progress, no deployment found")
             return False
-        
+
         # Check standard replica counts
         desired = deployment.spec.replicas or 0
         ready = deployment.status.ready_replicas or 0
         updated = deployment.status.updated_replicas or 0
         available = deployment.status.available_replicas or 0
         total = deployment.status.replicas or 0
-        
+
         # Check that not all replicas are ready AND updated AND available
         if total == ready == updated == available == desired == 1:
-            logger.info(f"{deployment_name}: Rollout completed (replicas: total={total}, desired={desired}, ready={ready}, updated={updated}, available={available})")
+            logger.info(
+                f"{deployment_name}: Rollout completed (replicas: total={total}, desired={desired}, ready={ready}, updated={updated}, available={available})"
+            )
             return False
         else:
-            logger.info(f"{deployment_name}: Rollout in progress (replicas: total={total}, desired={desired}, ready={ready}, updated={updated}, available={available})")
+            logger.info(
+                f"{deployment_name}: Rollout in progress (replicas: total={total}, desired={desired}, ready={ready}, updated={updated}, available={available})"
+            )
             return True

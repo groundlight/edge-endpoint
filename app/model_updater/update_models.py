@@ -29,6 +29,7 @@ def sleep_forever(message: str | None = None):
         logger.info(message)
         time.sleep(TEN_MINUTES)
 
+
 def _check_new_models_and_inference_deployments(
     detector_id: str,
     edge_inference_manager: EdgeInferenceManager,
@@ -54,7 +55,7 @@ def _check_new_models_and_inference_deployments(
     if deployment_manager.is_rollout_in_progress(edge_deployment_name):
         logger.info(f"Rollout already in progress for {detector_id}, skipping.")
         return
-    
+
     if separate_oodd_inference:
         oodd_deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd=True)
         if deployment_manager.is_rollout_in_progress(oodd_deployment_name):
