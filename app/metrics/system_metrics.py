@@ -35,9 +35,9 @@ def get_inference_flavor() -> str:
 def get_namespace() -> str:
     """
     Get the namespace of the EE.
-    
+
     Use the NAMESPACE environment variable if it exists (helm setup method), otherwise use the
-    DEPLOYMENT_NAMESPACE environment variable (setup-ee.sh method). If neither exist, default to 
+    DEPLOYMENT_NAMESPACE environment variable (setup-ee.sh method). If neither exist, default to
     the namespace "edge"
     """
     namespace = os.getenv("NAMESPACE", os.getenv("DEPLOYMENT_NAMESPACE", "edge"))
