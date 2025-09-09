@@ -40,7 +40,12 @@ def get_namespace() -> str:
     DEPLOYMENT_NAMESPACE environment variable (setup-ee.sh method). If neither exist, default to
     the namespace "edge"
     """
-    namespace = os.getenv("NAMESPACE", os.getenv("DEPLOYMENT_NAMESPACE", "edge"))
+    namespace = os.getenv("NAMESPACE", os.getenv("DEPLOYMENT_NAMESPACE"))
+
+    if namespace is None:
+        logger.error("Neither NAMESPACE nor DEPLOYMENT_NAMESPACE are set, using default namespace 'edge'")
+        namespace = "edge"
+
     return namespace
 
 
