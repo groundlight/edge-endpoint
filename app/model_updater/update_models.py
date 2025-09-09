@@ -49,21 +49,17 @@ def _check_new_models_and_inference_deployments(
     :param separate_oodd_inference: whether or not to run inference separately for an OODD model
     """
 
-    # Guard clause: Skip if rollout already in progress
-    edge_deployment_name = get_edge_inference_deployment_name(detector_id)
-    if deployment_manager.is_rollout_in_progress(edge_deployment_name):
-        logger.info(f"Rollout already in progress for {detector_id}, skipping.")
-        return
-    
-    if separate_oodd_inference:
-        oodd_deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd=True)
-        if deployment_manager.is_rollout_in_progress(oodd_deployment_name):
-            logger.info(f"OODD rollout already in progress for {detector_id}, skipping.")
-            return
-
     # Download and write new model to model repo on disk
     new_model = edge_inference_manager.update_models_if_available(detector_id=detector_id)
 
+    if not new_model:
+        logger.info(f'No new model available for {detector_id}. Skipping...')
+        time.sleep(10) # TODO remove this debugging
+        return
+    else:
+        logger.info(f"New model available for {detector_id}. Updating inference deployment...")
+
+    # create_inference_deployment
     edge_deployment_name = get_edge_inference_deployment_name(detector_id)
     edge_deployment = deployment_manager.get_inference_deployment(deployment_name=edge_deployment_name)
     if edge_deployment is None:
@@ -77,27 +73,31 @@ def _check_new_models_and_inference_deployments(
             logger.info(f"Creating a new oodd inference deployment for {detector_id}")
             deployment_manager.create_inference_deployment(detector_id=detector_id, is_oodd=True)
 
-    if new_model:
-        # Update inference deployment and rollout a new pod
-        logger.info(f"Updating inference deployment for {detector_id}")
-        deployment_manager.update_inference_deployment(detector_id=detector_id)
-        if separate_oodd_inference:
-            deployment_manager.update_inference_deployment(detector_id=detector_id, is_oodd=True)
+    # if new_model:
+    # Update inference deployment and rollout a new pod
+    logger.info(f"Updating inference deployment for {detector_id}")
+    deployment_manager.update_inference_deployment(detector_id=detector_id)
+    if separate_oodd_inference:
+        deployment_manager.update_inference_deployment(detector_id=detector_id, is_oodd=True)
 
-        poll_start = time.time()
-        while not deployment_manager.is_inference_deployment_rollout_complete(deployment_name=edge_deployment_name) or (
-            separate_oodd_inference
-            and not deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name)
-        ):
-            time.sleep(5)
-            if time.time() - poll_start > TEN_MINUTES:
-                raise TimeoutError("Inference deployments are not ready within time limit")
+    # Poll for the inference deployment rollout to be complete
+    poll_start = time.time()
+    while not deployment_manager.is_inference_deployment_rollout_complete(deployment_name=edge_deployment_name) or (
+        separate_oodd_inference
+        and not deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name)
+    ):
+        time.sleep(5)
+        if time.time() - poll_start > TEN_MINUTES:
+            raise TimeoutError(f"Inference deployment(s) are not ready within time limit for {detector_id}.")
 
-        # Now that we have successfully rolled out new model versions, we can clean up our model repository a bit.
-        # To be a bit conservative, we keep the current model version as well as the version before that. Older
-        # versions of the model for the current detector_id will be removed from disk.
-        logger.info(f"Cleaning up old model versions for {detector_id}")
-        delete_old_model_versions(detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2)
+    inference_rollout_duration = time.time() - poll_start
+    logger.info(f"Inference deployment(s) finished for {detector_id} in {inference_rollout_duration:.2f} seconds.")
+
+    # Now that we have successfully rolled out new model versions, we can clean up our model repository a bit.
+    # To be a bit conservative, we keep the current model version as well as the version before that. Older
+    # versions of the model for the current detector_id will be removed from disk.
+    logger.info(f"Cleaning up old model versions for {detector_id}")
+    delete_old_model_versions(detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2)
 
     if deployment_manager.is_inference_deployment_rollout_complete(deployment_name=edge_deployment_name) and (
         not separate_oodd_inference
@@ -177,17 +177,18 @@ def manage_update_models(
 
         # Fetch detector IDs that need to be deployed from the database and add them to the config
         logger.debug("Fetching undeployed detector IDs from the database.")
-        undeployed_detector_ids = db_manager.get_inference_deployment_records(deployment_created=False)
-        if undeployed_detector_ids:
-            logger.info(f"Found {len(undeployed_detector_ids)} undeployed detectors. Updating inference config.")
-            for detector_record in undeployed_detector_ids:
-                logger.debug(f"Updating inference config for detector_id: {detector_record.detector_id}")
+        undeployed_inference_deployments = db_manager.get_inference_deployment_records(deployment_created=False)
+        if undeployed_inference_deployments:
+            unique_detectors = {record.detector_id: record.api_token for record in undeployed_inference_deployments}
+            logger.info(f"Found {len(undeployed_inference_deployments)} undeployed inference deployment(s) for {len(unique_detectors)} detector(s). Updating inference config.")
+            for detector_id, api_token in unique_detectors.items():
+                logger.debug(f"Updating inference config for detector_id: {detector_id}")
                 edge_inference_manager.update_inference_config(
-                    detector_id=detector_record.detector_id,
-                    api_token=detector_record.api_token,
+                    detector_id=detector_id,
+                    api_token=api_token,
                 )
         else:
-            logger.debug("No undeployed detectors found.")
+            logger.debug("No undeployed inference deployments found.")
 
         # Update the status of the inference deployments in the database
         deployment_records = db_manager.get_inference_deployment_records()

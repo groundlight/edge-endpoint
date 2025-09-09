@@ -1,79 +1,134 @@
 from groundlight import Groundlight
 import datetime
 import time
+from model import Detector
 import urllib3.exceptions
+import argparse
 
 import utils
 
 DETECTOR_GROUP_NAME = 'Rollout Testing'
 LABEL_SUBMISSION_PERIOD_SEC = 3.0
-STARTING_LABELS = 30 
+STARTING_LABELS = 15 
+SUPPORTED_DETECTOR_MODES = (
+    'BINARY',
+)
 
-gl = Groundlight(endpoint='http://localhost:30101')
-
-datetime_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-detector_name = f'Rollout Test Detector {datetime_str}'
-
-detector = gl.create_binary_detector(
-    detector_name, 
-    query="Is the image completely black?",
-    group_name=DETECTOR_GROUP_NAME,
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description="Tests the Edge Endpoint's ability to roll out new inference pods."
     )
+    parser.add_argument(
+        'num_detectors',
+        type=int,
+        help='Number of detectors to create for load testing'
+    )
+    parser.add_argument(
+        '--detector_mode',
+        choices=SUPPORTED_DETECTOR_MODES,
+        default='BINARY',
+        help=f'Detector mode'
+    )
+    return parser.parse_args()
 
-print(f'Created {detector.id}')
-
-test_start = time.time()
-num_added_labels = 0
-while True:
-    print('-' * 50)
-    
-    # Generate data
+def add_label(gl: Groundlight, detector: Detector) -> None:
+    """
+    Submits an image query with a randomly image and then labels it.
+    """
     image, label = utils.get_random_binary_image()
+    iq = gl.ask_async(detector, image, human_review="NEVER")
+    gl.add_label(iq, label)
+    print(f'Added {label} label to {detector.id}/{iq.id}')
 
-    # Submit image query
-    try:
-        iq = gl.submit_image_query(
-            detector=detector, 
-            image=image, 
-            human_review='NEVER', 
-            wait=0.0, 
-            confidence_threshold=0.0
+
+def prime_detector(gl: Groundlight, detector: Detector, num_labels: int) -> None:
+    """
+    Submits a handful of labels to a detector so that the cloud can train a model. 
+    """
+    print(f'Priming detector {detector.id}')
+    for _ in range(num_labels):
+        add_label(gl, detector)
+
+def main(num_detectors: int) -> None:
+
+    gl = Groundlight(endpoint='http://localhost:30101')
+
+    # Create the detectors
+    detectors = []
+    datetime_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    for n in range(num_detectors):
+        detector_name = f'Rollout Test Detector - {datetime_str} - {n}'
+
+        detector = gl.create_binary_detector(
+            detector_name, 
+            query="Is the image completely black?",
+            group_name=DETECTOR_GROUP_NAME,
             )
-    except urllib3.exceptions.ReadTimeoutError as e:
-        print(f"Timeout while submitting image query: {e}")
-        time.sleep(1)
+        print(f'Created {detector.id}')
+        detectors.append(detector)
+        
+    detector_completion_statuses = {detector.id: False for detector in detectors}
 
-    # Check if we are getting edge results
-    if iq.result.from_edge:
-        print(f'Received an edge answer. This means the Edge Endpoint was able to successfully rollout an inference pod for {detector.id}')
-        user_input = input('Keep going? (y/n): ').strip().lower()
-        if user_input != 'y':
-            print('Quitting...')
-            break
-        else:
-            print('Continuing...')
+    # Prime the detectors
+    for detector in detectors:
+        prime_detector(gl, detector, STARTING_LABELS)
 
-    # Add a label
-    if not iq.result.from_edge:
-        gl.add_label(iq, label)
-        num_added_labels += 1
-        print(f'Added {label} label to {iq.id}.')
+    # Run inference
+    test_start = time.time()
+    run = True
+    while run:
+        print('-' * 50)
+        
+        # Generate data
+        image, _ = utils.get_random_binary_image()
 
-    # Sleep
-    if num_added_labels < STARTING_LABELS:
-        # Don't wait at all until a minimum number of labels has been submitted (enough to decently train the detector)
-        # This ensures that a usable model is trained sooner rather than later
-        sleep_time = 0.0 
-    else:
-        sleep_time = LABEL_SUBMISSION_PERIOD_SEC
-    print(f'Submitted {iq.id} to {detector.id}. from_edge: {iq.result.from_edge}. Waiting {sleep_time}...')
-    time.sleep(sleep_time)
+        # Submit image query
+        for detector in detectors:
+            try:
+                iq = gl.submit_image_query(
+                    detector=detector, 
+                    image=image, 
+                    human_review='NEVER', 
+                    wait=0.0, 
+                    confidence_threshold=0.0
+                    )
+                print(f'Submitted {iq.id} to {detector.id}. from_edge: {iq.result.from_edge}.')
+            except urllib3.exceptions.ReadTimeoutError as e:
+                print(f"Timeout while submitting image query: {e}")
+                time.sleep(1)
 
-    # Calculate test duration
-    now = time.time()
-    test_duration = now - test_start
-    print(f'Test duration so far: {test_duration:.2f} seconds')
+            from_edge = iq.result.from_edge
+            if from_edge and not detector_completion_statuses[detector.id]:
+                print(f'Received an edge answer for {detector.id}. This means the Edge Endpoint was able to successfully rollout an inference pod for this detector.')
+                detector_completion_statuses[detector.id] = True
 
+            all_detectors_complete =  all([status for status in detector_completion_statuses.values()])
 
-print('Done.')
+            # Check if we are getting edge results
+            if all_detectors_complete:
+                print(f'Received edge answers for all {len(detectors)} detectors.')
+                user_input = input('Keep going? (y/n): ').strip().lower()
+                if user_input != 'y':
+                    print('Quitting...')
+                    run = False
+                    break
+                else:
+                    print('Continuing...')
 
+            # Add a label
+            add_label(gl, detector)
+
+            # Sleep
+            print(f'Waiting {LABEL_SUBMISSION_PERIOD_SEC} seconds...')
+            time.sleep(LABEL_SUBMISSION_PERIOD_SEC)
+
+            # Calculate test duration (so far)
+            now = time.time()
+            test_duration = now - test_start
+            print(f'Test duration so far: {test_duration:.2f} seconds')
+
+    print('Done.')
+
+if __name__ == "__main__":
+    args = parse_arguments()    
+    main(args.num_detectors)
