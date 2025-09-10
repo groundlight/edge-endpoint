@@ -541,7 +541,7 @@ def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[i
             return False
         else:
             logger.info(
-                f"The model in {model_dir} needs to be updated: no binary, pipeline config differs"
+                f"The model in {model_dir} needs to be updated, the current edge model is different from the cloud model."
                 )
             return True
 

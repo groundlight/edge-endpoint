@@ -1,15 +1,14 @@
-from sqlite3.dbapi2 import complete_statement
 from groundlight import Groundlight
-import datetime
 import time
 from model import Detector
 import urllib3.exceptions
 import argparse
+import os
 
 import utils
 
 DETECTOR_GROUP_NAME = 'Edge Endpoint Rollout Testing'
-LABEL_SUBMISSION_PERIOD_SEC = 3.0
+LABEL_SUBMISSION_WAIT_TIME_SEC = 3.0 # wait time between each label submission, set to something reasonable to avoid overwhelming the system
 MIN_STARTING_LABELS = 30 # ensure that each detector has at leat this number of labels before beginning the test
 CONFIDENCE_THRESHOLD = 0.1 # use a super low threshold because we don't care about ML accuracy, only want to see that we can get edge answers
 SUPPORTED_DETECTOR_MODES = (
@@ -53,7 +52,15 @@ def prime_detector(gl: Groundlight, detector: Detector, num_labels: int) -> None
 
 def main(num_detectors: int) -> None:
 
-    gl = Groundlight(endpoint='http://localhost:30101')
+    endpoint = os.environ.get('GROUNDLIGHT_ENDPOINT')
+    if endpoint is None:
+        raise ValueError(
+            f'GROUNDLIGHT_ENDPOINT was not set in the environment variables. '
+            'This test is designed to run against an Edge Endpoint, so this is required. '
+            'Set GROUNDLIGHT_ENDPOINT and try again.'
+        )
+
+    gl = Groundlight(endpoint=endpoint)
 
     # Get or create the detectors
     detectors = []
@@ -184,7 +191,7 @@ def main(num_detectors: int) -> None:
                     complete_test_duration = now - test_start
                     print(f'Received edge answers for all {len(detectors)} detectors. Test completed in {complete_test_duration:.2f} seconds.')
 
-                user_input = input('Continue running inference? (y/n): ').strip().lower()
+                user_input = input('Would you like to continue running to trigger more rollouts? (y/n): ').strip().lower()
                 if user_input != 'y':
                     print('Quitting...')
                     run = False
@@ -196,8 +203,8 @@ def main(num_detectors: int) -> None:
             add_label(gl, detector)
 
             # Sleep
-            print(f'Waiting {LABEL_SUBMISSION_PERIOD_SEC} seconds...')
-            time.sleep(LABEL_SUBMISSION_PERIOD_SEC)
+            print(f'Waiting {LABEL_SUBMISSION_WAIT_TIME_SEC} seconds...')
+            time.sleep(LABEL_SUBMISSION_WAIT_TIME_SEC)
 
             # Calculate test duration (so far)
             now = time.time()
