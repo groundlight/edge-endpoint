@@ -50,24 +50,11 @@ def _check_new_models_and_inference_deployments(
     :param separate_oodd_inference: whether or not to run inference separately for an OODD model
     """
 
-    # Guard clause: Skip if rollout already in progress
-    edge_deployment_name = get_edge_inference_deployment_name(detector_id)
-    if deployment_manager.is_rollout_in_progress(edge_deployment_name):
-        logger.info(f"Rollout already in progress for {detector_id}, skipping.")
-        return
-
-    if separate_oodd_inference:
-        oodd_deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd=True)
-        if deployment_manager.is_rollout_in_progress(oodd_deployment_name):
-            logger.info(f"OODD rollout already in progress for {detector_id}, skipping.")
-            return
-
     # Download and write new model to model repo on disk
     new_model = edge_inference_manager.update_models_if_available(detector_id=detector_id)
 
     if not new_model:
         logger.info(f"No new model available for {detector_id}. Skipping...")
-        time.sleep(10)  # TODO remove this debugging
         return
     else:
         logger.info(f"New model available for {detector_id}. Updating inference deployment...")
