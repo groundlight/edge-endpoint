@@ -160,6 +160,7 @@ class InferenceDeploymentManager:
         This method checks if an inference deployment already exists for the specified detector ID.
         If it does not exist, it creates a new deployment. If it exists, it updates the deployment
         by setting the appropriate environment variables to ensure the correct model is loaded.
+        is loaded and the deployment is restarted.
 
         Args:
             detector_id (str): The unique identifier for the detector whose inference deployment

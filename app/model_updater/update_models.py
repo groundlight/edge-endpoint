@@ -59,7 +59,7 @@ def _check_new_models_and_inference_deployments(
     else:
         logger.info(f"New model available for {detector_id}. Updating inference deployment...")
 
-    # create_inference_deployment
+    # Create or update inference_deployment
     edge_deployment_name = get_edge_inference_deployment_name(detector_id)
     edge_deployment = deployment_manager.get_inference_deployment(deployment_name=edge_deployment_name)
     if edge_deployment is None:
