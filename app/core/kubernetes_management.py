@@ -101,9 +101,7 @@ class InferenceDeploymentManager:
         service_name = get_edge_inference_service_name(detector_id, is_oodd)
         model_name = get_edge_inference_model_name(detector_id, is_oodd)
         inference_deployment = self._substitute_placeholders(
-            service_name=service_name, 
-            deployment_name=deployment_name, 
-            model_name=model_name
+            service_name=service_name, deployment_name=deployment_name, model_name=model_name
         )
         self._create_from_kube_manifest(namespace=self._target_namespace, manifest=inference_deployment)
 
