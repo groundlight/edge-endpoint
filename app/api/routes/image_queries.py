@@ -152,7 +152,9 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     # Schedule a background task to refresh the detector metadata if it's too old
     background_tasks.add_task(refresh_detector_metadata_if_needed, detector_id, gl)
 
-    confidence_threshold = confidence_threshold or detector_metadata.confidence_threshold
+    confidence_threshold = (
+        confidence_threshold if confidence_threshold is not None else detector_metadata.confidence_threshold
+    )
 
     # For holding edge results if and when available
     results = None
