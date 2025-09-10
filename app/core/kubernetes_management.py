@@ -101,7 +101,9 @@ class InferenceDeploymentManager:
         service_name = get_edge_inference_service_name(detector_id, is_oodd)
         model_name = get_edge_inference_model_name(detector_id, is_oodd)
         inference_deployment = self._substitute_placeholders(
-            service_name=service_name, deployment_name=deployment_name, model_name=model_name
+            service_name=service_name, 
+            deployment_name=deployment_name, 
+            model_name=model_name
         )
         self._create_from_kube_manifest(namespace=self._target_namespace, manifest=inference_deployment)
 
@@ -159,8 +161,7 @@ class InferenceDeploymentManager:
 
         This method checks if an inference deployment already exists for the specified detector ID.
         If it does not exist, it creates a new deployment. If it exists, it updates the deployment
-        by setting the appropriate environment variables and annotations to ensure the correct model
-        is loaded and the deployment is restarted.
+        by setting the appropriate environment variables to ensure the correct model is loaded.
 
         Args:
             detector_id (str): The unique identifier for the detector whose inference deployment
@@ -176,6 +177,7 @@ class InferenceDeploymentManager:
             logger.info(f"Creating a new inference deployment: {deployment_name}")
             return False
 
+        # Add restart annotation to force pod restart when model updates
         if deployment.spec.template.metadata.annotations is None:
             deployment.spec.template.metadata.annotations = {}
         deployment.spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"] = datetime.now().isoformat()

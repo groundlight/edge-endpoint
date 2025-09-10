@@ -9,7 +9,8 @@ import utils
 
 DETECTOR_GROUP_NAME = 'Rollout Testing'
 LABEL_SUBMISSION_PERIOD_SEC = 3.0
-STARTING_LABELS = 15 
+STARTING_LABELS = 15
+CONFIDENCE_THRESHOLD=0.5
 SUPPORTED_DETECTOR_MODES = (
     'BINARY',
 )
@@ -54,6 +55,7 @@ def main(num_detectors: int) -> None:
     gl = Groundlight(endpoint='http://localhost:30101')
 
     # Create the detectors
+    test_complete = False # once all inference pods are online, we'll call the test done, and allow the user to continue running inference
     detectors = []
     datetime_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     for n in range(num_detectors):
@@ -63,6 +65,7 @@ def main(num_detectors: int) -> None:
             detector_name, 
             query="Is the image completely black?",
             group_name=DETECTOR_GROUP_NAME,
+            confidence_threshold=CONFIDENCE_THRESHOLD
             )
         print(f'Created {detector.id}')
         detectors.append(detector)
@@ -90,14 +93,17 @@ def main(num_detectors: int) -> None:
                     image=image, 
                     human_review='NEVER', 
                     wait=0.0, 
-                    confidence_threshold=0.0
+                    confidence_threshold=CONFIDENCE_THRESHOLD
                     )
-                print(f'Submitted {iq.id} to {detector.id}. from_edge: {iq.result.from_edge}.')
+                print(
+                    f'Submitted {iq.id} to {detector.id} - label: {iq.result.label.value} | confidence: {iq.result.confidence:.2f} | from_edge: {iq.result.from_edge}'
+                    )
             except urllib3.exceptions.ReadTimeoutError as e:
                 print(f"Timeout while submitting image query: {e}")
                 time.sleep(1)
 
             from_edge = iq.result.from_edge
+            print(iq.metadata)
             if from_edge and not detector_completion_statuses[detector.id]:
                 print(f'Received an edge answer for {detector.id}. This means the Edge Endpoint was able to successfully rollout an inference pod for this detector.')
                 detector_completion_statuses[detector.id] = True
@@ -105,7 +111,8 @@ def main(num_detectors: int) -> None:
             all_detectors_complete =  all([status for status in detector_completion_statuses.values()])
 
             # Check if we are getting edge results
-            if all_detectors_complete:
+            if not test_complete and all_detectors_complete:
+                test_complete = True
                 print(f'Received edge answers for all {len(detectors)} detectors.')
                 user_input = input('Keep going? (y/n): ').strip().lower()
                 if user_input != 'y':
