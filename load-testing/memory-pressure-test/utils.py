@@ -1,20 +1,78 @@
 import numpy as np
 import random
-import groundlight
-from groundlight import ROI
+from datetime import datetime
+from groundlight import Groundlight, ROI
 import math
 import cv2
 
-from datetime import datetime
-
-# We need to establish a client here so that we can use functions like `gl.create_roi`, but we won't
-# actually use it to submit anything to Groundlight
-gl = groundlight.Groundlight(endpoint=None)
+import os
+import requests
+import json
 
 IMAGE_DIMENSIONS = (480, 640, 3)
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 
+# We need to establish a client here so that we can use functions like `gl.create_roi`, but we won't
+# actually use it to submit anything to Groundlight
+gl = Groundlight(endpoint=None)
+
+class APIError(Exception):
+    """Any response from the Groundlight API that is not 200
+    """
+    pass
+
+def call_reef_api(gl_client: Groundlight, path: str, params: dict) -> dict:
+    """Given a Groundlight client, an API resource path and API parameters, calls 
+    the Groundlight API and returns the decoded response content.
+
+    Submits the Groundlight API token to the API as an X-API-Token.
+
+    Uses the Groundlight client to discover the correct endpoint.
+    """
+
+    url = gl_client.endpoint.replace('/device-api', '/reef-api') + path
+
+    headers = {
+        "X-API-Token": os.environ.get('GROUNDLIGHT_API_TOKEN')
+    }
+    
+    response = requests.get(url, params=params, headers=headers)
+    if response.status_code == 200:
+        response_content = response.content.decode('utf-8')
+        return json.loads(response_content)
+    else:
+        raise APIError(
+            f"Request failed with status code {response.status_code} | "
+            f"Response content: {response.content}" 
+            )
+
+def get_detector_stats(gl: Groundlight, detector_id: str) -> dict:
+    path = f'/detectors/{detector_id}'
+    params = {
+        'type': 'summary',
+        'answer_type': 'current_best_answer',
+    }
+    
+    decoded_response = call_reef_api(gl, path, params)
+    
+    yes_labels = decoded_response['ground_truths']['yes']
+    no_labels = decoded_response['ground_truths']['no']
+    total_labels = yes_labels + no_labels
+        
+    evaluation_results = decoded_response.get('evaluation_results')
+    if evaluation_results is None:
+        projected_ml_accuracy = None
+    else:
+        projected_ml_accuracy = evaluation_results['kfold_pooled__balanced_accuracy']
+
+    return {
+        "projected_ml_accuracy": projected_ml_accuracy,
+        "total_labels": total_labels,
+        "yes_labels": yes_labels,
+        "no_labels": no_labels,
+        }
+    
 def get_random_binary_image() -> tuple[np.ndarray, str]:
     """
     Used for generating random data to submit to Groundlight for load testing.

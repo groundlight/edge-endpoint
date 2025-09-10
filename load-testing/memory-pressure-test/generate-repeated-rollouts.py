@@ -1,3 +1,4 @@
+from sqlite3.dbapi2 import complete_statement
 from groundlight import Groundlight
 import datetime
 import time
@@ -7,10 +8,10 @@ import argparse
 
 import utils
 
-DETECTOR_GROUP_NAME = 'Rollout Testing'
+DETECTOR_GROUP_NAME = 'Edge Endpoint Rollout Testing'
 LABEL_SUBMISSION_PERIOD_SEC = 3.0
-STARTING_LABELS = 15
-CONFIDENCE_THRESHOLD=0.5
+MIN_STARTING_LABELS = 30 # ensure that each detector has at leat this number of labels before beginning the test
+CONFIDENCE_THRESHOLD = 0.1 # use a super low threshold because we don't care about ML accuracy, only want to see that we can get edge answers
 SUPPORTED_DETECTOR_MODES = (
     'BINARY',
 )
@@ -34,7 +35,7 @@ def parse_arguments():
 
 def add_label(gl: Groundlight, detector: Detector) -> None:
     """
-    Submits an image query with a randomly image and then labels it.
+    Submits an image query with a random image and then labels it.
     """
     image, label = utils.get_random_binary_image()
     iq = gl.ask_async(detector, image, human_review="NEVER")
@@ -54,31 +55,81 @@ def main(num_detectors: int) -> None:
 
     gl = Groundlight(endpoint='http://localhost:30101')
 
-    # Create the detectors
-    test_complete = False # once all inference pods are online, we'll call the test done, and allow the user to continue running inference
+    # Get or create the detectors
     detectors = []
-    datetime_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # datetime_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     for n in range(num_detectors):
-        detector_name = f'Rollout Test Detector - {datetime_str} - {n}'
+        # detector_name = f'Rollout Test Detector - {datetime_str} - {n}'
+        detector_name = f'Edge Endpoint Rollout Test Detector - {n}'
 
-        detector = gl.create_binary_detector(
+        detector = gl.get_or_create_detector(
             detector_name, 
             query="Is the image completely black?",
             group_name=DETECTOR_GROUP_NAME,
-            confidence_threshold=CONFIDENCE_THRESHOLD
             )
-        print(f'Created {detector.id}')
+        print(f'Got or created {detector.id}')
         detectors.append(detector)
         
     detector_completion_statuses = {detector.id: False for detector in detectors}
 
-    # Prime the detectors
+    # Prime the detectors, if necessary
     for detector in detectors:
-        prime_detector(gl, detector, STARTING_LABELS)
+        detector_stats = utils.get_detector_stats(gl, detector.id)
+
+        projected_ml_accuracy = detector_stats['projected_ml_accuracy']
+        if projected_ml_accuracy is not None:
+            print(
+                f'{detector.id} has a Projected ML accuracy of {projected_ml_accuracy:.2f} '
+                'No need to provide additional training labels.'
+            )
+            continue
+        else:
+            print(
+                f'{detector.id} has no evaluation results. '
+                'We might need to prime the detector.'
+            )
+
+
+        total_labels = detector_stats['total_labels']
+        num_labels_to_add = MIN_STARTING_LABELS - total_labels
+        if num_labels_to_add > 0:
+            print(
+                f'{detector.id} only has {total_labels} ground truth labels. '
+                f'Needs an additional {num_labels_to_add} labels. Priming detector...'
+            )
+            prime_detector(gl, detector, num_labels_to_add)
+        else:
+            print(
+                f'{detector.id} already has enough labels (actual={total_labels}, required={MIN_STARTING_LABELS}). No need to prime.'
+            )
+
+    # Wait for evaluation to occur
+    poll_timeout_sec = 2 * 60 
+    for detector in detectors:
+        print(f'Checking evaluation results for {detector.id}...')
+        pollstart = time.time()
+        while True:
+            detector_stats = utils.get_detector_stats(gl, detector.id)
+            projected_ml_accuracy = detector_stats['projected_ml_accuracy']
+
+            if projected_ml_accuracy is not None:
+                print(f'Evaluation has completed for {detector.id}. Projected ML Accuracy: {projected_ml_accuracy:.2f}')
+                break
+
+            now = time.time()
+            elapsed_time = now - pollstart
+            if elapsed_time > poll_timeout_sec:
+                raise RuntimeError(
+                    f'Failed to receive evaluation results for {detector.id} after {elapsed_time} seconds.'
+                )
+
+            time.sleep(5)
 
     # Run inference
     test_start = time.time()
+    test_complete = False # once all inference pods are online, we'll call the test done, and allow the user to continue running inference
     run = True
+    iteration = 0
     while run:
         print('-' * 50)
         
@@ -103,18 +154,37 @@ def main(num_detectors: int) -> None:
                 time.sleep(1)
 
             from_edge = iq.result.from_edge
-            print(iq.metadata)
+
+            # Check for unexpected cloud escalations
+            if not from_edge and iq.metadata.get('edge_result') is not None:
+                raise RuntimeError(
+                    f"Got a cloud result for {iq.id} even though edge inference occurred. "
+                    "It seems the Edge Endpoint escalated to the cloud even though it shouldn't have."
+                )
+
+            # Register if we got a cloud response for this detector
             if from_edge and not detector_completion_statuses[detector.id]:
                 print(f'Received an edge answer for {detector.id}. This means the Edge Endpoint was able to successfully rollout an inference pod for this detector.')
                 detector_completion_statuses[detector.id] = True
 
+            # Check if all detectors are complete (have received edge answers)
             all_detectors_complete =  all([status for status in detector_completion_statuses.values()])
 
-            # Check if we are getting edge results
+            # Check if the test should conclude
             if not test_complete and all_detectors_complete:
                 test_complete = True
-                print(f'Received edge answers for all {len(detectors)} detectors.')
-                user_input = input('Keep going? (y/n): ').strip().lower()
+                if iteration == 0:
+                    print(
+                        f'Got edge responses from all {len(detectors)} detectors on first iteration of test. '
+                        'This likely means that inference pods were already rolled out prior to starting this test. '
+                        'Therefore, this test is likely invalid. Consider reploying your Edge Endpoint and running the test again.'
+                        )
+                else:
+                    now = time.time()
+                    complete_test_duration = now - test_start
+                    print(f'Received edge answers for all {len(detectors)} detectors. Test completed in {complete_test_duration:.2f} seconds.')
+
+                user_input = input('Continue running inference? (y/n): ').strip().lower()
                 if user_input != 'y':
                     print('Quitting...')
                     run = False
@@ -133,6 +203,8 @@ def main(num_detectors: int) -> None:
             now = time.time()
             test_duration = now - test_start
             print(f'Test duration so far: {test_duration:.2f} seconds')
+
+        iteration += 1
 
     print('Done.')
 
