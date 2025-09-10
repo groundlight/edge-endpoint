@@ -155,6 +155,8 @@ spec:
               name: groundlight-api-token
               key: GROUNDLIGHT_API_TOKEN
               optional: true
+        - name: NAMESPACE
+          value: "{{ .Values.namespace }}"
         - name: INFERENCE_FLAVOR
           value: "{{ .Values.inferenceFlavor }}"
         volumeMounts:
