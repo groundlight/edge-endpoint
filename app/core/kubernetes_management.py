@@ -221,9 +221,7 @@ class InferenceDeploymentManager:
         available = deployment.status.available_replicas or 0
         total = deployment.status.replicas or 0
 
-        replica_str = (
-            f"(replicas: total={total}, desired={desired}, updated={updated}, available={available})"
-        )
+        replica_str = f"(replicas: total={total}, desired={desired}, updated={updated}, available={available})"
         if total == updated == available == desired:
             logger.info(f"Inference deployment rollout for {deployment_name} is complete. {replica_str}")
             return True
