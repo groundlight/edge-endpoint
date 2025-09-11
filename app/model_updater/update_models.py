@@ -69,7 +69,7 @@ def _check_new_models_and_inference_deployments(
             deployment_created = True
 
     # Only need to update the deployment if there is a new model and the deployment wasn't just created
-    # Attempting to update a recently created deployment can result in a Kubernetes 409 exception, so it's best to avoid this 
+    # Attempting to update a recently created deployment can result in a Kubernetes 409 exception, so it's best to avoid this
     if new_model and not deployment_created:
         # Update inference deployment and rollout a new pod
         logger.info(f"Updating inference deployment for {detector_id}")
@@ -79,7 +79,7 @@ def _check_new_models_and_inference_deployments(
 
         # Poll until the deployment rollout begins
         # There is a slight delay between `update_inference_deployment` and Kubernetes actually starting the rollout, so it's important to wait for this
-        logger.info(f'Waiting for inference deployments ({edge_deployment_name} and {oodd_deployment_name}) to start')
+        logger.info(f"Waiting for inference deployments ({edge_deployment_name} and {oodd_deployment_name}) to start")
         rollout_start_timeout = 10
         poll_start = time.time()
         while deployment_manager.is_inference_deployment_rollout_complete(deployment_name=edge_deployment_name) or (
@@ -93,7 +93,9 @@ def _check_new_models_and_inference_deployments(
                 )
 
         # Poll until the rollout completes
-        logger.info(f'Waiting for inference deployments ({edge_deployment_name} and {oodd_deployment_name}) to complete')
+        logger.info(
+            f"Waiting for inference deployments ({edge_deployment_name} and {oodd_deployment_name}) to complete"
+        )
         poll_start = time.time()
         while not deployment_manager.is_inference_deployment_rollout_complete(deployment_name=edge_deployment_name) or (
             separate_oodd_inference
