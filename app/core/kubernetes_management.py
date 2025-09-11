@@ -217,17 +217,16 @@ class InferenceDeploymentManager:
 
         # Check replica counts
         desired = deployment.spec.replicas or 0
-        ready = deployment.status.ready_replicas or 0
         updated = deployment.status.updated_replicas or 0
         available = deployment.status.available_replicas or 0
         total = deployment.status.replicas or 0
 
         replica_str = (
-            f"(replicas: total={total}, desired={desired}, ready={ready}, updated={updated}, available={available})"
+            f"(replicas: total={total}, desired={desired}, updated={updated}, available={available})"
         )
-        if total == ready == updated == available == desired == 1:
+        if total == updated == available == desired:
             logger.info(f"Inference deployment rollout for {deployment_name} is complete. {replica_str}")
             return True
         else:
-            logger.info(f"Inference deployment rollout for {deployment_name} is NOT complete. {replica_str}")
+            logger.debug(f"Inference deployment rollout for {deployment_name} is not yet complete. {replica_str}")
             return False

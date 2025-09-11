@@ -49,25 +49,14 @@ def _check_new_models_and_inference_deployments(
     :param db_manager: the database manager object.
     :param separate_oodd_inference: whether or not to run inference separately for an OODD model
     """
-
     # Download and write new model to model repo on disk
     new_model = edge_inference_manager.update_models_if_available(detector_id=detector_id)
 
-    if not new_model:
-        logger.info(f"No new model available for {detector_id}. Skipping...")
-        return
-    else:
-        logger.info(f"New model available for {detector_id}. Updating inference deployment...")
-
-    # Create or update inference_deployment
     edge_deployment_name = get_edge_inference_deployment_name(detector_id)
     edge_deployment = deployment_manager.get_inference_deployment(deployment_name=edge_deployment_name)
     if edge_deployment is None:
         logger.info(f"Creating a new edge inference deployment for {detector_id}")
         deployment_manager.create_inference_deployment(detector_id=detector_id)
-    else:
-        logger.info(f"Updating existing edge inference deployment for {detector_id}")
-        deployment_manager.update_inference_deployment(detector_id=detector_id)
 
     if separate_oodd_inference:
         oodd_deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd=True)
@@ -75,28 +64,42 @@ def _check_new_models_and_inference_deployments(
         if oodd_deployment is None:
             logger.info(f"Creating a new oodd inference deployment for {detector_id}")
             deployment_manager.create_inference_deployment(detector_id=detector_id, is_oodd=True)
-        else:
-            logger.info(f"Updating existing oodd inference deployment for {detector_id}")
+
+    if new_model:
+        # Update inference deployment and rollout a new pod
+        logger.info(f"Updating inference deployment for {detector_id}")
+        deployment_manager.update_inference_deployment(detector_id=detector_id)
+        if separate_oodd_inference:
             deployment_manager.update_inference_deployment(detector_id=detector_id, is_oodd=True)
 
-    # Poll for the inference deployment rollout to be complete
-    poll_start = time.time()
-    while not deployment_manager.is_inference_deployment_rollout_complete(deployment_name=edge_deployment_name) or (
-        separate_oodd_inference
-        and not deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name)
-    ):
-        time.sleep(5)
-        if time.time() - poll_start > TEN_MINUTES:
-            raise TimeoutError(f"Inference deployment(s) are not ready within time limit for {detector_id}.")
+        # Poll until the deployment rollout begins
+        # There is a slight between `update_inference_deployment` and Kubernetes actually starting the rollout, so it's important to wait for this 
+        poll_start = time.time()
+        rollout_start_timeout = 10
+        while deployment_manager.is_inference_deployment_rollout_complete(deployment_name=edge_deployment_name) or (
+            separate_oodd_inference
+            and deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name)
+        ):
+            logger.info(f'Waiting for inference deployments ({edge_deployment_name} and {oodd_deployment_name}) to start')
+            time.sleep(0.5)
+            if time.time() - poll_start > rollout_start_timeout:
+                raise TimeoutError(f"Inference deployments ({edge_deployment_name} and {oodd_deployment_name}) did not start within time limit")
 
-    inference_rollout_duration = time.time() - poll_start
-    logger.info(f"Inference deployment(s) finished for {detector_id} in {inference_rollout_duration:.2f} seconds.")
+        # Poll until the rollout finishes
+        poll_start = time.time()
+        while not deployment_manager.is_inference_deployment_rollout_complete(deployment_name=edge_deployment_name) or (
+            separate_oodd_inference
+            and not deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name)
+        ):
+            time.sleep(5)
+            if time.time() - poll_start > TEN_MINUTES:
+                raise TimeoutError(f"Inference deployments ({edge_deployment_name} and {oodd_deployment_name}) are not ready within time limit")
 
-    # Now that we have successfully rolled out new model versions, we can clean up our model repository a bit.
-    # To be a bit conservative, we keep the current model version as well as the version before that. Older
-    # versions of the model for the current detector_id will be removed from disk.
-    logger.info(f"Cleaning up old model versions for {detector_id}")
-    delete_old_model_versions(detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2)
+        # Now that we have successfully rolled out new model versions, we can clean up our model repository a bit.
+        # To be a bit conservative, we keep the current model version as well as the version before that. Older
+        # versions of the model for the current detector_id will be removed from disk.
+        logger.info(f"Cleaning up old model versions for {detector_id}")
+        delete_old_model_versions(detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2)
 
     if deployment_manager.is_inference_deployment_rollout_complete(deployment_name=edge_deployment_name) and (
         not separate_oodd_inference
