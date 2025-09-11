@@ -68,11 +68,8 @@ def _check_new_models_and_inference_deployments(
             deployment_manager.create_inference_deployment(detector_id=detector_id, is_oodd=True)
             deployment_created = True
 
-    # # Only need to update the deployment if there is a new model and the deployment was just created 
-    # if not new_model or deployment_created:
-    #     return
-
-    # Only need to update the deployment if there is a new model and the deployment was just created 
+    # Only need to update the deployment if there is a new model and the deployment wasn't just created
+    # Attempting to update a recently created deployment can result in a Kubernetes 409 exception, so it's best to avoid this 
     if new_model and not deployment_created:
         # Update inference deployment and rollout a new pod
         logger.info(f"Updating inference deployment for {detector_id}")
