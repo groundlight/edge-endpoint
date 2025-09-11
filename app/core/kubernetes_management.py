@@ -220,9 +220,7 @@ class InferenceDeploymentManager:
         available = deployment.status.available_replicas or 0
         total = deployment.status.replicas or 0
 
-        replica_str = (
-            f"(replicas: total={total}, desired={desired}, updated={updated}, available={available})"
-        )
+        replica_str = f"(replicas: total={total}, desired={desired}, updated={updated}, available={available})"
 
         # Check that we have exactly as many available and updated pods as the spec defines
         # If there are more or less, then a rollout is in progress
