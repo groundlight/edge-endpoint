@@ -65,7 +65,6 @@ def main(num_detectors: int) -> None:
 
     # Get or create the detectors
     detectors = []
-    # datetime_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     for n in range(num_detectors):
         # detector_name = f'Rollout Test Detector - {datetime_str} - {n}'
         detector_name = f'Edge Endpoint Rollout Test Detector - {n}'
@@ -185,7 +184,7 @@ def main(num_detectors: int) -> None:
                     print(
                         f'Got edge responses from all {len(detectors)} detectors on first iteration of test. '
                         'This likely means that inference pods were already rolled out prior to starting this test. '
-                        'Therefore, this test is likely invalid. Consider reploying your Edge Endpoint and running the test again.'
+                        'Therefore, this test is likely invalid. Consider redeploying your Edge Endpoint and running the test again.'
                         )
                 else:
                     now = time.time()
