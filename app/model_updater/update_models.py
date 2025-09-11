@@ -54,9 +54,11 @@ def _check_new_models_and_inference_deployments(
 
     edge_deployment_name = get_edge_inference_deployment_name(detector_id)
     edge_deployment = deployment_manager.get_inference_deployment(deployment_name=edge_deployment_name)
+    deployment_created = False
     if edge_deployment is None:
         logger.info(f"Creating a new edge inference deployment for {detector_id}")
         deployment_manager.create_inference_deployment(detector_id=detector_id)
+        deployment_created = True
 
     if separate_oodd_inference:
         oodd_deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd=True)
@@ -64,8 +66,14 @@ def _check_new_models_and_inference_deployments(
         if oodd_deployment is None:
             logger.info(f"Creating a new oodd inference deployment for {detector_id}")
             deployment_manager.create_inference_deployment(detector_id=detector_id, is_oodd=True)
+            deployment_created = True
 
-    if new_model:
+    # # Only need to update the deployment if there is a new model and the deployment was just created 
+    # if not new_model or deployment_created:
+    #     return
+
+    # Only need to update the deployment if there is a new model and the deployment was just created 
+    if new_model and not deployment_created:
         # Update inference deployment and rollout a new pod
         logger.info(f"Updating inference deployment for {detector_id}")
         deployment_manager.update_inference_deployment(detector_id=detector_id)
@@ -73,19 +81,20 @@ def _check_new_models_and_inference_deployments(
             deployment_manager.update_inference_deployment(detector_id=detector_id, is_oodd=True)
 
         # Poll until the deployment rollout begins
-        # There is a slight between `update_inference_deployment` and Kubernetes actually starting the rollout, so it's important to wait for this 
-        poll_start = time.time()
+        # There is a slight delay between `update_inference_deployment` and Kubernetes actually starting the rollout, so it's important to wait for this 
+        logger.info(f'Waiting for inference deployments ({edge_deployment_name} and {oodd_deployment_name}) to start')
         rollout_start_timeout = 10
+        poll_start = time.time()
         while deployment_manager.is_inference_deployment_rollout_complete(deployment_name=edge_deployment_name) or (
             separate_oodd_inference
             and deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name)
         ):
-            logger.info(f'Waiting for inference deployments ({edge_deployment_name} and {oodd_deployment_name}) to start')
             time.sleep(0.5)
             if time.time() - poll_start > rollout_start_timeout:
                 raise TimeoutError(f"Inference deployments ({edge_deployment_name} and {oodd_deployment_name}) did not start within time limit")
 
-        # Poll until the rollout finishes
+        # Poll until the rollout completes
+        logger.info(f'Waiting for inference deployments ({edge_deployment_name} and {oodd_deployment_name}) to complete')
         poll_start = time.time()
         while not deployment_manager.is_inference_deployment_rollout_complete(deployment_name=edge_deployment_name) or (
             separate_oodd_inference

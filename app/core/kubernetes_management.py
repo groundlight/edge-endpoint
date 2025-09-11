@@ -176,7 +176,6 @@ class InferenceDeploymentManager:
             logger.info(f"Creating a new inference deployment: {deployment_name}")
             return False
 
-        # Add restart annotation to force pod restart when model updates
         if deployment.spec.template.metadata.annotations is None:
             deployment.spec.template.metadata.annotations = {}
         deployment.spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"] = datetime.now().isoformat()
@@ -224,6 +223,9 @@ class InferenceDeploymentManager:
         replica_str = (
             f"(replicas: total={total}, desired={desired}, updated={updated}, available={available})"
         )
+
+        # Check that we have exactly as many available and updated pods as the spec defines
+        # If there are more or less, then a rollout is in progress
         if total == updated == available == desired:
             logger.info(f"Inference deployment rollout for {deployment_name} is complete. {replica_str}")
             return True

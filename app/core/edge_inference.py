@@ -519,9 +519,6 @@ def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[i
 
     if isinstance(model_info, ModelInfoWithBinary):
         edge_binary_ksuid = get_current_model_ksuid(model_dir, version)
-        logger.info(
-            f"Comparing binary IDs for {model_dir}: edge={edge_binary_ksuid}, cloud={model_info.model_binary_id}"
-        )
         if edge_binary_ksuid and model_info.model_binary_id == edge_binary_ksuid:
             logger.info(
                 f"The edge binary in {model_dir} is the same as the cloud binary ({model_info.model_binary_id}), so we don't need to update the model."
