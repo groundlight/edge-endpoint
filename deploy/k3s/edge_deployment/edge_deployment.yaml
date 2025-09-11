@@ -42,7 +42,7 @@ spec:
       initContainers:
         - name: database-prep
           image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${IMAGE_TAG}
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           volumeMounts:
             - name: edge-endpoint-persistent-volume
               mountPath: /opt/groundlight/edge/sqlite
@@ -53,7 +53,7 @@ spec:
       containers:
         - name: edge-endpoint
           image: *edgeEndpointImage
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 30101
           env:
@@ -101,7 +101,7 @@ spec:
 
         - name: status-monitor
           image: *edgeEndpointImage
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8123
           command: ["./app/bin/launch-status-monitor.sh"]
@@ -124,7 +124,7 @@ spec:
 
         - name: escalation-queue-reader
           image: *edgeEndpointImage
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           command: ["./app/bin/launch-escalation-queue-reader.sh"]
           env:
             - name: LOG_LEVEL
@@ -141,7 +141,7 @@ spec:
 
         - name: inference-model-updater
           image: *edgeEndpointImage
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           command: ["/bin/bash", "-c"]
           args: ["poetry run python -m app.model_updater.update_models"]
           env:

@@ -11,6 +11,7 @@ spec:
       containers:
       - name: image-puller
         image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference:latest
+        imagePullPolicy: IfNotPresent
         command: ["echo", "Successfully pulled image to warm cache"]
       - name: sync-pinamod
         image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${IMAGE_TAG}
