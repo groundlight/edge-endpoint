@@ -214,15 +214,19 @@ class InferenceDeploymentManager:
         if deployment is None:
             return False
 
-        desired_replicas = deployment.spec.replicas
-        updated_replicas = deployment.status.updated_replicas if deployment.status.updated_replicas else 0
-        available_replicas = deployment.status.available_replicas if deployment.status.available_replicas else 0
+        # Check replica counts
+        desired = deployment.spec.replicas or 0
+        updated = deployment.status.updated_replicas or 0
+        available = deployment.status.available_replicas or 0
+        total = deployment.status.replicas or 0
 
-        if desired_replicas == updated_replicas == available_replicas:
-            logger.info(f"Inference deployment for {deployment_name} is ready")
+        replica_str = f"(replicas: total={total}, desired={desired}, updated={updated}, available={available})"
+
+        # Check that we have exactly as many available and updated pods as the spec defines
+        # If there are more or less, then a rollout is in progress
+        if desired == updated == available == total:
+            logger.info(f"Inference deployment rollout for {deployment_name} is complete. {replica_str}")
             return True
-        logger.debug(
-            f"Inference deployment rollout for {deployment_name} is not complete. Desired: {desired_replicas}, Updated:"
-            f" {updated_replicas}, Available: {available_replicas}"
-        )
-        return False
+        else:
+            logger.debug(f"Inference deployment rollout for {deployment_name} is not yet complete. {replica_str}")
+            return False

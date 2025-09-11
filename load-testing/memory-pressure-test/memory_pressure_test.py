@@ -7,9 +7,11 @@ import time
 
 from threading import Thread
 
+import sys
+sys.path.append('../utils')
 import utils as u
 
-SUPPORTED_MODES = (
+SUPPORTED_DETECTOR_MODES = (
     'BINARY',
     'COUNT',
 )
@@ -47,7 +49,7 @@ def parse_arguments():
     )
     parser.add_argument(
         'detector_mode',
-        choices=SUPPORTED_MODES,
+        choices=SUPPORTED_DETECTOR_MODES,
         help=f'Detector mode'
     )
     return parser.parse_args()
