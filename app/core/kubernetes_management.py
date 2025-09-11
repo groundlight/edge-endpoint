@@ -224,7 +224,7 @@ class InferenceDeploymentManager:
 
         # Check that we have exactly as many available and updated pods as the spec defines
         # If there are more or less, then a rollout is in progress
-        if total == updated == available == desired:
+        if desired == updated == available == total:
             logger.info(f"Inference deployment rollout for {deployment_name} is complete. {replica_str}")
             return True
         else:
