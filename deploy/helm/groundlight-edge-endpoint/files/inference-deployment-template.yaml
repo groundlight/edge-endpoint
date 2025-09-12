@@ -25,6 +25,7 @@ spec:
   replicas: 1
   # Require the pod to remain Ready for this duration before rollout continues.
   # This gives endpoint/routing updates time to propagate so traffic won’t hit a terminating pod.
+  # Without this, inference tends raise exceptions during inference pod rollout 
   minReadySeconds: 5  
   selector:
     matchLabels:
