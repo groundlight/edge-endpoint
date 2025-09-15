@@ -236,7 +236,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                     submit_iq_params = SubmitImageQueryParams(
                         patience_time=patience_time,
                         confidence_threshold=confidence_threshold,
-                        human_review=None,
+                        human_review=human_review,
                         metadata=generate_metadata_dict(results=results, is_edge_audit=False),
                         image_query_id=image_query.id,  # We give the cloud IQ the same ID as the returned edge IQ
                     )
