@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import HTTPException, status
 from groundlight import Groundlight, GroundlightClientError, ImageQuery
-from urllib3.exceptions import MaxRetryError
+from urllib3.exceptions import MaxRetryError, ReadTimeoutError
 
 from app.core.utils import safe_call_sdk
 from app.escalation_queue.models import EscalationInfo
@@ -88,17 +88,23 @@ def _escalate_once(  # noqa: PLR0911
         )
         return res, False  # Should not retry because the escalation was successful.
     except MaxRetryError as ex:
-        # Raised when the SDK tried to retry the request but did not succeed. This is the exception raised when there's
-        # no internet connection, which is probably the most likely cause.
-        logger.info(f"Got MaxRetryError, {ex=}. This could mean we currently have no internet connection. Will retry.")
+        # Raised when the API client tried to retry the request but did not succeed. This exception is most often seen
+        # when there's network connectivity problems.
+        logger.info(f"Got MaxRetryError, {ex=}. This could be due to network connectivity issues. Will retry.")
+        return None, True  # Should retry because the escalation could succeed in the future.
+    except ReadTimeoutError as ex:
+        # Raised when the upstream server doesn't respond within the read timeout after connection. This exception is
+        # most often seen when there's network connectivity problems.
+        logger.info(f"Got ReadTimeoutError, {ex=}. This could be due to network connectivity issues. Will retry.")
         return None, True  # Should retry because the escalation could succeed in the future.
     except HTTPException as ex:
         if ex.status_code == status.HTTP_400_BAD_REQUEST:
             logger.info(
-                f"Got HTTPException with status code 400. This could be because we already escalated this query. "
-                f"Scrapping the escalation. {ex=}"
+                "Got HTTPException with status code 400. This could be because we already escalated this query, in "
+                "which case we can move on. This could also be due to a malformed request, which is not expected to "
+                f"succeed upon retry. Scrapping the escalation. \nThe exception was: {ex}"
             )
-            return None, False  # Should not retry because the request is bad.
+            return None, False  # Should not retry because we already escalated the query or the request is bad.
         elif ex.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
             logger.info(
                 "Got HTTPException with status code 429. This likely means we have hit our throttling limit. Will "
@@ -135,16 +141,21 @@ def consume_queued_escalation(
     should_retry_escalation = True
     escalation_result = None
 
-    submit_iq_request_timeout_s = 5  # How long the image query request should be allowed to try to complete.
+    submit_iq_request_timeout_s = (5, 15)  # How long the image query request should be allowed to try to complete.
+    # The first element of the tuple is the connect timeout and the second is the read timeout.
+
     retry_count = 0
 
     while should_retry_escalation:
         escalation_result, should_try_again = _escalate_once(escalation_info, submit_iq_request_timeout_s)
         if escalation_result is None:
-            logger.info("Escalation failed.")
+            logger.info(f"Escalation attempt {retry_count + 1} failed.")
             if should_try_again:
                 should_retry_escalation = True
-                submit_iq_request_timeout_s = 1  # Wait less time on retries, since we expect we don't have connection.
+                submit_iq_request_timeout_s = (
+                    1,
+                    15,
+                )  # Shorter connect timeout on retries since we expect we have bad network connectivity.
                 wait_time = RETRY_WAIT_TIMES[min(retry_count, len(RETRY_WAIT_TIMES) - 1)]
                 logger.info(f"Retrying escalation. Waiting {wait_time} seconds before next retry.")
                 time.sleep(wait_time)
