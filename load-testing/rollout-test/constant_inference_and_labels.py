@@ -37,6 +37,7 @@ def add_label_in_thread(gl: Groundlight, detector: Detector) -> None:
     t.daemon = True
     t.start()
 
+
 def extract_primary_inference_pods(kubectl_output: str) -> list:
     """
     Extracts all pod names that start with 'inferencemodel-primary'
@@ -113,7 +114,8 @@ def main(detector_id: str) -> None:
 
         observed_rollouts = len(seen_pods) - 1
 
-        image, _ = utils.get_random_binary_image()
+        # image, _ = utils.get_random_binary_image()
+        image, rois = utils.generate_random_count_image('circle')
         
         iq_id = None
 
@@ -124,10 +126,10 @@ def main(detector_id: str) -> None:
                 image=image, 
                 human_review='NEVER', 
                 wait=0.0,
-                confidence_threshold=1.0 # threshold of 1.0 ensures that the detector is properly configured for edge-only inference
+                confidence_threshold=1.0, # threshold of 1.0 ensures that the detector is properly configured for edge-only inference
                 # could be used for ensuring rapidly inference, but inference times seems to be pretty
                 # unstable, even when pods are not rolling out, so this parameter can be problematic for this test
-                # request_timeout=1/3,
+                # request_timeout=0.5,
                 )
             iq_id = iq.id
         except KeyboardInterrupt:
