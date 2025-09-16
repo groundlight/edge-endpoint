@@ -37,7 +37,7 @@ def add_label(gl: Groundlight, detector: Detector) -> None:
     """
     Submits an image query with a random image and then labels it.
     """
-    image, label = utils.get_random_binary_image()
+    image, label, _ = utils.generate_random_binary_image(gl)
     iq = gl.ask_async(detector, image, human_review="NEVER")
     gl.add_label(iq, label)
     print(f'Added {label} label to {detector.id}/{iq.id}')
@@ -141,7 +141,7 @@ def main(num_detectors: int) -> None:
         print('-' * 50)
         
         # Generate data
-        image, _ = utils.get_random_binary_image()
+        image, _, _ = utils.generate_random_binary_image(gl)
 
         # Submit image query
         for detector in detectors:
