@@ -11,7 +11,7 @@ ARG POETRY_VERSION=1.5.1
 #############
 # Build Stage
 #############
-FROM python:3.11-slim-bullseye AS production-dependencies-build-stage
+FROM pypy:3.10-slim-bullseye AS production-dependencies-build-stage
 
 # docker buildx will override this for the target platform
 ARG TARGETARCH
@@ -25,8 +25,7 @@ ARG POETRY_VERSION
 # Combine the installations into a single RUN command
 # Ensure that we have the bash shell since it doesn't seem to be included in the slim image.
 # This is useful for exec'ing into the container for debugging purposes.
-# We need to install libGL dependencies (`libglib2.0-0` and `libgl1-mesa-lgx`)
-# since they are required by OpenCV
+# We need build-essential for compiling C extensions like httptools (used by uvicorn)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     bash \
@@ -34,9 +33,8 @@ RUN apt-get update && \
     nginx \
     less \
     unzip \
-    libglib2.0-0 \
-    libgl1-mesa-glx \
-    sqlite3 && \
+    sqlite3 \
+    build-essential && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     POETRY_HOME=${POETRY_HOME} curl -sSL https://install.python-poetry.org | python - && \
@@ -65,12 +63,13 @@ ENV PYTHONUNBUFFERED=1 \
     PATH=${POETRY_HOME}/bin:$PATH
 
 # Copy only required files first to leverage Docker caching
-COPY ./pyproject.toml ./poetry.lock ${APP_ROOT}/
+COPY ./pyproject.toml ${APP_ROOT}/
 
 WORKDIR ${APP_ROOT}
 
-# Install production dependencies only
-RUN poetry install --no-interaction --no-root --without dev --without lint && \
+# Generate lock file and install production dependencies only
+RUN poetry lock --no-update && \
+    poetry install --no-interaction --no-root --without dev --without lint && \
     poetry cache clear --all pypi
 
 # Create /etc/groundlight directory where edge-config.yaml and inference_deployment.yaml will be mounted
