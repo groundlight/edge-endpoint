@@ -152,7 +152,9 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     # Schedule a background task to refresh the detector metadata if it's too old
     background_tasks.add_task(refresh_detector_metadata_if_needed, detector_id, gl)
 
-    confidence_threshold = confidence_threshold or detector_metadata.confidence_threshold
+    confidence_threshold = (
+        confidence_threshold if confidence_threshold is not None else detector_metadata.confidence_threshold
+    )
 
     # For holding edge results if and when available
     results = None
@@ -234,7 +236,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                     submit_iq_params = SubmitImageQueryParams(
                         patience_time=patience_time,
                         confidence_threshold=confidence_threshold,
-                        human_review=None,
+                        human_review=human_review,
                         metadata=generate_metadata_dict(results=results, is_edge_audit=False),
                         image_query_id=image_query.id,  # We give the cloud IQ the same ID as the returned edge IQ
                     )
