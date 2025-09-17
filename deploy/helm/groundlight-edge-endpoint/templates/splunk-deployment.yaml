@@ -1,0 +1,109 @@
+{{- if .Values.splunk.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: splunk
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+    app.kubernetes.io/component: splunk
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "groundlight-edge-endpoint.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: splunk
+  template:
+    metadata:
+      labels:
+        {{- include "groundlight-edge-endpoint.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: splunk
+    spec:
+      containers:
+      - name: splunk
+        image: "{{ .Values.splunk.image.repository }}:{{ .Values.splunk.image.tag }}"
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        ports:
+        - containerPort: 8000
+          name: web
+        - containerPort: 8088
+          name: hec
+        - containerPort: 8089
+          name: management
+        env:
+        - name: SPLUNK_START_ARGS
+          value: "--accept-license"
+        - name: SPLUNK_GENERAL_TERMS
+          value: "--accept-sgt-current-at-splunk-com"
+        - name: SPLUNK_PASSWORD
+          value: {{ .Values.splunk.password | quote }}
+        - name: SPLUNK_LICENSE_URI
+          value: "Free"
+        - name: SPLUNK_HEC_TOKEN
+          value: {{ .Values.splunk.hecToken | quote }}
+        - name: SPLUNK_ENABLE_HEC
+          value: "true"
+        - name: SPLUNK_HEC_SSL
+          value: "false"
+        - name: SPLUNK_ADD_INDEXES
+          value: "edge_app,edge_events,edge_metrics,edge_errors,edge_inference"
+        - name: ANSIBLE_REMOTE_TMP
+          value: "/opt/splunk/.ansible-tmp"
+        - name: ANSIBLE_PIPELINING
+          value: "True"
+        - name: ANSIBLE_ALLOW_WORLD_READABLE_TMPFILES
+          value: "True"
+        - name: SPLUNK_UI_SSL
+          value: "false"
+        - name: SPLUNK_LAUNCH_CONF
+          value: "OPTIMISTIC_ABOUT_FILE_LOCKING=1"
+        volumeMounts:
+        - name: splunk-data
+          mountPath: /opt/splunk/var
+        - name: splunk-etc
+          mountPath: /opt/splunk/etc
+        - name: splunk-config
+          mountPath: /tmp/indexes.conf
+          subPath: indexes.conf
+        # TODO refactor this into a Dockerfile
+        command:
+          - /bin/bash
+          - -c
+          - |
+            # Copy indexes.conf to the proper location before starting Splunk
+            mkdir -p /opt/splunk/etc/system/local
+            cp /tmp/indexes.conf /opt/splunk/etc/system/local/indexes.conf
+            # Start Splunk with the correct command
+            exec /sbin/entrypoint.sh start
+        resources:
+          {{- toYaml .Values.splunk.resources | nindent 10 }}
+        readinessProbe:
+          httpGet:
+            path: /services/collector/health
+            port: 8088
+          # TODO re-evaluate all the lenient thresholds below (marked with comments)
+          initialDelaySeconds: 600  # Wait 10 minutes before first check (matching vision team's experience)
+          periodSeconds: 60
+          timeoutSeconds: 15
+          failureThreshold: 15      # Allow many failures - Splunk is slow to start
+        livenessProbe:
+          httpGet:
+            path: /services/collector/health
+            port: 8088
+          initialDelaySeconds: 900  # Wait 15 minutes before first liveness check  
+          periodSeconds: 120
+          timeoutSeconds: 15
+          failureThreshold: 10      # Give it plenty of chances
+      volumes:
+      - name: splunk-data
+        persistentVolumeClaim:
+          claimName: splunk-data
+      - name: splunk-etc
+        persistentVolumeClaim:
+          claimName: splunk-etc
+      - name: splunk-config
+        configMap:
+          name: splunk-config
+{{- end }}
+
+

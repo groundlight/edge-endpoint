@@ -1,0 +1,36 @@
+{{- if .Values.splunk.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: splunk
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+    app.kubernetes.io/component: splunk
+spec:
+  type: {{ .Values.splunk.service.type }}
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: web
+    {{- if and (eq .Values.splunk.service.type "NodePort") .Values.splunk.service.webNodePort }}
+    nodePort: {{ .Values.splunk.service.webNodePort }}
+    {{- end }}
+  - port: 8088
+    targetPort: 8088
+    name: hec
+    {{- if and (eq .Values.splunk.service.type "NodePort") .Values.splunk.service.hecNodePort }}
+    nodePort: {{ .Values.splunk.service.hecNodePort }}
+    {{- end }}
+  - port: 8089
+    targetPort: 8089
+    name: management
+    {{- if and (eq .Values.splunk.service.type "NodePort") .Values.splunk.service.managementNodePort }}
+    nodePort: {{ .Values.splunk.service.managementNodePort }}
+    {{- end }}
+  selector:
+    {{- include "groundlight-edge-endpoint.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: splunk
+{{- end }}
+
+

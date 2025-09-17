@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from app.api.api import api_router, health_router, ping_router
 from app.api.naming import API_BASE_PATH
 from app.core.app_state import AppState
+from app.utils.loghelper import create_logger
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 DEPLOY_DETECTOR_LEVEL_INFERENCE = bool(int(os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", 0)))
@@ -24,6 +25,9 @@ logging.basicConfig(
 # The asyncio executor is too verbose at INFO level, so we set it to WARNING
 if LOG_LEVEL == "INFO":
     logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
+
+# Use loghelper for Splunk integration
+logger = create_logger(__name__, component="edge_logic")
 
 app = FastAPI(title="edge-endpoint")
 app.include_router(router=api_router, prefix=API_BASE_PATH)
