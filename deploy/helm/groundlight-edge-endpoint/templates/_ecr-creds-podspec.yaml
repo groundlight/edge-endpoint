@@ -25,7 +25,7 @@ containers:
         subPath: init-aws-access-retrieve.sh
 
   - name: kubectl
-    image: bitnami/kubectl:latest
+    image: bitnamilegacy/kubectl:latest
     command:
       - /bin/sh
       - /app/init-aws-access-apply.sh
