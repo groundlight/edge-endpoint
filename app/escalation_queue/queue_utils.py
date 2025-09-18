@@ -6,8 +6,9 @@ from model import ImageQuery
 from app.core.utils import get_formatted_timestamp_str, safe_call_sdk
 from app.escalation_queue.models import EscalationInfo, SubmitImageQueryParams
 from app.escalation_queue.queue_writer import QueueWriter
+from app.utils.loghelper import create_logger
 
-logger = logging.getLogger(__name__)
+logger = create_logger(__name__, component="escalation-queue-reader")
 
 
 def write_escalation_to_queue(

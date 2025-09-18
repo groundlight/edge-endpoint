@@ -18,8 +18,9 @@ from app.core.utils import create_iq, generate_iq_id, generate_metadata_dict, ge
 from app.escalation_queue.models import SubmitImageQueryParams
 from app.escalation_queue.queue_utils import safe_escalate_with_queue_write, write_escalation_to_queue
 from app.metrics.iq_activity import record_activity_for_metrics
+from app.utils.loghelper import create_logger
 
-logger = logging.getLogger(__name__)
+logger = create_logger(__name__, component="edge-endpoint")
 
 router = APIRouter()
 

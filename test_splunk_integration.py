@@ -101,7 +101,7 @@ def test_integration():
         from app.utils.loghelper import create_logger
         
         # This is how it would be used in main.py
-        logger = create_logger(__name__, component="edge_logic")
+        logger = create_logger(__name__, component="test")
         logger.info("Test message from edge logic", extra={
             "detector_id": "test_detector",
             "request_id": "test_request"

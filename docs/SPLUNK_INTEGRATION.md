@@ -117,8 +117,7 @@ The Edge Endpoint automatically sends logs to Splunk when configured:
 ```python
 from app.utils import loghelper
 
-# Create logger with Splunk integration
-logger = loghelper.create_logger("my_component", component="edge_logic")
+logger = loghelper.create_logger("my_component")
 
 # Logs are automatically sent to both file and Splunk
 logger.info("Processing inference request", extra={
