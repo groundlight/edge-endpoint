@@ -17,7 +17,7 @@ spec:
       serviceAccountName: job-cleanup-sa  # Ensure permissions to delete Jobs
       containers:
         - name: kubectl
-          image: bitnami/kubectl:latest
+          image: bitnamilegacy/kubectl:latest
           command:
             - /bin/sh
             - -c
