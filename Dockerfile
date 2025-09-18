@@ -13,6 +13,9 @@ ARG POETRY_VERSION=1.5.1
 #############
 FROM python:3.11-slim-bullseye AS production-dependencies-build-stage
 
+# docker buildx will override this for the target platform
+ARG TARGETARCH
+
 # Args that are needed in this stage
 ARG APP_ROOT
 ARG POETRY_HOME
@@ -42,7 +45,14 @@ RUN apt-get update && \
     rm kubectl
 
 RUN cd /tmp && \
-    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    set -eux; \
+    case "$TARGETARCH" in \
+    amd64)  UARCH=x86_64 ;; \
+    arm64)  UARCH=aarch64 ;; \
+    arm)    UARCH=armv7 ;; \
+    *) echo "Unsupported arch: $TARGETARCH" >&2; exit 1 ;; \
+    esac; \
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-${UARCH}.zip" -o "awscliv2.zip" && \
     unzip awscliv2.zip && \
     ./aws/install --update && \
     rm -rf awscliv2.zip aws
