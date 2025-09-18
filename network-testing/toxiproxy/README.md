@@ -28,7 +28,7 @@ The toxics we currently support are:
 export DEPLOYMENT_NAMESPACE=edge
 ```
 
-## Testing behavior under simulated network connectivity issues
+## Testing behavior under simulated network impairments
 
 Currently all testing with Toxiproxy is done manually.
 
@@ -36,29 +36,25 @@ For exact commands and options, see [Enabling Toxiproxy](#enabling-toxiproxy), [
 
 To test the behavior of the edge endpoint with an impairment, follow this basic flow:
 
-- Enable Toxiproxy for the edge endpoint in your target namespace.
+- Enable Toxiproxy for the edge endpoint in your target namespace
 
-- Apply the desired impairment to simulate a network condition:
-  - Latency
-  - Timeout
-  - Outage
-  - Flap impairment (alternating healthy/impairment periods)
+- Apply the desired impairment to simulate a network condition
 
-- Trigger the behavior you want to test so the edge endpoint calls `api.groundlight.ai`.
-  - For example, trigger an escalation from the escalation queue.
+- Trigger the behavior you want to test so the edge endpoint calls `api.groundlight.ai`
+  - For example, trigger an escalation from the escalation queue
 
-- Observe behavior and outcomes.
-  - For example, check if the escalation made it to the cloud and look at the logs to check for errors.
+- Observe behavior and outcomes
+  - For example, check if the escalation made it to the cloud and look at the logs to check for errors
 
 ## Enabling Toxiproxy
 
-1) Enable Toxiproxy in your namespace (deploys resources, creates/updates the proxy, patches the deployment):
+To enable Toxiproxy in your namespace (deploys resources, creates/updates the proxy, patches the deployment):
 
 ```bash
 poetry run python enable_toxiproxy.py
 ```
 
-2) Disable Toxiproxy (deleting the created resources) and restore normal routing:
+To disable Toxiproxy (deleting the created resources) and restore normal routing:
 
 ```bash
 poetry run python disable_toxiproxy.py
