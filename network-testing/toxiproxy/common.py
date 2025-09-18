@@ -131,6 +131,37 @@ def http_request(method: str, url: str, json_body: Optional[Dict] = None, timeou
     raise ValueError(f"Unsupported method: {method}")
 
 
+def post_proxy_method(base_url: str, method_suffix: str, json_body: Optional[Dict] = None, timeout: float = 5.0) -> int:
+    """POST to the api_groundlight_ai proxy subresource and return HTTP status code.
+
+    - base_url: e.g., http://127.0.0.1:8474
+    - method_suffix: appended to "/proxies/api_groundlight_ai". Use "" for the base path,
+      e.g., "toxics" or "toxics/<name>".
+    - json_body: payload to send in the POST request
+    - timeout: request timeout in seconds
+    """
+    url = f"{base_url}/proxies/api_groundlight_ai"
+    if method_suffix:
+        url = f"{url}/{method_suffix}"
+    response = http_request("POST", url, json_body, timeout=timeout)
+    return response.status_code
+
+
+def delete_proxy_method(base_url: str, method_suffix: str, timeout: float = 5.0) -> int:
+    """DELETE the api_groundlight_ai proxy subresource and return HTTP status code.
+
+    - base_url: e.g., http://127.0.0.1:8474
+    - method_suffix: appended to "/proxies/api_groundlight_ai". Use "" for the base path,
+      e.g., "toxics/<name>".
+    - timeout: request timeout in seconds
+    """
+    url = f"{base_url}/proxies/api_groundlight_ai"
+    if method_suffix:
+        url = f"{url}/{method_suffix}"
+    response = http_request("DELETE", url, timeout=timeout)
+    return response.status_code
+
+
 def sleep_ms(ms: int) -> None:
     """Sleep for the specified duration in milliseconds. Negative values are treated as 0."""
     time.sleep(max(ms, 0) / 1000.0)
