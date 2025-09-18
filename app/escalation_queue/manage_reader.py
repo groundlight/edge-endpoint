@@ -13,12 +13,13 @@ from app.core.utils import safe_call_sdk
 from app.escalation_queue.models import EscalationInfo
 from app.escalation_queue.queue_reader import QueueReader
 from app.escalation_queue.request_cache import RequestCache
+from app.utils.loghelper import create_logger
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
     level=LOG_LEVEL, format="%(asctime)s.%(msecs)03d %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
 )
-logger = logging.getLogger(__name__)
+logger = create_logger(__name__, component="escalation-queue-reader")
 
 # Increasing lengths of time to wait before retrying an escalation, to avoid hammering the cloud
 # service if it's down for some reason or if the user's throttling limit is reached.

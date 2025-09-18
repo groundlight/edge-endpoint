@@ -1,0 +1,39 @@
+{{- if .Values.splunk.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: splunk-data
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+    app.kubernetes.io/component: splunk-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.splunk.persistence.dataSize }}
+  {{- if .Values.splunk.persistence.storageClass }}
+  storageClassName: {{ .Values.splunk.persistence.storageClass }}
+  {{- end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: splunk-etc
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+    app.kubernetes.io/component: splunk-etc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.splunk.persistence.etcSize }}
+  {{- if .Values.splunk.persistence.storageClass }}
+  storageClassName: {{ .Values.splunk.persistence.storageClass }}
+  {{- end }}
+{{- end }}
+
+

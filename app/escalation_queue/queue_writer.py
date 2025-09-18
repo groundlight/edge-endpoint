@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 from pathlib import Path
 
@@ -13,8 +12,9 @@ from app.escalation_queue.constants import (
     WRITING_DIR_SUFFIX,
 )
 from app.escalation_queue.models import EscalationInfo
+from app.utils.loghelper import create_logger
 
-logger = logging.getLogger(__name__)
+logger = create_logger(__name__, component="escalation-queue-reader")
 
 
 def convert_escalation_info_to_str(escalation_info: EscalationInfo) -> str:

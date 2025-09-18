@@ -12,12 +12,14 @@ from app.core.edge_inference import (
     get_edge_inference_model_name,
 )
 from app.core.kubernetes_management import InferenceDeploymentManager
+from app.utils.loghelper import create_logger
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
     level=LOG_LEVEL, format="%(asctime)s.%(msecs)03d %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
 )
-logger = logging.getLogger(__name__)
+
+logger = create_logger(__name__, component="inference-model-updater")
 
 TEN_MINUTES = 60 * 10
 

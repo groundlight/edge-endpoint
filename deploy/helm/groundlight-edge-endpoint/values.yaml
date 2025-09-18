@@ -74,3 +74,28 @@ k3sConfig:
 serviceAccount:
   create: true
   name: ""
+
+# Splunk Configuration
+splunk:
+  enabled: false  # Set to true to enable Splunk deployment
+  image:
+    repository: splunk/splunk
+    tag: "9.3.5"
+  password: "admin123"
+  hecToken: "abcd1234-5678-90ef-ghij-klmnopqrstuv"
+  service:
+    type: NodePort
+    webNodePort: 30080    # Splunk Web UI
+    hecNodePort: 30088    # HTTP Event Collector
+    managementNodePort: 30089  # Management port
+  persistence:
+    dataSize: "10Gi"
+    etcSize: "2Gi"
+    storageClass: ""  # Use default storage class
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+    requests:
+      cpu: 500m
+      memory: 2Gi

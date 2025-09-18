@@ -1,4 +1,3 @@
-import logging
 import os
 import re
 import time
@@ -12,8 +11,9 @@ from app.escalation_queue.constants import (
     TRACKING_FILE_NAME_PREFIX,
     WRITING_DIR_SUFFIX,
 )
+from app.utils.loghelper import create_logger
 
-logger = logging.getLogger(__name__)
+logger = create_logger(__name__, component="escalation-queue-reader")
 
 
 class QueueReader:
