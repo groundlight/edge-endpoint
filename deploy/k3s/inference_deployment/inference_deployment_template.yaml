@@ -44,9 +44,11 @@ spec:
       # NOTE: the sync-pinamod container is duplicated in the warmup_inference_model.yaml Job
       # TODO: refactor to share code between the Job and the initContainer in the Deployment
       - name: sync-pinamod
-        image: amazon/aws-cli:latest
+        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${IMAGE_TAG}
+        imagePullPolicy: IfNotPresent
+
         # Sync models from S3 to the local hostmapped filesystem.
-        command: ['sh', '-c', 'aws s3 sync s3://pinamod-artifacts-public/pinamod $PINAMOD_DIR --delete']
+        command: ['sh', '-c', 'aws --region us-west-2 s3 sync s3://pinamod-artifacts-public/pinamod $PINAMOD_DIR --delete']
         env:
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
@@ -73,6 +75,17 @@ spec:
           value: &modelRepository /opt/groundlight/edge/serving/model-repo
         - name: MODEL_NAME
           value: placeholder-model-name
+        # necessary to access pretrained model weights stored in S3
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: aws_access_key_id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: aws_secret_access_key
         - name: PINAMOD_DIR
           value: /opt/models/pinamod
         - name: LOAD_ALL_PIPELINES  # Load only the pipelines that are needed for edge inference.

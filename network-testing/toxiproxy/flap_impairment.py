@@ -3,9 +3,10 @@ import argparse
 import sys
 
 from common import (
+    delete_proxy_method,
     get_namespace,
-    http_request,
     port_forward_service,
+    post_proxy_method,
     require_toxiproxy_installed,
     sleep_ms,
 )
@@ -35,10 +36,10 @@ def main() -> int:
     def cleanup() -> None:
         with port_forward_service(ns) as base_url:
             if mode == "refuse":
-                http_request("POST", f"{base_url}/proxies/api_groundlight_ai", {"enabled": True})
+                post_proxy_method(base_url, "", {"enabled": True})
             else:
-                http_request("DELETE", f"{base_url}/proxies/api_groundlight_ai/toxics/timeout_up")
-                http_request("DELETE", f"{base_url}/proxies/api_groundlight_ai/toxics/timeout_down")
+                delete_proxy_method(base_url, "toxics/timeout_up")
+                delete_proxy_method(base_url, "toxics/timeout_down")
         print("\nFlapping stopped. Cleaned up.")
 
     msg = f"Starting impairment flapping: mode={mode} up={up_ms}ms down={down_ms}ms"
@@ -52,23 +53,23 @@ def main() -> int:
             # UP period (normal)
             with port_forward_service(ns) as base_url:
                 if mode == "refuse":
-                    http_request("POST", f"{base_url}/proxies/api_groundlight_ai", {"enabled": True})
+                    post_proxy_method(base_url, "", {"enabled": True})
                 else:
                     # Ensure timeout toxics removed during UP
-                    http_request("DELETE", f"{base_url}/proxies/api_groundlight_ai/toxics/timeout_up")
-                    http_request("DELETE", f"{base_url}/proxies/api_groundlight_ai/toxics/timeout_down")
+                    delete_proxy_method(base_url, "toxics/timeout_up")
+                    delete_proxy_method(base_url, "toxics/timeout_down")
             print(".", end="", flush=True)
             sleep_ms(up_ms)
 
             # DOWN period (impairment)
             with port_forward_service(ns) as base_url:
                 if mode == "refuse":
-                    http_request("POST", f"{base_url}/proxies/api_groundlight_ai", {"enabled": False})
+                    post_proxy_method(base_url, "", {"enabled": False})
                 else:
                     if to_stream in {"up", "both"}:
-                        http_request(
-                            "POST",
-                            f"{base_url}/proxies/api_groundlight_ai/toxics",
+                        post_proxy_method(
+                            base_url,
+                            "toxics",
                             {
                                 "name": "timeout_up",
                                 "type": "timeout",
@@ -77,11 +78,11 @@ def main() -> int:
                             },
                         )
                     else:
-                        http_request("DELETE", f"{base_url}/proxies/api_groundlight_ai/toxics/timeout_up")
+                        delete_proxy_method(base_url, "toxics/timeout_up")
                     if to_stream in {"down", "both"}:
-                        http_request(
-                            "POST",
-                            f"{base_url}/proxies/api_groundlight_ai/toxics",
+                        post_proxy_method(
+                            base_url,
+                            "toxics",
                             {
                                 "name": "timeout_down",
                                 "type": "timeout",
@@ -90,7 +91,7 @@ def main() -> int:
                             },
                         )
                     else:
-                        http_request("DELETE", f"{base_url}/proxies/api_groundlight_ai/toxics/timeout_down")
+                        delete_proxy_method(base_url, "toxics/timeout_down")
             print("x", end="", flush=True)
             sleep_ms(down_ms)
 

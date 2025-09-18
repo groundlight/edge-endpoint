@@ -18,8 +18,9 @@ spec:
         command: ["echo", "Successfully pulled image to warm cache"]
       - name: sync-pinamod
         image: amazon/aws-cli:latest
+        imagePullPolicy: IfNotPresent
         # Sync models from S3 to the local hostmapped filesystem.
-        command: ['sh', '-c', 'mkdir -p $PINAMOD_DIR; aws s3 sync s3://pinamod-artifacts-public/pinamod $PINAMOD_DIR --delete']
+        command: ['sh', '-c', 'mkdir -p $PINAMOD_DIR; aws --region us-west-2 s3 sync s3://pinamod-artifacts-public/pinamod $PINAMOD_DIR --delete']
         env:
         - name: PINAMOD_DIR
           value: /opt/models/pinamod-public/pinamod

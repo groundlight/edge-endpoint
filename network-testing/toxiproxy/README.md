@@ -10,6 +10,13 @@ Applying a "toxic" via the scripts detailed below will affect behavior for reque
 
 For general info on Toxiproxy, see [the source repo](https://github.com/Shopify/toxiproxy/tree/main).
 
+The toxics we currently support are:
+
+- Latency: add fixed delay (optionally with jitter). See [Latency](#latency).
+- Timeout: connections hang for a configured duration. See [Timeout](#timeout).
+- Outage: refuse all connections by disabling the proxy. See [Outage](#outage).
+- Flap impairment: alternate healthy and impaired periods (timeout or refuse). See [Flap impairment](#flap-impairment).
+
 ## Prerequisites
 
 - A working Kubernetes cluster and `kubectl` configured to the target context.
@@ -21,15 +28,33 @@ For general info on Toxiproxy, see [the source repo](https://github.com/Shopify/
 export DEPLOYMENT_NAMESPACE=edge
 ```
 
+## Testing behavior under simulated network impairments
+
+Currently all testing with Toxiproxy is done manually.
+
+For exact commands and options, see [Enabling Toxiproxy](#enabling-toxiproxy), [Checking status](#checking-status), and [Currently supported toxics](#currently-supported-toxics) below.
+
+To test the behavior of the edge endpoint with an impairment, follow this basic flow:
+
+- Enable Toxiproxy for the edge endpoint in your target namespace
+
+- Apply the desired impairment to simulate a network condition
+
+- Trigger the behavior you want to test so the edge endpoint calls `api.groundlight.ai`
+  - For example, trigger an escalation from the escalation queue
+
+- Observe behavior and outcomes
+  - For example, check if the escalation made it to the cloud and look at the logs to check for errors
+
 ## Enabling Toxiproxy
 
-1) Enable Toxiproxy in your namespace (deploys resources, creates/updates the proxy, patches the deployment):
+To enable Toxiproxy in your namespace (deploys resources, creates/updates the proxy, patches the deployment):
 
 ```bash
 poetry run python enable_toxiproxy.py
 ```
 
-2) Disable Toxiproxy (deleting the created resources) and restore normal routing:
+To disable Toxiproxy (deleting the created resources) and restore normal routing:
 
 ```bash
 poetry run python disable_toxiproxy.py
@@ -38,7 +63,7 @@ poetry run python disable_toxiproxy.py
 Notes:
 - `enable_toxiproxy.py` is idempotent and will update the proxy if it already exists.
 
-## Checking Status
+## Checking status
 
 To check the status, which includes whether the proxy is enabled and any active toxics:
 
@@ -46,7 +71,9 @@ To check the status, which includes whether the proxy is enabled and any active 
 poetry run python status.py
 ```
 
-## Latency functionality
+## Currently supported toxics
+
+### Latency
 
 Add fixed latency (with optional jitter) to the proxy. Direction refers to the Toxiproxy stream relative to the client:
 - `up` → upstream (from EE → cloud)
@@ -75,7 +102,7 @@ poetry run python disable_latency.py
 Behavior details:
 - If a latency toxic already exists (HTTP 409), the script will update its attributes and inform you.
 
-## Timeout functionality
+### Timeout
 
 Add timeout toxics so connections hang up to a configured duration. You can target upstream (EE → cloud), downstream (cloud → EE), or both directions.
 
@@ -98,7 +125,7 @@ poetry run python disable_timeout.py
 Behavior details:
 - If a timeout toxic already exists (HTTP 409), the script will update its attributes and inform you.
 
-## Outage functionality
+### Outage
 
 Refuse all connections by disabling the proxy (RST).
 
@@ -115,7 +142,7 @@ Disable outage (re-enable proxy):
 poetry run python disable_outage.py
 ```
 
-## Flap impairment functionality
+### Flap impairment
 
 Continuously alternate between UP (normal) and DOWN (impairment) periods. Supports:
 - `refuse` (disable proxy)

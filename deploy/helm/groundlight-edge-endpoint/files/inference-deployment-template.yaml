@@ -49,8 +49,9 @@ spec:
       # TODO: refactor to share code between the Job and the initContainer in the Deployment
       - name: sync-pinamod
         image: amazon/aws-cli:latest
+        imagePullPolicy: IfNotPresent
         # Sync models from S3 to the local hostmapped filesystem.
-        command: ['sh', '-c', 'aws s3 sync s3://pinamod-artifacts-public/pinamod $PINAMOD_DIR --delete']
+        command: ['sh', '-c', 'aws --region us-west-2 s3 sync s3://pinamod-artifacts-public/pinamod $PINAMOD_DIR --delete']
         env:
         - name: PINAMOD_DIR
           value: /opt/models/pinamod
@@ -75,19 +76,19 @@ spec:
           value: {{ .Values.logLevel | quote }}
         - name: LOAD_ALL_PIPELINES  # Load only the pipelines that are needed for edge inference.
           value: "false"
-        command:
-          [
-            "poetry", "run", "python3", "-m", "uvicorn", "serving.edge_inference_server.fastapi_server:app",
-            "--host", "0.0.0.0",
-            "--port", "8000",
-            "--workers", "1"
-          ]
+        - name: INFERENCE_FLAVOR
+          value: "{{ .Values.inferenceFlavor }}"
+        - name: WORKERS  # Number of uvicorn workers for the inference server
+          value: "1"
         volumeMounts:
         - name: edge-endpoint-persistent-volume
           mountPath: *modelRepository
         - name: pina-models
           mountPath: /opt/models
           readOnly: true
+        # necessary to access pretrained model weights stored in S3
+        - name: aws-credentials
+          mountPath: /root/.aws
         ports:
         - containerPort: 8000
           name: http-fastapi

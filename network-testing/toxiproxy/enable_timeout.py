@@ -2,7 +2,13 @@
 import argparse
 import sys
 
-from common import get_namespace, http_request, port_forward_service, require_toxiproxy_installed
+from common import (
+    delete_proxy_method,
+    get_namespace,
+    port_forward_service,
+    post_proxy_method,
+    require_toxiproxy_installed,
+)
 from fastapi import status
 
 
@@ -22,9 +28,9 @@ def main() -> int:
 
     with port_forward_service(ns) as base_url:
         if stream in {"up", "both"}:
-            r = http_request(
-                "POST",
-                f"{base_url}/proxies/api_groundlight_ai/toxics",
+            status_code = post_proxy_method(
+                base_url,
+                "toxics",
                 {
                     "name": "timeout_up",
                     "type": "timeout",
@@ -32,19 +38,19 @@ def main() -> int:
                     "attributes": {"timeout": to_ms},
                 },
             )
-            if r.status_code in {status.HTTP_200_OK, status.HTTP_201_CREATED}:
+            if status_code in {status.HTTP_200_OK, status.HTTP_201_CREATED}:
                 pass
-            elif r.status_code == status.HTTP_409_CONFLICT:
-                r_upd = http_request(
-                    "POST",
-                    f"{base_url}/proxies/api_groundlight_ai/toxics/timeout_up",
+            elif status_code == status.HTTP_409_CONFLICT:
+                status_code_upd = post_proxy_method(
+                    base_url,
+                    "toxics/timeout_up",
                     {"attributes": {"timeout": to_ms}},
                 )
-                if r_upd.status_code in {status.HTTP_200_OK, status.HTTP_201_CREATED}:
+                if status_code_upd in {status.HTTP_200_OK, status.HTTP_201_CREATED}:
                     print("Toxic timeout_up already existed; attributes updated.")
                 else:
                     print(
-                        f"Toxic timeout_up already exists; failed to update attributes (HTTP {r_upd.status_code}).",
+                        f"Toxic timeout_up already exists; failed to update attributes (HTTP {status_code_upd}).",
                         file=sys.stderr,
                     )
                     return 1
@@ -52,12 +58,12 @@ def main() -> int:
                 print("Failed to ensure upstream timeout toxic", file=sys.stderr)
                 return 1
         else:
-            http_request("DELETE", f"{base_url}/proxies/api_groundlight_ai/toxics/timeout_up")
+            delete_proxy_method(base_url, "toxics/timeout_up")
 
         if stream in {"down", "both"}:
-            r = http_request(
-                "POST",
-                f"{base_url}/proxies/api_groundlight_ai/toxics",
+            status_code = post_proxy_method(
+                base_url,
+                "toxics",
                 {
                     "name": "timeout_down",
                     "type": "timeout",
@@ -65,19 +71,19 @@ def main() -> int:
                     "attributes": {"timeout": to_ms},
                 },
             )
-            if r.status_code in {status.HTTP_200_OK, status.HTTP_201_CREATED}:
+            if status_code in {status.HTTP_200_OK, status.HTTP_201_CREATED}:
                 pass
-            elif r.status_code == status.HTTP_409_CONFLICT:
-                r_upd = http_request(
-                    "POST",
-                    f"{base_url}/proxies/api_groundlight_ai/toxics/timeout_down",
+            elif status_code == status.HTTP_409_CONFLICT:
+                status_code_upd = post_proxy_method(
+                    base_url,
+                    "toxics/timeout_down",
                     {"attributes": {"timeout": to_ms}},
                 )
-                if r_upd.status_code in {status.HTTP_200_OK, status.HTTP_201_CREATED}:
+                if status_code_upd in {status.HTTP_200_OK, status.HTTP_201_CREATED}:
                     print("Toxic timeout_down already existed; attributes updated.")
                 else:
                     print(
-                        f"Toxic timeout_down already exists; failed to update attributes (HTTP {r_upd.status_code}).",
+                        f"Toxic timeout_down already exists; failed to update attributes (HTTP {status_code_upd}).",
                         file=sys.stderr,
                     )
                     return 1
@@ -85,7 +91,7 @@ def main() -> int:
                 print("Failed to ensure downstream timeout toxic", file=sys.stderr)
                 return 1
         else:
-            http_request("DELETE", f"{base_url}/proxies/api_groundlight_ai/toxics/timeout_down")
+            delete_proxy_method(base_url, "toxics/timeout_down")
 
     print(f"Timeout enabled: connections will hang up to {to_ms}ms on {stream}.")
     return 0
