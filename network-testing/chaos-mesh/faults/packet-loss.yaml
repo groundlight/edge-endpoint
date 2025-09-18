@@ -1,6 +1,6 @@
 apiVersion: chaos-mesh.org/v1alpha1
 kind: NetworkChaos
-metadata: { name: drop-traffic }
+metadata: { name: packet-loss }
 spec:
   action: loss # Simulating packet loss
   mode: all # Applies to all selected pods
