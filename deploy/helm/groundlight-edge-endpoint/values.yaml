@@ -75,27 +75,58 @@ serviceAccount:
   create: true
   name: ""
 
-# Splunk Configuration
+# Logging Configuration
+# loggingMode options:
+#   - "standard": Basic logging to stdout/files (no Splunk, no OTel)
+#   - "local-splunk": Deploy local Splunk container + OTel collector
+#   - "cloud-splunk": Use external Splunk + OTel collector
+loggingMode: "standard"
+
+# Splunk Configuration (used for local-splunk and cloud-splunk modes)
 splunk:
-  enabled: false  # Set to true to enable Splunk deployment
-  image:
-    repository: splunk/splunk
-    tag: "9.3.5"
-  password: "admin123"
-  hecToken: "abcd1234-5678-90ef-ghij-klmnopqrstuv"
-  service:
-    type: NodePort
-    webNodePort: 30080    # Splunk Web UI
-    hecNodePort: 30088    # HTTP Event Collector
-    managementNodePort: 30089  # Management port
-  persistence:
-    dataSize: "10Gi"
-    etcSize: "2Gi"
-    storageClass: ""  # Use default storage class
-  resources:
-    limits:
-      cpu: 2000m
-      memory: 4Gi
-    requests:
-      cpu: 500m
-      memory: 2Gi
+  # Local Splunk container settings (for local-splunk mode)
+  local:
+    image:
+      repository: splunk/splunk
+      tag: "9.3.5"
+    password: "admin123"
+    hecToken: "abcd1234-5678-90ef-ghij-klmnopqrstuv"
+    service:
+      type: NodePort
+      webNodePort: 30080    # Splunk Web UI
+      hecNodePort: 30088    # HTTP Event Collector
+      managementNodePort: 30089  # Management port
+    persistence:
+      dataSize: "10Gi"
+      etcSize: "2Gi"
+      storageClass: ""  # Use default storage class
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+      requests:
+        cpu: 500m
+        memory: 2Gi
+  
+  # Cloud Splunk settings (for cloud-splunk mode)
+  cloud:
+    endpoint: "https://your-splunk-instance:8088/services/collector"
+    token: "your-hec-token-here"
+  
+  # Common Splunk settings
+  index: "edge_app"
+  source: "edge-endpoint"
+  sourcetype: "edge:endpoint:logs"
+  
+  # OpenTelemetry Collector configuration
+  collector:
+    image:
+      repository: otel/opentelemetry-collector-contrib
+      tag: "0.91.0"
+    resources:
+      limits:
+        cpu: 200m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi

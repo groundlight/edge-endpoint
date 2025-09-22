@@ -1,20 +1,17 @@
-{{- if .Values.splunk.enabled }}
+{{- if eq .Values.loggingMode "local-splunk" }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: splunk-data
   namespace: {{ .Values.namespace }}
-  labels:
-    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
-    app.kubernetes.io/component: splunk-data
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: {{ .Values.splunk.persistence.dataSize }}
-  {{- if .Values.splunk.persistence.storageClass }}
-  storageClassName: {{ .Values.splunk.persistence.storageClass }}
+      storage: {{ .Values.splunk.local.persistence.dataSize }}
+  {{- if .Values.splunk.local.persistence.storageClass }}
+  storageClassName: {{ .Values.splunk.local.persistence.storageClass }}
   {{- end }}
 ---
 apiVersion: v1
@@ -22,18 +19,13 @@ kind: PersistentVolumeClaim
 metadata:
   name: splunk-etc
   namespace: {{ .Values.namespace }}
-  labels:
-    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
-    app.kubernetes.io/component: splunk-etc
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: {{ .Values.splunk.persistence.etcSize }}
-  {{- if .Values.splunk.persistence.storageClass }}
-  storageClassName: {{ .Values.splunk.persistence.storageClass }}
+      storage: {{ .Values.splunk.local.persistence.etcSize }}
+  {{- if .Values.splunk.local.persistence.storageClass }}
+  storageClassName: {{ .Values.splunk.local.persistence.storageClass }}
   {{- end }}
 {{- end }}
-
-

@@ -1,36 +1,32 @@
-{{- if .Values.splunk.enabled }}
+{{- if eq .Values.loggingMode "local-splunk" }}
 apiVersion: v1
 kind: Service
 metadata:
   name: splunk
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
-    app.kubernetes.io/component: splunk
+    app: splunk
 spec:
-  type: {{ .Values.splunk.service.type }}
+  type: {{ .Values.splunk.local.service.type }}
   ports:
-  - port: 8000
+  - name: web
+    port: 8000
     targetPort: 8000
-    name: web
-    {{- if and (eq .Values.splunk.service.type "NodePort") .Values.splunk.service.webNodePort }}
-    nodePort: {{ .Values.splunk.service.webNodePort }}
+    {{- if eq .Values.splunk.local.service.type "NodePort" }}
+    nodePort: {{ .Values.splunk.local.service.webNodePort }}
     {{- end }}
-  - port: 8088
+  - name: hec
+    port: 8088
     targetPort: 8088
-    name: hec
-    {{- if and (eq .Values.splunk.service.type "NodePort") .Values.splunk.service.hecNodePort }}
-    nodePort: {{ .Values.splunk.service.hecNodePort }}
+    {{- if eq .Values.splunk.local.service.type "NodePort" }}
+    nodePort: {{ .Values.splunk.local.service.hecNodePort }}
     {{- end }}
-  - port: 8089
+  - name: management
+    port: 8089
     targetPort: 8089
-    name: management
-    {{- if and (eq .Values.splunk.service.type "NodePort") .Values.splunk.service.managementNodePort }}
-    nodePort: {{ .Values.splunk.service.managementNodePort }}
+    {{- if eq .Values.splunk.local.service.type "NodePort" }}
+    nodePort: {{ .Values.splunk.local.service.managementNodePort }}
     {{- end }}
   selector:
-    {{- include "groundlight-edge-endpoint.selectorLabels" . | nindent 4 }}
-    app.kubernetes.io/component: splunk
+    app: splunk
 {{- end }}
-
-

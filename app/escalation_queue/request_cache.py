@@ -4,14 +4,13 @@ from pathlib import Path
 
 from app.escalation_queue.constants import DEFAULT_REQUEST_CACHE_DIR, DEFAULT_REQUEST_CACHE_MAX_ENTRIES
 
-from app.utils.loghelper import create_logger
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
     level=LOG_LEVEL, format="%(asctime)s.%(msecs)03d %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
 )
 
-logger = create_logger(__name__, component="escalation-queue-reader")
+logger = logging.getLogger(__name__)
 
 class RequestCache:
     """

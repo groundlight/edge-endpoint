@@ -8,7 +8,6 @@ from fastapi.responses import HTMLResponse
 
 from app.metrics.iq_activity import clear_old_activity_files
 from app.metrics.metric_reporting import MetricsReporter
-from app.utils.loghelper import create_logger
 
 ONE_HOUR_IN_SECONDS = 3600
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -24,8 +23,7 @@ async def startup_event():
     logging.basicConfig(
         level=LOG_LEVEL, format="%(asctime)s.%(msecs)03d %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
     )
-    # Use Splunk-enabled logger
-    logger = create_logger(__name__, component="status-monitor")
+    logger = logging.getLogger(__name__)
     logger.info("Starting status-monitor server...")
     logger.info("Will report metrics to the cloud every hour")
     # Every hour, on the hour, collect metrics to send to the cloud.

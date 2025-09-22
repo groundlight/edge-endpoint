@@ -108,14 +108,6 @@ spec:
         env:
         - name: LOG_LEVEL
           value: {{ .Values.logLevel | quote }}
-        {{- if .Values.splunk.enabled }}
-        - name: SPLUNK_HEC_URL
-          value: "http://splunk:8088"
-        - name: SPLUNK_HEC_TOKEN
-          value: {{ .Values.splunk.hecToken | quote }}
-        - name: SPLUNK_INDEX
-          value: "edge_app"
-        {{- end }}
         # We need this feature flag since we run the edge logic server in two separate environments:
         # 1. In docker (on the GitHub Actions runner) for testing
         # 2. In kubernetes (currently a dedicated EC2 instance)
@@ -157,14 +149,6 @@ spec:
         env:
         - name: LOG_LEVEL
           value: {{ .Values.logLevel | quote }}
-        {{- if .Values.splunk.enabled }}
-        - name: SPLUNK_HEC_URL
-          value: "http://splunk:8088"
-        - name: SPLUNK_HEC_TOKEN
-          value: {{ .Values.splunk.hecToken | quote }}
-        - name: SPLUNK_INDEX
-          value: "edge_app"
-        {{- end }}
         - name: GROUNDLIGHT_API_TOKEN
           valueFrom:
             secretKeyRef:
@@ -193,14 +177,6 @@ spec:
         env:
         - name: LOG_LEVEL
           value: {{ .Values.logLevel | quote }}
-        {{- if .Values.splunk.enabled }}
-        - name: SPLUNK_HEC_URL
-          value: "http://splunk:8088"
-        - name: SPLUNK_HEC_TOKEN
-          value: {{ .Values.splunk.hecToken | quote }}
-        - name: SPLUNK_INDEX
-          value: "edge_app"
-        {{- end }}
         - name: GROUNDLIGHT_API_TOKEN
           valueFrom:
             secretKeyRef:
@@ -224,14 +200,6 @@ spec:
         env:
         - name: LOG_LEVEL
           value: {{ .Values.logLevel | quote }}
-        {{- if .Values.splunk.enabled }}
-        - name: SPLUNK_HEC_URL
-          value: "http://splunk:8088"
-        - name: SPLUNK_HEC_TOKEN
-          value: {{ .Values.splunk.hecToken | quote }}
-        - name: SPLUNK_INDEX
-          value: "edge_app"
-        {{- end }}
         - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
           value: "1"
         - name: GROUNDLIGHT_ENDPOINT
@@ -268,6 +236,39 @@ spec:
         - name: device-info-volume
           mountPath: /opt/groundlight/device
 
+      {{- if or (eq .Values.loggingMode "local-splunk") (eq .Values.loggingMode "cloud-splunk") }}
+      # OpenTelemetry Collector sidecar for log collection
+      - name: otel-collector
+        image: {{ .Values.splunk.collector.image.repository }}:{{ .Values.splunk.collector.image.tag }}
+        imagePullPolicy: IfNotPresent
+        resources:
+          limits:
+            cpu: {{ .Values.splunk.collector.resources.limits.cpu }}
+            memory: {{ .Values.splunk.collector.resources.limits.memory }}
+          requests:
+            cpu: {{ .Values.splunk.collector.resources.requests.cpu }}
+            memory: {{ .Values.splunk.collector.resources.requests.memory }}
+        env:
+        - name: KUBE_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        command:
+        - /otelcol-contrib
+        - --config=/etc/otel-collector-config/otel-config.yaml
+        volumeMounts:
+        - name: otel-collector-config
+          mountPath: /etc/otel-collector-config
+        - name: var-log-pods
+          mountPath: /var/log/pods
+          readOnly: true
+        - name: var-lib-docker-containers
+          mountPath: /var/lib/docker/containers
+          readOnly: true
+        securityContext:
+          runAsUser: 0  # Need root to read log files
+      {{- end }}
+
       imagePullSecrets:
       - name: registry-credentials
 
@@ -295,3 +296,15 @@ spec:
         hostPath:
           path: /opt/groundlight/queue/{{ .Values.namespace }}
           type: DirectoryOrCreate
+      {{- if or (eq .Values.loggingMode "local-splunk") (eq .Values.loggingMode "cloud-splunk") }}
+      # OpenTelemetry Collector volumes
+      - name: otel-collector-config
+        configMap:
+          name: otel-collector-config
+      - name: var-log-pods
+        hostPath:
+          path: /var/log/pods
+      - name: var-lib-docker-containers
+        hostPath:
+          path: /var/lib/docker/containers
+      {{- end }}

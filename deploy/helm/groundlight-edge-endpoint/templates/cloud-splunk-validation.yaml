@@ -1,0 +1,60 @@
+{{- if eq .Values.loggingMode "cloud-splunk" }}
+{{- if or (not .Values.splunk.cloud.endpoint) (not .Values.splunk.cloud.token) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloud-splunk-error
+  namespace: {{ .Values.Namespace }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+data:
+  error.txt: |
+    ERROR: cloud-splunk mode is not fully implemented yet.
+    
+    To use cloud-splunk mode, you must provide:
+    - splunk.cloud.endpoint
+    - splunk.cloud.token
+    
+    Current configuration:
+    - endpoint: {{ .Values.splunk.cloud.endpoint | default "NOT SET" }}
+    - token: {{ if .Values.splunk.cloud.token }}[CONFIGURED]{{ else }}NOT SET{{ end }}
+    
+    For now, please use:
+    - loggingMode: "standard" (basic logging)
+    - loggingMode: "local-splunk" (local Splunk container)
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cloud-splunk-validation-error
+  namespace: {{ .Values.Namespace }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-4"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: validation-error
+        image: busybox:1.35
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "=============================================="
+          cat /error/error.txt
+          echo "=============================================="
+          echo "DEPLOYMENT FAILED: cloud-splunk mode requires additional configuration"
+          exit 1
+        volumeMounts:
+        - name: error-config
+          mountPath: /error
+      volumes:
+      - name: error-config
+        configMap:
+          name: cloud-splunk-error
+{{- end }}
+{{- end }}

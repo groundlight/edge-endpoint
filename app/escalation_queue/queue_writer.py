@@ -13,9 +13,8 @@ from app.escalation_queue.constants import (
     WRITING_DIR_SUFFIX,
 )
 from app.escalation_queue.models import EscalationInfo
-from app.utils.loghelper import create_logger
 
-logger = create_logger(__name__, component="escalation-queue-reader")
+logger = logging.getLogger(__name__)
 
 
 def convert_escalation_info_to_str(escalation_info: EscalationInfo) -> str:

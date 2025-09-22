@@ -1,4 +1,4 @@
-{{- if .Values.splunk.enabled }}
+{{- if eq .Values.loggingMode "local-splunk" }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -6,54 +6,32 @@ metadata:
   namespace: {{ .Values.namespace }}
 data:
   indexes.conf: |
-    # Splunk Index Configuration for Edge Endpoint
-
-    # Main application logs index
+    # Custom indexes for edge-endpoint
     [edge_app]
     homePath = $SPLUNK_DB/edge_app/db
     coldPath = $SPLUNK_DB/edge_app/colddb
     thawedPath = $SPLUNK_DB/edge_app/thaweddb
     maxDataSize = auto_high_volume
-    maxHotBuckets = 10
-    maxWarmDBCount = 300
+    datatype = event
 
-    # Events index for inference requests, escalations, etc.
     [edge_events]
     homePath = $SPLUNK_DB/edge_events/db
     coldPath = $SPLUNK_DB/edge_events/colddb
     thawedPath = $SPLUNK_DB/edge_events/thaweddb
     maxDataSize = auto_high_volume
-    maxHotBuckets = 10
-    maxWarmDBCount = 300
+    datatype = event
 
-    # Metrics index for performance data
     [edge_metrics]
     homePath = $SPLUNK_DB/edge_metrics/db
     coldPath = $SPLUNK_DB/edge_metrics/colddb
     thawedPath = $SPLUNK_DB/edge_metrics/thaweddb
     maxDataSize = auto_high_volume
-    maxHotBuckets = 10
-    maxWarmDBCount = 300
-    # This is a metrics index
     datatype = metric
 
-    # Errors index for error tracking
     [edge_errors]
     homePath = $SPLUNK_DB/edge_errors/db
     coldPath = $SPLUNK_DB/edge_errors/colddb
     thawedPath = $SPLUNK_DB/edge_errors/thaweddb
-    maxDataSize = auto
-    maxHotBuckets = 5
-    maxWarmDBCount = 100
-
-    # Business events index for inference analytics
-    [edge_inference]
-    homePath = $SPLUNK_DB/edge_inference/db
-    coldPath = $SPLUNK_DB/edge_inference/colddb
-    thawedPath = $SPLUNK_DB/edge_inference/thaweddb
     maxDataSize = auto_high_volume
-    maxHotBuckets = 10
-    maxWarmDBCount = 300
+    datatype = event
 {{- end }}
-
-
