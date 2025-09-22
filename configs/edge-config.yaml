@@ -1,7 +1,7 @@
 # For configuring detectors on the edge endpoint. See CONFIGURING-DETECTORS.md for more information.
 
 global_config: # These settings affect the overall behavior of the edge endpoint.
-  refresh_rate: 20 # How often to attempt to fetch updated ML models (in seconds). Defaults to 60.
+  refresh_rate: 60 # How often to attempt to fetch updated ML models (in seconds). Defaults to 60.
   confident_audit_rate: 0.00001 # Probability that a confident prediction will be sent to cloud for auditing. Defaults to 1e-5 = a 0.001% chance.
 
 edge_inference_configs: # These configs define detector-specific behavior and can be applied to detectors below.
@@ -14,7 +14,7 @@ edge_inference_configs: # These configs define detector-specific behavior and ca
     enabled: true
     always_return_edge_prediction: true
     disable_cloud_escalation: false
-    min_time_between_escalations: 5.0
+    min_time_between_escalations: 2.0
 
   no_cloud: # Always return the edge model's prediction and never escalate to the cloud.
     enabled: true

@@ -25,8 +25,6 @@ logging.basicConfig(
 if LOG_LEVEL == "INFO":
     logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
 
-logger = logging.getLogger(__name__)
-
 app = FastAPI(title="edge-endpoint")
 app.include_router(router=api_router, prefix=API_BASE_PATH)
 app.include_router(router=ping_router)
@@ -37,7 +35,7 @@ scheduler = AsyncIOScheduler()
 
 def update_inference_config(app_state: AppState) -> None:
     """Update the App's edge-inference config by querying the database for new detectors."""
-    logger.debug("Querying database for updated inference deployment records...")
+    logging.debug("Querying database for updated inference deployment records...")
     detectors = app_state.db_manager.get_inference_deployment_records(deployment_created=True)
     if detectors:
         for detector_record in detectors:
@@ -50,11 +48,11 @@ def update_inference_config(app_state: AppState) -> None:
 @app.on_event("startup")
 async def startup_event():
     """Lifecycle event that is triggered when the application starts."""
-    logger.info("Starting edge-endpoint application...")
+    logging.info("Starting edge-endpoint application...")
     app.state.app_state = AppState()
     app.state.app_state.db_manager.reset_database()
 
-    logger.info(f"edge_config={app.state.app_state.edge_config}")
+    logging.info(f"edge_config={app.state.app_state.edge_config}")
 
     if DEPLOY_DETECTOR_LEVEL_INFERENCE:
         # Add job to periodically update the inference config
@@ -62,7 +60,7 @@ async def startup_event():
         scheduler.start()
 
     app.state.app_state.is_ready = True
-    logger.info("Application is ready to serve requests.")
+    logging.info("Application is ready to serve requests.")
 
 
 @app.on_event("shutdown")
