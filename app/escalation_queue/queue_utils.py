@@ -1,5 +1,3 @@
-import logging
-
 from groundlight import Groundlight
 from model import ImageQuery
 
