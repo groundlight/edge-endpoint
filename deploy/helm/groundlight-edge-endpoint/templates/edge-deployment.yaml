@@ -253,6 +253,16 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NODE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        - name: BALENA_DEVICE_UUID
+          value: {{ .Values.balena.deviceUuid | default "none" | quote }}
         command:
         - /otelcol-contrib
         - --config=/etc/otel-collector-config/otel-config.yaml

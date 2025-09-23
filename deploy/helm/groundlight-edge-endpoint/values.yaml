@@ -130,3 +130,7 @@ splunk:
       requests:
         cpu: 100m
         memory: 128Mi
+
+# Balena device configuration
+balena:
+  deviceUuid: "none"

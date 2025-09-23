@@ -18,21 +18,31 @@ data:
         include_file_path: true
         include_file_name: false
         operators:
-          # Parse Kubernetes log format
-          - type: json_parser
-            id: parser-cri
-            output: extract_metadata_from_filepath
-          # Extract Kubernetes metadata from file path
+          - id: container
+            type: container     # populates k8s.pod.uid, k8s.container.name, etc.
+          # First extract Kubernetes metadata from file path
           - type: regex_parser
             id: extract_metadata_from_filepath
             regex: '^.*\/(?P<namespace>[^_]+)_(?P<pod_name>[^_]+)_(?P<uid>[a-f0-9\-]{36})\/(?P<container_name>[^\._]+)\/(?P<restart_count>\d+)\.log$'
             parse_from: attributes["log.file.path"]
-            output: add_source
-          # Add source information
-          - type: add
-            id: add_source
-            field: attributes.source
-            value: "kubernetes"
+            output: parse_cri_format
+          # Parse CRI format: timestamp stdout/stderr F message
+          - type: regex_parser
+            id: parse_cri_format
+            regex: '^(?P<timestamp>[^\s]+)\s+(?P<stream>stdout|stderr)\s+(?P<partial>F|P)(\s+(?P<message>.*))?$'
+            parse_from: body
+            # timestamp:
+            #   parse_from: attributes.timestamp
+            #   layout: '%Y-%m-%dT%H:%M:%S.%f%z'
+            #   location: 'Local'
+            output: extract_log_level
+          # Extract log level from message
+          - type: regex_parser
+            id: extract_log_level
+            # Match log patterns like: "INFO: message" or "2025-09-23 17:42:23.192 INFO message" 
+            regex: '^(?:\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}[.]\d+\s+)?(?P<log_level>TRACE|DEBUG|INFO|WARN|WARNING|ERROR|CRITICAL|FATAL)[:,]?\s*(?P<clean_message>.*)$'
+            parse_from: attributes.message
+            on_error: 'send'  # Send original message if regex doesn't match
 
     processors:
       # Add Kubernetes attributes using the Kubernetes API
@@ -50,6 +60,8 @@ data:
             - k8s.node.name
             - k8s.pod.start_time
             - k8s.container.name
+            - container.image.name
+            - container.image.tag
           labels:
             - tag_name: app
               key: app
@@ -57,6 +69,8 @@ data:
               key: version
             - tag_name: component
               key: component
+            - tag_name: pod-template-hash
+              key: pod-template-hash
           annotations:
             - tag_name: deployment
               key: deployment.kubernetes.io/revision
@@ -73,6 +87,30 @@ data:
           - key: deployment.environment
             value: "edge"
             action: upsert
+          # Use pod name as host identifier (more reliable than node name)
+          - key: host.name
+            from_attribute: k8s.pod.name
+            action: upsert
+          # Add Balena device UUID if available
+          - key: balena.device.uuid
+            value: "${env:BALENA_DEVICE_UUID}"
+            action: insert
+          # Map extracted log level for searchability
+          - key: log.level
+            from_attribute: log_level
+            action: insert
+          # Use cleaned message without timestamp/level prefix  
+          - key: log.message
+            from_attribute: clean_message
+            action: insert
+          # Container image info not available via k8sattributes - would need custom solution
+          # Add IP address information
+          - key: pod.ip
+            value: "${env:POD_IP}"
+            action: insert
+          - key: node.ip
+            value: "${env:NODE_IP}"
+            action: insert
 
       # Batch processor for performance
       batch:
@@ -110,6 +148,4 @@ data:
           receivers: [filelog]
           processors: [k8sattributes, resource, batch]
           exporters: [splunk_hec]
-          # Uncomment to enable debug output:
-          # exporters: [splunk_hec, debug]
 {{- end }}
