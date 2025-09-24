@@ -211,19 +211,25 @@ opentelemetry-collector:
           # Extract log level from the message content
           - type: regex_parser
             id: extract_log_level
-            regex: '^(?P<level>DEBUG|INFO|WARN|WARNING|ERROR|CRITICAL|FATAL):'
+            regex: '(?:^|.*\s)(?P<level>DEBUG|INFO|WARN|WARNING|ERROR|CRITICAL|FATAL)(?:[:\s]|$)'
             parse_from: attributes.message
-            on_error: 'send'  # Send original message if regex doesn't match
+            on_error: 'send'
           # Parse JSON logs that are already structured
           - type: json_parser
             id: parse_json_logs
             parse_from: attributes.message
             on_error: 'send'  # Continue if not JSON
-          # Use a simpler regex to detect and parse HTTP access log patterns
+          # Parse FastAPI/Uvicorn HTTP access logs: "INFO: 10.42.0.1:50126 - "GET /health/ready HTTP/1.1" 200 OK"
           - type: regex_parser
-            id: extract_http_access_log
-            regex: '(?P<client_ip>\d+\.\d+\.\d+\.\d+):(?P<client_port>\d+)\s+-\s+"(?P<http_method>\w+)\s+(?P<http_path>\S+)[^"]*"\s+(?P<status_code>\d+)'
+            id: extract_fastapi_access_log
+            regex: '(?P<client_ip>\d+\.\d+\.\d+\.\d+):(?P<client_port>\d+)\s+-\s+"(?P<http_method>\w+)\s+(?P<http_path>[^?\s]+)(?:\?(?P<http_query>[^"\s]*?))?(?:\s+[^"]*)?"\s+(?P<status_code>\d+)'
             parse_from: attributes.message  
+            on_error: 'send'
+          # Parse NGINX access logs: "NGINX: 10.42.0.1 - - [24/Sep/2025:17:16:24 +0000] "GET /health/ready HTTP/1.1" 200 18 "-" "kube-probe/1.33""
+          - type: regex_parser
+            id: extract_nginx_access_log
+            regex: 'NGINX:\s+(?P<client_ip>\d+\.\d+\.\d+\.\d+)\s+-\s+-\s+\[(?P<nginx_timestamp>[^\]]+)\]\s+"(?P<http_method>\w+)\s+(?P<http_path>[^?\s]+)(?:\?(?P<http_query>[^"\s]*?))?(?:\s+[^"]*)?"\s+(?P<status_code>\d+)\s+(?P<response_size>\d+)\s+"(?P<referer>[^"]*)"\s+"(?P<user_agent>[^"]*)"'
+            parse_from: attributes.message
             on_error: 'send'
     
     processors:
