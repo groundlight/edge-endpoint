@@ -7,8 +7,6 @@ global:
   # Enable OpenTelemetry dependency when needed for logging
   # Use: --set global.otelEnabled=true for local-splunk or cloud-splunk modes
   otelEnabled: false
-  # Balena device UUID gets passed to subcharts
-  balenaDeviceUuid: "none"
 
 # The Kubernetees namespace where the Edge Endpoint will be deployed
 # We recommend that you don't change this value unless you're doing something unusual
@@ -153,10 +151,8 @@ opentelemetry-collector:
   # DaemonSet mode for collecting logs from all pods on each node
   mode: daemonset
   
-  # Deploy to the edge namespace instead of default
   namespaceOverride: "edge"
   
-  # Simplified naming
   nameOverride: "opentelemetry-collector"
   fullnameOverride: "opentelemetry-collector"
   
@@ -185,7 +181,6 @@ opentelemetry-collector:
   
   config:
     receivers:
-      # Manual filelog configuration to avoid unsupported 'container' operator
       filelog:
         include:
           - /var/log/pods/*/*/*.log

@@ -80,8 +80,7 @@ Each `inferencemodel` pod contains one container.
 
 The Edge Endpoint supports multiple logging modes for different environments:
 
-* **[Logging Integration Guide](./docs/OPENTELEMETRY_INTEGRATION.md)** - Complete documentation for all logging modes
-* **Standard Mode**: Basic logging to stdout/files (default)
+* **Standard Mode**: Basic logging to stdout/files, accessible with `k logs` (default)
 * **Local Splunk Mode**: Local Splunk container + OpenTelemetry collector  
 * **Cloud Splunk Mode**: External Splunk + OpenTelemetry collector (in development)
 
@@ -89,17 +88,15 @@ The Edge Endpoint supports multiple logging modes for different environments:
 
 ```bash
 # Standard logging (default)
-helm upgrade -i edge-endpoint ./deploy/helm/groundlight-edge-endpoint
+helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint \
+  --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}"
 
 # Local Splunk for testing
-helm upgrade -i edge-endpoint ./deploy/helm/groundlight-edge-endpoint \
-  --set loggingMode="local-splunk"
+helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint \
+  --set loggingMode="local-splunk" \
+  --set global.otelEnabled=true 
 
-# External Splunk for production (when available)
-helm upgrade -i edge-endpoint ./deploy/helm/groundlight-edge-endpoint \
-  --set loggingMode="cloud-splunk" \
-  --set splunk.cloud.endpoint="https://your-splunk.com:8088/services/collector" \
-  --set splunk.cloud.token="your-hec-token"
+# External Splunk for production (coming soon)
 ```
 
 ## Attribution

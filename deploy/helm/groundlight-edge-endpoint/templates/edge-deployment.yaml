@@ -236,7 +236,6 @@ spec:
         - name: device-info-volume
           mountPath: /opt/groundlight/device
 
-
       imagePullSecrets:
       - name: registry-credentials
 
