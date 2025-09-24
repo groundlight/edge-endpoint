@@ -89,10 +89,12 @@ The Edge Endpoint supports multiple logging modes for different environments:
 ```bash
 # Standard logging (default)
 helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint \
+  --dependency-update \
   --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}"
 
 # Local Splunk for testing
 helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint \
+  --dependency-update \
   --set loggingMode="local-splunk" \
   --set global.otelEnabled=true 
 
