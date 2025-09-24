@@ -236,48 +236,6 @@ spec:
         - name: device-info-volume
           mountPath: /opt/groundlight/device
 
-      {{- if or (eq .Values.loggingMode "local-splunk") (eq .Values.loggingMode "cloud-splunk") }}
-      # OpenTelemetry Collector sidecar for log collection
-      - name: otel-collector
-        image: {{ .Values.splunk.collector.image.repository }}:{{ .Values.splunk.collector.image.tag }}
-        imagePullPolicy: IfNotPresent
-        resources:
-          limits:
-            cpu: {{ .Values.splunk.collector.resources.limits.cpu }}
-            memory: {{ .Values.splunk.collector.resources.limits.memory }}
-          requests:
-            cpu: {{ .Values.splunk.collector.resources.requests.cpu }}
-            memory: {{ .Values.splunk.collector.resources.requests.memory }}
-        env:
-        - name: KUBE_NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        - name: POD_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.podIP
-        - name: NODE_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.hostIP
-        - name: BALENA_DEVICE_UUID
-          value: {{ .Values.balena.deviceUuid | default "none" | quote }}
-        command:
-        - /otelcol-contrib
-        - --config=/etc/otel-collector-config/otel-config.yaml
-        volumeMounts:
-        - name: otel-collector-config
-          mountPath: /etc/otel-collector-config
-        - name: var-log-pods
-          mountPath: /var/log/pods
-          readOnly: true
-        - name: var-lib-docker-containers
-          mountPath: /var/lib/docker/containers
-          readOnly: true
-        securityContext:
-          runAsUser: 0  # Need root to read log files
-      {{- end }}
 
       imagePullSecrets:
       - name: registry-credentials
@@ -306,15 +264,3 @@ spec:
         hostPath:
           path: /opt/groundlight/queue/{{ .Values.namespace }}
           type: DirectoryOrCreate
-      {{- if or (eq .Values.loggingMode "local-splunk") (eq .Values.loggingMode "cloud-splunk") }}
-      # OpenTelemetry Collector volumes
-      - name: otel-collector-config
-        configMap:
-          name: otel-collector-config
-      - name: var-log-pods
-        hostPath:
-          path: /var/log/pods
-      - name: var-lib-docker-containers
-        hostPath:
-          path: /var/lib/docker/containers
-      {{- end }}

@@ -2,6 +2,14 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+# Global configuration for dependencies
+global:
+  # Enable OpenTelemetry dependency when needed for logging
+  # Use: --set global.otelEnabled=true for local-splunk or cloud-splunk modes
+  otelEnabled: false
+  # Balena device UUID gets passed to subcharts
+  balenaDeviceUuid: "none"
+
 # The Kubernetees namespace where the Edge Endpoint will be deployed
 # We recommend that you don't change this value unless you're doing something unusual
 # like running more that one instance of the Edge Endpoint in the same cluster
@@ -78,9 +86,13 @@ serviceAccount:
 # Logging Configuration
 # loggingMode options:
 #   - "standard": Basic logging to stdout/files (no Splunk, no OTel)
-#   - "local-splunk": Deploy local Splunk container + OTel collector
-#   - "cloud-splunk": Use external Splunk + OTel collector
+#   - "local-splunk": Deploy local Splunk container
+#   - "cloud-splunk": Does not deploy local Splunk container, points to cloud instance instead
 loggingMode: "standard"
+
+# Balena device configuration
+balena:
+  deviceUuid: "none"
 
 # Splunk Configuration (used for local-splunk and cloud-splunk modes)
 splunk:
@@ -131,6 +143,152 @@ splunk:
         cpu: 100m
         memory: 128Mi
 
-# Balena device configuration
-balena:
-  deviceUuid: "none"
+# OpenTelemetry Collector dependency configuration
+# This configures the official OpenTelemetry Helm chart as a dependency
+opentelemetry-collector:
+  # Enable the OpenTelemetry collector when logging modes require it
+  # This gets set dynamically based on loggingMode
+  enabled: false  # Will be overridden via --set at deployment time
+  
+  # DaemonSet mode for collecting logs from all pods on each node
+  mode: daemonset
+  
+  # Deploy to the edge namespace instead of default
+  namespaceOverride: "edge"
+  
+  # Simplified naming
+  nameOverride: "opentelemetry-collector"
+  fullnameOverride: "opentelemetry-collector"
+  
+  # Use the contrib image which includes all receivers/processors
+  image:
+    repository: otel/opentelemetry-collector-contrib
+    tag: "0.91.0"
+  
+  # Resource configuration
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  
+  # Preset configurations
+  presets:
+    kubernetesAttributes:
+      enabled: true
+    logsCollection:
+      enabled: false  # Disabled due to unsupported 'container' operator in v0.91.0
+    kubeletMetrics:
+      enabled: false
+  
+  config:
+    receivers:
+      # Manual filelog configuration to avoid unsupported 'container' operator
+      filelog:
+        include:
+          - /var/log/pods/*/*/*.log
+        exclude:
+          - /var/log/pods/edge_opentelemetry-collector*/*/*.log
+        start_at: end
+        include_file_path: true
+        include_file_name: false
+        operators:
+          # Parse CRI format logs manually
+          - type: regex_parser
+            id: extract_metadata_from_filepath  
+            regex: '^.*\/(?P<namespace>[^_]+)_(?P<pod_name>[^_]+)_(?P<uid>[a-f0-9\-]{36})\/(?P<container_name>[^\._]+)\/(?P<restart_count>\d+)\.log$'
+            parse_from: attributes["log.file.path"]
+          # Parse CRI log format: timestamp stream partial_flag log_message
+          - type: regex_parser
+            id: parse_cri_format
+            regex: '^(?P<timestamp>[^\s]+) (?P<stream>stdout|stderr) (?P<partial>P|F) (?P<message>.*)$'
+            parse_from: body
+            timestamp:
+              parse_from: attributes.timestamp
+              layout: '%Y-%m-%dT%H:%M:%S.%LZ'
+          # Extract log level from the message content
+          - type: regex_parser
+            id: extract_log_level
+            regex: '^(?P<level>DEBUG|INFO|WARN|WARNING|ERROR|CRITICAL|FATAL):'
+            parse_from: attributes.message
+            on_error: 'send'  # Send original message if regex doesn't match
+          # Parse JSON logs that are already structured
+          - type: json_parser
+            id: parse_json_logs
+            parse_from: attributes.message
+            on_error: 'send'  # Continue if not JSON
+          # Use a simpler regex to detect and parse HTTP access log patterns
+          - type: regex_parser
+            id: extract_http_access_log
+            regex: '(?P<client_ip>\d+\.\d+\.\d+\.\d+):(?P<client_port>\d+)\s+-\s+"(?P<http_method>\w+)\s+(?P<http_path>\S+)[^"]*"\s+(?P<status_code>\d+)'
+            parse_from: attributes.message  
+            on_error: 'send'
+    
+    processors:
+      # Add resource attributes for custom fields
+      resource:
+        attributes:
+          - key: service.name
+            value: "edge-endpoint"
+            action: upsert
+          - key: deployment.environment
+            value: "edge"
+            action: upsert
+          - key: balena.device.uuid
+            value: "${env:BALENA_DEVICE_UUID}"
+            action: upsert
+    
+    exporters:
+      # Splunk HEC exporter configuration
+      splunk_hec:
+        endpoint: "http://splunk.edge.svc.cluster.local:8088/services/collector"
+        token: "abcd1234-5678-90ef-ghij-klmnopqrstuv"
+        index: "edge_app"
+        source: "edge-endpoint"
+        sourcetype: "edge:endpoint:logs"
+        disable_compression: false
+        timeout: 10s
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 120s
+    
+    service:
+      pipelines:
+        logs:
+          receivers: [filelog]
+          processors: [k8sattributes, resource, memory_limiter, batch]
+          exporters: [splunk_hec]
+  
+  # Mount host directories for log collection
+  extraVolumes:
+    - name: varlogpods
+      hostPath:
+        path: /var/log/pods
+    - name: varlibdockercontainers
+      hostPath:
+        path: /var/lib/docker/containers
+  
+  extraVolumeMounts:
+    - name: varlogpods
+      mountPath: /var/log/pods
+      readOnly: true
+    - name: varlibdockercontainers
+      mountPath: /var/lib/docker/containers
+      readOnly: true
+  
+  # Environment variables for custom attributes  
+  extraEnvs:
+    - name: BALENA_DEVICE_UUID
+      valueFrom:
+        configMapKeyRef:
+          name: balena-config
+          key: device-uuid
+  
+  # Security context to read log files  
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 0
