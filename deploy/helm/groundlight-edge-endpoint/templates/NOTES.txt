@@ -8,4 +8,4 @@ export GROUNDLIGHT_ENDPOINT="http://localhost:{{ .Values.edgeEndpointPort }}/"
 
 From within the cluster:
 
-export GROUNDLIGHT_ENDPOINT="http://edge-endpoint-service.{{ .Values.namespace }}.svc.cluster.local:30101/"
+export GROUNDLIGHT_ENDPOINT="http://edge-endpoint-service.{{ .Values.namespace }}.svc.cluster.local:30101/"   
