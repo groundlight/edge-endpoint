@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 MAX_SDK_INSTANCES_CACHE_SIZE = 1000
 MAX_DETECTOR_IDS_CACHE_SIZE = 1000
-STALE_METADATA_THRESHOLD_SEC = 60  # 30 seconds
+STALE_METADATA_THRESHOLD_SEC = 60  # 60 seconds
 
 USE_MINIMAL_IMAGE = os.environ.get("USE_MINIMAL_IMAGE", "false") == "true"
 
@@ -89,10 +89,10 @@ def get_detector_inference_configs(
 
 @lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
 def _get_groundlight_sdk_instance_internal(api_token: str):
-    # We reduce the HTTP transport retries to avoid stalling too long when experiencing network connectivity issues.
+    # We set the HTTP transport retries to 0 to avoid stalling too long when experiencing network connectivity issues.
     # By default, urllib3 retries are only done for idempotent methods (which does not include POST). This configuration
     # therefore will not affect submission of image queries.
-    http_transport_retries = Retry(total=2, connect=1, read=1)
+    http_transport_retries = Retry(total=0)
     return Groundlight(api_token=api_token, http_transport_retries=http_transport_retries)
 
 
@@ -151,7 +151,7 @@ def get_detector_metadata(detector_id: str, gl: Groundlight) -> Detector:
     # We set a lower connect and read timeout to avoid stalling too long when experiencing network connectivity issues.
     # These values are somewhat arbitrarily set and can be adjusted in conjunction with the http_transport_retries
     # parameter for the Groundlight instance to achieve a different balance of robustness vs speed.
-    connect_timeout, read_timeout = 3, 5
+    connect_timeout, read_timeout = 2, 3
     detector = safe_call_sdk(gl.get_detector, id=detector_id, request_timeout=(connect_timeout, read_timeout))
     return detector
 
