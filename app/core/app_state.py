@@ -8,6 +8,7 @@ import yaml
 from fastapi import Request
 from groundlight import Groundlight
 from model import Detector
+from urllib3.util.retry import Retry
 
 from app.escalation_queue.queue_writer import QueueWriter
 
@@ -88,7 +89,11 @@ def get_detector_inference_configs(
 
 @lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
 def _get_groundlight_sdk_instance_internal(api_token: str):
-    return Groundlight(api_token=api_token)
+    # We reduce the HTTP transport retries to avoid stalling too long when experiencing network connectivity issues.
+    # By default, urllib3 retries are only done for idempotent methods (which does not include POST). This configuration
+    # therefore will not affect submission of image queries.
+    http_transport_retries = Retry(connect=1, read=1)
+    return Groundlight(api_token=api_token, http_transport_retries=http_transport_retries)
 
 
 def get_groundlight_sdk_instance(request: Request):
@@ -143,7 +148,11 @@ def get_detector_metadata(detector_id: str, gl: Groundlight) -> Detector:
     Returns detector metadata from the Groundlight API.
     Caches the result so that we don't have to make an expensive API call every time.
     """
-    detector = safe_call_sdk(gl.get_detector, id=detector_id)
+    # We set a lower connect and read timeout to avoid stalling too long when experiencing network connectivity issues.
+    # These values are somewhat arbitrarily set and can be adjusted in conjunction with the http_transport_retries
+    # parameter for the Groundlight instance to achieve a different balance of robustness vs speed.
+    connect_timeout, read_timeout = 3, 5
+    detector = safe_call_sdk(gl.get_detector, id=detector_id, request_timeout=(connect_timeout, read_timeout))
     return detector
 
 
