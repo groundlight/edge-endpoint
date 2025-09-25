@@ -129,6 +129,8 @@ def refresh_detector_metadata_if_needed(detector_id: str, gl: Groundlight) -> No
                 logger.error(
                     f"Failed to refresh detector metadata for {detector_id=}: {e}. Restoring stale cached metadata."
                 )
+                # The timestamp of the restored value will be updated to the time of restoration. This avoids trying to
+                # refresh the metadata again right away, in case the failure was due to a temporary network outage.
                 metadata_cache.restore_suspended_value(detector_id)
 
 
