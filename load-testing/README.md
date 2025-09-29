@@ -1,6 +1,6 @@
 # Load Testing the Edge Endpoint
 
-This directory contains scripts to comprehensively test an edge endpoint's performance, infrastructure resilience, and deployment capabilities. These include concurrent client load testing, memory pressure testing with multiple inference pods, and model rollout pipeline validation. The tools here are actively under development and may be changed at any time. 
+This directory contains scripts to comprehensively test an edge endpoint's performance, infrastructure resilience, and deployment capabilities. These include concurrent client load testing, memory pressure testing with multiple inference pods, and model rollout validation. The tools here are actively under development and may be changed at any time. 
 
 ## Multiple Client Throughput Test
 
