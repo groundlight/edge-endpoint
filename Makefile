@@ -55,7 +55,7 @@ helm-install:
 	helm upgrade -i -n default --dependency-update ${HELM_ARGS} ${HELM_RELEASE_NAME} deploy/helm/groundlight-edge-endpoint 
 
 helm-package:
-	helm package deploy/helm/groundlight-edge-endpoint
+	helm package deploy/helm/groundlight-edge-endpoint --dependency-update
 
 # TODO: update this with inference server support
 helm-local:
