@@ -52,13 +52,13 @@ HELM_RELEASE_NAME = edge-endpoint
 # the namespace where the resources are deployed. The namespace where the resources are deployed is 
 # specified in the values.yaml file (default is "edge").
 helm-install:
-	helm upgrade -i -n default ${HELM_ARGS} ${HELM_RELEASE_NAME} deploy/helm/groundlight-edge-endpoint 
+	helm upgrade -i -n default --dependency-update ${HELM_ARGS} ${HELM_RELEASE_NAME} deploy/helm/groundlight-edge-endpoint 
 
 helm-package:
 	helm package deploy/helm/groundlight-edge-endpoint
 
 # TODO: update this with inference server support
 helm-local:
-	helm upgrade -i -n default ${HELM_ARGS} --set=edgeEndpointTag=dev ${HELM_RELEASE_NAME} deploy/helm/groundlight-edge-endpoint 
+	helm upgrade -i -n default --dependency-update ${HELM_ARGS} --set=edgeEndpointTag=dev ${HELM_RELEASE_NAME} deploy/helm/groundlight-edge-endpoint 
 	# Restart any deployments so that they pick up the new image
 	kubectl rollout restart deployment -n $$(helm get -n default values ${HELM_RELEASE_NAME} --all -o json | jq -r '.namespace') edge-endpoint
