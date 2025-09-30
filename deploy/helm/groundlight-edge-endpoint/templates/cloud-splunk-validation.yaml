@@ -1,4 +1,4 @@
-# Just a placehold that will later be replaced with a proper implementation for Splunk cloud logging
+# Just a placeholder that will later be replaced with a proper implementation for Splunk cloud logging
 {{- if eq .Values.loggingMode "cloud-splunk" }}
 {{- if or (not .Values.splunk.cloud.endpoint) (not .Values.splunk.cloud.token) }}
 apiVersion: v1
