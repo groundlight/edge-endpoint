@@ -148,3 +148,7 @@ sqlalchemy.log.*
 
 # Docker Compose - dont check in our temporary docker-compose.yml file
 docker-compose.yml
+
+# Load testing outputs - local performance data and plots
+load-testing/logs/
+load-testing/plots/
