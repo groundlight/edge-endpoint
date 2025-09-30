@@ -1,0 +1,15 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata: { name: packet-loss }
+spec:
+  action: loss # Simulating packet loss
+  mode: all # Applies to all selected pods
+  direction: to # Only affect traffic outbound to the specified target
+  selector:
+    labelSelectors:
+      app: edge-logic-server # Only affect traffic to/from the edge-endpoint pod
+  loss:
+    loss: "50"          # x% probability of packet loss
+    correlation: "75"   # Amount of correlation between packet loss events
+  externalTargets:
+    - "api.groundlight.ai" # Only affect traffic to api.groundlight.ai

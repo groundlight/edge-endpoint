@@ -22,7 +22,7 @@ Filesystem structure:
 import json
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
 
@@ -144,6 +144,10 @@ class ActivityRetriever:
         # Convert the detector_activity dict to a JSON string to prevent opensearch from indexing all
         # the individual detector fields
         return json.dumps(detector_activity)
+
+    def get_last_hour(self) -> str:
+        """Get the last hour in UTC."""
+        return (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
 
     def get_detector_activity_metrics(self, detector_id: str) -> int:
         """Get the activity on a detector for the previous hour."""

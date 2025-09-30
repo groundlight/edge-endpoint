@@ -14,22 +14,42 @@ detectors:
     edge_inference_config: "no_cloud"
 ```
 
-* You'll want to configure the edge-endpoint proxy and the inference server to have the optimal number of workers. A general guideline is that your number of edge-endpoint proxy workers shouldn't exceed the number of CPU cores on your machine. Try to set your number of inference workers to maximize GPU utilization (if using a GPU).
-    * To increase the number of edge-endpoint proxy workers, change the `--workers` param in the CMD line of the [Dockerfile](/Dockerfile). 
-    * To increase the number of inference server workers, in the [inference_deployment_template](/deploy/k3s/inference_deployment/inference_deployment_template.yaml) locate the below command and change the argument for `--workers`.
-```
-command:
-    [
-        "poetry", "run", "python3", "-m", "uvicorn", "serving.edge_inference_server.fastapi_server:app",
-        "--host", "0.0.0.0",
-        "--port", "8000",
-        "--workers", "1"
-    ]
-```
+* You'll want to configure both the edge endpoint and the inference server to have the optimal number of workers. A general guideline is that your number of edge endpoint workers shouldn't exceed the number of CPU cores on your machine. Try to set your number of inference workers to maximize GPU utilization (if using a GPU).
+
+    * **To configure edge endpoint workers**: Edit the `--workers` parameter in [launch-edge-logic-server.sh](/app/bin/launch-edge-logic-server.sh). Change from the default:
+    ```bash
+    poetry run uvicorn \
+        --workers 8 \  # You can tweak this for load testing
+        --host 0.0.0.0 \
+        --port ${APP_PORT} \
+        --proxy-headers \
+        app.main:app
+    ```
+
+    * **To configure inference server workers**: Set the `WORKERS` environment variable in the inference deployment template at [inference-deployment-template.yaml](/deploy/helm/groundlight-edge-endpoint/files/inference-deployment-template.yaml). Change the value from `"1"` to your desired number of workers:
+    ```yaml
+    - name: WORKERS  # Number of uvicorn workers for the inference server
+      value: "4"  # Increase this number for load testing
+    ```
 
 Some trial and error will likely be necessary to figure out the ideal configuration.
 
-After setting these config options, you should run/re-run the [setup edge endpoint script](/deploy/bin/setup-ee.sh) to deploy with your new configuration. You can monitor the inference pod's logs to see when all of the workers have finished starting up (if the number of workers is high, this will likely be after the pod reports being ready). 
+After setting these config options, you should run/re-run the upgrade command to deploy with your new configuration. 
+
+#### If using setup-ee.sh: 
+
+Run/re-run the [setup edge endpoint script](/deploy/bin/setup-ee.sh).
+
+#### If using helm:
+
+Reinstall the endpoint and set the configFile to the `edge-config.yaml` that you just modified:
+
+```
+# For an endpoint with default values:
+helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint \
+  --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}" --set-file configFile=/path/to/your/edge-config.yaml
+```
+
 
 ### Configuring the load testing scripts
 

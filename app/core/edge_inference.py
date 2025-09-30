@@ -1,11 +1,9 @@
-import asyncio
 import logging
 import os
 import shutil
 import time
 from typing import Optional
 
-import httpx
 import requests
 import yaml
 from cachetools import TTLCache, cached
@@ -21,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Simple TTL cache for is_edge_inference_ready checks to avoid having to re-check every time a request is processed.
 # This will be process-specific, so each edge-endpoint worker will have its own cache instance.
-ttl_cache = TTLCache(maxsize=128, ttl=2)
+ttl_cache = TTLCache(maxsize=128, ttl=5)
 
 
 @cached(ttl_cache)
@@ -35,37 +33,39 @@ def is_edge_inference_ready(inference_client_url: str) -> bool:
         return False
 
 
-async def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, content_type: str) -> dict:
+def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, content_type: str) -> dict:
     inference_url = f"http://{inference_client_url}/infer"
     headers = {"Content-Type": content_type}
-    async with httpx.AsyncClient() as client:
-        try:
-            logger.debug(f"Submitting image for inference to {inference_url}")
-            response = await client.post(inference_url, data=image_bytes, headers=headers)
-            if response.status_code != status.HTTP_200_OK:
-                logger.error(f"Inference server returned an error: {response.status_code} - {response.text}")
-                raise RuntimeError(f"Inference server error: {response.status_code} - {response.text}")
-            return response.json()
-        except httpx.RequestError as e:
-            logger.error(f"Failed to connect to {inference_url}: {e}")
-            raise RuntimeError("Failed to submit image for inference") from e
+    try:
+        logger.debug(f"Submitting image for inference to {inference_url}")
+        response = requests.post(inference_url, data=image_bytes, headers=headers)
+        if response.status_code != status.HTTP_200_OK:
+            logger.error(f"Inference server returned an error: {response.status_code} - {response.text}")
+            raise RuntimeError(f"Inference server error: {response.status_code} - {response.text}")
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to connect to {inference_url}: {e}")
+        raise RuntimeError("Failed to submit image for inference") from e
 
 
-def get_inference_result(primary_response: dict, oodd_response: dict) -> str:
+def get_inference_result(primary_response: dict, oodd_response: dict | None) -> str:
     """
-    Get the final inference result from the primary and OODD responses.
+    Get the final inference result from the primary and OODD responses. If the OODD response is None, we return the
+    parsed primary response without confidence adjustment.
     """
     primary_num_classes = get_num_classes(primary_response)
 
-    primary_output_dict = parse_inference_response(primary_response)
-    logger.debug(f"Primary inference server response: {primary_output_dict}.")
-    oodd_output_dict = parse_inference_response(oodd_response)
-    logger.debug(f"OODD inference server response: {oodd_output_dict}.")
+    output_dict = parse_inference_response(primary_response)
+    logger.debug(f"Primary inference server response: {output_dict}.")
 
-    combined_output_dict = adjust_confidence_with_oodd(primary_output_dict, oodd_output_dict, primary_num_classes)
-    logger.debug(f"Combined (primary + OODD) inference result: {combined_output_dict}.")
+    if oodd_response is not None:
+        oodd_output_dict = parse_inference_response(oodd_response)
+        logger.debug(f"OODD inference server response: {oodd_output_dict}.")
 
-    return combined_output_dict
+        output_dict = adjust_confidence_with_oodd(output_dict, oodd_output_dict, primary_num_classes)
+        logger.debug(f"Combined (primary + OODD) inference result: {output_dict}.")
+
+    return output_dict
 
 
 def get_num_classes(response: dict) -> int:
@@ -134,9 +134,9 @@ def parse_inference_response(response: dict) -> dict:
     #     "predictions": {"confidences": [0.54], "labels": [0], "probabilities": [0.45], "scores": [-2.94]},  # Binary results
     #     "secondary_predictions": None,  # Text recognition and Obj detection results
     # }
-    multi_predictions: dict = response.get("multi_predictions", None)
-    predictions: dict = response.get("predictions", None)
-    secondary_predictions: dict = response.get("secondary_predictions", None)
+    multi_predictions: dict | None = response.get("multi_predictions", None)
+    predictions: dict | None = response.get("predictions", None)
+    secondary_predictions: dict | None = response.get("secondary_predictions", None)
 
     if multi_predictions is not None and predictions is not None:
         raise ValueError("Got result with both multi_predictions and predictions.")
@@ -188,6 +188,7 @@ class EdgeInferenceManager:
         self,
         detector_inference_configs: dict[str, EdgeInferenceConfig] | None,
         verbose: bool = False,
+        separate_oodd_inference: bool = True,
     ) -> None:
         """
         Initializes the edge inference manager.
@@ -195,10 +196,12 @@ class EdgeInferenceManager:
             detector_inference_configs: Dictionary of detector IDs to EdgeInferenceConfig objects
             edge_config: RootEdgeConfig object
             verbose: Whether to print verbose logs from the inference server client
+            separate_oodd_inference: Whether to run inference separately for the OODD model
         """
         self.verbose = verbose
         self.detector_inference_configs, self.inference_client_urls, self.oodd_inference_client_urls = {}, {}, {}
         self.speedmon = SpeedMonitor()
+        self.separate_oodd_inference = separate_oodd_inference
 
         if detector_inference_configs:
             self.detector_inference_configs = detector_inference_configs
@@ -207,11 +210,12 @@ class EdgeInferenceManager:
                 for detector_id in self.detector_inference_configs.keys()
                 if self.detector_configured_for_edge_inference(detector_id)
             }
-            self.oodd_inference_client_urls = {
-                detector_id: get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
-                for detector_id in self.detector_inference_configs.keys()
-                if self.detector_configured_for_edge_inference(detector_id)
-            }
+            if separate_oodd_inference:
+                self.oodd_inference_client_urls = {
+                    detector_id: get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
+                    for detector_id in self.detector_inference_configs.keys()
+                    if self.detector_configured_for_edge_inference(detector_id)
+                }
         # Last time we escalated to cloud for each detector
         self.last_escalation_times = {detector_id: None for detector_id in self.detector_inference_configs.keys()}
         # Minimum time between escalations for each detector
@@ -232,9 +236,11 @@ class EdgeInferenceManager:
         if detector_id not in self.detector_inference_configs.keys():
             self.detector_inference_configs[detector_id] = EdgeInferenceConfig(enabled=True, api_token=api_token)
             self.inference_client_urls[detector_id] = get_edge_inference_service_name(detector_id) + ":8000"
-            self.oodd_inference_client_urls[detector_id] = (
-                get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
-            )
+            if self.separate_oodd_inference:
+                logger.info(f"Performing separate OODD inference, updating OODD inference URL for {detector_id}")
+                self.oodd_inference_client_urls[detector_id] = (
+                    get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
+                )
             logger.info(f"Set up edge inference for {detector_id}")
 
     def detector_configured_for_edge_inference(self, detector_id: str) -> bool:
@@ -263,20 +269,26 @@ class EdgeInferenceManager:
         """
         try:
             inference_client_url = self.inference_client_urls[detector_id]
-            oodd_inference_client_url = self.oodd_inference_client_urls[detector_id]
+            oodd_inference_client_url = (
+                self.oodd_inference_client_urls[detector_id] if self.separate_oodd_inference else None
+            )
         except KeyError:
             logger.info(f"Failed to look up inference clients for {detector_id}")
             return False
 
-        inference_clients_are_ready = is_edge_inference_ready(inference_client_url) and is_edge_inference_ready(
-            oodd_inference_client_url
+        # primary inference client is ready, and if we're doing separate OODD inference, the OODD
+        # inference client is also ready
+        inference_clients_are_ready = is_edge_inference_ready(inference_client_url) and (
+            not self.separate_oodd_inference or is_edge_inference_ready(oodd_inference_client_url)
         )
         if not inference_clients_are_ready:
-            logger.debug("Edge inference server and/or OODD inference server is not ready")
+            logger.debug(
+                f"Edge inference server and/or OODD inference server is not ready. {inference_client_url=}, {oodd_inference_client_url=}"
+            )
             return False
         return True
 
-    async def run_inference(self, detector_id: str, image_bytes: bytes, content_type: str) -> dict:
+    def run_inference(self, detector_id: str, image_bytes: bytes, content_type: str) -> dict:
         """
         Submit an image to the inference server, route to a specific model, and return the results.
         Args:
@@ -294,12 +306,12 @@ class EdgeInferenceManager:
         start_time = time.perf_counter()
 
         inference_client_url = self.inference_client_urls[detector_id]
-        oodd_inference_client_url = self.oodd_inference_client_urls[detector_id]
+        response = submit_image_for_inference(inference_client_url, image_bytes, content_type)
 
-        response, oodd_response = await asyncio.gather(
-            submit_image_for_inference(inference_client_url, image_bytes, content_type),
-            submit_image_for_inference(oodd_inference_client_url, image_bytes, content_type),
-        )
+        oodd_response = None
+        if self.separate_oodd_inference:
+            oodd_inference_client_url = self.oodd_inference_client_urls[detector_id]
+            oodd_response = submit_image_for_inference(oodd_inference_client_url, image_bytes, content_type)
 
         output_dict = get_inference_result(response, oodd_response)
 
@@ -313,8 +325,8 @@ class EdgeInferenceManager:
 
     def update_models_if_available(self, detector_id: str) -> bool:
         """
-        Request a new model from Groundlight. If there is a new model available, download it and
-        write it to the model repository as a new version.
+        Request a new model from Groundlight. If there is a new model available for primary or OODD
+        inference, download it and write it to the model repository as a new version.
 
         Returns True if a new model was downloaded and saved, False otherwise.
         """
@@ -331,12 +343,16 @@ class EdgeInferenceManager:
 
         edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
 
-        edge_version, oodd_version = get_current_model_versions(self.MODEL_REPOSITORY, detector_id)
+        primary_version = get_current_model_version(self.MODEL_REPOSITORY, detector_id)
         primary_edge_model_dir = get_primary_edge_model_dir(self.MODEL_REPOSITORY, detector_id)
-        oodd_model_dir = get_oodd_model_dir(self.MODEL_REPOSITORY, detector_id)
+        update_primary_model = should_update(edge_model_info, primary_edge_model_dir, primary_version)
 
-        update_primary_model = should_update(edge_model_info, primary_edge_model_dir, edge_version)
-        update_oodd_model = should_update(oodd_model_info, oodd_model_dir, oodd_version)
+        if self.separate_oodd_inference:
+            oodd_version = get_current_model_version(self.MODEL_REPOSITORY, detector_id, is_oodd=True)
+            oodd_model_dir = get_oodd_model_dir(self.MODEL_REPOSITORY, detector_id)
+            update_oodd_model = should_update(oodd_model_info, oodd_model_dir, oodd_version)
+        else:
+            update_oodd_model = False
 
         if not update_primary_model and not update_oodd_model:
             logger.debug(f"No new models available for {detector_id}")
@@ -376,12 +392,18 @@ class EdgeInferenceManager:
 
 
 def fetch_model_info(detector_id: str, api_token: Optional[str] = None) -> tuple[ModelInfoBase, ModelInfoBase]:
+    """Fetch model info for primary and OODD models from the Groundlight API."""
     if not api_token:
         raise ValueError(f"No API token provided for {detector_id=}")
 
     logger.debug(f"Fetching model info for {detector_id}")
 
-    url = f"https://api.groundlight.ai/edge-api/v1/fetch-model-urls/{detector_id}/"
+    # Get endpoint from env var
+    groundlight_endpoint = os.environ.get("GROUNDLIGHT_ENDPOINT", "https://api.groundlight.ai/")
+    if not groundlight_endpoint.endswith("/"):
+        groundlight_endpoint += "/"
+    url = f"{groundlight_endpoint}edge-api/v1/fetch-model-urls/{detector_id}/"
+
     headers = {"x-api-token": api_token}
     response = requests.get(url, headers=headers, timeout=10)
     logger.debug(f'fetch-model-urls response.text = "{response.text}", response.status_code = {response.status_code}')
@@ -449,26 +471,18 @@ def save_models_to_repository(
                     <model-definition-files (e.g. model.buf, pipeline_config.yaml, etc)>
     ```
     """
-    edge_model_dir = get_primary_edge_model_dir(repository_root, detector_id)
-    oodd_model_dir = get_oodd_model_dir(repository_root, detector_id)
-    os.makedirs(edge_model_dir, exist_ok=True)
-    os.makedirs(oodd_model_dir, exist_ok=True)
-
-    old_primary_model_version, old_oodd_model_version = get_current_model_versions(repository_root, detector_id)
-
     if edge_model_info:
+        edge_model_dir = get_primary_edge_model_dir(repository_root, detector_id)
+        os.makedirs(edge_model_dir, exist_ok=True)
+        old_primary_model_version = get_current_model_version(repository_root, detector_id)
         new_primary_model_version = 1 if old_primary_model_version is None else old_primary_model_version + 1
-    else:
-        new_primary_model_version = old_primary_model_version
-
-    if oodd_model_info:
-        new_oodd_model_version = 1 if old_oodd_model_version is None else old_oodd_model_version + 1
-    else:
-        new_oodd_model_version = old_oodd_model_version
-
-    if edge_model_info:
         save_model_to_repository(edge_model_buffer, edge_model_info, edge_model_dir, new_primary_model_version)
+
     if oodd_model_info:
+        oodd_model_dir = get_oodd_model_dir(repository_root, detector_id)
+        os.makedirs(oodd_model_dir, exist_ok=True)
+        old_oodd_model_version = get_current_model_version(repository_root, detector_id, is_oodd=True)
+        new_oodd_model_version = 1 if old_oodd_model_version is None else old_oodd_model_version + 1
         save_model_to_repository(oodd_model_buffer, oodd_model_info, oodd_model_dir, new_oodd_model_version)
 
 
@@ -507,9 +521,14 @@ def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[i
         edge_binary_ksuid = get_current_model_ksuid(model_dir, version)
         if edge_binary_ksuid and model_info.model_binary_id == edge_binary_ksuid:
             logger.info(
-                f"The edge binary in {model_dir} is the same as the cloud binary, so we don't need to update the model."
+                f"The edge binary in {model_dir} is the same as the cloud binary ({model_info.model_binary_id}), so we don't need to update the model."
             )
             return False
+        else:
+            logger.info(
+                f"The model in {model_dir} needs to be updated: edge binary={edge_binary_ksuid}, cloud binary={model_info.model_binary_id}"
+            )
+            return True
     else:
         current_pipeline_config = get_current_pipeline_config(model_dir, version)
         if current_pipeline_config and current_pipeline_config == yaml.safe_load(model_info.pipeline_config):
@@ -517,35 +536,30 @@ def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[i
                 f"The current pipeline_config in {model_dir} is the same as the received pipeline_config and we have no model binary, so we don't need to update the model."
             )
             return False
-
-    logger.info(
-        f"The model in {model_dir} needs to be updated, the current edge model is different from the cloud model."
-    )
-    return True
+        else:
+            logger.info(f"The model in {model_dir} needs to be updated: no binary, pipeline config differs")
+            return True
 
 
-def get_current_model_versions(repository_root: str, detector_id: str) -> tuple[Optional[int], Optional[int]]:
+def get_current_model_version(repository_root: str, detector_id: str, is_oodd: bool = False) -> Optional[int]:
     """Edge inference server model_repositories contain model versions in subdirectories. These subdirectories
     are named with integers. This function returns the highest integer in the model repository directory.
     """
-    logger.debug(f"Checking for current model versions for {detector_id}")
-    primary_dir = get_primary_edge_model_dir(repository_root, detector_id)
-    oodd_dir = get_oodd_model_dir(repository_root, detector_id)
+    logger.debug(f"Checking for current model versions for {detector_id} with is_oodd={is_oodd}")
+    model_dir = (
+        get_oodd_model_dir(repository_root, detector_id)
+        if is_oodd
+        else get_primary_edge_model_dir(repository_root, detector_id)
+    )
 
-    # If the primary or oodd directories don't exist, we'll update both models. This will happen when the edge endpoint
-    # switches from the old model repository format to the new one.
-    primary_version = None
-    oodd_version = None
+    # If the model directory doesn't exist, we'll update the model
+    model_version = None
 
-    if os.path.exists(primary_dir):
-        primary_versions = get_all_model_versions(primary_dir)
-        primary_version = max(primary_versions) if primary_versions else None
+    if os.path.exists(model_dir):
+        model_versions = get_all_model_versions(model_dir)
+        model_version = max(model_versions) if model_versions else None
 
-    if os.path.exists(oodd_dir):
-        oodd_versions = get_all_model_versions(oodd_dir)
-        oodd_version = max(oodd_versions) if oodd_versions else None
-
-    return primary_version, oodd_version
+    return model_version
 
 
 def get_all_model_versions(model_dir: str) -> list:

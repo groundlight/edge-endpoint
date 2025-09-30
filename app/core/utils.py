@@ -1,6 +1,7 @@
 import json
 import logging
 import time
+import uuid
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any, Callable
@@ -42,6 +43,7 @@ def create_iq(  # noqa: PLR0913
     result_value: int,
     confidence: float,
     confidence_threshold: float,
+    is_done_processing: bool,
     query: str = "",
     patience_time: float | None = None,
     rois: list[ROI] | None = None,
@@ -55,6 +57,7 @@ def create_iq(  # noqa: PLR0913
     :param result_value: The predicted value.
     :param confidence: The confidence of the predicted value.
     :param confidence_threshold: The confidence threshold for the query.
+    :param is_done_processing: Whether Groundlight has completed all planned escalations.
     :param query: The query string.
     :param patience_time: The acceptable time to wait for a result.
     :param rois: The ROIs associated with the prediction, if applicable.
@@ -68,7 +71,7 @@ def create_iq(  # noqa: PLR0913
 
     return ImageQuery(
         metadata={"is_from_edge": True},
-        id=prefixed_ksuid(prefix="iq_"),
+        id=generate_iq_id(),
         type=ImageQueryTypeEnum.image_query,
         created_at=datetime.now(timezone.utc),
         query=query,
@@ -79,6 +82,7 @@ def create_iq(  # noqa: PLR0913
         confidence_threshold=confidence_threshold,
         rois=rois,
         text=text,
+        done_processing=is_done_processing,
     )
 
 
@@ -103,6 +107,7 @@ def _mode_to_result_and_type(
         result = BinaryClassificationResult(
             confidence=confidence,
             source=source,
+            from_edge=True,
             label=label,
         )
     elif mode == ModeEnum.COUNT:
@@ -118,6 +123,7 @@ def _mode_to_result_and_type(
         result = CountingResult(
             confidence=confidence,
             source=source,
+            from_edge=True,
             count=result_value,
             greater_than_max=greater_than_max,
         )
@@ -129,6 +135,7 @@ def _mode_to_result_and_type(
         result = MultiClassificationResult(
             confidence=confidence,
             source=source,
+            from_edge=True,
             label=multi_class_mode_configuration.class_names[result_value],
         )
     elif mode == ModeEnum.BOUNDING_BOX:
@@ -142,6 +149,11 @@ def _mode_to_result_and_type(
         raise ValueError(f"Got unrecognized or unsupported detector mode: {mode}")
 
     return result_type, result
+
+
+def get_formatted_timestamp_str() -> str:
+    """Get the current datetime with the highest time precision available."""
+    return datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 
 
 def safe_call_sdk(api_method: Callable, **kwargs):
@@ -236,6 +248,15 @@ def prefixed_ksuid(prefix: str | None = None) -> str:
     k = ksuid.KsuidMs()
     out = f"{prefix}{k}"
     return out
+
+
+def generate_iq_id() -> str:
+    return prefixed_ksuid(prefix="iq_")
+
+
+def generate_request_id() -> str:
+    """Generates a request ID in the same way that the Groundlight SDK does, as of July 2025."""
+    return "req_uu" + uuid.uuid4().hex
 
 
 def pil_image_to_bytes(img: Image.Image, format: str = "JPEG") -> bytes:
@@ -363,9 +384,9 @@ def parse_model_info(
     Parse the response from the fetch model urls endpoint. Attempt to parse both the edge and oodd models
     with their ML binaries, and fall back to no binary cases if that fails.
     """
-    # The ModelInfo fields are named correspondingly to the response keys for the edge model, so we can use the
-    # pydantic model to validate and parse the response. The OODD keys will be ignored, since they aren't in the
-    # model fields
+    # The ModelInfo field names correspond to the response keys for the edge model, so we can use
+    # the pydantic model to validate and parse the response. The OODD specific keys will be ignored,
+    # since they aren't in the model fields.
     try:
         edge_model_info = ModelInfoWithBinary(**fetch_model_response)
     except ValidationError:

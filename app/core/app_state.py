@@ -9,6 +9,8 @@ from fastapi import Request
 from groundlight import Groundlight
 from model import Detector
 
+from app.escalation_queue.queue_writer import QueueWriter
+
 from .configs import EdgeInferenceConfig, RootEdgeConfig
 from .database import DatabaseManager
 from .edge_inference import EdgeInferenceManager
@@ -20,6 +22,8 @@ logger = logging.getLogger(__name__)
 MAX_SDK_INSTANCES_CACHE_SIZE = 1000
 MAX_DETECTOR_IDS_CACHE_SIZE = 1000
 STALE_METADATA_THRESHOLD_SEC = 30  # 30 seconds
+
+USE_MINIMAL_IMAGE = os.environ.get("USE_MINIMAL_IMAGE", "false") == "true"
 
 
 def load_edge_config() -> RootEdgeConfig:
@@ -144,10 +148,17 @@ def get_detector_metadata(detector_id: str, gl: Groundlight) -> Detector:
 class AppState:
     def __init__(self):
         self.edge_config = load_edge_config()
+        # We only launch a separate OODD inference pod if we are not using the minimal image.
+        # Pipelines used in the minimal image include OODD inference and confidence adjustment,
+        # so they do not need to be adjusted separately.
+        self.separate_oodd_inference = not USE_MINIMAL_IMAGE
         detector_inference_configs = get_detector_inference_configs(root_edge_config=self.edge_config)
-        self.edge_inference_manager = EdgeInferenceManager(detector_inference_configs=detector_inference_configs)
+        self.edge_inference_manager = EdgeInferenceManager(
+            detector_inference_configs=detector_inference_configs, separate_oodd_inference=self.separate_oodd_inference
+        )
         self.db_manager = DatabaseManager()
         self.is_ready = False
+        self.queue_writer = QueueWriter()
 
 
 def get_app_state(request: Request) -> AppState:

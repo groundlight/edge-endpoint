@@ -63,12 +63,17 @@ spec:
       - name: nginx
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
-        command: ["nginx", "-g", "daemon off;"]
+        # Allocate some memory for this container. System-critical containers have memory requests so 
+        # that they are never evicted, even when the system is under memory pressure. 
+        resources:
+          requests:
+            memory: "50Mi"
+        command: ["/bin/bash", "-c", "./app/bin/launch-nginx.sh"]
         ports:
         - containerPort: 30101
         volumeMounts:
         - name: nginx-config-volume
-          mountPath: /etc/nginx/nginx.conf
+          mountPath: /opt/nginx/nginx.conf
           subPath: nginx.conf
         startupProbe:
           httpGet:
@@ -95,6 +100,11 @@ spec:
       - name: edge-endpoint
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        # Allocate some memory for this container. System-critical containers have memory requests so 
+        # that they are never evicted, even when the system is under memory pressure. 
+        resources:
+          requests:
+            memory: "700Mi"
         env:
         - name: LOG_LEVEL
           value: {{ .Values.logLevel | quote }}
@@ -109,6 +119,8 @@ spec:
           value: "1"
         - name: GROUNDLIGHT_ENDPOINT
           value: "{{ .Values.upstreamEndpoint }}"
+        - name: USE_MINIMAL_IMAGE
+          value: "{{ .Values.useMinimalImage }}"
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
@@ -120,10 +132,17 @@ spec:
           mountPath: /opt/groundlight/edge/sqlite
         - name: device-info-volume
           mountPath: /opt/groundlight/device
+        - name: escalation-queue-volume
+          mountPath: /opt/groundlight/queue
 
       - name: status-monitor
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        # Allocate some memory for this container. System-critical containers have memory requests so 
+        # that they are never evicted, even when the system is under memory pressure. 
+        resources:
+          requests:
+            memory: "150Mi"
         ports:
         - containerPort: 8123
         command: ["./app/bin/launch-status-monitor.sh"]
@@ -136,6 +155,8 @@ spec:
               name: groundlight-api-token
               key: GROUNDLIGHT_API_TOKEN
               optional: true
+        - name: NAMESPACE
+          value: "{{ .Values.namespace }}"
         - name: INFERENCE_FLAVOR
           value: "{{ .Values.inferenceFlavor }}"
         volumeMounts:
@@ -143,10 +164,37 @@ spec:
             mountPath: /etc/groundlight/edge-config
           - name: device-info-volume
             mountPath: /opt/groundlight/device
+      
+      - name: escalation-queue-reader
+        image: *edgeEndpointImage
+        imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        # Allocate some memory for this container. System-critical containers have memory requests so 
+        # that they are never evicted, even when the system is under memory pressure. 
+        resources:
+          requests:
+            memory: "100Mi"
+        command: ["./app/bin/launch-escalation-queue-reader.sh"]
+        env:
+        - name: LOG_LEVEL
+          value: {{ .Values.logLevel | quote }}
+        - name: GROUNDLIGHT_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: groundlight-api-token
+              key: GROUNDLIGHT_API_TOKEN
+              optional: true
+        volumeMounts:
+          - name: escalation-queue-volume
+            mountPath: /opt/groundlight/queue
 
       - name: inference-model-updater
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        # Allocate some memory for this container. System-critical containers have memory requests so 
+        # that they are never evicted, even when the system is under memory pressure. 
+        resources:
+          requests:
+            memory: "200Mi"
         command: ["/bin/bash", "-c"]
         args: ["poetry run python -m app.model_updater.update_models"]
         env:
@@ -161,6 +209,8 @@ spec:
             secretKeyRef:
               name: groundlight-api-token
               key: GROUNDLIGHT_API_TOKEN
+        - name: USE_MINIMAL_IMAGE
+          value: "{{ .Values.useMinimalImage }}"
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
@@ -208,4 +258,8 @@ spec:
       - name: device-info-volume
         hostPath:
           path: /opt/groundlight/device
+          type: DirectoryOrCreate
+      - name: escalation-queue-volume
+        hostPath:
+          path: /opt/groundlight/queue/{{ .Values.namespace }}
           type: DirectoryOrCreate

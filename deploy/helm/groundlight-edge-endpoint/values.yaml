@@ -13,6 +13,11 @@ imageTag: "release"
 edgeEndpointTag: ""
 inferenceTag: ""
 
+# Whether to use the minimal image for the inference server. Currently, the minimal image only
+# supports binary and multiclass detectors, so be sure to keep this set to false if you're using
+# an object detection or counting model. 
+useMinimalImage: false
+
 # The image pull policy for the containers.
 # The default value is "Always" which means that Kubernetes will always check to see if there's 
 # a new version of the image with the requested tag available when starting containers.
@@ -56,3 +61,16 @@ logLevel: "INFO"
 # Don't override these
 nameOverride: "edge-endpoint"
 fullnameOverride: "edge-endpoint"
+
+# Set some sensible limits on memory usage to avoid system crashing
+k3sConfig:
+  enabled: true
+  evictionHardPercent: "15"
+  evictionSoftPercent: "25" 
+  evictionHardMinGB: "4"
+  evictionSoftMinGB: "8"
+  evictionGracePeriod: "10s"
+
+serviceAccount:
+  create: true
+  name: ""

@@ -13,6 +13,9 @@ ARG POETRY_VERSION=1.5.1
 #############
 FROM python:3.11-slim-bullseye AS production-dependencies-build-stage
 
+# docker buildx will override this for the target platform
+ARG TARGETARCH
+
 # Args that are needed in this stage
 ARG APP_ROOT
 ARG POETRY_HOME
@@ -36,13 +39,20 @@ RUN apt-get update && \
     sqlite3 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
-    curl -sSL https://install.python-poetry.org | python - && \
+    POETRY_HOME=${POETRY_HOME} curl -sSL https://install.python-poetry.org | python - && \
     curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
     install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl && \
     rm kubectl
 
 RUN cd /tmp && \
-    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    set -eux; \
+    case "$TARGETARCH" in \
+    amd64)  UARCH=x86_64 ;; \
+    arm64)  UARCH=aarch64 ;; \
+    arm)    UARCH=armv7 ;; \
+    *) echo "Unsupported arch: $TARGETARCH" >&2; exit 1 ;; \
+    esac; \
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-${UARCH}.zip" -o "awscliv2.zip" && \
     unzip awscliv2.zip && \
     ./aws/install --update && \
     rm -rf awscliv2.zip aws
@@ -95,6 +105,8 @@ WORKDIR ${APP_ROOT}
 # Copy the remaining files
 COPY /app ${APP_ROOT}/app/
 COPY /deploy ${APP_ROOT}/deploy/
+COPY /licenses ${APP_ROOT}/licenses/
+COPY /README.md ${APP_ROOT}/README.md
 
 COPY --from=production-dependencies-build-stage ${APP_ROOT}/configs/nginx.conf /etc/nginx/nginx.conf
 
