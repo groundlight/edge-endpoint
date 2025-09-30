@@ -76,6 +76,31 @@ Each `inferencemodel` pod contains one container.
 
 * `Endpoint url:` This is the URL where the endpoint's functionality is exposed to the SDK or applications.  (i.e., the upstream you can set for the Groundlight application). This is set to `http://localhost:30101`.
 
+## Logging and Observability
+
+The Edge Endpoint supports multiple logging modes for different environments:
+
+* **Standard Mode**: Basic logging to stdout/files, accessible with `k logs` (default)
+* **Local Splunk Mode**: Local Splunk container + OpenTelemetry collector  
+* **Cloud Splunk Mode**: External Splunk + OpenTelemetry collector (in development)
+
+### Quick Start
+
+```bash
+# Standard logging (default)
+helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint \
+  --dependency-update \
+  --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}"
+
+# Local Splunk for testing
+helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint \
+  --dependency-update \
+  --set loggingMode="local-splunk" \
+  --set global.otelEnabled=true 
+
+# External Splunk for production (coming soon)
+```
+
 ## Attribution
 
 This product includes software developed by third parties, which is subject to their respective open-source licenses.

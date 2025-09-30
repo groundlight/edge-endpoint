@@ -18,3 +18,10 @@ version: 0.7.1
 
 # This is the version number of the application being deployed, the Groundlight Edge Endpoint.
 appVersion: "0.7.1"
+
+# Chart dependencies
+dependencies:
+  - name: opentelemetry-collector
+    version: "0.105.0"
+    repository: "https://open-telemetry.github.io/opentelemetry-helm-charts"
+    condition: global.otelEnabled
