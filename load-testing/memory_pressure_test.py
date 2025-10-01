@@ -8,8 +8,6 @@ from typing import Callable
 
 from threading import Thread
 
-import sys
-sys.path.append('../utils')
 import utils as u
 
 SUPPORTED_DETECTOR_MODES = (

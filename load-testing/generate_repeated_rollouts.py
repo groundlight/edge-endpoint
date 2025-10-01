@@ -4,8 +4,6 @@ import urllib3.exceptions
 import argparse
 import os
 
-import sys
-sys.path.append('../utils')
 import utils
 
 DETECTOR_GROUP_NAME = 'Edge Endpoint Rollout Testing'

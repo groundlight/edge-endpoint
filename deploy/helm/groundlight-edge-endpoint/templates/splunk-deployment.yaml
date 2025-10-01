@@ -1,0 +1,98 @@
+{{- if eq .Values.loggingMode "local-splunk" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: splunk
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: splunk
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: splunk
+  template:
+    metadata:
+      labels:
+        app: splunk
+    spec:
+      containers:
+      - name: splunk
+        image: {{ .Values.splunk.local.image.repository }}:{{ .Values.splunk.local.image.tag }}
+        imagePullPolicy: IfNotPresent
+        resources:
+          limits:
+            cpu: {{ .Values.splunk.local.resources.limits.cpu }}
+            memory: {{ .Values.splunk.local.resources.limits.memory }}
+          requests:
+            cpu: {{ .Values.splunk.local.resources.requests.cpu }}
+            memory: {{ .Values.splunk.local.resources.requests.memory }}
+        env:
+        - name: SPLUNK_START_ARGS
+          value: "--accept-license"
+        - name: SPLUNK_GENERAL_TERMS
+          value: "--accept-sgt-current-at-splunk-com"
+        - name: SPLUNK_PASSWORD
+          value: {{ .Values.splunk.local.password | quote }}
+        - name: SPLUNK_LICENSE_URI
+          value: "Free"
+        - name: SPLUNK_HEC_TOKEN
+          value: {{ .Values.splunk.local.hecToken | quote }}
+        - name: SPLUNK_ENABLE_HEC
+          value: "true"
+        - name: SPLUNK_ADD_INDEXES
+          value: "edge_app,edge_events,edge_metrics,edge_errors"
+        - name: SPLUNK_UI_SSL
+          value: "false"
+        - name: SPLUNK_HEC_SSL
+          value: "false"
+        ports:
+        - containerPort: 8000
+          name: web
+        - containerPort: 8088
+          name: hec
+        - containerPort: 8089
+          name: management
+        volumeMounts:
+        - name: splunk-data
+          mountPath: /opt/splunk/var
+        - name: splunk-etc
+          mountPath: /opt/splunk/etc
+        - name: splunk-config
+          mountPath: /tmp/indexes.conf
+          subPath: indexes.conf
+        command:
+          - /bin/bash
+          - -c
+          - |
+            # Copy indexes.conf to the proper location before starting Splunk
+            mkdir -p /opt/splunk/etc/system/local
+            cp /tmp/indexes.conf /opt/splunk/etc/system/local/indexes.conf
+            # Start Splunk with the correct command
+            exec /sbin/entrypoint.sh start
+        readinessProbe:
+          httpGet:
+            path: /services/collector/health
+            port: 8088
+          periodSeconds: 15           # Check every 15 seconds
+          timeoutSeconds: 5
+          failureThreshold: 40        # 10 minutes of retries (40 × 15s)
+        livenessProbe:
+          httpGet:
+            path: /services/collector/health
+            port: 8088
+          initialDelaySeconds: 300    # Wait 5 minutes before checking liveness
+          periodSeconds: 120
+          timeoutSeconds: 15
+          failureThreshold: 10      # Give it plenty of chances
+      volumes:
+      - name: splunk-data
+        persistentVolumeClaim:
+          claimName: splunk-data
+      - name: splunk-etc
+        persistentVolumeClaim:
+          claimName: splunk-etc
+      - name: splunk-config
+        configMap:
+          name: splunk-config
+{{- end }}

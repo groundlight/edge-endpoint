@@ -1,0 +1,9 @@
+{{- if and (eq .Values.loggingMode "local-splunk") .Values.global.otelEnabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: balena-config
+  namespace: {{ .Values.namespace }}
+data:
+  device-uuid: {{ .Values.balena.deviceUuid | default "none" | quote }}
+{{- end }}

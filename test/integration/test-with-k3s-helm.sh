@@ -59,6 +59,7 @@ echo "DEPLOYMENT_NAMESPACE: $DEPLOYMENT_NAMESPACE"
 echo "IMAGE_TAG: $IMAGE_TAG"
 echo "INFERENCE_IMAGE_TAG: $INFERENCE_IMAGE_TAG"
 helm install -n default ${HELM_RELEASE_NAME} deploy/helm/groundlight-edge-endpoint \
+    --dependency-update \
     --set groundlightApiToken=$GROUNDLIGHT_API_TOKEN \
     --set inferenceFlavor=$INFERENCE_FLAVOR \
     --set edgeEndpointPort=$EDGE_ENDPOINT_PORT \

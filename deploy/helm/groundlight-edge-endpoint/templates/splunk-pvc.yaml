@@ -1,0 +1,31 @@
+{{- if eq .Values.loggingMode "local-splunk" }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: splunk-data
+  namespace: {{ .Values.namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.splunk.local.persistence.dataSize }}
+  {{- if .Values.splunk.local.persistence.storageClass }}
+  storageClassName: {{ .Values.splunk.local.persistence.storageClass }}
+  {{- end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: splunk-etc
+  namespace: {{ .Values.namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.splunk.local.persistence.etcSize }}
+  {{- if .Values.splunk.local.persistence.storageClass }}
+  storageClassName: {{ .Values.splunk.local.persistence.storageClass }}
+  {{- end }}
+{{- end }}
