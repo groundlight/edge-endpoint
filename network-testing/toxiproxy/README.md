@@ -61,6 +61,7 @@ poetry run python disable_toxiproxy.py
 ```
 
 Notes:
+- If you redeploy the edge endpoint, you'll need to enable Toxiproxy again.
 - `enable_toxiproxy.py` is idempotent and will update the proxy if it already exists.
 
 ## Checking status
