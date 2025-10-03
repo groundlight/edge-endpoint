@@ -1,5 +1,5 @@
-import os
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
@@ -196,6 +196,7 @@ def test_get_detector_activity_metrics(monkeypatch, tmp_base_dir, _test_tracker)
         assert det_789_metrics["last_iq"] == "none"
         assert det_789_metrics["last_escalation"] == "none"
         assert det_789_metrics["last_audit"] == "none"
+
 
 def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_tracker):
     monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
