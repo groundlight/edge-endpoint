@@ -140,10 +140,16 @@ class ActivityRetriever:
         """Get all activity metrics for all detectors."""
         f = _tracker().detectors_dir
         detector_activity = {det.name: self.get_detector_activity_metrics(det.name) for det in f.iterdir()}
+        return detector_activity
 
-        # Convert the detector_activity dict to a JSON string to prevent opensearch from indexing all
+    def get_active_detector_activity(self) -> str:
+        """Get activity metrics for detectors that have had iqs submitted in the last hour."""
+        all_detector_activity = self.get_all_detector_activity()
+        active_detectors = [det for det in all_detector_activity if all_detector_activity[det]["hourly_total_iqs"] > 0]
+        active_detector_activity = {det: all_detector_activity[det] for det in active_detectors}
+        # Convert the active_detector_activity dict to a JSON string to prevent opensearch from indexing all
         # the individual detector fields
-        return json.dumps(detector_activity)
+        return json.dumps(active_detector_activity)
 
     def get_last_hour(self) -> str:
         """Get the last hour in UTC."""
