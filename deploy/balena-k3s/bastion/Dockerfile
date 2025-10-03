@@ -34,9 +34,9 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 # This works for both x86_64 and aarch64, but its not simultaneously multi-arch
 RUN arch=$(uname -m) && \
     if [ "$arch" = "aarch64" ]; then \
-    curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"; \
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"; \
     else \
-    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"; \
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"; \
     fi
 RUN unzip awscliv2.zip && rm awscliv2.zip
 RUN ./aws/install
