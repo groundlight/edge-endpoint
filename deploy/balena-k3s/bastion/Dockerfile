@@ -34,9 +34,9 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 # This works for both x86_64 and aarch64, but its not simultaneously multi-arch
 RUN arch=$(uname -m) && \
     if [ "$arch" = "aarch64" ]; then \
-        curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"; \
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"; \
     else \
-        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"; \
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"; \
     fi
 RUN unzip awscliv2.zip && rm awscliv2.zip
 RUN ./aws/install
@@ -60,7 +60,7 @@ RUN mkdir -p /app/edge-endpoint
 COPY . /app/edge-endpoint
 
 RUN echo "source /app/edge-endpoint/deploy/balena-k3s/bastion/src/kube-bash.sh" >> /root/.bashrc
-RUN chmod +x ./edge-endpoint/deploy/bin/setup-ee.sh
+RUN chmod +x ./edge-endpoint/deploy/bin/*.sh
 
 ENTRYPOINT []
 CMD ["/bin/sh", "-c", "./edge-endpoint/deploy/bin/setup-ee.sh && tail -f /dev/null"]
