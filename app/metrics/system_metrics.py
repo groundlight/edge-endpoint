@@ -71,7 +71,12 @@ def get_pods() -> str:
 
     # If the pod has failed, only include it if it failed within the last hour. This is to prevent us from getting too
     # long of a log message to be properly parsed.
-    filtered_pods = [pod for pod in pods.items if pod.status.phase is not "Failed" or pod.status.conditions.last_transition_time > datetime.now() - timedelta(hours=1)]
+    filtered_pods = [
+        pod
+        for pod in pods.items
+        if pod.status.phase != "Failed"
+        or pod.status.conditions.last_transition_time > datetime.now() - timedelta(hours=1)
+    ]
 
     # Convert the pods dict to a JSON string to prevent opensearch from indexing all
     # the individual pod fields
