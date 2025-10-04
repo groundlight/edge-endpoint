@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from datetime import datetime, timedelta
 
 import psutil
 from kubernetes import client, config
@@ -68,9 +69,13 @@ def get_pods() -> str:
     namespace = get_namespace()
     pods = v1_core.list_namespaced_pod(namespace=namespace)
 
+    # If the pod has failed, only include it if it failed within the last hour. This is to prevent us from getting too
+    # long of a log message to be properly parsed.
+    filtered_pods = [pod for pod in pods.items if pod.status.phase is not "Failed" or pod.status.conditions.last_transition_time > datetime.now() - timedelta(hours=1)]
+
     # Convert the pods dict to a JSON string to prevent opensearch from indexing all
     # the individual pod fields
-    return json.dumps({pod.metadata.name: pod.status.phase for pod in pods.items})
+    return json.dumps({pod.metadata.name: pod.status.phase for pod in filtered_pods})
 
 
 def get_container_images() -> str:
