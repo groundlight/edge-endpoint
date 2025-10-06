@@ -10,6 +10,8 @@ from cachetools import TTLCache, cached
 from fastapi import HTTPException, status
 from jinja2 import Template
 
+from model import ModeEnum
+
 from app.core.configs import EdgeInferenceConfig
 from app.core.file_paths import MODEL_REPOSITORY_PATH
 from app.core.speedmon import SpeedMonitor
@@ -48,18 +50,18 @@ def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, co
         raise RuntimeError("Failed to submit image for inference") from e
 
 
-def get_inference_result(primary_response: dict, oodd_response: dict | None) -> str:
+def get_inference_result(primary_response: dict, oodd_response: dict | None, mode: ModeEnum | None = None) -> str:
     """
     Get the final inference result from the primary and OODD responses. If the OODD response is None, we return the
     parsed primary response without confidence adjustment.
     """
     primary_num_classes = get_num_classes(primary_response)
 
-    output_dict = parse_inference_response(primary_response)
+    output_dict = parse_inference_response(primary_response, mode)
     logger.debug(f"Primary inference server response: {output_dict}.")
 
     if oodd_response is not None:
-        oodd_output_dict = parse_inference_response(oodd_response)
+        oodd_output_dict = parse_inference_response(oodd_response, ModeEnum.BINARY)
         logger.debug(f"OODD inference server response: {oodd_output_dict}.")
 
         output_dict = adjust_confidence_with_oodd(output_dict, oodd_output_dict, primary_num_classes)
@@ -120,7 +122,7 @@ def adjust_confidence_with_oodd(primary_output_dict: dict, oodd_output_dict: dic
     return adjusted_output_dict
 
 
-def parse_inference_response(response: dict) -> dict:
+def parse_inference_response(response: dict, mode: ModeEnum) -> dict:
     if "predictions" not in response:
         logger.error(f"Invalid inference response: {response}")
         raise RuntimeError("Invalid inference response")
@@ -288,7 +290,7 @@ class EdgeInferenceManager:
             return False
         return True
 
-    def run_inference(self, detector_id: str, image_bytes: bytes, content_type: str) -> dict:
+    def run_inference(self, detector_id: str, image_bytes: bytes, content_type: str, mode: ModeEnum) -> dict:
         """
         Submit an image to the inference server, route to a specific model, and return the results.
         Args:
@@ -313,7 +315,7 @@ class EdgeInferenceManager:
             oodd_inference_client_url = self.oodd_inference_client_urls[detector_id]
             oodd_response = submit_image_for_inference(oodd_inference_client_url, image_bytes, content_type)
 
-        output_dict = get_inference_result(response, oodd_response)
+        output_dict = get_inference_result(response, oodd_response, mode)
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         self.speedmon.update(detector_id, elapsed_ms)
