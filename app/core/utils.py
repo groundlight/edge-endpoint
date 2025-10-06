@@ -282,7 +282,6 @@ class TimestampedCache(cachetools.Cache):
         super().__init__(*args, **kwargs)
         self._timestamps: dict[Any, float] = {}  # Store timestamps for each key
         self._suspended_values: dict[Any, Any] = {}
-        self._suspended_timestamps: dict[Any, float] = {}
 
     def __setitem__(self, key, value, timestamp: float | None = None):
         """Overrides the __setitem__ method to track the timestamp of when an item was added to the cache."""
@@ -312,7 +311,6 @@ class TimestampedCache(cachetools.Cache):
         item = self.pop(key, None)
         if item is not None and timestamp is not None:
             self._suspended_values[key] = item
-            self._suspended_timestamps[key] = timestamp
             return True
         raise KeyError(f"Key {key} not found in cache")
 
@@ -320,16 +318,16 @@ class TimestampedCache(cachetools.Cache):
         """
         Restore a suspended value to the cache.
         If the key is already in the cache, the existing value will be overwritten.
+        The restored value's timestamp will be updated to the time of restoration.
 
         Returns True if the value was successfully restored.
         Raises KeyError if the key is not in the suspended values.
         """
         item = self._suspended_values.pop(key, None)
-        timestamp = self._suspended_timestamps.pop(key, None)
-        if item is not None and timestamp is not None:
+        if item is not None:
             if key in self:
                 logger.warning(f"Key {key} already in cache, overwriting with suspended value")
-            self.__setitem__(key, item, timestamp=timestamp)
+            self.__setitem__(key, item)  # Restore the value but update the timestamp to the current time.
             return True
         raise KeyError(f"Key {key} not found in suspended values")
 
@@ -341,8 +339,7 @@ class TimestampedCache(cachetools.Cache):
         Raises KeyError if the key is not in the suspended values.
         """
         item = self._suspended_values.pop(key, None)
-        timestamp = self._suspended_timestamps.pop(key, None)
-        if item is not None and timestamp is not None:
+        if item is not None:
             return True
         raise KeyError(f"Key {key} not found in suspended values")
 

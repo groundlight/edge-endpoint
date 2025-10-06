@@ -1,0 +1,32 @@
+{{- if eq .Values.loggingMode "local-splunk" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: splunk
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: splunk
+spec:
+  type: {{ .Values.splunk.local.service.type }}
+  ports:
+  - name: web
+    port: 8000
+    targetPort: 8000
+    {{- if eq .Values.splunk.local.service.type "NodePort" }}
+    nodePort: {{ .Values.splunk.local.service.webNodePort }}
+    {{- end }}
+  - name: hec
+    port: 8088
+    targetPort: 8088
+    {{- if eq .Values.splunk.local.service.type "NodePort" }}
+    nodePort: {{ .Values.splunk.local.service.hecNodePort }}
+    {{- end }}
+  - name: management
+    port: 8089
+    targetPort: 8089
+    {{- if eq .Values.splunk.local.service.type "NodePort" }}
+    nodePort: {{ .Values.splunk.local.service.managementNodePort }}
+    {{- end }}
+  selector:
+    app: splunk
+{{- end }}

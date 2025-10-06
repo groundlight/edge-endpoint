@@ -25,8 +25,6 @@ ARG POETRY_VERSION
 # Combine the installations into a single RUN command
 # Ensure that we have the bash shell since it doesn't seem to be included in the slim image.
 # This is useful for exec'ing into the container for debugging purposes.
-# We need to install libGL dependencies (`libglib2.0-0` and `libgl1-mesa-lgx`)
-# since they are required by OpenCV
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     bash \
@@ -34,8 +32,6 @@ RUN apt-get update && \
     nginx \
     less \
     unzip \
-    libglib2.0-0 \
-    libgl1-mesa-glx \
     sqlite3 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \

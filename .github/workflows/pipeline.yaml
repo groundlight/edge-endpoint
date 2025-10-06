@@ -597,7 +597,7 @@ jobs:
 
       - name: Package chart into .deploy
         run: |
-          helm package ./deploy/helm/groundlight-edge-endpoint --destination .deploy
+          helm package ./deploy/helm/groundlight-edge-endpoint --destination .deploy --dependency-update
 
       - name: Update Helm index.yaml
         run: |

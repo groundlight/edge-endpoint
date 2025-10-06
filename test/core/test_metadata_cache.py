@@ -98,7 +98,7 @@ def test_timestamped_cache_delete_removes_timestamp():
 
 
 def test_timestamped_cache_suspend_and_restore():
-    """Test suspending and restoring a value with timestamp preservation."""
+    """Test suspending and restoring a value, and ensure the timestamp is updated."""
     cache = TimestampedCache(maxsize=100)
 
     cache["key1"] = "value1"
@@ -111,7 +111,7 @@ def test_timestamped_cache_suspend_and_restore():
 
     assert cache.restore_suspended_value("key1")
     assert cache.get("key1", None) == "value1"
-    assert cache.get_timestamp("key1") == key1_timestamp
+    assert cache.get_timestamp("key1") > key1_timestamp  # Timestamp should be updated to the time of restoration.
 
 
 def test_timestamped_cache_delete_suspended_value():
