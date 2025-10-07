@@ -64,7 +64,7 @@ def get_inference_result(primary_response: dict, oodd_response: dict | None, mod
         oodd_output_dict = parse_inference_response(oodd_response, ModeEnum.BINARY)
         logger.debug(f"OODD inference server response: {oodd_output_dict}.")
 
-        output_dict = adjust_confidence_with_oodd(output_dict, oodd_output_dict, primary_num_classes)
+        output_dict = adjust_confidence_with_oodd(output_dict, oodd_output_dict, mode, primary_num_classes)
         logger.debug(f"Combined (primary + OODD) inference result: {output_dict}.")
 
     return output_dict
@@ -90,7 +90,7 @@ def get_num_classes(response: dict) -> int:
         )
 
 
-def adjust_confidence_with_oodd(primary_output_dict: dict, oodd_output_dict: dict, num_classes: int) -> dict:
+def adjust_confidence_with_oodd(primary_output_dict: dict, oodd_output_dict: dict, mode: ModeEnum, num_classes: int) -> dict:
     """
     Adjust the confidence of the primary result based on the OODD result.
 
@@ -98,6 +98,12 @@ def adjust_confidence_with_oodd(primary_output_dict: dict, oodd_output_dict: dic
     made here that bring this out of sync with the cloud OODD confidence adjustment logic. The cloud implementation for
     binary detectors is found in detector_modes_logic, implemented separately for each detector mode.
     """
+
+    if mode is ModeEnum.BOUNDING_BOX:
+        min_confidence = 0
+    else:
+        min_confidence = 1 / num_classes
+
     oodd_confidence = oodd_output_dict["confidence"]
     oodd_label = oodd_output_dict["label"]
     primary_confidence = primary_output_dict["confidence"]
@@ -108,7 +114,7 @@ def adjust_confidence_with_oodd(primary_output_dict: dict, oodd_output_dict: dic
     # 1.0 is the FAIL (outlier) class
     outlier_probability = oodd_confidence if oodd_label == 1 else 1 - oodd_confidence
 
-    adjusted_confidence = (outlier_probability * 1 / num_classes) + (1 - outlier_probability) * primary_confidence
+    adjusted_confidence = (outlier_probability * min_confidence) + (1 - outlier_probability) * primary_confidence
     logger.debug(
         f"Adjusted confidence of the primary prediction with the OODD prediction. New confidence is {adjusted_confidence}."
     )
@@ -132,7 +138,7 @@ def calculate_confidence_for_bounding_box_mode(multi_predictions: dict) -> float
     """
     rois = multi_predictions.get("rois", None)
     dropped_rois = multi_predictions.get("dropped_rois", None)
-    
+
     if rois is not None:
         rois = rois[0]
     if dropped_rois is not None:
@@ -175,7 +181,7 @@ def parse_inference_response(response: dict, mode: ModeEnum) -> dict:
         probabilities: list[float] = multi_predictions["probabilities"][0]
         max_prob_index = max(range(len(probabilities)), key=lambda i: probabilities[i])
         label: int = max_prob_index
-        if mode == ModeEnum.BOUNDING_BOXES:
+        if mode == ModeEnum.BOUNDING_BOX:
             # Bounding box mode has a different method for calculating confidence based on roi scores instead of the
             # label probability.
             # TODO: This really shouldn't be duplicated on the edge, but as long as we're using MultiPredictions for
