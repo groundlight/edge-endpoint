@@ -1,5 +1,7 @@
 import pytest
 
+from model import ModeEnum
+
 from app.core.edge_inference import adjust_confidence_with_oodd
 
 
@@ -30,6 +32,14 @@ def mock_parsed_count_response():
         ],
     }
 
+@pytest.fixture
+def mock_parsed_multiclass_response():
+    return {}
+
+
+@pytest.fixture
+def mock_parsed_bounding_box_response():
+    return {}
 
 @pytest.fixture
 def mock_outlier_oodd_response():
@@ -64,6 +74,7 @@ def test_adjust_confidence_with_oodd_binary(
     adjusted_output_dict = adjust_confidence_with_oodd(
         primary_output_dict=mock_parsed_binary_response,
         oodd_output_dict=mock_inlier_oodd_response,
+        mode=ModeEnum.BINARY,
         num_classes=num_classes,
     )
     assert adjusted_output_dict["confidence"] == 0.785
@@ -79,6 +90,7 @@ def test_adjust_confidence_with_oodd_count(
     adjusted_output_dict = adjust_confidence_with_oodd(
         primary_output_dict=mock_parsed_count_response,
         oodd_output_dict=mock_outlier_oodd_response,
+        mode=ModeEnum.COUNT,
         num_classes=num_classes,
     )
     assert adjusted_output_dict["confidence"] == 0.285
@@ -101,6 +113,7 @@ def test_adjust_confidence_with_oodd_count(
     adjusted_output_dict = adjust_confidence_with_oodd(
         primary_output_dict=mock_parsed_count_response,
         oodd_output_dict=mock_inlier_oodd_response,
+        mode=ModeEnum.COUNT,
         num_classes=num_classes,
     )
     assert adjusted_output_dict["confidence"] == 0.5825
@@ -118,3 +131,13 @@ def test_adjust_confidence_with_oodd_count(
         "right": 0.3,
         "bottom": 0.4,
     }
+
+def test_adjust_confidence_with_oodd_multiclass(
+    mock_parsed_multiclass_response, mock_outlier_oodd_response, mock_inlier_oodd_response
+):
+    pass
+
+def test_adjust_confidence_with_oodd_bounding_box(
+    mock_parsed_bounding_box_response, mock_outlier_oodd_response, mock_inlier_oodd_response
+):
+    pass
