@@ -122,6 +122,35 @@ def adjust_confidence_with_oodd(primary_output_dict: dict, oodd_output_dict: dic
     return adjusted_output_dict
 
 
+def calculate_confidence_for_bounding_box_mode(multi_predictions: dict) -> float:
+    """
+    Calculate the confidence of a bounding box mode prediction.
+
+    NOTE: This is a duplication of the bounding box mode cloud inference result confidence calculation logic. Changes
+    should not be made here that bring this out of sync with the cloud logic. The cloud implementation of this is found
+    in detector_modes_logic for bounding box mode.
+    """
+    rois = multi_predictions.get("rois", None)
+    dropped_rois = multi_predictions.get("dropped_rois", None)
+    
+    if rois is not None:
+        rois = rois[0]
+    if dropped_rois is not None:
+        dropped_rois = dropped_rois[0]
+    
+    if len(rois) > 0:
+        min_predicted_roi_score = min(rois, key=lambda x: x["score"])["score"]
+    else:
+        min_predicted_roi_score = 0
+    
+    if len(dropped_rois) > 0:
+        max_dropped_roi_score = max(dropped_rois, key=lambda x: x["score"])["score"]
+    else:
+        max_dropped_roi_score = 0
+    
+    return min_predicted_roi_score * (1 - max_dropped_roi_score)
+
+
 def parse_inference_response(response: dict, mode: ModeEnum) -> dict:
     if "predictions" not in response:
         logger.error(f"Invalid inference response: {response}")
@@ -143,11 +172,19 @@ def parse_inference_response(response: dict, mode: ModeEnum) -> dict:
     if multi_predictions is not None and predictions is not None:
         raise ValueError("Got result with both multi_predictions and predictions.")
     if multi_predictions is not None:
-        # Count, multiclass, or bounding boxes case
         probabilities: list[float] = multi_predictions["probabilities"][0]
-        confidence: float = max(probabilities)
         max_prob_index = max(range(len(probabilities)), key=lambda i: probabilities[i])
         label: int = max_prob_index
+        if mode == ModeEnum.BOUNDING_BOXES:
+            # Bounding box mode has a different method for calculating confidence based on roi scores instead of the
+            # label probability.
+            # TODO: This really shouldn't be duplicated on the edge, but as long as we're using MultiPredictions for
+            # bounding box mode there isn't a much better way to do it. We don't store the confidence directly in 
+            # MultiPredictions, so we need to calculate it here.
+            confidence: float = calculate_confidence_for_bounding_box_mode(rois, dropped_rois)
+        # Count or multiclass case
+        else:
+            confidence: float = max(probabilities)
     elif predictions is not None:
         # Binary case
         confidence: float = predictions["confidences"][0]
