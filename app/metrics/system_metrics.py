@@ -2,9 +2,9 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
-import tzlocal
 
 import psutil
+import tzlocal
 from kubernetes import client, config
 
 logger = logging.getLogger(__name__)
@@ -76,7 +76,8 @@ def get_pods() -> str:
         pod
         for pod in pods.items
         if pod.status.phase != "Failed"
-        or max(condition.last_transition_time for condition in pod.status.conditions) > datetime.now(tzlocal.get_localzone()) - timedelta(hours=1)
+        or max(condition.last_transition_time for condition in pod.status.conditions)
+        > datetime.now(tzlocal.get_localzone()) - timedelta(hours=1)
     ]
 
     # Convert the pods dict to a JSON string to prevent opensearch from indexing all

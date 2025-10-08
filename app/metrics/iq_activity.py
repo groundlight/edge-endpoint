@@ -145,7 +145,9 @@ class ActivityRetriever:
     def get_active_detector_activity(self) -> str:
         """Get activity metrics for detectors that have had iqs submitted in the last hour."""
         all_detector_activity = self.get_all_detector_activity()
-        active_detector_activity = {det: data for det, data in all_detector_activity.items() if data["hourly_total_iqs"] > 0}
+        active_detector_activity = {
+            det: data for det, data in all_detector_activity.items() if data["hourly_total_iqs"] > 0
+        }
         # Convert the active_detector_activity dict to a JSON string to prevent opensearch from indexing all
         # the individual detector fields
         return json.dumps(active_detector_activity)
