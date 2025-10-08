@@ -3,7 +3,6 @@ import tempfile
 from unittest import mock
 
 import pytest
-
 from model import ModeEnum
 
 from app.core.configs import EdgeInferenceConfig
