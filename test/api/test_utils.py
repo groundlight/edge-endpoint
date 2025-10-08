@@ -301,6 +301,7 @@ class TestCreateIQ:
             result_value="BOUNDING_BOX",
             confidence=0.8,
             confidence_threshold=self.confidence_threshold,
+            is_done_processing=True,
             query="Test query",
             rois=[
                 {
@@ -373,6 +374,7 @@ class TestCreateIQ:
                 result_value="BOUNDING_BOX",
                 confidence=0.8,
                 confidence_threshold=self.confidence_threshold,
+                is_done_processing=True,
                 query="Test query",
                 rois=[
                     {
