@@ -1,5 +1,4 @@
 import pytest
-
 from model import ModeEnum
 
 from app.core.edge_inference import adjust_confidence_with_oodd
@@ -32,6 +31,7 @@ def mock_parsed_count_response():
         ],
     }
 
+
 @pytest.fixture
 def mock_parsed_multiclass_response():
     return {}
@@ -40,6 +40,7 @@ def mock_parsed_multiclass_response():
 @pytest.fixture
 def mock_parsed_bounding_box_response():
     return {}
+
 
 @pytest.fixture
 def mock_outlier_oodd_response():
@@ -132,10 +133,12 @@ def test_adjust_confidence_with_oodd_count(
         "bottom": 0.4,
     }
 
+
 def test_adjust_confidence_with_oodd_multiclass(
     mock_parsed_multiclass_response, mock_outlier_oodd_response, mock_inlier_oodd_response
 ):
     pass
+
 
 def test_adjust_confidence_with_oodd_bounding_box(
     mock_parsed_bounding_box_response, mock_outlier_oodd_response, mock_inlier_oodd_response

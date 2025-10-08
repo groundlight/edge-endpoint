@@ -9,7 +9,6 @@ import yaml
 from cachetools import TTLCache, cached
 from fastapi import HTTPException, status
 from jinja2 import Template
-
 from model import ModeEnum
 
 from app.core.configs import EdgeInferenceConfig
@@ -90,7 +89,9 @@ def get_num_classes(response: dict) -> int:
         )
 
 
-def adjust_confidence_with_oodd(primary_output_dict: dict, oodd_output_dict: dict, mode: ModeEnum, num_classes: int) -> dict:
+def adjust_confidence_with_oodd(
+    primary_output_dict: dict, oodd_output_dict: dict, mode: ModeEnum, num_classes: int
+) -> dict:
     """
     Adjust the confidence of the primary result based on the OODD result.
 
@@ -143,17 +144,17 @@ def calculate_confidence_for_bounding_box_mode(multi_predictions: dict) -> float
         rois = rois[0]
     if dropped_rois is not None:
         dropped_rois = dropped_rois[0]
-    
+
     if len(rois) > 0:
         min_predicted_roi_score = min(rois, key=lambda x: x["score"])["score"]
     else:
         min_predicted_roi_score = 0
-    
+
     if len(dropped_rois) > 0:
         max_dropped_roi_score = max(dropped_rois, key=lambda x: x["score"])["score"]
     else:
         max_dropped_roi_score = 0
-    
+
     return min_predicted_roi_score * (1 - max_dropped_roi_score)
 
 
@@ -185,7 +186,7 @@ def parse_inference_response(response: dict, mode: ModeEnum) -> dict:
             # Bounding box mode has a different method for calculating confidence based on roi scores instead of the
             # label probability.
             # TODO: This really shouldn't be duplicated on the edge, but as long as we're using MultiPredictions for
-            # bounding box mode there isn't a much better way to do it. We don't store the confidence directly in 
+            # bounding box mode there isn't a much better way to do it. We don't store the confidence directly in
             # MultiPredictions, so we need to calculate it here.
             confidence: float = calculate_confidence_for_bounding_box_mode(rois, dropped_rois)
         # Count or multiclass case
