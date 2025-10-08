@@ -227,5 +227,5 @@ def test_adjust_confidence_with_oodd_bounding_box(
         "left": 0.1,
         "top": 0.2,
         "right": 0.3,
-       "bottom": 0.4,
+        "bottom": 0.4,
     }

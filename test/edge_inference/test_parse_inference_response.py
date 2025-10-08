@@ -1,8 +1,7 @@
 import pytest
+from model import ModeEnum
 
 from app.core.edge_inference import parse_inference_response
-
-from model import ModeEnum
 
 
 # Fixtures for mock responses
@@ -30,7 +29,7 @@ def mock_count_response():
                         "version": "2.0",
                     }
                 ]
-            ]
+            ],
         },
         "predictions": None,
         "secondary_predictions": {
@@ -245,13 +244,13 @@ class TestParseInferenceResponse:
         result = parse_inference_response(mock_bounding_boxes_response, ModeEnum.BOUNDING_BOX)
         assert result["confidence"] == 0.68
         assert result["label"] == 1
-        assert result["text"] == None
+        assert result["text"] is None
         assert len(result["rois"]) == 1
         assert result["rois"][0]["label"] == "bird"
         assert result["rois"][0]["score"] == 0.8
         assert "x" in result["rois"][0]["geometry"]
         assert "y" in result["rois"][0]["geometry"]
-    
+
     def test_parse_binary_with_rois_response(self, mock_binary_with_rois_response):
         result = parse_inference_response(mock_binary_with_rois_response, ModeEnum.BINARY)
         assert result["confidence"] == 0.54
