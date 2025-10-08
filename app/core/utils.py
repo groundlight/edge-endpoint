@@ -145,6 +145,7 @@ def _mode_to_result_and_type(
         result = BoundingBoxResult(
             confidence=confidence,
             source=source,
+            from_edge=True,
             label=result_value,
         )
     else:
