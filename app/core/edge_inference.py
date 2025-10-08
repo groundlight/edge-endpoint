@@ -187,7 +187,7 @@ def parse_inference_response(response: dict, mode: ModeEnum) -> dict:
             # TODO: This really shouldn't be duplicated on the edge, but as long as we're using MultiPredictions for
             # bounding box mode there isn't a much better way to do it. We don't store the confidence directly in 
             # MultiPredictions, so we need to calculate it here.
-            confidence: float = calculate_confidence_for_bounding_box_mode(rois, dropped_rois)
+            confidence: float = calculate_confidence_for_bounding_box_mode(multi_predictions)
         # Count or multiclass case
         else:
             confidence: float = max(probabilities)
