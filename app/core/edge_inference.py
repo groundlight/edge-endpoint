@@ -140,18 +140,13 @@ def calculate_confidence_for_bounding_box_mode(multi_predictions: dict) -> float
     rois = multi_predictions.get("rois", None)
     dropped_rois = multi_predictions.get("dropped_rois", None)
 
-    if rois is not None:
-        rois = rois[0]
-    if dropped_rois is not None:
-        dropped_rois = dropped_rois[0]
-
-    if len(rois) > 0:
-        min_predicted_roi_score = min(rois, key=lambda x: x["score"])["score"]
+    if rois is not None and len(rois[0]) > 0:
+        min_predicted_roi_score = min(rois[0], key=lambda x: x["score"])["score"]
     else:
         min_predicted_roi_score = 0
 
-    if len(dropped_rois) > 0:
-        max_dropped_roi_score = max(dropped_rois, key=lambda x: x["score"])["score"]
+    if dropped_rois is not None and len(dropped_rois[0]) > 0:
+        max_dropped_roi_score = max(dropped_rois[0], key=lambda x: x["score"])["score"]
     else:
         max_dropped_roi_score = 0
 
