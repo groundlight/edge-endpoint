@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime
 from pathlib import Path
@@ -195,3 +196,57 @@ def test_get_detector_activity_metrics(monkeypatch, tmp_base_dir, _test_tracker)
         assert det_789_metrics["last_iq"] == "none"
         assert det_789_metrics["last_escalation"] == "none"
         assert det_789_metrics["last_audit"] == "none"
+
+
+def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_tracker):
+    monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
+    with patch("app.metrics.iq_activity.datetime") as mock_datetime:
+        mock_datetime.now.return_value = datetime(2025, 4, 3, 12, 0, 0)
+        # Mock fromtimestamp to return a proper datetime object for JSON serialization
+        mock_datetime.fromtimestamp.return_value = datetime(2025, 4, 3, 11, 30, 0)
+        retriever = ActivityRetriever()
+
+        # Total iqs should be 28, total escalations should be 2, and total audits should be 1
+        os.makedirs(Path(tmp_base_dir, "detectors", "det_123"), exist_ok=True)
+        Path(tmp_base_dir, "detectors", "det_123", "iqs_10294_2025-04-03_11").write_text("10")
+        Path(tmp_base_dir, "detectors", "det_123", "iqs_12323_2025-04-03_11").write_text("1")
+        Path(tmp_base_dir, "detectors", "det_123", "iqs_12345_2025-04-03_11").write_text("17")
+        Path(tmp_base_dir, "detectors", "det_123", "escalations_102394_2025-04-03_11").write_text("2")
+        Path(tmp_base_dir, "detectors", "det_123", "audits_102394_2025-04-03_11").write_text("1")
+        Path(tmp_base_dir, "detectors", "det_123", "last_iqs").touch()
+        Path(tmp_base_dir, "detectors", "det_123", "last_escalations").touch()
+        Path(tmp_base_dir, "detectors", "det_123", "last_audits").touch()
+
+        # This detector has no iqs in the last hour, so it should not be included in the active detectors
+        # It will still be included in the all detectors activity
+        os.makedirs(Path(tmp_base_dir, "detectors", "det_456"), exist_ok=True)
+        Path(tmp_base_dir, "detectors", "det_456", "iqs_102394_2025-04-03_11").write_text("0")
+        Path(tmp_base_dir, "detectors", "det_456", "escalations_12345_2025-04-03_11").write_text("0")
+        Path(tmp_base_dir, "detectors", "det_456", "last_iqs").touch()
+        Path(tmp_base_dir, "detectors", "det_456", "last_escalations").touch()
+
+        all_detector_activity = retriever.get_all_detector_activity()
+        assert "det_123" in all_detector_activity
+        assert "det_456" in all_detector_activity
+        assert all_detector_activity["det_123"]["hourly_total_iqs"] == 28
+        assert all_detector_activity["det_123"]["hourly_total_escalations"] == 2
+        assert all_detector_activity["det_123"]["hourly_total_audits"] == 1
+        assert all_detector_activity["det_123"]["last_iq"] != "none"
+        assert all_detector_activity["det_123"]["last_escalation"] != "none"
+        assert all_detector_activity["det_123"]["last_audit"] != "none"
+        assert all_detector_activity["det_456"]["hourly_total_iqs"] == 0
+        assert all_detector_activity["det_456"]["hourly_total_escalations"] == 0
+        assert all_detector_activity["det_456"]["hourly_total_audits"] == 0
+        assert all_detector_activity["det_456"]["last_iq"] != "none"
+        assert all_detector_activity["det_456"]["last_escalation"] != "none"
+        assert all_detector_activity["det_456"]["last_audit"] == "none"
+
+        active_detector_activity = json.loads(retriever.get_active_detector_activity())
+        assert "det_123" in active_detector_activity
+        assert "det_456" not in active_detector_activity
+        assert active_detector_activity["det_123"]["hourly_total_iqs"] == 28
+        assert active_detector_activity["det_123"]["hourly_total_escalations"] == 2
+        assert active_detector_activity["det_123"]["hourly_total_audits"] == 1
+        assert active_detector_activity["det_123"]["last_iq"] != "none"
+        assert active_detector_activity["det_123"]["last_escalation"] != "none"
+        assert active_detector_activity["det_123"]["last_audit"] != "none"
