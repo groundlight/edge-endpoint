@@ -79,7 +79,7 @@ def get_pods() -> str:
 
 def should_record_pod(pod: client.V1Pod) -> bool:
     """Returns True if the pod should be recorded, False otherwise.
-    
+
     If the pod has failed, we only record it if it failed within the last hour. This is to prevent us from getting too
     long of a log message to be properly parsed. If we're missing the information in the pod status to determine when it
     failed, we record it.
@@ -87,12 +87,16 @@ def should_record_pod(pod: client.V1Pod) -> bool:
     if pod.status.phase != "Failed":
         return True
     elif len(pod.status.conditions) == 0:
-        logger.warning(f"Pod {pod.metadata.name} has no conditions, recording it in system metrics. {pod.status.conditions}")
+        logger.warning(
+            f"Pod {pod.metadata.name} has no conditions, recording it in system metrics. {pod.status.conditions}"
+        )
         return True
 
     last_transition_times = [condition.last_transition_time for condition in pod.status.conditions]
     if None in last_transition_times:
-        logger.warning(f"Pod {pod.metadata.name} has a condition with no last transition time, recording it in system metrics. {pod.status.conditions}")
+        logger.warning(
+            f"Pod {pod.metadata.name} has a condition with no last transition time, recording it in system metrics. {pod.status.conditions}"
+        )
         return True
 
     return max(last_transition_times) > datetime.now(tzlocal.get_localzone()) - timedelta(hours=1)
