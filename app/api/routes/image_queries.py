@@ -167,7 +167,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         # -- Edge-model Inference --
         logger.debug(f"Local inference is available for {detector_id=}. Running inference...")
         results = app_state.edge_inference_manager.run_inference(
-            detector_id=detector_id, image_bytes=image_bytes, content_type=content_type
+            detector_id=detector_id, image_bytes=image_bytes, content_type=content_type, mode=detector_metadata.mode
         )
         ml_confidence = results["confidence"]
 
