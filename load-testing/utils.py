@@ -1,7 +1,7 @@
 import numpy as np
 import random
 from datetime import datetime
-from groundlight import Groundlight, ROI
+from groundlight import Groundlight, ROI, Detector, ApiException, ImageQuery
 import math
 import cv2
 
@@ -58,7 +58,7 @@ def get_detector_stats(gl: Groundlight, detector_id: str) -> dict:
     
     yes_labels = decoded_response['ground_truths']['yes']
     no_labels = decoded_response['ground_truths']['no']
-    total_labels = yes_labels + no_labels
+    total_labels = decoded_response['total_iqs']
         
     evaluation_results = decoded_response.get('evaluation_results')
     if evaluation_results is None:
@@ -164,3 +164,67 @@ def generate_random_count_image(
     label = len(rois)
 
     return image, label, rois
+
+def get_or_create_count_detector(
+    gl: Groundlight,
+    name: str,
+    class_name: str,
+    max_count: int, 
+    group_name: str,
+    ) -> list[Detector]:
+
+    query_text = f"Count all the {class_name}s"
+    try:
+        return gl.create_counting_detector(
+            name,
+            query_text,
+            class_name,
+            max_count=max_count,
+            group_name=group_name,
+        )
+    except ApiException as e:
+        if e.status != 400 or "unique_undeleted_name_per_set" not in getattr(e, "body", ""):
+            raise
+        return gl.get_detector_by_name(name)
+
+def error_if_not_from_edge(iq: ImageQuery) -> None:
+    if not iq.result.from_edge:
+        raise ValueError(
+            'Got a non-edge answer from the Edge Endpoint. '
+            f'Please configure your Edge Endpoint so that {iq.detector_id} always receives edge answers.'
+        )
+
+def prime_detector(
+    gl: Groundlight, 
+    detector: Detector, 
+    num_labels: int, 
+    image_width: int, 
+    image_height: int) -> None:
+    """
+    Submits a handful of labels to a detector so that the cloud can train a model. 
+    """
+    for _ in range(num_labels):
+        if detector.mode == 'COUNT':
+            class_name = detector.mode_configuration["class_name"]
+            max_count = detector.mode_configuration["max_count"]
+            image, label, rois = generate_random_count_image(
+                gl, 
+                image_width=image_width, 
+                image_height=image_height, 
+                class_name=class_name,
+                max_count=max_count,
+                )
+
+            iq = gl.ask_async(detector, image, human_review="NEVER")
+            gl.add_label(iq, label, rois)
+
+def detector_is_sufficiently_trained(
+    stats: dict,
+    min_projected_ml_accuracy: float,
+    min_total_labels: int,
+    ) -> bool:
+    projected_ml_accuracy = stats['projected_ml_accuracy'] 
+    total_labels = stats['total_labels'] 
+    return projected_ml_accuracy is not None and \
+        projected_ml_accuracy > min_projected_ml_accuracy and \
+        total_labels >= min_total_labels
