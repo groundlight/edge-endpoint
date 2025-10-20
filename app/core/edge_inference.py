@@ -2,8 +2,8 @@ import logging
 import os
 import shutil
 import time
-from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
+from typing import Optional
 
 import requests
 import yaml
