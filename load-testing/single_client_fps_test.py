@@ -11,6 +11,7 @@ SUPPORTED_DETECTOR_MODES = {
     'BINARY',
     'COUNT',
 }
+DETECTOR_GROUP_NAME = "Load Testing"
 
 def parse_arguments():
     """Parse command line arguments."""
@@ -58,7 +59,8 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
     if detector_mode == "BINARY":
         detector = gl.get_or_create_detector(
             name=detector_name,
-            query='Is the image background black?'
+            query='Is the image background black?',
+            group_name=DETECTOR_GROUP_NAME
         )
         generate_image = u.generate_random_binary_image
         generate_image_kwargs = {
@@ -74,7 +76,7 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
             name=detector_name,
             class_name=class_name,
             max_count=max_count,
-            group_name="Load Testing"
+            group_name=DETECTOR_GROUP_NAME
         )
         generate_image = u.generate_random_count_image
         generate_image_kwargs = {
