@@ -43,7 +43,7 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
     TESTING_ITERATIONS = 100
     MIN_PROJECTED_ML_ACCURACY = 0.6
     MIN_TOTAL_LABELS = 20
-    # MIN_CONFIDENCE = 0.6
+    # MIN_CONFIDENCE = 0.6 # Confidence calibration doesn't work well on COUNT detectors, so we won't evaluate confidences for now
 
     endpoint = os.environ.get('GROUNDLIGHT_ENDPOINT')
     if endpoint is None:
@@ -135,7 +135,7 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
 
         u.error_if_not_from_edge(iq)
 
-        # Counting mode confidence callibration is off, so this check always fails
+        # Counting mode confidence calibration is off, so this check always fails
         # if iq.result.confidence < MIN_CONFIDENCE:
         #     raise RuntimeError(
         #         f'Got a below confidence answer for {detector.id}. '
