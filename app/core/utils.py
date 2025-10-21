@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from model import (
     ROI,
     BinaryClassificationResult,
+    BoundingBoxLabelEnum,
     BoundingBoxResult,
     CountingResult,
     CountModeConfiguration,
@@ -139,14 +140,13 @@ def _mode_to_result_and_type(
             label=multi_class_mode_configuration.class_names[result_value],
         )
     elif mode == ModeEnum.BOUNDING_BOX:
-        if mode_configuration is None:
-            raise ValueError("mode_configuration for Bounding Box detector shouldn't be None.")
         result_type = ResultTypeEnum.bounding_box
+        label = list(BoundingBoxLabelEnum)[result_value].value
         result = BoundingBoxResult(
             confidence=confidence,
             source=source,
             from_edge=True,
-            label=result_value,
+            label=label,
         )
     else:
         raise ValueError(f"Got unrecognized or unsupported detector mode: {mode}")
