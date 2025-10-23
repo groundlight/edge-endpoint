@@ -2,6 +2,7 @@ import logging
 import os
 import shutil
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 import requests
@@ -305,13 +306,17 @@ class EdgeInferenceManager:
         logger.info(f"Submitting image to edge inference service. {detector_id=}")
         start_time = time.perf_counter()
 
-        inference_client_url = self.inference_client_urls[detector_id]
-        response = submit_image_for_inference(inference_client_url, image_bytes, content_type)
-
-        oodd_response = None
+        primary_url = self.inference_client_urls[detector_id]
         if self.separate_oodd_inference:
-            oodd_inference_client_url = self.oodd_inference_client_urls[detector_id]
-            oodd_response = submit_image_for_inference(oodd_inference_client_url, image_bytes, content_type)
+            oodd_url = self.oodd_inference_client_urls[detector_id]
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                f_primary = executor.submit(submit_image_for_inference, primary_url, image_bytes, content_type)
+                f_oodd = executor.submit(submit_image_for_inference, oodd_url, image_bytes, content_type)
+                response = f_primary.result()
+                oodd_response = f_oodd.result()
+        else:
+            response = submit_image_for_inference(primary_url, image_bytes, content_type)
+            oodd_response = None
 
         output_dict = get_inference_result(response, oodd_response)
 
