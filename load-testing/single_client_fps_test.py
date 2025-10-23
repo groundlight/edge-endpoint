@@ -39,11 +39,13 @@ def parse_arguments():
     return parser.parse_args()
 
 def main(detector_mode: str, image_width: int, image_height: int) -> None:
+    TRAINING_TIMEOUT_SEC = 60 * 10
+    INFERENCE_POD_READY_TIMEOUT_SEC = 60 * 10
+
     WARMUP_ITERATIONS = 200
-    TESTING_ITERATIONS = 100
+    TESTING_ITERATIONS = 400
     MIN_PROJECTED_ML_ACCURACY = 0.6
-    MIN_TOTAL_LABELS = 20
-    # MIN_CONFIDENCE = 0.6 # Confidence calibration doesn't work well on COUNT detectors, so we won't evaluate confidences for now
+    MIN_TOTAL_LABELS = 30
 
     endpoint = os.environ.get('GROUNDLIGHT_ENDPOINT')
     if endpoint is None:
@@ -93,32 +95,39 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
     stats = u.get_detector_stats(gl, detector.id)
     sufficiently_trained = u.detector_is_sufficiently_trained(stats, MIN_PROJECTED_ML_ACCURACY, MIN_TOTAL_LABELS)
     if sufficiently_trained:
-        print(f'{detector.id} is sufficiently trained. Stats: {stats}')
+        print(f'{detector.id} is sufficiently trained. Evaluation results: {stats}')
     else:
-        print(f'{detector.id} is not sufficiently trained: Stats: {stats}')
-        print('Priming detector...')
+        print(f'{detector.id} is not sufficiently trained. Evaluation results: {stats}')
+        print(f'Priming detector with {MIN_TOTAL_LABELS} labels')
         u.prime_detector(gl_cloud, detector, MIN_TOTAL_LABELS, image_width, image_height)
 
         # After priming, wait until it trains to a sufficient level
         print(f'Waiting for {detector.id} to finish training...')
-        timeout_sec = 60 * 5
         poll_start = time.time()
         while True:
             stats = u.get_detector_stats(gl, detector.id)
             sufficiently_trained = u.detector_is_sufficiently_trained(stats, MIN_PROJECTED_ML_ACCURACY, MIN_TOTAL_LABELS)
-            if sufficiently_trained:
-                print(f'{detector.id} is sufficiently trained.')
-                break
-
             elapsed_time = time.time() - poll_start
-            if elapsed_time > timeout_sec:
+            if sufficiently_trained:
+                print(f'{detector.id} is sufficiently trained after {elapsed_time:.2f} seconds. Evaluation results: {stats}')
+                break
+            else:
+                print(f'{detector.id} has not yet trained sufficiently after {elapsed_time:.2f} seconds. Evaluation results: {stats}')
+
+            if elapsed_time > TRAINING_TIMEOUT_SEC:
                 raise RuntimeError(
-                    f'{detector.id} failed to trained sufficiently after {timeout_sec} seconds. Stats: {stats}'
+                    f'{detector.id} failed to trained sufficiently after {TRAINING_TIMEOUT_SEC} seconds. Evaluation results: {stats}'
                 )
+
             time.sleep(5)
 
+    # Wait for the inference pod to become availble
+    print(f'Waiting for up to {INFERENCE_POD_READY_TIMEOUT_SEC} seconds for inference pod to be ready for {detector.id}.')
+    u.wait_for_ready_inference_pod(gl, detector, image_width, image_height, timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC)
+    print(f'Inference pod is ready for {detector.id}')
+
     # Warm up
-    iq_submission_kwargs = {'wait': 0.0, 'human_review': 'NEVER'}
+    iq_submission_kwargs = {'wait': 0.0, 'human_review': 'NEVER', 'confidence_threshold': 0.0}
     for _ in tqdm(range(WARMUP_ITERATIONS), "Warming up"):
         image, _, _ = generate_image(**generate_image_kwargs)
         iq = gl.submit_image_query(detector, image, **iq_submission_kwargs)
@@ -134,13 +143,6 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
         t2 = time.time()
 
         u.error_if_not_from_edge(iq)
-
-        # Counting mode confidence calibration is off, so this check always fails
-        # if iq.result.confidence < MIN_CONFIDENCE:
-        #     raise RuntimeError(
-        #         f'Got a below confidence answer for {detector.id}. '
-        #         f'Confidence: {iq.result.confidence:.3f} < MIN_CONFIDENCE ({MIN_CONFIDENCE}). '
-        #     )
 
         elapsed_time = t2 - t1
         fps = 1 / elapsed_time

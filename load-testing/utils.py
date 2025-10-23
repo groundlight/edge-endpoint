@@ -8,6 +8,7 @@ import cv2
 import os
 import requests
 import json
+import time
 
 IMAGE_DIMENSIONS = (480, 640, 3)
 BLACK = (0, 0, 0)
@@ -55,23 +56,50 @@ def get_detector_stats(gl: Groundlight, detector_id: str) -> dict:
     }
     
     decoded_response = call_reef_api(gl, path, params)
-    
-    yes_labels = decoded_response['ground_truths']['yes']
-    no_labels = decoded_response['ground_truths']['no']
-    total_labels = decoded_response['total_iqs']
         
     evaluation_results = decoded_response.get('evaluation_results')
     if evaluation_results is None:
         projected_ml_accuracy = None
+        total_ground_truth_examples = 0
     else:
         projected_ml_accuracy = evaluation_results['kfold_pooled__balanced_accuracy']
+        total_ground_truth_examples = evaluation_results["total_ground_truth_examples"]
+
 
     return {
         "projected_ml_accuracy": projected_ml_accuracy,
-        "total_labels": total_labels,
-        "yes_labels": yes_labels,
-        "no_labels": no_labels,
+        "total_labels": total_ground_truth_examples,
         }
+
+def call_edge_api(gl_client: Groundlight, path: str, params: dict) -> dict:
+    """Call the edge API specifically"""
+    url = gl_client.endpoint.replace('/device-api', '/edge-api') + path
+    
+    headers = {
+        "X-API-Token": os.environ.get('GROUNDLIGHT_API_TOKEN')
+    }
+    
+    response = requests.get(url, params=params, headers=headers)
+    if response.status_code == 200:
+        response_content = response.content.decode('utf-8')
+        return json.loads(response_content)
+    else:
+        raise APIError(
+            f"Request failed with status code {response.status_code} | "
+            f"Response content: {response.content}" 
+        )
+
+def get_detector_pipeline_config(gl: Groundlight, detector_id: str) -> dict:
+    path = f'/v1/fetch-model-urls/{detector_id}/'  # Note: no 'edge' prefix for edge-api
+    params = {}
+    
+    decoded_response = call_edge_api(gl, path, params)
+    print(decoded_response)
+    
+    return {
+        "edge_pipeline_config": decoded_response.get('pipeline_config'),
+        "oodd_pipeline_config": decoded_response.get('oodd_pipeline_config'),
+    }
 
 def generate_random_binary_image(
     gl: Groundlight,  # not used, but added here to maintain consistency with `generate_random_count_image`
@@ -165,6 +193,38 @@ def generate_random_count_image(
 
     return image, label, rois
 
+def generate_random_image(
+    gl: Groundlight,
+    detector: Detector,
+    image_width: int,
+    image_height: int,
+    ) -> tuple[np.ndarray, int | str, list[ROI]] | None:
+
+    detector_mode = detector.mode
+    if detector_mode== 'COUNT':
+        detector_mode_configuration = detector.mode_configuration
+        class_name = detector_mode_configuration["class_name"]
+        max_count = int(detector_mode_configuration["max_count"])
+        image, label, rois = generate_random_count_image(
+            gl, 
+            image_width=image_width, 
+            image_height=image_height, 
+            class_name=class_name,
+            max_count=max_count,
+            )
+    elif detector_mode == 'BINARY':
+        image, label, rois = generate_random_binary_image(
+            gl, 
+            image_width=image_width, 
+            image_height=image_height, 
+            )
+    else:
+        raise ValueError(
+            f'Unsupported detector mode of {detector_mode} for {detector.id}'
+        )
+
+    return image, label, rois
+
 def get_or_create_count_detector(
     gl: Groundlight,
     name: str,
@@ -203,10 +263,12 @@ def prime_detector(
     """
     Submits a handful of labels to a detector so that the cloud can train a model. 
     """
+    detector_mode = detector.mode
     for _ in range(num_labels):
-        if detector.mode == 'COUNT':
-            class_name = detector.mode_configuration["class_name"]
-            max_count = detector.mode_configuration["max_count"]
+        if detector_mode== 'COUNT':
+            detector_mode_configuration = detector.mode_configuration
+            class_name = detector_mode_configuration["class_name"]
+            max_count = int(detector_mode_configuration["max_count"])
             image, label, rois = generate_random_count_image(
                 gl, 
                 image_width=image_width, 
@@ -214,9 +276,55 @@ def prime_detector(
                 class_name=class_name,
                 max_count=max_count,
                 )
-
             iq = gl.ask_async(detector, image, human_review="NEVER")
-            gl.add_label(iq, label, rois)
+        elif detector_mode == 'BINARY':
+            image, label, rois = generate_random_binary_image(
+                gl, 
+                image_width=image_width, 
+                image_height=image_height, 
+                )
+            iq = gl.ask_async(detector, image, human_review="NEVER")
+        else:
+            raise ValueError(
+                f'Unsupported detector mode of {detector_mode} for {detector.id}'
+            )
+        
+        gl.add_label(iq, label, rois)
+
+def wait_for_ready_inference_pod(
+    gl: Groundlight,
+    detector: Detector,
+    image_width: int, 
+    image_height: int,
+    timeout_sec: float,
+    ) -> None:
+    """
+    Waits until an inference pod is ready for the given detector.
+
+    Uses receiving an edge answer as a proxy for there being a ready inference pod.
+    """
+
+    poll_start = time.time()
+    while True:
+        elapsed_time = time.time() - poll_start
+        if elapsed_time > timeout_sec:
+            raise RuntimeError(
+                f'Failed to receive an edge answer for {detector.id} after {timeout_sec:.2f} seconds. Inference pod is not ready.'
+            )
+
+        image, _, _ = generate_random_image(gl, detector, image_width, image_height)
+
+        iq = gl.submit_image_query( # not using ask_ml here because it doesn't support human_review
+            detector, 
+            image, 
+            human_review="NEVER",
+            wait=0.0,
+            confidence_threshold=0.0) # Use confidence threshold of 0.0 to ensure that escalation never happens and we maximize our chance of getting an edge answer 
+        if iq.result.from_edge:
+            return 
+
+        # Inference pod is not yet ready. Wait and retry
+        time.sleep(5)
 
 def detector_is_sufficiently_trained(
     stats: dict,
