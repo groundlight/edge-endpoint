@@ -9,6 +9,7 @@ import os
 import requests
 import json
 import time
+from tqdm import trange
 
 IMAGE_DIMENSIONS = (480, 640, 3)
 BLACK = (0, 0, 0)
@@ -23,16 +24,7 @@ class APIError(Exception):
     """
     pass
 
-def call_reef_api(gl_client: Groundlight, path: str, params: dict) -> dict:
-    """Given a Groundlight client, an API resource path and API parameters, calls 
-    the Groundlight API and returns the decoded response content.
-
-    Submits the Groundlight API token to the API as an X-API-Token.
-
-    Uses the Groundlight client to discover the correct endpoint.
-    """
-
-    url = gl_client.endpoint.replace('/device-api', '/reef-api') + path
+def call_api(url: str, params: dict) -> dict:
 
     headers = {
         "X-API-Token": os.environ.get('GROUNDLIGHT_API_TOKEN')
@@ -47,6 +39,18 @@ def call_reef_api(gl_client: Groundlight, path: str, params: dict) -> dict:
             f"Request failed with status code {response.status_code} | "
             f"Response content: {response.content}" 
             )
+
+def call_reef_api(gl_client: Groundlight, path: str, params: dict) -> dict:
+
+    url = gl_client.endpoint.replace('/device-api', '/reef-api') + path
+
+    return call_api(url, params)
+
+def call_edge_api(gl_client: Groundlight, path: str, params: dict) -> dict:
+
+    url = gl_client.endpoint.replace('/device-api', '/edge-api') + path
+
+    return call_api(url, params)
 
 def get_detector_stats(gl: Groundlight, detector_id: str) -> dict:
     path = f'/detectors/{detector_id}'
@@ -71,33 +75,16 @@ def get_detector_stats(gl: Groundlight, detector_id: str) -> dict:
         "total_labels": total_ground_truth_examples,
         }
 
-def call_edge_api(gl_client: Groundlight, path: str, params: dict) -> dict:
-    """Call the edge API specifically"""
-    url = gl_client.endpoint.replace('/device-api', '/edge-api') + path
-    
-    headers = {
-        "X-API-Token": os.environ.get('GROUNDLIGHT_API_TOKEN')
-    }
-    
-    response = requests.get(url, params=params, headers=headers)
-    if response.status_code == 200:
-        response_content = response.content.decode('utf-8')
-        return json.loads(response_content)
-    else:
-        raise APIError(
-            f"Request failed with status code {response.status_code} | "
-            f"Response content: {response.content}" 
-        )
-
 def get_detector_pipeline_config(gl: Groundlight, detector_id: str) -> dict:
     path = f'/v1/fetch-model-urls/{detector_id}/'  # Note: no 'edge' prefix for edge-api
     params = {}
     
     decoded_response = call_edge_api(gl, path, params)
-    print(decoded_response)
-    
+
     return {
-        "edge_pipeline_config": decoded_response.get('pipeline_config'),
+        "model_binary_id": decoded_response.get('model_binary_id'),
+        "pipeline_config": decoded_response.get('pipeline_config'),
+        "oodd_model_binary_id": decoded_response.get('oodd_model_binary_id'),
         "oodd_pipeline_config": decoded_response.get('oodd_pipeline_config'),
     }
 
@@ -263,32 +250,9 @@ def prime_detector(
     """
     Submits a handful of labels to a detector so that the cloud can train a model. 
     """
-    detector_mode = detector.mode
-    for _ in range(num_labels):
-        if detector_mode== 'COUNT':
-            detector_mode_configuration = detector.mode_configuration
-            class_name = detector_mode_configuration["class_name"]
-            max_count = int(detector_mode_configuration["max_count"])
-            image, label, rois = generate_random_count_image(
-                gl, 
-                image_width=image_width, 
-                image_height=image_height, 
-                class_name=class_name,
-                max_count=max_count,
-                )
-            iq = gl.ask_async(detector, image, human_review="NEVER")
-        elif detector_mode == 'BINARY':
-            image, label, rois = generate_random_binary_image(
-                gl, 
-                image_width=image_width, 
-                image_height=image_height, 
-                )
-            iq = gl.ask_async(detector, image, human_review="NEVER")
-        else:
-            raise ValueError(
-                f'Unsupported detector mode of {detector_mode} for {detector.id}'
-            )
-        
+    for _ in trange(num_labels, desc=f"Priming {detector.id}th ", unit="label"):
+        image, label, rois = generate_random_image(gl, detector, image_width, image_height)
+        iq = gl.ask_async(detector, image, human_review="NEVER")
         gl.add_label(iq, label, rois)
 
 def wait_for_ready_inference_pod(
@@ -336,3 +300,24 @@ def detector_is_sufficiently_trained(
     return projected_ml_accuracy is not None and \
         projected_ml_accuracy > min_projected_ml_accuracy and \
         total_labels >= min_total_labels
+
+def wait_until_sufficiently_trained(
+    gl: Groundlight,
+    detector: Detector,
+    min_projected_ml_accuracy: float,
+    min_total_labels: int,
+    timeout_sec: float,
+    poll_interval_sec: float = 5.0,
+) -> dict:
+    start = time.time()
+    while True:
+        stats = get_detector_stats(gl, detector.id)
+        if detector_is_sufficiently_trained(stats, min_projected_ml_accuracy, min_total_labels):
+            return stats
+
+        if (time.time() - start) > timeout_sec:
+            raise RuntimeError(
+                f'{detector.id} failed to trained sufficiently after {timeout_sec} seconds.'
+            )
+
+        time.sleep(poll_interval_sec)

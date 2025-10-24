@@ -91,38 +91,31 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
     else:
         raise ValueError(f'Detector mode {detector_mode} not recognized.')
 
+    # Get the pipeline config so that we can log it
+    pipeline_config = u.get_detector_pipeline_config(gl, detector.id)
+    
     # Check if the detector has trained. If not, prime it with some labels
     stats = u.get_detector_stats(gl, detector.id)
     sufficiently_trained = u.detector_is_sufficiently_trained(stats, MIN_PROJECTED_ML_ACCURACY, MIN_TOTAL_LABELS)
     if sufficiently_trained:
         print(f'{detector.id} is sufficiently trained. Evaluation results: {stats}')
     else:
-        print(f'{detector.id} is not sufficiently trained. Evaluation results: {stats}')
-        print(f'Priming detector with {MIN_TOTAL_LABELS} labels')
+        print(f'{detector.id} is not yet sufficiently trained. Evaluation results: {stats}')
         u.prime_detector(gl_cloud, detector, MIN_TOTAL_LABELS, image_width, image_height)
 
         # After priming, wait until it trains to a sufficient level
-        print(f'Waiting for {detector.id} to finish training...')
-        poll_start = time.time()
-        while True:
-            stats = u.get_detector_stats(gl, detector.id)
-            sufficiently_trained = u.detector_is_sufficiently_trained(stats, MIN_PROJECTED_ML_ACCURACY, MIN_TOTAL_LABELS)
-            elapsed_time = time.time() - poll_start
-            if sufficiently_trained:
-                print(f'{detector.id} is sufficiently trained after {elapsed_time:.2f} seconds. Evaluation results: {stats}')
-                break
-            else:
-                print(f'{detector.id} has not yet trained sufficiently after {elapsed_time:.2f} seconds. Evaluation results: {stats}')
-
-            if elapsed_time > TRAINING_TIMEOUT_SEC:
-                raise RuntimeError(
-                    f'{detector.id} failed to trained sufficiently after {TRAINING_TIMEOUT_SEC} seconds. Evaluation results: {stats}'
-                )
-
-            time.sleep(5)
+        print(f'Waiting up to {TRAINING_TIMEOUT_SEC} seconds for training to complete...')
+        stats = u.wait_until_sufficiently_trained(
+            gl,
+            detector,
+            min_projected_ml_accuracy=MIN_PROJECTED_ML_ACCURACY,
+            min_total_labels=MIN_TOTAL_LABELS,
+            timeout_sec=TRAINING_TIMEOUT_SEC,
+        )
+        print(f'{detector.id} is now sufficiently trained. Evaluation results: {stats}')
 
     # Wait for the inference pod to become availble
-    print(f'Waiting for up to {INFERENCE_POD_READY_TIMEOUT_SEC} seconds for inference pod to be ready for {detector.id}.')
+    print(f'Waiting up to {INFERENCE_POD_READY_TIMEOUT_SEC} seconds for inference pod to be ready for {detector.id}.')
     u.wait_for_ready_inference_pod(gl, detector, image_width, image_height, timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC)
     print(f'Inference pod is ready for {detector.id}')
 
@@ -159,6 +152,10 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
     print('-' * 10, 'Test Results', '-' * 10)
     print(f'detector_id: {detector.id}')
     print(f'detector_mode: {detector_mode}')
+    print(f'model_binary_id: {pipeline_config.get('model_binary_id')}')
+    print(f'pipeline_config: {pipeline_config.get('pipeline_config')}')
+    print(f'oodd_model_binary_id: {pipeline_config.get('oodd_model_binary_id')}')
+    print(f'oodd_pipeline_config: {pipeline_config.get('oodd_pipeline_config')}')
     print(f'image_size: {image_width}x{image_height}')
     print(f'endpoint: {endpoint}')
     print(f'warmup_iterations: {WARMUP_ITERATIONS}')
