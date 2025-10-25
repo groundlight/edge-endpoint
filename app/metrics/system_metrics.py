@@ -8,12 +8,12 @@ import psutil
 import tzlocal
 from kubernetes import client, config
 
-from app.core.file_paths import MODEL_REPOSITORY_PATH
 from app.core.edge_inference import (
-    get_primary_edge_model_dir,
     get_current_model_version,
     get_current_pipeline_config,
+    get_primary_edge_model_dir,
 )
+from app.core.file_paths import MODEL_REPOSITORY_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -204,9 +204,7 @@ def get_detector_details() -> dict:
             # Active primary pipeline_config from model repo
             model_dir = get_primary_edge_model_dir(MODEL_REPOSITORY_PATH, det_id)
             version = get_current_model_version(MODEL_REPOSITORY_PATH, det_id, is_oodd=False)
-            pipeline_config = (
-                get_current_pipeline_config(model_dir, version) if version is not None else None
-            )
+            pipeline_config = get_current_pipeline_config(model_dir, version) if version is not None else None
 
             # Query text from predictor_metadata.json in the same model version dir
             query_text = None
