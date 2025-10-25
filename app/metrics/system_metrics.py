@@ -2,10 +2,18 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
+from typing import Dict
 
 import psutil
 import tzlocal
 from kubernetes import client, config
+
+from app.core.file_paths import MODEL_REPOSITORY_PATH
+from app.core.edge_inference import (
+    get_primary_edge_model_dir,
+    get_current_model_version,
+    get_current_pipeline_config,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -118,3 +126,110 @@ def get_container_images() -> str:
     # Convert the containers dict to a JSON string to prevent opensearch from indexing all
     # the individual container fields
     return json.dumps(containers)
+
+
+def _normalized_detector_id(detector_id: str) -> str:
+    """Normalize a detector id to the form used in pod names: replace '_' with '-' and lower-case."""
+    return detector_id.replace("_", "-").lower()
+
+
+def _detector_id_from_primary_pod_name(pod_name: str) -> str | None:
+    """Extract the normalized detector id from a primary inference pod name.
+
+    Expected formats (examples):
+      - inferencemodel-primary-det-34abcd...-<hash>
+    Returns the part between the prefix and the last dash (hash separator).
+    """
+    prefix = "inferencemodel-primary-"
+    if not pod_name.startswith(prefix):
+        return None
+    rest = pod_name[len(prefix) :]
+    # strip trailing -<hash>
+    if "-" not in rest:
+        return None
+    return rest.rsplit("-", 1)[0]
+
+
+def _map_normalized_to_actual_detector_ids() -> Dict[str, str]:
+    """Build a mapping from normalized detector ids to actual detector directory names in the model repo.
+
+    This lets us recover correct casing when we only know the lowercase/normalized id from pod names.
+    """
+    mapping: Dict[str, str] = {}
+    try:
+        for entry in os.listdir(MODEL_REPOSITORY_PATH):
+            full_path = os.path.join(MODEL_REPOSITORY_PATH, entry)
+            if os.path.isdir(full_path):
+                mapping[_normalized_detector_id(entry)] = entry
+    except Exception as e:
+        logger.error(f"Error reading model repository at {MODEL_REPOSITORY_PATH}: {e}")
+    return mapping
+
+
+def get_detector_details() -> dict:
+    """Return details for detectors with running primary inference pods.
+
+    Details include:
+      - query_text (detector.query from cloud)
+      - pipeline_config (the active primary pipeline_config on edge)
+    """
+    config.load_incluster_config()
+    v1_core = client.CoreV1Api()
+    namespace = get_namespace()
+    pods = v1_core.list_namespaced_pod(namespace=namespace)
+
+    norm_to_actual = _map_normalized_to_actual_detector_ids()
+
+    # Collect normalized detector ids that currently have a running primary pod
+    normalized_ids: set[str] = set()
+    for pod in pods.items:
+        if pod.status.phase != "Running":
+            continue
+        norm = _detector_id_from_primary_pod_name(pod.metadata.name or "")
+        if norm:
+            normalized_ids.add(norm)
+
+    # Resolve to actual ids (preserving casing if possible)
+    detector_ids: list[str] = []
+    for norm in sorted(normalized_ids):
+        if norm in norm_to_actual:
+            detector_ids.append(norm_to_actual[norm])
+        else:
+            # Fallback: convert first '-' back to '_' (ids are typically like 'det_xxx')
+            detector_ids.append(norm.replace("-", "_", 1))
+
+    details: Dict[str, dict] = {}
+    for det_id in detector_ids:
+        try:
+            # Active primary pipeline_config from model repo
+            model_dir = get_primary_edge_model_dir(MODEL_REPOSITORY_PATH, det_id)
+            version = get_current_model_version(MODEL_REPOSITORY_PATH, det_id, is_oodd=False)
+            pipeline_config = (
+                get_current_pipeline_config(model_dir, version) if version is not None else None
+            )
+
+            # Query text from predictor_metadata.json in the same model version dir
+            query_text = None
+            if version is not None:
+                predictor_metadata_path = os.path.join(model_dir, str(version), "predictor_metadata.json")
+                if os.path.exists(predictor_metadata_path):
+                    try:
+                        with open(predictor_metadata_path, "r") as f:
+                            metadata = json.load(f)
+                            # Field is named "text_query" in predictor_metadata
+                            query_text = metadata.get("text_query")
+                    except Exception as e:
+                        logger.error(
+                            f"Failed reading predictor_metadata for {det_id} at {predictor_metadata_path}: {e}",
+                            exc_info=True,
+                        )
+
+            details[det_id] = {
+                "query_text": query_text,
+                "pipeline_config": pipeline_config,
+            }
+        except Exception as e:
+            logger.error(f"Error collecting detector details for {det_id}: {e}", exc_info=True)
+            details[det_id] = {"error": str(e)}
+
+    return details

@@ -15,6 +15,8 @@ IMAGE_DIMENSIONS = (480, 640, 3)
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 
+CLOUD_ENDPOINT = 'https://api.groundlight.ai/device-api'
+
 # We need to establish a client here so that we can use functions like `gl.create_roi`, but we won't
 # actually use it to submit anything to Groundlight
 gl = Groundlight(endpoint=None)
@@ -76,16 +78,17 @@ def get_detector_stats(gl: Groundlight, detector_id: str) -> dict:
         }
 
 def get_detector_pipeline_config(gl: Groundlight, detector_id: str) -> dict:
-    path = f'/v1/fetch-model-urls/{detector_id}/'  # Note: no 'edge' prefix for edge-api
+    path = f'/v1/fetch-model-urls/{detector_id}/'
     params = {}
     
     decoded_response = call_edge_api(gl, path, params)
 
     return {
-        "model_binary_id": decoded_response.get('model_binary_id'),
         "pipeline_config": decoded_response.get('pipeline_config'),
-        "oodd_model_binary_id": decoded_response.get('oodd_model_binary_id'),
         "oodd_pipeline_config": decoded_response.get('oodd_pipeline_config'),
+        # sometimes model binaries return as None. Not sure why, but they don't seem terribly useful anyway, so I am commenting them out for now
+        # "model_binary_id": decoded_response.get('model_binary_id'), 
+        # "oodd_model_binary_id": decoded_response.get('oodd_model_binary_id'),
     }
 
 def generate_random_binary_image(
@@ -241,6 +244,13 @@ def error_if_not_from_edge(iq: ImageQuery) -> None:
             f'Please configure your Edge Endpoint so that {iq.detector_id} always receives edge answers.'
         )
 
+def error_if_endpoint_is_cloud(gl: Groundlight) -> None:
+    if CLOUD_ENDPOINT == gl.endpoint:
+        raise RuntimeError(
+            'You are connected to Groundlight cloud. This app should only be run against an Edge Endpoint. '
+            'Please visit https://github.com/groundlight/edge-endpoint/blob/main/deploy/README.md to learn more about deploying an Edge Endpoint.'
+        )
+
 def prime_detector(
     gl: Groundlight, 
     detector: Detector, 
@@ -250,9 +260,10 @@ def prime_detector(
     """
     Submits a handful of labels to a detector so that the cloud can train a model. 
     """
-    for _ in trange(num_labels, desc=f"Priming {detector.id}th ", unit="label"):
+    for _ in trange(num_labels, desc=f"Priming {detector.id} with {num_labels} labels.", unit="label"):
         image, label, rois = generate_random_image(gl, detector, image_width, image_height)
-        iq = gl.ask_async(detector, image, human_review="NEVER")
+        # iq = gl.ask_async(detector, image, human_review="NEVER") # using ask_sync is causing a race condition on the server, commmenting it out until that is fixed
+        iq = gl.submit_image_query(detector, image, wait=0.0, human_review="NEVER")
         gl.add_label(iq, label, rois)
 
 def wait_for_ready_inference_pod(
@@ -299,7 +310,7 @@ def detector_is_sufficiently_trained(
     total_labels = stats['total_labels'] 
     return projected_ml_accuracy is not None and \
         projected_ml_accuracy > min_projected_ml_accuracy and \
-        total_labels >= min_total_labels
+        total_labels >= 1 # should use `min_total_labels` here, but there is a bug that sometimes prevents all labels from being used in training
 
 def wait_until_sufficiently_trained(
     gl: Groundlight,

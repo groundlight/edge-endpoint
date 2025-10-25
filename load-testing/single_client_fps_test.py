@@ -42,20 +42,18 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
     TRAINING_TIMEOUT_SEC = 60 * 10
     INFERENCE_POD_READY_TIMEOUT_SEC = 60 * 10
 
-    WARMUP_ITERATIONS = 200
-    TESTING_ITERATIONS = 400
+    WARMUP_ITERATIONS = 300
+    TESTING_ITERATIONS = 1000
     MIN_PROJECTED_ML_ACCURACY = 0.6
     MIN_TOTAL_LABELS = 30
 
-    endpoint = os.environ.get('GROUNDLIGHT_ENDPOINT')
-    if endpoint is None:
-        raise ValueError(
-            'Please set GROUNDLIGHT_ENDPOINT in your environment variables.'
-        ) 
+    # Connect to the GROUNDLIGHT_ENDPOINT defined in the env vars. Should be an edge endpoint.
+    gl = Groundlight() 
+    u.error_if_endpoint_is_cloud(gl)
+    endpoint = gl.endpoint
 
-    gl = Groundlight(endpoint=endpoint)
-    cloud_endpoint = 'https://api.groundlight.ai/device-api'
-    gl_cloud = Groundlight(endpoint=cloud_endpoint)
+    # Connect to a Groundlight cloud endpoint, for certain operations that require the cloud (like adding a label)
+    gl_cloud = Groundlight(endpoint=u.CLOUD_ENDPOINT)
 
     detector_name = f'Single Client FPS Test {image_width} x {image_height} - {detector_mode}'
     if detector_mode == "BINARY":
@@ -115,9 +113,9 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
         print(f'{detector.id} is now sufficiently trained. Evaluation results: {stats}')
 
     # Wait for the inference pod to become availble
-    print(f'Waiting up to {INFERENCE_POD_READY_TIMEOUT_SEC} seconds for inference pod to be ready for {detector.id}.')
+    print(f'Waiting up to {INFERENCE_POD_READY_TIMEOUT_SEC} seconds for inference pod to be ready for {detector.id}...')
     u.wait_for_ready_inference_pod(gl, detector, image_width, image_height, timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC)
-    print(f'Inference pod is ready for {detector.id}')
+    print(f'Inference pod is ready for {detector.id}.')
 
     # Warm up
     iq_submission_kwargs = {'wait': 0.0, 'human_review': 'NEVER', 'confidence_threshold': 0.0}
@@ -152,9 +150,7 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
     print('-' * 10, 'Test Results', '-' * 10)
     print(f'detector_id: {detector.id}')
     print(f'detector_mode: {detector_mode}')
-    print(f'model_binary_id: {pipeline_config.get('model_binary_id')}')
     print(f'pipeline_config: {pipeline_config.get('pipeline_config')}')
-    print(f'oodd_model_binary_id: {pipeline_config.get('oodd_model_binary_id')}')
     print(f'oodd_pipeline_config: {pipeline_config.get('oodd_pipeline_config')}')
     print(f'image_size: {image_width}x{image_height}')
     print(f'endpoint: {endpoint}')
