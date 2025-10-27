@@ -1,4 +1,4 @@
-from groundlight import Groundlight
+from groundlight import ExperimentalApi, Groundlight
 import os
 import time
 import argparse
@@ -39,8 +39,8 @@ def parse_arguments():
     return parser.parse_args()
 
 def main(detector_mode: str, image_width: int, image_height: int) -> None:
-    TRAINING_TIMEOUT_SEC = 60 * 10
-    INFERENCE_POD_READY_TIMEOUT_SEC = 60 * 10
+    TRAINING_TIMEOUT_SEC = 60 * 20
+    INFERENCE_POD_READY_TIMEOUT_SEC = 60 * 5
 
     WARMUP_ITERATIONS = 300
     TESTING_ITERATIONS = 1000
@@ -48,12 +48,12 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
     MIN_TOTAL_LABELS = 30
 
     # Connect to the GROUNDLIGHT_ENDPOINT defined in the env vars. Should be an edge endpoint.
-    gl = Groundlight() 
+    gl = ExperimentalApi() 
     u.error_if_endpoint_is_cloud(gl)
     endpoint = gl.endpoint
 
     # Connect to a Groundlight cloud endpoint, for certain operations that require the cloud (like adding a label)
-    gl_cloud = Groundlight(endpoint=u.CLOUD_ENDPOINT)
+    gl_cloud = ExperimentalApi(endpoint=u.CLOUD_ENDPOINT)
 
     detector_name = f'Single Client FPS Test {image_width} x {image_height} - {detector_mode}'
     if detector_mode == "BINARY":

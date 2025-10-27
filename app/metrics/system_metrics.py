@@ -3,6 +3,7 @@ import logging
 import os
 from datetime import datetime, timedelta
 from typing import Dict
+import time
 
 import psutil
 import tzlocal
@@ -210,6 +211,8 @@ def get_detector_details() -> dict:
 
             # Query text from predictor_metadata.json in the same model version dir
             query_text = None
+            updated_time_iso = None
+            updated_ago_minutes = None
             if version is not None:
                 predictor_metadata_path = os.path.join(model_dir, str(version), "predictor_metadata.json")
                 if os.path.exists(predictor_metadata_path):
@@ -224,9 +227,20 @@ def get_detector_details() -> dict:
                             exc_info=True,
                         )
 
+                # Use the predictor_metadata.json mtime as the model update time.
+                try:
+                    stat = os.stat(predictor_metadata_path)
+                    updated_ts = stat.st_mtime
+                    updated_time_iso = datetime.fromtimestamp(updated_ts).isoformat()
+                    updated_ago_minutes = int((time.time() - updated_ts) / 60)
+                except Exception:
+                    pass
+
             details[det_id] = {
                 "query_text": query_text,
                 "pipeline_config": pipeline_config,
+                "updated_time": updated_time_iso,
+                "updated_ago_minutes": updated_ago_minutes,
             }
         except Exception as e:
             logger.error(f"Error collecting detector details for {det_id}: {e}", exc_info=True)

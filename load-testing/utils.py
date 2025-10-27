@@ -1,7 +1,7 @@
 import numpy as np
 import random
 from datetime import datetime
-from groundlight import Groundlight, ROI, Detector, ApiException, ImageQuery
+from groundlight import ExperimentalApi, ROI, Detector, ApiException, ImageQuery
 import math
 import cv2
 
@@ -42,19 +42,19 @@ def call_api(url: str, params: dict) -> dict:
             f"Response content: {response.content}" 
             )
 
-def call_reef_api(gl_client: Groundlight, path: str, params: dict) -> dict:
+def call_reef_api(gl_client: ExperimentalApi, path: str, params: dict) -> dict:
 
     url = gl_client.endpoint.replace('/device-api', '/reef-api') + path
 
     return call_api(url, params)
 
-def call_edge_api(gl_client: Groundlight, path: str, params: dict) -> dict:
+def call_edge_api(gl_client: ExperimentalApi, path: str, params: dict) -> dict:
 
     url = gl_client.endpoint.replace('/device-api', '/edge-api') + path
 
     return call_api(url, params)
 
-def get_detector_stats(gl: Groundlight, detector_id: str) -> dict:
+def get_detector_stats(gl: ExperimentalApi, detector_id: str) -> dict:
     path = f'/detectors/{detector_id}'
     params = {
         'type': 'summary',
@@ -77,7 +77,7 @@ def get_detector_stats(gl: Groundlight, detector_id: str) -> dict:
         "total_labels": total_ground_truth_examples,
         }
 
-def get_detector_pipeline_config(gl: Groundlight, detector_id: str) -> dict:
+def get_detector_pipeline_config(gl: ExperimentalApi, detector_id: str) -> dict:
     path = f'/v1/fetch-model-urls/{detector_id}/'
     params = {}
     
@@ -92,7 +92,7 @@ def get_detector_pipeline_config(gl: Groundlight, detector_id: str) -> dict:
     }
 
 def generate_random_binary_image(
-    gl: Groundlight,  # not used, but added here to maintain consistency with `generate_random_count_image`
+    gl: ExperimentalApi,  # not used, but added here to maintain consistency with `generate_random_count_image`
     image_width: int = 640,
     image_height: int = 480,
 ) -> tuple[np.ndarray, str, None]:
@@ -128,7 +128,7 @@ def generate_color_canvas(width: int, height: int, color: tuple[int, int, int]) 
     return np.full((height, width, 3), color, dtype=np.uint8)
 
 def generate_random_count_image(
-        gl: Groundlight,
+        gl: ExperimentalApi,
         image_width: int = 640,
         image_height: int = 480,
         class_name: str = 'object',
@@ -184,7 +184,7 @@ def generate_random_count_image(
     return image, label, rois
 
 def generate_random_image(
-    gl: Groundlight,
+    gl: ExperimentalApi,
     detector: Detector,
     image_width: int,
     image_height: int,
@@ -216,7 +216,7 @@ def generate_random_image(
     return image, label, rois
 
 def get_or_create_count_detector(
-    gl: Groundlight,
+    gl: ExperimentalApi,
     name: str,
     class_name: str,
     max_count: int, 
@@ -244,7 +244,7 @@ def error_if_not_from_edge(iq: ImageQuery) -> None:
             f'Please configure your Edge Endpoint so that {iq.detector_id} always receives edge answers.'
         )
 
-def error_if_endpoint_is_cloud(gl: Groundlight) -> None:
+def error_if_endpoint_is_cloud(gl: ExperimentalApi) -> None:
     if CLOUD_ENDPOINT == gl.endpoint:
         raise RuntimeError(
             'You are connected to Groundlight cloud. This app should only be run against an Edge Endpoint. '
@@ -252,7 +252,7 @@ def error_if_endpoint_is_cloud(gl: Groundlight) -> None:
         )
 
 def prime_detector(
-    gl: Groundlight, 
+    gl: ExperimentalApi, 
     detector: Detector, 
     num_labels: int, 
     image_width: int, 
@@ -267,7 +267,7 @@ def prime_detector(
         gl.add_label(iq, label, rois)
 
 def wait_for_ready_inference_pod(
-    gl: Groundlight,
+    gl: ExperimentalApi,
     detector: Detector,
     image_width: int, 
     image_height: int,
@@ -310,10 +310,10 @@ def detector_is_sufficiently_trained(
     total_labels = stats['total_labels'] 
     return projected_ml_accuracy is not None and \
         projected_ml_accuracy > min_projected_ml_accuracy and \
-        total_labels >= 1 # should use `min_total_labels` here, but there is a bug that sometimes prevents all labels from being used in training
+        total_labels >= min_total_labels # should use `min_total_labels` here, but there is a bug that sometimes prevents all labels from being used in training
 
 def wait_until_sufficiently_trained(
-    gl: Groundlight,
+    gl: ExperimentalApi,
     detector: Detector,
     min_projected_ml_accuracy: float,
     min_total_labels: int,

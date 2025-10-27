@@ -80,12 +80,13 @@ class MetricsReporter:
         k3s_stats.add("container_images", lambda: system_metrics.get_container_images())
 
         detector_details = SafeMetricsDict()
-        detector_details.add("detectors", lambda: system_metrics.get_detector_details())
+        detector_details.add("detector_details", lambda: system_metrics.get_detector_details())
 
         return {
             "device_info": device_info.as_dict(),
             "activity_metrics": activity_metrics.as_dict(),
-            "detector_details": detector_details.as_dict(),
+            # Flatten: top-level key is detector_details containing the dict of ids → details
+            **detector_details.as_dict(),
             "k3s_stats": k3s_stats.as_dict(),
         }
 
