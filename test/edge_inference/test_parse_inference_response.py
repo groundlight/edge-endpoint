@@ -82,16 +82,7 @@ def mock_bounding_boxes_response():
                     }
                 ]
             ],
-            "dropped_rois": [
-                [
-                    {
-                        "label": "bird",
-                        "geometry": {"left": 0.1, "top": 0.2, "right": 0.3, "bottom": 0.4, "version": "2.0"},
-                        "score": 0.15,
-                        "version": "2.0",
-                    }
-                ]
-            ],
+            "max_dropped_roi_scores": [0.15],
         },
         "predictions": None,
         "secondary_predictions": {
