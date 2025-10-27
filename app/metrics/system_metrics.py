@@ -128,12 +128,6 @@ def get_container_images() -> str:
     # the individual container fields
     return json.dumps(containers)
 
-
-def _normalized_detector_id(detector_id: str) -> str:
-    """Normalize a detector id to the form used in pod names: replace '_' with '-' and lower-case."""
-    return detector_id.replace("_", "-").lower()
-
-
 def _detector_id_from_primary_pod_name(pod_name: str) -> str | None:
     """Extract the normalized detector id from a primary inference pod name.
 
@@ -181,25 +175,9 @@ def _get_container_started_at(pod: client.V1Pod) -> datetime | None:
 def _get_annotation(pod: client.V1Pod, key: str) -> str | None:
     try:
         return (pod.metadata.annotations or {}).get(key)
-    except Exception:
-        return None
-
-
-def _map_normalized_to_actual_detector_ids() -> Dict[str, str]:
-    """Build a mapping from normalized detector ids to actual detector directory names in the model repo.
-
-    This lets us recover correct casing when we only know the lowercase/normalized id from pod names.
-    """
-    mapping: Dict[str, str] = {}
-    try:
-        for entry in os.listdir(MODEL_REPOSITORY_PATH):
-            full_path = os.path.join(MODEL_REPOSITORY_PATH, entry)
-            if os.path.isdir(full_path):
-                mapping[_normalized_detector_id(entry)] = entry
     except Exception as e:
-        logger.error(f"Error reading model repository at {MODEL_REPOSITORY_PATH}: {e}")
-    return mapping
-
+        logger.error(f"Error getting annotation {key}: {e}", exc_info=True)
+        return None
 
 def get_detector_details() -> dict:
     """Return details for detectors with running primary inference pods.
@@ -242,7 +220,7 @@ def get_detector_details() -> dict:
 
             # Read annotations written by the deployment logic
             pipeline_config = _get_annotation(pod, "groundlight.dev/pipeline-config")
-            last_updated_time = _get_annotation(pod, "groundlight.dev/last-updated-time")
+            last_updated_time = _get_container_started_at(pod).isoformat()
 
             details[det_id] = {
                 "status": "ready",

@@ -106,7 +106,6 @@ class InferenceDeploymentManager:
         )
         # Add informative annotations to the Pod template with intended runtime details
         docs = list(yaml.safe_load_all(inference_deployment))
-        now_iso = datetime.now().isoformat()
         # Fetch pipeline config intended for this detector (primary/oodd)
         try:
             api_token = os.environ.get("GROUNDLIGHT_API_TOKEN")
@@ -122,7 +121,6 @@ class InferenceDeploymentManager:
                 ann = md.setdefault("annotations", {})
                 ann["groundlight.dev/detector-id"] = detector_id
                 ann["groundlight.dev/model-name"] = model_name
-                ann["groundlight.dev/last-updated-time"] = now_iso
                 if pipeline_config is not None:
                     ann["groundlight.dev/pipeline-config"] = str(pipeline_config)
 
@@ -212,14 +210,13 @@ class InferenceDeploymentManager:
             edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
             pipeline_config = (oodd_model_info.pipeline_config if is_oodd else edge_model_info.pipeline_config)
         except Exception:
+            logger.error(f'Error while fetching pipeline_config for {detector_id}', exc_info=True)
             pipeline_config = None
 
         ann = deployment.spec.template.metadata.annotations
         ann["groundlight.dev/detector-id"] = detector_id
         ann["groundlight.dev/model-name"] = get_edge_inference_model_name(detector_id, is_oodd)
-        ann["groundlight.dev/last-updated-time"] = now_iso
-        if pipeline_config is not None:
-            ann["groundlight.dev/pipeline-config"] = str(pipeline_config)
+        ann["groundlight.dev/pipeline-config"] = str(pipeline_config)
 
         # Set the correct model name for this inference deployment
         for env_var in deployment.spec.template.spec.containers[0].env:
