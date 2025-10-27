@@ -145,8 +145,8 @@ def calculate_confidence_for_bounding_box_mode(multi_predictions: dict) -> float
     else:
         min_predicted_roi_score = 0
 
-    if max_dropped_roi_scores is not None and len(max_dropped_roi_scores[0]) > 0:
-        max_dropped_roi_score = max(max_dropped_roi_scores[0])
+    if max_dropped_roi_scores is not None and len(max_dropped_roi_scores) > 0:
+        max_dropped_roi_score = max_dropped_roi_scores[0]
     else:
         max_dropped_roi_score = 0
 
