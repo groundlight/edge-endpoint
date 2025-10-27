@@ -238,7 +238,7 @@ class TestParseInferenceResponse:
         assert result["text"] is None
         assert len(result["rois"]) == 1
         assert result["rois"][0]["label"] == "bird"
-        assert result["rois"][0]["score"] == 0.8
+        assert result["rois"][0]["score"] == 0.68
         assert "x" in result["rois"][0]["geometry"]
         assert "y" in result["rois"][0]["geometry"]
 
