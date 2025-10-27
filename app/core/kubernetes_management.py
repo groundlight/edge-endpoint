@@ -12,6 +12,7 @@ from .edge_inference import (
     get_edge_inference_deployment_name,
     get_edge_inference_model_name,
     get_edge_inference_service_name,
+    fetch_model_info,
 )
 from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH
 
@@ -103,7 +104,31 @@ class InferenceDeploymentManager:
         inference_deployment = self._substitute_placeholders(
             service_name=service_name, deployment_name=deployment_name, model_name=model_name
         )
-        self._create_from_kube_manifest(namespace=self._target_namespace, manifest=inference_deployment)
+        # Add informative annotations to the Pod template with intended runtime details
+        docs = list(yaml.safe_load_all(inference_deployment))
+        now_iso = datetime.now().isoformat()
+        # Fetch pipeline config intended for this detector (primary/oodd)
+        try:
+            api_token = os.environ.get("GROUNDLIGHT_API_TOKEN")
+            edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
+            pipeline_config = (oodd_model_info.pipeline_config if is_oodd else edge_model_info.pipeline_config)
+        except Exception:
+            pipeline_config = None
+
+        for doc in docs:
+            if doc.get("kind") == "Deployment":
+                tpl = doc.setdefault("spec", {}).setdefault("template", {})
+                md = tpl.setdefault("metadata", {})
+                ann = md.setdefault("annotations", {})
+                ann["groundlight.dev/detector-id"] = detector_id
+                ann["groundlight.dev/model-name"] = model_name
+                ann["groundlight.dev/last-updated-time"] = now_iso
+                if pipeline_config is not None:
+                    ann["groundlight.dev/pipeline-config"] = str(pipeline_config)
+
+        self._create_from_kube_manifest(
+            namespace=self._target_namespace, manifest=yaml.safe_dump_all(docs)
+        )
 
     def get_inference_deployment(self, deployment_name: str) -> V1Deployment | None:
         """
@@ -178,7 +203,23 @@ class InferenceDeploymentManager:
 
         if deployment.spec.template.metadata.annotations is None:
             deployment.spec.template.metadata.annotations = {}
-        deployment.spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"] = datetime.now().isoformat()
+        now_iso = datetime.now().isoformat()
+        deployment.spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"] = now_iso
+
+        # Set informative annotations with intended runtime details
+        try:
+            api_token = os.environ.get("GROUNDLIGHT_API_TOKEN")
+            edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
+            pipeline_config = (oodd_model_info.pipeline_config if is_oodd else edge_model_info.pipeline_config)
+        except Exception:
+            pipeline_config = None
+
+        ann = deployment.spec.template.metadata.annotations
+        ann["groundlight.dev/detector-id"] = detector_id
+        ann["groundlight.dev/model-name"] = get_edge_inference_model_name(detector_id, is_oodd)
+        ann["groundlight.dev/last-updated-time"] = now_iso
+        if pipeline_config is not None:
+            ann["groundlight.dev/pipeline-config"] = str(pipeline_config)
 
         # Set the correct model name for this inference deployment
         for env_var in deployment.spec.template.spec.containers[0].env:

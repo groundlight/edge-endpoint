@@ -19,7 +19,7 @@ CLOUD_ENDPOINT = 'https://api.groundlight.ai/device-api'
 
 # We need to establish a client here so that we can use functions like `gl.create_roi`, but we won't
 # actually use it to submit anything to Groundlight
-gl = Groundlight(endpoint=None)
+gl = ExperimentalApi(endpoint=None)
 
 class APIError(Exception):
     """Any response from the Groundlight API that is not 200

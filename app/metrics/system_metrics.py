@@ -151,6 +151,40 @@ def _detector_id_from_primary_pod_name(pod_name: str) -> str | None:
     return rest.rsplit("-", 1)[0]
 
 
+def _primary_pod_is_ready(pod: client.V1Pod) -> bool:
+    if not pod or not pod.status or pod.status.phase != "Running":
+        return False
+    try:
+        if not any(c.type == "Ready" and c.status == "True" for c in (pod.status.conditions or [])):
+            return False
+    except Exception:
+        return False
+    try:
+        for cs in (pod.status.container_statuses or []):
+            if cs.name == "inference-server" and cs.ready:
+                return True
+    except Exception:
+        return False
+    return False
+
+
+def _get_container_started_at(pod: client.V1Pod) -> datetime | None:
+    try:
+        for cs in (pod.status.container_statuses or []):
+            if cs.name == "inference-server" and cs.state and cs.state.running and cs.state.running.started_at:
+                return cs.state.running.started_at
+    except Exception:
+        return None
+    return None
+
+
+def _get_annotation(pod: client.V1Pod, key: str) -> str | None:
+    try:
+        return (pod.metadata.annotations or {}).get(key)
+    except Exception:
+        return None
+
+
 def _map_normalized_to_actual_detector_ids() -> Dict[str, str]:
     """Build a mapping from normalized detector ids to actual detector directory names in the model repo.
 
@@ -179,66 +213,41 @@ def get_detector_details() -> dict:
     namespace = get_namespace()
     pods = v1_core.list_namespaced_pod(namespace=namespace)
 
-    norm_to_actual = _map_normalized_to_actual_detector_ids()
-
-    # Collect normalized detector ids that currently have a running primary pod
-    normalized_ids: set[str] = set()
+    # Group all primary pods by normalized detector id (include non-ready for 'pending')
+    norm_to_pods: Dict[str, list[client.V1Pod]] = {}
     for pod in pods.items:
-        if pod.status.phase != "Running":
-            continue
         norm = _detector_id_from_primary_pod_name(pod.metadata.name or "")
-        if norm:
-            normalized_ids.add(norm)
-
-    # Resolve to actual ids (preserving casing if possible)
-    detector_ids: list[str] = []
-    for norm in sorted(normalized_ids):
-        if norm in norm_to_actual:
-            detector_ids.append(norm_to_actual[norm])
-        else:
-            # Fallback: convert first '-' back to '_' (ids are typically like 'det_xxx')
-            detector_ids.append(norm.replace("-", "_", 1))
+        if not norm:
+            continue
+        norm_to_pods.setdefault(norm, []).append(pod)
 
     details: Dict[str, dict] = {}
-    for det_id in detector_ids:
+    for norm, pod_list in sorted(norm_to_pods.items()):
+        # Determine detector id from pod annotations if available, else best-effort from norm
+        ready_pods = [p for p in pod_list if _primary_pod_is_ready(p)]
+        any_pod = ready_pods[0] if ready_pods else pod_list[0]
+        det_id = _get_annotation(any_pod, "groundlight.dev/detector-id") or norm.replace("-", "_", 1)
         try:
-            # Active primary pipeline_config from model repo
-            model_dir = get_primary_edge_model_dir(MODEL_REPOSITORY_PATH, det_id)
-            version = get_current_model_version(MODEL_REPOSITORY_PATH, det_id, is_oodd=False)
-            pipeline_config = get_current_pipeline_config(model_dir, version) if version is not None else None
+            # Choose a Ready pod if present, else most recent pod (pending)
+            ready_pods = [p for p in pod_list if _primary_pod_is_ready(p)]
+            pod = ready_pods[0] if ready_pods else sorted(
+                pod_list,
+                key=lambda p: (p.metadata.creation_timestamp or datetime.min.replace(tzinfo=None)),
+                reverse=True,
+            )[0]
 
-            # Query text from predictor_metadata.json in the same model version dir
-            query_text = None
-            updated_time_iso = None
-            updated_ago_minutes = None
-            if version is not None:
-                predictor_metadata_path = os.path.join(model_dir, str(version), "predictor_metadata.json")
-                if os.path.exists(predictor_metadata_path):
-                    try:
-                        with open(predictor_metadata_path, "r") as f:
-                            metadata = json.load(f)
-                            # Field is named "text_query" in predictor_metadata
-                            query_text = metadata.get("text_query")
-                    except Exception as e:
-                        logger.error(
-                            f"Failed reading predictor_metadata for {det_id} at {predictor_metadata_path}: {e}",
-                            exc_info=True,
-                        )
+            if not _primary_pod_is_ready(pod):
+                details[det_id] = {"status": "pending"}
+                continue
 
-                # Use the predictor_metadata.json mtime as the model update time.
-                try:
-                    stat = os.stat(predictor_metadata_path)
-                    updated_ts = stat.st_mtime
-                    updated_time_iso = datetime.fromtimestamp(updated_ts).isoformat()
-                    updated_ago_minutes = int((time.time() - updated_ts) / 60)
-                except Exception:
-                    pass
+            # Read annotations written by the deployment logic
+            pipeline_config = _get_annotation(pod, "groundlight.dev/pipeline-config")
+            last_updated_time = _get_annotation(pod, "groundlight.dev/last-updated-time")
 
             details[det_id] = {
-                "query_text": query_text,
+                "status": "ready",
                 "pipeline_config": pipeline_config,
-                "updated_time": updated_time_iso,
-                "updated_ago_minutes": updated_ago_minutes,
+                "last_updated_time": last_updated_time,
             }
         except Exception as e:
             logger.error(f"Error collecting detector details for {det_id}: {e}", exc_info=True)
