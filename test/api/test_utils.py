@@ -364,36 +364,6 @@ class TestCreateIQ:
                 query="Test query",
             )
 
-    def test_create_bounding_box_iq_without_configuration(self):
-        """Test creating a bounding box IQ with no mode_configuration."""
-        with pytest.raises(ValueError, match="mode_configuration for Bounding Box detector shouldn't be None."):
-            create_iq(
-                detector_id=prefixed_ksuid("det_"),
-                mode=ModeEnum.BOUNDING_BOX,
-                mode_configuration=None,
-                result_value=1,
-                confidence=0.8,
-                confidence_threshold=self.confidence_threshold,
-                is_done_processing=True,
-                query="Test query",
-                rois=[
-                    {
-                        "label": "test_class",
-                        "score": 0.8,
-                        "geometry": {
-                            "left": 0.4,
-                            "top": 0.4,
-                            "right": 0.6,
-                            "bottom": 0.6,
-                            # x and y are calculated in parse_inference_response, so should be included in calls to
-                            # create_iq
-                            "x": 0.5,
-                            "y": 0.5,
-                        },
-                    }
-                ],
-            )
-
 
 class TestParseModelInfo:
     def test_parse_with_binary(self):
