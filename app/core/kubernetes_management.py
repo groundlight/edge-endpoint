@@ -9,10 +9,10 @@ from kubernetes import config
 from kubernetes.client import V1Deployment
 
 from .edge_inference import (
+    fetch_model_info,
     get_edge_inference_deployment_name,
     get_edge_inference_model_name,
     get_edge_inference_service_name,
-    fetch_model_info,
 )
 from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH
 
@@ -110,7 +110,7 @@ class InferenceDeploymentManager:
         try:
             api_token = os.environ.get("GROUNDLIGHT_API_TOKEN")
             edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
-            pipeline_config = (oodd_model_info.pipeline_config if is_oodd else edge_model_info.pipeline_config)
+            pipeline_config = oodd_model_info.pipeline_config if is_oodd else edge_model_info.pipeline_config
         except Exception:
             pipeline_config = None
 
@@ -124,9 +124,7 @@ class InferenceDeploymentManager:
                 if pipeline_config is not None:
                     ann["groundlight.dev/pipeline-config"] = str(pipeline_config)
 
-        self._create_from_kube_manifest(
-            namespace=self._target_namespace, manifest=yaml.safe_dump_all(docs)
-        )
+        self._create_from_kube_manifest(namespace=self._target_namespace, manifest=yaml.safe_dump_all(docs))
 
     def get_inference_deployment(self, deployment_name: str) -> V1Deployment | None:
         """
@@ -208,7 +206,7 @@ class InferenceDeploymentManager:
         try:
             api_token = os.environ.get("GROUNDLIGHT_API_TOKEN")
             edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
-            pipeline_config = (oodd_model_info.pipeline_config if is_oodd else edge_model_info.pipeline_config)
+            pipeline_config = oodd_model_info.pipeline_config if is_oodd else edge_model_info.pipeline_config
         except Exception:
             logger.error(f'Error while fetching pipeline_config for {detector_id}', exc_info=True)
             pipeline_config = None

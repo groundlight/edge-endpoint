@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import time
 from datetime import datetime, timedelta
 from typing import Dict
 
@@ -9,11 +8,6 @@ import psutil
 import tzlocal
 from kubernetes import client, config
 
-from app.core.edge_inference import (
-    get_current_model_version,
-    get_current_pipeline_config,
-    get_primary_edge_model_dir,
-)
 from app.core.file_paths import MODEL_REPOSITORY_PATH
 
 logger = logging.getLogger(__name__)
@@ -154,7 +148,7 @@ def _primary_pod_is_ready(pod: client.V1Pod) -> bool:
     except Exception:
         return False
     try:
-        for cs in (pod.status.container_statuses or []):
+        for cs in pod.status.container_statuses or []:
             if cs.name == "inference-server" and cs.ready:
                 return True
     except Exception:
@@ -164,7 +158,7 @@ def _primary_pod_is_ready(pod: client.V1Pod) -> bool:
 
 def _get_container_started_at(pod: client.V1Pod) -> datetime | None:
     try:
-        for cs in (pod.status.container_statuses or []):
+        for cs in pod.status.container_statuses or []:
             if cs.name == "inference-server" and cs.state and cs.state.running and cs.state.running.started_at:
                 return cs.state.running.started_at
     except Exception:
@@ -208,11 +202,15 @@ def get_detector_details() -> dict:
         try:
             # Choose a Ready pod if present, else most recent pod (pending)
             ready_pods = [p for p in pod_list if _primary_pod_is_ready(p)]
-            pod = ready_pods[0] if ready_pods else sorted(
-                pod_list,
-                key=lambda p: (p.metadata.creation_timestamp or datetime.min.replace(tzinfo=None)),
-                reverse=True,
-            )[0]
+            pod = (
+                ready_pods[0]
+                if ready_pods
+                else sorted(
+                    pod_list,
+                    key=lambda p: (p.metadata.creation_timestamp or datetime.min.replace(tzinfo=None)),
+                    reverse=True,
+                )[0]
+            )
 
             if not _primary_pod_is_ready(pod):
                 details[det_id] = {"status": "pending"}
