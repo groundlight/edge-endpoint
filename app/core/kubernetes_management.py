@@ -208,7 +208,7 @@ class InferenceDeploymentManager:
             edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
             pipeline_config = oodd_model_info.pipeline_config if is_oodd else edge_model_info.pipeline_config
         except Exception:
-            logger.error(f'Error while fetching pipeline_config for {detector_id}', exc_info=True)
+            logger.error(f"Error while fetching pipeline_config for {detector_id}", exc_info=True)
             pipeline_config = None
 
         ann = deployment.spec.template.metadata.annotations
