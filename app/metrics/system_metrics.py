@@ -8,8 +8,6 @@ import psutil
 import tzlocal
 from kubernetes import client, config
 
-from app.core.file_paths import MODEL_REPOSITORY_PATH
-
 logger = logging.getLogger(__name__)
 
 
@@ -122,6 +120,7 @@ def get_container_images() -> str:
     # the individual container fields
     return json.dumps(containers)
 
+
 def _detector_id_from_primary_pod_name(pod_name: str) -> str | None:
     """Extract the normalized detector id from a primary inference pod name.
 
@@ -172,6 +171,7 @@ def _get_annotation(pod: client.V1Pod, key: str) -> str | None:
     except Exception as e:
         logger.error(f"Error getting annotation {key}: {e}", exc_info=True)
         return None
+
 
 def get_detector_details() -> dict:
     """Return details for detectors with running primary inference pods.
