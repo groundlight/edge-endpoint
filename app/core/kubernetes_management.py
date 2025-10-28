@@ -24,6 +24,32 @@ class InferenceDeploymentManager:
         self._setup_kube_client()
         self._inference_deployment_template = self._load_inference_deployment_template()
 
+    def _fetch_pipeline_config(self, detector_id: str, is_oodd: bool, log_errors: bool = False) -> str | None:
+        """Fetch the pipeline_config for the given detector and pipeline type.
+
+        Args:
+            detector_id: Detector id
+            is_oodd: Whether the request is for the OODD pipeline
+            log_errors: If True, logs an error if fetching fails
+
+        Returns:
+            The pipeline_config string or None if unavailable
+        """
+        try:
+            api_token = os.environ.get("GROUNDLIGHT_API_TOKEN")
+            edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
+            return oodd_model_info.pipeline_config if is_oodd else edge_model_info.pipeline_config
+        except Exception:
+            if log_errors:
+                logger.error(f"Error while fetching pipeline_config for {detector_id}", exc_info=True)
+            return None
+
+    def _set_runtime_annotations(self, ann: dict, detector_id: str, is_oodd: bool, pipeline_config: str | None) -> None:
+        """Populate standard runtime annotations for inference pods."""
+        ann["groundlight.dev/detector-id"] = detector_id
+        ann["groundlight.dev/model-name"] = get_edge_inference_model_name(detector_id, is_oodd)
+        ann["groundlight.dev/pipeline-config"] = str(pipeline_config)
+
     def _setup_kube_client(self) -> None:
         """Sets up the kubernetes client in order to access resources in the cluster."""
         # Requires the application to be running inside kubernetes.
@@ -107,22 +133,14 @@ class InferenceDeploymentManager:
         # Add informative annotations to the Pod template with intended runtime details
         docs = list(yaml.safe_load_all(inference_deployment))
         # Fetch pipeline config intended for this detector (primary/oodd)
-        try:
-            api_token = os.environ.get("GROUNDLIGHT_API_TOKEN")
-            edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
-            pipeline_config = oodd_model_info.pipeline_config if is_oodd else edge_model_info.pipeline_config
-        except Exception:
-            pipeline_config = None
+        pipeline_config = self._fetch_pipeline_config(detector_id, is_oodd, log_errors=False)
 
         for doc in docs:
             if doc.get("kind") == "Deployment":
                 tpl = doc.setdefault("spec", {}).setdefault("template", {})
                 md = tpl.setdefault("metadata", {})
                 ann = md.setdefault("annotations", {})
-                ann["groundlight.dev/detector-id"] = detector_id
-                ann["groundlight.dev/model-name"] = model_name
-                if pipeline_config is not None:
-                    ann["groundlight.dev/pipeline-config"] = str(pipeline_config)
+                self._set_runtime_annotations(ann, detector_id, is_oodd, pipeline_config)
 
         self._create_from_kube_manifest(namespace=self._target_namespace, manifest=yaml.safe_dump_all(docs))
 
@@ -203,18 +221,10 @@ class InferenceDeploymentManager:
         deployment.spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"] = now_iso
 
         # Set informative annotations with intended runtime details
-        try:
-            api_token = os.environ.get("GROUNDLIGHT_API_TOKEN")
-            edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
-            pipeline_config = oodd_model_info.pipeline_config if is_oodd else edge_model_info.pipeline_config
-        except Exception:
-            logger.error(f"Error while fetching pipeline_config for {detector_id}", exc_info=True)
-            pipeline_config = None
+        pipeline_config = self._fetch_pipeline_config(detector_id, is_oodd, log_errors=True)
 
         ann = deployment.spec.template.metadata.annotations
-        ann["groundlight.dev/detector-id"] = detector_id
-        ann["groundlight.dev/model-name"] = get_edge_inference_model_name(detector_id, is_oodd)
-        ann["groundlight.dev/pipeline-config"] = str(pipeline_config)
+        self._set_runtime_annotations(ann, detector_id, is_oodd, pipeline_config)
 
         # Set the correct model name for this inference deployment
         for env_var in deployment.spec.template.spec.containers[0].env:

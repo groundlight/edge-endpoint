@@ -1,8 +1,7 @@
 import json
 import logging
 import os
-from datetime import datetime, timedelta
-from typing import Dict
+from datetime import datetime, timedelta 
 
 import psutil
 import tzlocal
@@ -121,21 +120,7 @@ def get_container_images() -> str:
     return json.dumps(containers)
 
 
-def _detector_id_from_primary_pod_name(pod_name: str) -> str | None:
-    """Extract the normalized detector id from a primary inference pod name.
-
-    Expected formats (examples):
-      - inferencemodel-primary-det-34abcd...-<hash>
-    Returns the part between the prefix and the last dash (hash separator).
-    """
-    prefix = "inferencemodel-primary-"
-    if not pod_name.startswith(prefix):
-        return None
-    rest = pod_name[len(prefix) :]
-    # strip trailing -<hash>
-    if "-" not in rest:
-        return None
-    return rest.rsplit("-", 1)[0]
+ 
 
 
 def _primary_pod_is_ready(pod: client.V1Pod) -> bool:
@@ -174,59 +159,26 @@ def _get_annotation(pod: client.V1Pod, key: str) -> str | None:
 
 
 def get_detector_details() -> dict:
-    """Return details for detectors with running primary inference pods.
-
-    Details include:
-      - query_text (detector.query from cloud)
-      - pipeline_config (the active primary pipeline_config on edge)
-    """
+    """Return details for detectors with primary inference pods, keyed by detector-id annotation."""
     config.load_incluster_config()
     v1_core = client.CoreV1Api()
     namespace = get_namespace()
     pods = v1_core.list_namespaced_pod(namespace=namespace)
 
-    # Group all primary pods by normalized detector id (include non-ready for 'pending')
-    norm_to_pods: Dict[str, list[client.V1Pod]] = {}
+    details: dict[str, dict] = {}
     for pod in pods.items:
-        norm = _detector_id_from_primary_pod_name(pod.metadata.name or "")
-        if not norm:
+        det_id = _get_annotation(pod, "groundlight.dev/detector-id")
+        if not det_id:
             continue
-        norm_to_pods.setdefault(norm, []).append(pod)
 
-    details: Dict[str, dict] = {}
-    for norm, pod_list in sorted(norm_to_pods.items()):
-        # Determine detector id from pod annotations if available, else best-effort from norm
-        ready_pods = [p for p in pod_list if _primary_pod_is_ready(p)]
-        any_pod = ready_pods[0] if ready_pods else pod_list[0]
-        det_id = _get_annotation(any_pod, "groundlight.dev/detector-id") or norm.replace("-", "_", 1)
-        try:
-            # Choose a Ready pod if present, else most recent pod (pending)
-            ready_pods = [p for p in pod_list if _primary_pod_is_ready(p)]
-            pod = (
-                ready_pods[0]
-                if ready_pods
-                else sorted(
-                    pod_list,
-                    key=lambda p: (p.metadata.creation_timestamp or datetime.min.replace(tzinfo=None)),
-                    reverse=True,
-                )[0]
-            )
-
-            if not _primary_pod_is_ready(pod):
-                details[det_id] = {"status": "pending"}
-                continue
-
-            # Read annotations written by the deployment logic
-            pipeline_config = _get_annotation(pod, "groundlight.dev/pipeline-config")
-            last_updated_time = _get_container_started_at(pod).isoformat()
-
+        if _primary_pod_is_ready(pod):
+            started = _get_container_started_at(pod)
             details[det_id] = {
                 "status": "ready",
-                "pipeline_config": pipeline_config,
-                "last_updated_time": last_updated_time,
+                "pipeline_config": _get_annotation(pod, "groundlight.dev/pipeline-config"),
+                "last_updated_time": started.isoformat() if started else None,
             }
-        except Exception as e:
-            logger.error(f"Error collecting detector details for {det_id}: {e}", exc_info=True)
-            details[det_id] = {"error": str(e)}
+        elif det_id not in details:
+            details[det_id] = {"status": "pending"}
 
     return details

@@ -89,11 +89,10 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
     else:
         raise ValueError(f'Detector mode {detector_mode} not recognized.')
 
-    # Get the pipeline config so that we can log it
+    # Get the pipeline config and log it
     pipeline_configs = glh.get_detector_pipeline_configs(gl, detector.id)
-    pipeline_config = pipeline_configs.get('pipeline_config')
-
-    print(f'Found {pipeline_config} as the most recently trained pipeline in the cloud. We will use this for testing.')
+    cloud_pipeline_config = pipeline_configs.get('pipeline_config')
+    print(f"Found pipeline_config='{cloud_pipeline_config}' as the most recently trained pipeline in the cloud. We will use this for testing.")
     
     # Check if the detector has trained. If not, prime it with some labels
     stats = glh.get_detector_stats(gl, detector.id)
@@ -115,16 +114,18 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
         )
         print(f'{detector.id} is now sufficiently trained. Evaluation results: {stats}')
 
-    # Wait for the inference pod to become availble
-    print(f'Waiting up to {INFERENCE_POD_READY_TIMEOUT_SEC} seconds for inference pod to be ready for {detector.id}...')
-    glh.wait_for_ready_inference_pod(gl, detector, image_width, image_height, pipeline_config, timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC)
-    print(f'Inference pod is ready for {detector.id} with pipeline_config {pipeline_config}.')
+    # Wait for the inference pod to become available
+    print(f"Waiting up to {INFERENCE_POD_READY_TIMEOUT_SEC} seconds for inference pod to be ready for {detector.id} with pipeline_config='{cloud_pipeline_config}'...")
+    glh.wait_for_ready_inference_pod(gl, detector, image_width, image_height, cloud_pipeline_config, timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC)
+    print(f"Inference pod is ready for {detector.id} with pipeline_config='{cloud_pipeline_config}'")
+
+    # Make note of the edge_pipeline_config at the beginning of the test
+    edge_pipeline_config = glh.get_detector_edge_metrics(gl, detector.id).get('pipeline_config')
 
     # Warm up
-    iq_submission_kwargs = {'wait': 0.0, 'human_review': 'NEVER', 'confidence_threshold': 0.0}
     for _ in tqdm(range(WARMUP_ITERATIONS), "Warming up"):
         image, _, _ = generate_image(**generate_image_kwargs)
-        iq = gl.submit_image_query(detector, image, **iq_submission_kwargs)
+        iq = gl.submit_image_query(detector, image, **glh.IQ_KWARGS_FOR_NO_ESCALATION)
         glh.error_if_not_from_edge(iq)
 
     # Test
@@ -133,7 +134,7 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
         image, _, _ = generate_image(**generate_image_kwargs)
 
         t1 = time.time()
-        iq = gl.submit_image_query(detector, image, **iq_submission_kwargs)
+        iq = gl.submit_image_query(detector, image, **glh.IQ_KWARGS_FOR_NO_ESCALATION)
         t2 = time.time()
 
         glh.error_if_not_from_edge(iq)
@@ -149,12 +150,19 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
     fps_p50 = statistics.median(fps_list)
     fps_p10 = statistics.quantiles(fps_list, n=10)[0]  # 1st element (0-indexed) of 10 quantiles = 10th percentile
 
+    # Check if the pipeline running on the edge changed during the test. This seems extremely unlikely, but 
+    # it would invaliddate the test
+    edge_pipeline_config_end = glh.get_detector_edge_metrics(gl, detector.id).get('pipeline_config')
+    if edge_pipeline_config != edge_pipeline_config_end:
+        raise RuntimeError(
+            f'The pipeline configuration on the Edge Endpoint changed from `{edge_pipeline_config}` to `{edge_pipeline_config_end}`. This test is invalid.'
+        )
+
     # Report results
     print('-' * 10, 'Test Results', '-' * 10)
     print(f'detector_id: {detector.id}')
     print(f'detector_mode: {detector_mode}')
-    print(f'pipeline_config: {pipeline_configs.get('pipeline_config')}')
-    print(f'oodd_pipeline_config: {pipeline_configs.get('oodd_pipeline_config')}')
+    print(f'pipeline_config: {edge_pipeline_config}')
     print(f'image_size: {image_width}x{image_height}')
     print(f'endpoint: {endpoint}')
     print(f'warmup_iterations: {WARMUP_ITERATIONS}')

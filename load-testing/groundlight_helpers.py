@@ -12,6 +12,10 @@ WHITE = (255, 255, 255)
 
 CLOUD_ENDPOINT = 'https://api.groundlight.ai/device-api'
 
+# Image query submission args that will ensure a query is never escalated to the cloud, 
+# unless an inference pod doesn't exist for the detector, in which case we have no choice but to escalate
+IQ_KWARGS_FOR_NO_ESCALATION = {'wait': 0.0, 'human_review': 'NEVER', 'confidence_threshold': 0.0}
+
 # We need to establish a client here so that we can use functions like `gl.create_roi`, but we won't
 # actually use it to submit anything to Groundlight
 gl = ExperimentalApi(endpoint=None)
@@ -147,7 +151,7 @@ def prime_detector(
     for _ in trange(num_labels, desc=f"Priming {detector.id} with {num_labels} labels.", unit="label"):
         image, label, rois = imgh.generate_random_image(gl, detector, image_width, image_height)
         # iq = gl.ask_async(detector, image, human_review="NEVER") # using ask_sync is causing a race condition on the server, commmenting it out until that is fixed
-        iq = gl.submit_image_query(detector, image, wait=0.0, human_review="NEVER")
+        iq = gl.submit_image_query(detector, image, **IQ_KWARGS_FOR_NO_ESCALATION)
         gl.add_label(iq, label, rois)
 
 def wait_for_ready_inference_pod(
@@ -169,19 +173,17 @@ def wait_for_ready_inference_pod(
         elapsed_time = time.time() - poll_start
         if elapsed_time > timeout_sec:
             raise RuntimeError(
-                f'Failed to roll out inferenece pod {detector.id} with pipeline_config {pipeline_config} after {timeout_sec:.2f} seconds.'
+                f"Failed to roll out inference pod for {detector.id} with pipeline_config='{pipeline_config}' after {timeout_sec:.2f} seconds."
             )
 
         detector_edge_metrics = get_detector_edge_metrics(gl, detector.id)
         if detector_edge_metrics is None:
             # Trigger pod creation by submitting an image query
             image, _, _ = imgh.generate_random_image(gl, detector, image_width, image_height)
-            _ = gl.submit_image_query( # not using ask_ml here because it doesn't support human_review
+            _ = gl.submit_image_query(
                 detector, 
                 image, 
-                human_review="NEVER",
-                wait=0.0,
-                confidence_threshold=0.0) # Use confidence threshold of 0.0 to ensure that escalation never happens and we maximize our chance of getting an edge answer 
+                **IQ_KWARGS_FOR_NO_ESCALATION) 
         else:
             pod_status = detector_edge_metrics.get('status')
             edge_pipeline_config = detector_edge_metrics.get('pipeline_config')
