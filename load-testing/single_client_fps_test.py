@@ -158,11 +158,18 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
             f'The pipeline configuration on the Edge Endpoint changed from `{edge_pipeline_config}` to `{edge_pipeline_config_end}`. This test is invalid.'
         )
 
+    # Check which images were used for the `edge-endpoint` container and the inference server container
+    edge_image, inference_image = glh.get_edge_and_inference_images(gl)
+
     # Report results
     print('-' * 10, 'Test Results', '-' * 10)
+    print(f"edge_endpoint_image: {edge_image}")
+    print(f"inference_server_image: {inference_image}")
     print(f'detector_id: {detector.id}')
-    print(f'detector_mode: {detector_mode}')
     print(f'pipeline_config: {edge_pipeline_config}')
+    print(f'detector_name: {detector.name}')
+    print(f'detector_query: {detector.query}')
+    print(f'detector_mode: {detector_mode}')
     print(f'image_size: {image_width}x{image_height}')
     print(f'endpoint: {endpoint}')
     print(f'warmup_iterations: {WARMUP_ITERATIONS}')

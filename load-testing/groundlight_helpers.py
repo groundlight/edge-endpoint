@@ -6,6 +6,8 @@ import json
 import time
 from tqdm import trange
 
+import image_helpers as imgh
+
 IMAGE_DIMENSIONS = (480, 640, 3)
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
@@ -85,23 +87,49 @@ def get_detector_pipeline_configs(gl: ExperimentalApi, detector_id: str) -> dict
     return {
         "pipeline_config": decoded_response.get('pipeline_config'),
         "oodd_pipeline_config": decoded_response.get('oodd_pipeline_config'),
-        # sometimes model binaries return as None. Not sure why, but they don't seem terribly useful anyway, so I am commenting them out for now
-        # "model_binary_id": decoded_response.get('model_binary_id'), 
-        # "oodd_model_binary_id": decoded_response.get('oodd_model_binary_id'),
     }
 
 def get_detector_edge_metrics(gl: ExperimentalApi, detector_id: str) -> dict | None:
-    # Fetch internal status metrics from the Edge Endpoint
-    base = gl.endpoint
-    base = base.replace('/device-api', '')
+    metrics = _get_status_metrics(gl)
+    return (metrics.get('detector_details') or {}).get(detector_id)
+
+def _get_status_metrics(gl: ExperimentalApi) -> dict:
+    base = gl.endpoint.replace('/device-api', '')
     url = base + '/status/metrics.json'
+    return call_api(url, {})
 
-    decoded_response = call_api(url, {})
+def get_container_images_map(gl: ExperimentalApi) -> dict[str, dict[str, str]]:
+    metrics = _get_status_metrics(gl)
+    k3s_stats = metrics.get('k3s_stats', {}) or {}
+    raw = k3s_stats.get('container_images', {})
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except Exception:
+            return {}
+    return raw
 
-    details = decoded_response.get('detector_details', {}) or {}
-    return details.get(detector_id)
+def get_edge_and_inference_images(gl: ExperimentalApi) -> tuple[str | None, str | None]:
+    """Return images for the edge-endpoint and inference-server containers.
+    """
 
-import image_helpers as imgh
+    images_map = get_container_images_map(gl)
+
+    # Find inference server image
+    inference_image: str | None = None
+    for containers in images_map.values():
+        if isinstance(containers, dict) and 'inference-server' in containers:
+            inference_image = containers['inference-server']
+            break
+
+    # Find edge-endpoint pod's image(s)
+    edge_image: str | None = None
+    for pod_name, containers in images_map.items():
+        if pod_name == 'edge-endpoint' or pod_name.startswith('edge-endpoint'):
+            edge_image = containers.get('edge-endpoint')
+            break
+
+    return edge_image, inference_image
 
 def get_or_create_count_detector(
     gl: ExperimentalApi,
