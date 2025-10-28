@@ -4,7 +4,8 @@ import urllib3.exceptions
 import argparse
 import os
 
-import utils
+import groundlight_helpers as glh
+import image_helpers as imgh
 
 DETECTOR_GROUP_NAME = 'Edge Endpoint Rollout Testing'
 LABEL_SUBMISSION_WAIT_TIME_SEC = 3.0 # wait time between each label submission, set to something reasonable to avoid overwhelming the system
@@ -35,7 +36,7 @@ def add_label(gl: Groundlight, detector: Detector) -> None:
     """
     Submits an image query with a random image and then labels it.
     """
-    image, label, _ = utils.generate_random_binary_image(gl)
+    image, label, _ = imgh.generate_random_binary_image(gl)
     iq = gl.ask_async(detector, image, human_review="NEVER")
     gl.add_label(iq, label)
     print(f'Added {label} label to {detector.id}/{iq.id}')
@@ -79,7 +80,7 @@ def main(num_detectors: int) -> None:
 
     # Prime the detectors, if necessary
     for detector in detectors:
-        detector_stats = utils.get_detector_stats(gl, detector.id)
+        detector_stats = glh.get_detector_stats(gl, detector.id)
 
         projected_ml_accuracy = detector_stats['projected_ml_accuracy']
         if projected_ml_accuracy is not None:
@@ -114,7 +115,7 @@ def main(num_detectors: int) -> None:
         print(f'Checking evaluation results for {detector.id}...')
         pollstart = time.time()
         while True:
-            detector_stats = utils.get_detector_stats(gl, detector.id)
+            detector_stats = glh.get_detector_stats(gl, detector.id)
             projected_ml_accuracy = detector_stats['projected_ml_accuracy']
 
             if projected_ml_accuracy is not None:
@@ -139,7 +140,7 @@ def main(num_detectors: int) -> None:
         print('-' * 50)
         
         # Generate data
-        image, _, _ = utils.generate_random_binary_image(gl)
+        image, _, _ = imgh.generate_random_binary_image(gl)
 
         # Submit image query
         for detector in detectors:

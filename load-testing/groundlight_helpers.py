@@ -1,9 +1,4 @@
-import numpy as np
-import random
-from datetime import datetime
-from groundlight import ExperimentalApi, ROI, Detector, ApiException, ImageQuery
-import math
-import cv2
+from groundlight import ExperimentalApi, Detector, ApiException, ImageQuery
 
 import os
 import requests
@@ -77,7 +72,7 @@ def get_detector_stats(gl: ExperimentalApi, detector_id: str) -> dict:
         "total_labels": total_ground_truth_examples,
         }
 
-def get_detector_pipeline_config(gl: ExperimentalApi, detector_id: str) -> dict:
+def get_detector_pipeline_configs(gl: ExperimentalApi, detector_id: str) -> dict:
     path = f'/v1/fetch-model-urls/{detector_id}/'
     params = {}
     
@@ -91,129 +86,18 @@ def get_detector_pipeline_config(gl: ExperimentalApi, detector_id: str) -> dict:
         # "oodd_model_binary_id": decoded_response.get('oodd_model_binary_id'),
     }
 
-def generate_random_binary_image(
-    gl: ExperimentalApi,  # not used, but added here to maintain consistency with `generate_random_count_image`
-    image_width: int = 640,
-    image_height: int = 480,
-) -> tuple[np.ndarray, str, None]:
-    """
-    Used for generating random data to submit to Groundlight for load testing.
-    
-    Randomly generates either a black or white image of the specified dimensions,
-    with the datetime overlaid.
+def get_detector_edge_metrics(gl: ExperimentalApi, detector_id: str) -> dict | None:
+    # Fetch internal status metrics from the Edge Endpoint
+    base = gl.endpoint
+    base = base.replace('/device-api', '')
+    url = base + '/status/metrics.json'
 
-    Returns:
-        tuple: (image as np.ndarray, label as str, rois as None)
-    """
-    image_shape = (image_height, image_width, 3)
+    decoded_response = call_api(url, {})
 
-    if random.choice([True, False]):
-        image = np.zeros(image_shape, dtype=np.uint8)  # Black image
-        text_color = WHITE
-        label = "YES"
-    else:
-        image = np.full(image_shape, 255, dtype=np.uint8)  # White image
-        text_color = BLACK
-        label = "NO"
+    details = decoded_response.get('detector_details', {}) or {}
+    return details.get(detector_id)
 
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    cv2.putText(image, timestamp, (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, text_color, 2)
-
-    return image, label, None # return rois as None to maintain consistency with `generate_random_count_image` 
-
-def get_random_color() -> tuple[int, int, int]:
-    return tuple(int(x) for x in np.random.randint(0, 256, 3))
-
-def generate_color_canvas(width: int, height: int, color: tuple[int, int, int]) -> np.ndarray:
-    return np.full((height, width, 3), color, dtype=np.uint8)
-
-def generate_random_count_image(
-        gl: ExperimentalApi,
-        image_width: int = 640,
-        image_height: int = 480,
-        class_name: str = 'object',
-        max_count: int = 10,
-    ) -> tuple[np.ndarray, int, list[ROI]]:
-    """
-    Used for generating random data to submit to Groundlight for load testing.
-     
-    Generates an image with a random number of circles.
-    
-    Returns the image and a list of ROI objects, which can be submitted as a label to Groundlight.
-    """
-
-    count = random.randint(0, max_count)
-
-    # Determine minimum and maximum size of circle radius based on some constants
-    # and the diagonal length of the image
-    image_diagonal = math.sqrt(image_width ** 2 + image_height ** 2)
-    min_circle_radius = int(image_diagonal * 0.05)
-    max_circle_radius = int(image_diagonal * 0.07)
-
-    # Generate a image of image_dimensions size, choose a random color for the background
-    canvas_color = get_random_color()
-    image = generate_color_canvas(image_width, image_height, canvas_color)
-
-    rois = []
-    for _ in range(count):
-        circle_color = get_random_color()
-        circle_radius = random.randint(min_circle_radius, max_circle_radius)
-        circle_x = random.randint(circle_radius, image_width - circle_radius)
-        circle_y = random.randint(circle_radius, image_height - circle_radius)
-
-        cv2.circle(image, (circle_x, circle_y), circle_radius, circle_color, -1)
-
-        top_left = (
-            (circle_x - circle_radius) / image_width, 
-            (circle_y - circle_radius) / image_height,
-        )
-        bottom_right = (
-            (circle_x + circle_radius) / image_width, 
-            (circle_y + circle_radius) / image_height
-            )
-
-        roi = gl.create_roi(
-            label=class_name,
-            top_left=top_left,
-            bottom_right=bottom_right,
-        )
-        rois.append(roi)
-
-    label = len(rois)
-
-    return image, label, rois
-
-def generate_random_image(
-    gl: ExperimentalApi,
-    detector: Detector,
-    image_width: int,
-    image_height: int,
-    ) -> tuple[np.ndarray, int | str, list[ROI]] | None:
-
-    detector_mode = detector.mode
-    if detector_mode== 'COUNT':
-        detector_mode_configuration = detector.mode_configuration
-        class_name = detector_mode_configuration["class_name"]
-        max_count = int(detector_mode_configuration["max_count"])
-        image, label, rois = generate_random_count_image(
-            gl, 
-            image_width=image_width, 
-            image_height=image_height, 
-            class_name=class_name,
-            max_count=max_count,
-            )
-    elif detector_mode == 'BINARY':
-        image, label, rois = generate_random_binary_image(
-            gl, 
-            image_width=image_width, 
-            image_height=image_height, 
-            )
-    else:
-        raise ValueError(
-            f'Unsupported detector mode of {detector_mode} for {detector.id}'
-        )
-
-    return image, label, rois
+import image_helpers as imgh
 
 def get_or_create_count_detector(
     gl: ExperimentalApi,
@@ -261,7 +145,7 @@ def prime_detector(
     Submits a handful of labels to a detector so that the cloud can train a model. 
     """
     for _ in trange(num_labels, desc=f"Priming {detector.id} with {num_labels} labels.", unit="label"):
-        image, label, rois = generate_random_image(gl, detector, image_width, image_height)
+        image, label, rois = imgh.generate_random_image(gl, detector, image_width, image_height)
         # iq = gl.ask_async(detector, image, human_review="NEVER") # using ask_sync is causing a race condition on the server, commmenting it out until that is fixed
         iq = gl.submit_image_query(detector, image, wait=0.0, human_review="NEVER")
         gl.add_label(iq, label, rois)
@@ -271,6 +155,7 @@ def wait_for_ready_inference_pod(
     detector: Detector,
     image_width: int, 
     image_height: int,
+    pipeline_config: str,
     timeout_sec: float,
     ) -> None:
     """
@@ -284,19 +169,26 @@ def wait_for_ready_inference_pod(
         elapsed_time = time.time() - poll_start
         if elapsed_time > timeout_sec:
             raise RuntimeError(
-                f'Failed to receive an edge answer for {detector.id} after {timeout_sec:.2f} seconds. Inference pod is not ready.'
+                f'Failed to roll out inferenece pod {detector.id} with pipeline_config {pipeline_config} after {timeout_sec:.2f} seconds.'
             )
 
-        image, _, _ = generate_random_image(gl, detector, image_width, image_height)
+        detector_edge_metrics = get_detector_edge_metrics(gl, detector.id)
+        if detector_edge_metrics is None:
+            # Trigger pod creation by submitting an image query
+            image, _, _ = imgh.generate_random_image(gl, detector, image_width, image_height)
+            _ = gl.submit_image_query( # not using ask_ml here because it doesn't support human_review
+                detector, 
+                image, 
+                human_review="NEVER",
+                wait=0.0,
+                confidence_threshold=0.0) # Use confidence threshold of 0.0 to ensure that escalation never happens and we maximize our chance of getting an edge answer 
+        else:
+            pod_status = detector_edge_metrics.get('status')
+            edge_pipeline_config = detector_edge_metrics.get('pipeline_config')
 
-        iq = gl.submit_image_query( # not using ask_ml here because it doesn't support human_review
-            detector, 
-            image, 
-            human_review="NEVER",
-            wait=0.0,
-            confidence_threshold=0.0) # Use confidence threshold of 0.0 to ensure that escalation never happens and we maximize our chance of getting an edge answer 
-        if iq.result.from_edge:
-            return 
+            # Check that the pod is ready and is using the specified pipeline_config
+            if pod_status == 'ready' and pipeline_config == edge_pipeline_config:
+                return
 
         # Inference pod is not yet ready. Wait and retry
         time.sleep(5)
@@ -310,7 +202,7 @@ def detector_is_sufficiently_trained(
     total_labels = stats['total_labels'] 
     return projected_ml_accuracy is not None and \
         projected_ml_accuracy > min_projected_ml_accuracy and \
-        total_labels >= min_total_labels # should use `min_total_labels` here, but there is a bug that sometimes prevents all labels from being used in training
+        total_labels >= min_total_labels
 
 def wait_until_sufficiently_trained(
     gl: ExperimentalApi,

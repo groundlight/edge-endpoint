@@ -7,7 +7,8 @@ from typing import Callable
 
 from threading import Thread
 
-import utils as u
+import groundlight_helpers as glh
+import image_helpers as imgh
 
 SUPPORTED_DETECTOR_MODES = (
     'BINARY',
@@ -242,7 +243,7 @@ if __name__ == "__main__":
         main(
             args.num_detectors, 
             get_or_create_binary_detectors, 
-            u.generate_random_binary_image, 
+            imgh.generate_random_binary_image, 
             kwargs
             )
     elif args.detector_mode == "COUNT":
@@ -253,7 +254,7 @@ if __name__ == "__main__":
         main(
             args.num_detectors, 
             get_or_create_count_detectors, 
-            u.generate_random_count_image, 
+            imgh.generate_random_count_image, 
             kwargs
             )
     else:
