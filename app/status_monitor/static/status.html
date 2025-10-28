@@ -109,7 +109,7 @@
 
                     const parseSection = (section) => {
                         if (!section) return section;
-                        const parsed = { ...section };
+                        const parsed = {...section};
                         for (const [key, value] of Object.entries(parsed)) {
                             parsed[key] = parseIfJson(value);
                         }

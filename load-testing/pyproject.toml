@@ -1,7 +1,7 @@
 [project]
 name = "load-testing"
 version = "0.1.0"
-description = "Scripts of testing the performance of a Grounlight Edge Endpoint"
+description = "Scripts for testing the performance of the Groundlight Edge Endpoint"
 requires-python = ">=3.13"
 dependencies = [
     "gputil>=1.4.0",

@@ -93,7 +93,7 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
     # Get the pipeline config and log it
     pipeline_configs = glh.get_detector_pipeline_configs(gl, detector.id)
     cloud_pipeline_config = pipeline_configs.get('pipeline_config')
-    print(f"Found pipeline_config='{cloud_pipeline_config}' as the most recently trained pipeline in the cloud. We will use this for testing.")
+    print(f"Found cloud_pipeline_config='{cloud_pipeline_config}' as the most recently trained pipeline in the cloud. We will use this for testing.")
     
     # Check if the detector has trained. If not, prime it with some labels
     stats = glh.get_detector_stats(gl, detector.id)
@@ -118,10 +118,8 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
     # Wait for the inference pod to become available
     print(f"Waiting up to {INFERENCE_POD_READY_TIMEOUT_SEC} seconds for inference pod to be ready for {detector.id} with pipeline_config='{cloud_pipeline_config}'...")
     glh.wait_for_ready_inference_pod(gl, detector, image_width, image_height, cloud_pipeline_config, timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC)
-    print(f"Inference pod is ready for {detector.id} with pipeline_config='{cloud_pipeline_config}'")
-
-    # Make note of the edge_pipeline_config at the beginning of the test
     edge_pipeline_config = glh.get_detector_edge_metrics(gl, detector.id).get('pipeline_config')
+    print(f"Inference pod is ready for {detector.id} with pipeline_config='{edge_pipeline_config}'")
 
     # Warm up
     for _ in tqdm(range(WARMUP_ITERATIONS), "Warming up"):
@@ -152,7 +150,7 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
     fps_p10 = statistics.quantiles(fps_list, n=10)[0]  # 1st element (0-indexed) of 10 quantiles = 10th percentile
 
     # Check if the pipeline running on the edge changed during the test. This seems extremely unlikely, but 
-    # it would invaliddate the test
+    # it would invalidate the test.
     edge_pipeline_config_end = glh.get_detector_edge_metrics(gl, detector.id).get('pipeline_config')
     if edge_pipeline_config != edge_pipeline_config_end:
         raise RuntimeError(

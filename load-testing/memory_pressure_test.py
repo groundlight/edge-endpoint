@@ -233,7 +233,7 @@ def main(num_detectors: int, get_or_create_detectors: Callable, generate_random_
                 print(
                     f'All {num_detectors} edge inference pods came online in no longer than {int(test_duration // 60)} minutes and {test_duration % 60:.2f} seconds ({test_duration:.2f} total seconds).'
                     )
-                # exit()
+                exit()
 
 if __name__ == "__main__":
     args = parse_arguments()
