@@ -2,7 +2,10 @@ from typing import Any
 
 import pytest
 from model import (
+    ROI,
+    BBoxGeometry,
     BinaryClassificationResult,
+    BoundingBoxResult,
     CountingResult,
     Label,
     ModeEnum,
@@ -288,6 +291,50 @@ class TestCreateIQ:
         assert "is_from_edge" in iq.metadata
         assert iq.metadata["is_from_edge"]
         assert iq.done_processing
+
+    def test_create_bounding_box_iq(self):
+        """Test creating a basic bounding box IQ."""
+        iq = create_iq(
+            detector_id=prefixed_ksuid("det_"),
+            mode=ModeEnum.BOUNDING_BOX,
+            mode_configuration={"max_num_bboxes": 5, "class_name": "test_class"},
+            result_value=1,
+            confidence=0.8,
+            confidence_threshold=self.confidence_threshold,
+            is_done_processing=True,
+            query="Test query",
+            rois=[
+                {
+                    "label": "test_class",
+                    "score": 0.8,
+                    "geometry": {
+                        "left": 0.4,
+                        "top": 0.4,
+                        "right": 0.6,
+                        "bottom": 0.6,
+                        # x and y are calculated in parse_inference_response, so should be included in calls to
+                        # create_iq
+                        "x": 0.5,
+                        "y": 0.5,
+                    },
+                }
+            ],
+        )
+
+        assert "iq_" in iq.id
+        assert iq.result_type == ResultTypeEnum.bounding_box
+        assert isinstance(iq.result, BoundingBoxResult)
+        assert iq.result.source == Source.ALGORITHM
+        assert iq.result.label == "BOUNDING_BOX"
+        assert iq.rois == [
+            ROI(
+                label="test_class",
+                score=0.8,
+                geometry=BBoxGeometry(left=0.4, top=0.4, right=0.6, bottom=0.6, x=0.5, y=0.5),
+            )
+        ]
+        assert "is_from_edge" in iq.metadata
+        assert iq.metadata["is_from_edge"]
 
     def test_create_count_iq_without_configuration(self):
         """Test creating a count IQ with no mode_configuration."""
