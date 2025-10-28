@@ -24,8 +24,8 @@ class InferenceDeploymentManager:
         self._setup_kube_client()
         self._inference_deployment_template = self._load_inference_deployment_template()
 
-    def _fetch_pipeline_config(self, detector_id: str, is_oodd: bool, log_errors: bool = False) -> str | None:
-        """Fetch the pipeline_config for the given detector and pipeline type.
+    def _fetch_pipeline_config(self, detector_id: str, is_oodd: bool) -> str | None:
+        """Fetch the pipeline_config that we use on edge for the given detector and pipeline type.
 
         Args:
             detector_id: Detector id
@@ -40,8 +40,7 @@ class InferenceDeploymentManager:
             edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
             return oodd_model_info.pipeline_config if is_oodd else edge_model_info.pipeline_config
         except Exception:
-            if log_errors:
-                logger.error(f"Error while fetching pipeline_config for {detector_id}", exc_info=True)
+            logger.error(f"Error while fetching pipeline_config for {detector_id}", exc_info=True)
             return None
 
     def _set_runtime_annotations(self, ann: dict, detector_id: str, is_oodd: bool, pipeline_config: str | None) -> None:
@@ -49,6 +48,13 @@ class InferenceDeploymentManager:
         ann["groundlight.dev/detector-id"] = detector_id
         ann["groundlight.dev/model-name"] = get_edge_inference_model_name(detector_id, is_oodd)
         ann["groundlight.dev/pipeline-config"] = str(pipeline_config)
+
+    def _annotate_pod_template(self, doc: dict, detector_id: str, is_oodd: bool, pipeline_config: str | None) -> None:
+        """Ensure the Pod template has an annotations map and set runtime values on it."""
+        tpl = doc.setdefault("spec", {}).setdefault("template", {})
+        md = tpl.setdefault("metadata", {})
+        ann = md.setdefault("annotations", {})
+        self._set_runtime_annotations(ann, detector_id, is_oodd, pipeline_config)
 
     def _setup_kube_client(self) -> None:
         """Sets up the kubernetes client in order to access resources in the cluster."""
@@ -130,17 +136,12 @@ class InferenceDeploymentManager:
         inference_deployment = self._substitute_placeholders(
             service_name=service_name, deployment_name=deployment_name, model_name=model_name
         )
-        # Add informative annotations to the Pod template with intended runtime details
-        docs = list(yaml.safe_load_all(inference_deployment))
-        # Fetch pipeline config intended for this detector (primary/oodd)
-        pipeline_config = self._fetch_pipeline_config(detector_id, is_oodd, log_errors=False)
 
+        pipeline_config = self._fetch_pipeline_config(detector_id, is_oodd)
+        docs = list(yaml.safe_load_all(inference_deployment))
         for doc in docs:
             if doc.get("kind") == "Deployment":
-                tpl = doc.setdefault("spec", {}).setdefault("template", {})
-                md = tpl.setdefault("metadata", {})
-                ann = md.setdefault("annotations", {})
-                self._set_runtime_annotations(ann, detector_id, is_oodd, pipeline_config)
+                self._annotate_pod_template(doc, detector_id, is_oodd, pipeline_config)
 
         self._create_from_kube_manifest(namespace=self._target_namespace, manifest=yaml.safe_dump_all(docs))
 
@@ -221,8 +222,7 @@ class InferenceDeploymentManager:
         deployment.spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"] = now_iso
 
         # Set informative annotations with intended runtime details
-        pipeline_config = self._fetch_pipeline_config(detector_id, is_oodd, log_errors=True)
-
+        pipeline_config = self._fetch_pipeline_config(detector_id, is_oodd)
         ann = deployment.spec.template.metadata.annotations
         self._set_runtime_annotations(ann, detector_id, is_oodd, pipeline_config)
 

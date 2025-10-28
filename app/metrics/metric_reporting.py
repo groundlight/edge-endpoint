@@ -85,8 +85,7 @@ class MetricsReporter:
         return {
             "device_info": device_info.as_dict(),
             "activity_metrics": activity_metrics.as_dict(),
-            # Flatten: top-level key is detector_details containing the dict of ids → details
-            **detector_details.as_dict(),
+            "detector_details": detector_details.as_dict().get("detector_details"),
             "k3s_stats": k3s_stats.as_dict(),
         }
 

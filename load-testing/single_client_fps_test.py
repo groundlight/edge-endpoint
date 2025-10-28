@@ -1,4 +1,5 @@
 from groundlight import ExperimentalApi
+from datetime import datetime, timezone
 import time
 import argparse
 from tqdm import tqdm
@@ -40,7 +41,7 @@ def parse_arguments():
 
 def main(detector_mode: str, image_width: int, image_height: int) -> None:
     TRAINING_TIMEOUT_SEC = 60 * 20
-    INFERENCE_POD_READY_TIMEOUT_SEC = 60 * 5
+    INFERENCE_POD_READY_TIMEOUT_SEC = 60 * 10
 
     WARMUP_ITERATIONS = 300
     TESTING_ITERATIONS = 1000
@@ -161,8 +162,11 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
     # Check which images were used for the `edge-endpoint` container and the inference server container
     edge_image, inference_image = glh.get_edge_and_inference_images(gl)
 
+    test_timestamp = datetime.now(timezone.utc).isoformat()
+
     # Report results
     print('-' * 10, 'Test Results', '-' * 10)
+    print(f'test_timestamp: {test_timestamp}')
     print(f"edge_endpoint_image: {edge_image}")
     print(f"inference_server_image: {inference_image}")
     print(f'detector_id: {detector.id}')
