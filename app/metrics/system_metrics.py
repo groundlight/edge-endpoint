@@ -145,6 +145,7 @@ def _get_container_started_at(pod: client.V1Pod) -> datetime | None:
 def _get_annotation(pod: client.V1Pod, key: str) -> str | None:
     return (pod.metadata.annotations or {}).get(key)
 
+
 def get_detector_details() -> dict:
     """Return details for detectors with primary inference pods, keyed by detector-id annotation."""
     config.load_incluster_config()
