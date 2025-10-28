@@ -97,7 +97,7 @@ def adjust_confidence_with_oodd(
 
     NOTE: This is a duplication of the cloud inference result OODD confidence adjustment logic. Changes should not be
     made here that bring this out of sync with the cloud OODD confidence adjustment logic. The cloud implementation for
-    binary detectors is found in detector_modes_logic, implemented separately for each detector mode.
+    OODD confidence adjustment is found in detector_modes_logic, implemented separately for each detector mode.
     """
 
     if mode is ModeEnum.BOUNDING_BOX:
