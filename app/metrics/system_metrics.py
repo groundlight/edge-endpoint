@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from datetime import datetime, timedelta 
+from datetime import datetime, timedelta
 
 import psutil
 import tzlocal
@@ -118,9 +118,6 @@ def get_container_images() -> str:
     # Convert the containers dict to a JSON string to prevent opensearch from indexing all
     # the individual container fields
     return json.dumps(containers)
-
-
- 
 
 
 def _primary_pod_is_ready(pod: client.V1Pod) -> bool:
