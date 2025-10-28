@@ -102,6 +102,29 @@ To monitor system utilization during the load test, you'll want to separately ru
 
 Once the scripts have finished running, you can review the generated plots to assess the results.
 
+## Single Client FPS Test
+
+Measures end-to-end single-client throughput (frames per second) for a single detector.
+
+### Setup
+1. Deploy your edge endpoint according to [deploy README](../../deploy/README.md). No special configurations are required for this test.
+1. Set your Groundlight Edge Endpoint URL: `export GROUNDLIGHT_ENDPOINT="http://<EDGE-ENDPOINT-IP>:30101"`
+1. Set your Groundlight API Token: `export GROUNDLIGHT_API_TOKEN=<YOUR-GROUNDLIGHT-API-TOKEN>`
+
+### Run
+```
+uv run python single_client_fps_test.py DETECTOR_MODE [--image-width WIDTH] [--image-height HEIGHT]
+```
+
+### Configure
+By default, this script will evaluate using the default pipeline for the given detector type. If you wish to evaluate a different pipeline, you need to:
+1. Switch to the desired edge pipeline in Django admin
+1. Wait until the new pipelines trains and downloads to your Edge Endpoint. You can check the status of your detector's pipeline on `http://<EDGE-ENDPOINT-IP>:30101/status`.
+
+### Evaluate
+After the script runs, you will see a print out of the detector's performance and other relevant details of the test. 
+
+
 
 ## Memory Pressure Test
 

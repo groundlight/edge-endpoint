@@ -123,37 +123,27 @@ def get_container_images() -> str:
 def _primary_pod_is_ready(pod: client.V1Pod) -> bool:
     if not pod or not pod.status or pod.status.phase != "Running":
         return False
-    try:
-        if not any(c.type == "Ready" and c.status == "True" for c in (pod.status.conditions or [])):
-            return False
-    except Exception:
+
+    if not any(c.type == "Ready" and c.status == "True" for c in (pod.status.conditions or [])):
         return False
-    try:
-        for cs in pod.status.container_statuses or []:
-            if cs.name == "inference-server" and cs.ready:
-                return True
-    except Exception:
-        return False
+
+    for cs in pod.status.container_statuses or []:
+        if cs.name == "inference-server" and cs.ready:
+            return True
+
     return False
 
 
 def _get_container_started_at(pod: client.V1Pod) -> datetime | None:
-    try:
-        for cs in pod.status.container_statuses or []:
-            if cs.name == "inference-server" and cs.state and cs.state.running and cs.state.running.started_at:
-                return cs.state.running.started_at
-    except Exception:
-        return None
+    for cs in pod.status.container_statuses or []:
+        if cs.name == "inference-server" and cs.state and cs.state.running and cs.state.running.started_at:
+            return cs.state.running.started_at
+
     return None
 
 
 def _get_annotation(pod: client.V1Pod, key: str) -> str | None:
-    try:
-        return (pod.metadata.annotations or {}).get(key)
-    except Exception as e:
-        logger.error(f"Error getting annotation {key}: {e}", exc_info=True)
-        return None
-
+    return (pod.metadata.annotations or {}).get(key)
 
 def get_detector_details() -> dict:
     """Return details for detectors with primary inference pods, keyed by detector-id annotation."""
