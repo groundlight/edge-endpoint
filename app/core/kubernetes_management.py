@@ -30,7 +30,6 @@ class InferenceDeploymentManager:
         Args:
             detector_id: Detector id
             is_oodd: Whether the request is for the OODD pipeline
-            log_errors: If True, logs an error if fetching fails
 
         Returns:
             The pipeline_config string or None if unavailable
