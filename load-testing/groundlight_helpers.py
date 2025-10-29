@@ -187,11 +187,17 @@ def wait_for_ready_inference_pod(
     timeout_sec: float,
     ) -> None:
     """
-    Waits until an inference pod is ready for the given detector.
-
-    Uses receiving an edge answer as a proxy for there being a ready inference pod.
+    Waits until an inference pod is ready and using the correct pipeline_config is used for the given detector.
     """
 
+    # Submit an image query to trigger pod creation
+    image, _, _ = imgh.generate_random_image(gl, detector, image_width, image_height)
+    _ = gl.submit_image_query(
+        detector, 
+        image, 
+        **IQ_KWARGS_FOR_NO_ESCALATION) 
+
+    # Poll until correct pipeline_config is 
     poll_start = time.time()
     while True:
         elapsed_time = time.time() - poll_start
@@ -200,21 +206,24 @@ def wait_for_ready_inference_pod(
                 f"Failed to roll out inference pod for {detector.id} with pipeline_config='{pipeline_config}' after {timeout_sec:.2f} seconds."
             )
 
+        # Check if correct pipeline is being used
         detector_edge_metrics = get_detector_edge_metrics(gl, detector.id)
-        if detector_edge_metrics is None:
-            # Trigger pod creation by submitting an image query
-            image, _, _ = imgh.generate_random_image(gl, detector, image_width, image_height)
-            _ = gl.submit_image_query(
-                detector, 
-                image, 
-                **IQ_KWARGS_FOR_NO_ESCALATION) 
-        else:
+        if detector_edge_metrics is not None:
             pod_status = detector_edge_metrics.get('status')
             edge_pipeline_config = detector_edge_metrics.get('pipeline_config')
 
-            # Check that the pod is ready and is using the specified pipeline_config
             if pod_status == 'ready' and pipeline_config == edge_pipeline_config:
-                return
+
+                # Correct pipeline is used and the pod is ready. 
+                # Double check that is it is returning edge answers
+                image, _, _ = imgh.generate_random_image(gl, detector, image_width, image_height)
+                iq = gl.submit_image_query(
+                    detector, 
+                    image, 
+                    **IQ_KWARGS_FOR_NO_ESCALATION) 
+
+                if iq.result.from_edge:
+                    return
 
         # Inference pod is not yet ready. Wait and retry
         time.sleep(5)
