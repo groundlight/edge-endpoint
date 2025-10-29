@@ -107,7 +107,7 @@ Once the scripts have finished running, you can review the generated plots to as
 Measures end-to-end single-client throughput (frames per second) for a single detector.
 
 ### Setup
-1. Deploy your edge endpoint according to [deploy README](../../deploy/README.md). No special configurations are required for this test.
+1. Deploy your edge endpoint according to [deploy README](../deploy/README.md). No special configurations are required for this test.
 1. Set your Groundlight Edge Endpoint URL: `export GROUNDLIGHT_ENDPOINT="http://<EDGE-ENDPOINT-IP>:30101"`
 1. Set your Groundlight API Token: `export GROUNDLIGHT_API_TOKEN=<YOUR-GROUNDLIGHT-API-TOKEN>`
 
@@ -139,7 +139,7 @@ Tests the Edge Endpoint's resilience under memory pressure by spawning multiple 
 1. Uninstall the Edge Endpoint with `helm uninstall -n default edge-endpoint` (for repeatable results, it's usually best to start from zero).
 1. Run the script: `uv run python memory_pressure_test.py NUM_DETECTORS DETECTOR_MODE`. Currently the script supports `BINARY` and `COUNT` modes.
 1. Observe that the script prints errors like `Failed to connect to Groundlight`. This is normal because you haven't installed it yet.
-1. Helm install the Edge Endpoint according to the instructions in the [deploy README](../../deploy/README.md). Once the endpoint comes online, the script will be able to communicate with it, and the test's timer will start.
+1. Helm install the Edge Endpoint according to the instructions in the [deploy README](../deploy/README.md). Once the endpoint comes online, the script will be able to communicate with it, and the test's timer will start.
 1. The script will run until all detectors receive an edge answer in a single iteration, which means that all requested inference pods have come online. The script will report the amount of time it took for all pods to come online. 
 
 ### Configure
