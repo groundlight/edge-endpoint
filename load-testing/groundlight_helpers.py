@@ -197,7 +197,7 @@ def wait_for_ready_inference_pod(
         image, 
         **IQ_KWARGS_FOR_NO_ESCALATION) 
 
-    # Poll until correct pipeline_config is 
+    # Poll until correct pipeline_config is used
     poll_start = time.time()
     while True:
         elapsed_time = time.time() - poll_start
@@ -206,7 +206,7 @@ def wait_for_ready_inference_pod(
                 f"Failed to roll out inference pod for {detector.id} with pipeline_config='{pipeline_config}' after {timeout_sec:.2f} seconds."
             )
 
-        # Check if correct pipeline is being used
+        # Check if correct pipeline is used
         detector_edge_metrics = get_detector_edge_metrics(gl, detector.id)
         if detector_edge_metrics is not None:
             pod_status = detector_edge_metrics.get('status')
@@ -214,8 +214,8 @@ def wait_for_ready_inference_pod(
 
             if pod_status == 'ready' and pipeline_config == edge_pipeline_config:
 
-                # Correct pipeline is used and the pod is ready. 
-                # Double check that is it is returning edge answers
+                # Correct pipeline is used and the pod is ready
+                # Double check that the pod is returning edge answers
                 image, _, _ = imgh.generate_random_image(gl, detector, image_width, image_height)
                 iq = gl.submit_image_query(
                     detector, 
@@ -223,7 +223,7 @@ def wait_for_ready_inference_pod(
                     **IQ_KWARGS_FOR_NO_ESCALATION) 
 
                 if iq.result.from_edge:
-                    return
+                    return # We got an edge answer and the pipeline_config is correct
 
         # Inference pod is not yet ready. Wait and retry
         time.sleep(5)
