@@ -3,6 +3,7 @@ import tempfile
 from unittest import mock
 
 import pytest
+from model import ModeEnum
 
 from app.core.configs import EdgeInferenceConfig
 from app.core.edge_inference import EdgeInferenceManager, get_edge_inference_service_name
@@ -176,7 +177,7 @@ class TestEdgeInferenceManager:
             mock_submit.return_value = mock_response
             # separate_oodd_inference is True by default
             edge_manager = EdgeInferenceManager(detector_inference_configs=detector_inference_config)
-            edge_manager.run_inference("test_detector", b"test_image", "image/jpeg")
+            edge_manager.run_inference("test_detector", b"test_image", "image/jpeg", mode=ModeEnum.BINARY)
             primary_inference_client_url = get_edge_inference_service_name("test_detector") + ":8000"
             oodd_inference_client_url = get_edge_inference_service_name("test_detector", is_oodd=True) + ":8000"
 
@@ -201,7 +202,7 @@ class TestEdgeInferenceManager:
             edge_manager = EdgeInferenceManager(
                 detector_inference_configs=detector_inference_config, separate_oodd_inference=False
             )
-            edge_manager.run_inference("test_detector", b"test_image", "image/jpeg")
+            edge_manager.run_inference("test_detector", b"test_image", "image/jpeg", mode=ModeEnum.BINARY)
             primary_inference_client_url = get_edge_inference_service_name("test_detector") + ":8000"
 
             # Assert that the mock_submit was called only once for primary inference, never for OODD
