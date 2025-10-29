@@ -8,10 +8,6 @@ from tqdm import trange
 
 import image_helpers as imgh
 
-IMAGE_DIMENSIONS = (480, 640, 3)
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
-
 CLOUD_ENDPOINT = 'https://api.groundlight.ai/device-api'
 
 # Image query submission args that will ensure a query is never escalated to the cloud, 

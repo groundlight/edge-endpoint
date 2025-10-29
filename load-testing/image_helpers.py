@@ -5,6 +5,8 @@ from groundlight import ExperimentalApi, ROI, Detector
 import math
 import cv2
 
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
 
 def get_random_color() -> tuple[int, int, int]:
     return tuple(int(x) for x in np.random.randint(0, 256, 3))
@@ -23,11 +25,11 @@ def generate_random_binary_image(
 
     if random.choice([True, False]):
         image = np.zeros(image_shape, dtype=np.uint8)  # Black image
-        text_color = (255, 255, 255)
+        text_color = WHITE
         label = "YES"
     else:
         image = np.full(image_shape, 255, dtype=np.uint8)  # White image
-        text_color = (0, 0, 0)
+        text_color = BLACK
         label = "NO"
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
