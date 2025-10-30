@@ -187,7 +187,7 @@ def wait_for_ready_inference_pod(
     timeout_sec: float,
     ) -> None:
     """
-    Waits until an inference pod is ready and using the correct pipeline_config is used for the given detector.
+    Waits until an inference pod is ready and using the correct pipeline_config.
     """
 
     # Submit an image query to trigger pod creation
