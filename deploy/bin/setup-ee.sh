@@ -83,11 +83,40 @@ cd "$(dirname "$0")"/../..
 export PERSISTENT_VOLUME_NAME=${PERSISTENT_VOLUME_NAME:-"edge-endpoint-pv"}
 export EDGE_ENDPOINT_PORT=${EDGE_ENDPOINT_PORT:-30101}
 
+# Wait for k3s to be fully ready
+echo "Waiting for k3s to be ready..."
+timeout=60
+elapsed=0
+while ! $K get nodes >/dev/null 2>&1; do
+    if [ $elapsed -ge $timeout ]; then
+        echo "Timeout waiting for k3s to be ready"
+        exit 1
+    fi
+    echo "Waiting for k3s API server... ($elapsed/$timeout seconds)"
+    sleep 2
+    elapsed=$((elapsed + 2))
+done
+echo "k3s is ready"
+
 # Create Secrets
 if ! ./deploy/bin/make-aws-secret.sh; then
     echo "Failed to execute make-aws-secret.sh successfully. Exiting."
     exit 1
 fi
+
+# Wait for secrets to be available (propagation delay)
+echo "Waiting for registry-credentials secret to be available..."
+timeout=30
+elapsed=0
+while ! $K get secret registry-credentials -n ${DEPLOYMENT_NAMESPACE} >/dev/null 2>&1; do
+    if [ $elapsed -ge $timeout ]; then
+        echo "Timeout waiting for registry-credentials secret"
+        exit 1
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+done
+echo "Secrets are ready"
 
 # Configmaps, secrets, and deployments
 $K delete configmap --ignore-not-found edge-config -n ${DEPLOYMENT_NAMESPACE}
