@@ -14,7 +14,7 @@ from .edge_inference import (
     get_edge_inference_service_name,
     get_latest_pipeline_config,
 )
-from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH, MODEL_REPOSITORY_PATH
+from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH
 
 logger = logging.getLogger(__name__)
 
