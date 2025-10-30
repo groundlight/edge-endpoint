@@ -9,12 +9,12 @@ from kubernetes import config
 from kubernetes.client import V1Deployment
 
 from .edge_inference import (
-    fetch_model_info,
     get_edge_inference_deployment_name,
     get_edge_inference_model_name,
     get_edge_inference_service_name,
+    get_latest_pipeline_config,
 )
-from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH
+from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH, MODEL_REPOSITORY_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -23,24 +23,6 @@ class InferenceDeploymentManager:
     def __init__(self) -> None:
         self._setup_kube_client()
         self._inference_deployment_template = self._load_inference_deployment_template()
-
-    def _fetch_pipeline_config(self, detector_id: str, is_oodd: bool) -> str | None:
-        """Fetch the pipeline_config that we use on edge for the given detector and pipeline type.
-
-        Args:
-            detector_id: Detector id
-            is_oodd: Whether the request is for the OODD pipeline
-
-        Returns:
-            The pipeline_config string or None if unavailable
-        """
-        try:
-            api_token = os.environ.get("GROUNDLIGHT_API_TOKEN")
-            edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
-            return oodd_model_info.pipeline_config if is_oodd else edge_model_info.pipeline_config
-        except Exception:
-            logger.error(f"Error while fetching pipeline_config for {detector_id}", exc_info=True)
-            return None
 
     def _set_runtime_annotations(self, ann: dict, detector_id: str, is_oodd: bool, pipeline_config: str | None) -> None:
         """Populate standard runtime annotations for inference pods."""
@@ -136,7 +118,7 @@ class InferenceDeploymentManager:
             service_name=service_name, deployment_name=deployment_name, model_name=model_name
         )
 
-        pipeline_config = self._fetch_pipeline_config(detector_id, is_oodd)
+        pipeline_config = get_latest_pipeline_config(detector_id, is_oodd)
         docs = list(yaml.safe_load_all(inference_deployment))
         for doc in docs:
             if doc.get("kind") == "Deployment":

@@ -53,8 +53,9 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
     glh.error_if_endpoint_is_cloud(gl)
     endpoint = gl.endpoint
 
-    # Connect to a Groundlight cloud endpoint, for certain operations that require the cloud (like adding a label)
-    gl_cloud = ExperimentalApi(endpoint=glh.CLOUD_ENDPOINT)
+    # Connect to a Groundlight cloud endpoint, for certain operations that require the cloud (like gl.ask_async)
+    # This points to prod, so this test currently would not work if the user wants to benchmark an Edge Endpoint that talks to integ
+    gl_cloud = ExperimentalApi(endpoint=glh.CLOUD_ENDPOINT_PROD)
 
     detector_name = f'Single Client FPS Test {image_width} x {image_height} - {detector_mode}'
     if detector_mode == "BINARY":
@@ -92,8 +93,9 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
 
     # Get the pipeline config and log it
     pipeline_configs = glh.get_detector_pipeline_configs(gl, detector.id)
-    cloud_pipeline_config = pipeline_configs.get('pipeline_config')
-    print(f"Found cloud_pipeline_config='{cloud_pipeline_config}' as the most recently trained pipeline in the cloud. We will use this for testing.")
+    latest_edge_pipeline_config_in_cloud = pipeline_configs.get('pipeline_config')
+
+    print(f"Found the following pipeline config as the most recently trained Edge pipeline config in the cloud. We will use this for testing: {latest_edge_pipeline_config_in_cloud}")
     
     # Check if the detector has trained. If not, prime it with some labels
     stats = glh.get_detector_stats(gl, detector.id)
@@ -116,8 +118,8 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
         print(f'{detector.id} is now sufficiently trained. Evaluation results: {stats}')
 
     # Wait for the inference pod to become available
-    print(f"Waiting up to {INFERENCE_POD_READY_TIMEOUT_SEC} seconds for inference pod to be ready for {detector.id} with pipeline_config='{cloud_pipeline_config}'...")
-    glh.wait_for_ready_inference_pod(gl, detector, image_width, image_height, cloud_pipeline_config, timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC)
+    print(f"Waiting up to {INFERENCE_POD_READY_TIMEOUT_SEC} seconds for inference pod to be ready for {detector.id} with pipeline_config='{latest_edge_pipeline_config_in_cloud}'...")
+    glh.wait_for_ready_inference_pod(gl, detector, image_width, image_height, latest_edge_pipeline_config_in_cloud, timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC)
     edge_pipeline_config = glh.get_detector_edge_metrics(gl, detector.id).get('pipeline_config')
     print(f"Inference pod is ready for {detector.id} with pipeline_config='{edge_pipeline_config}'")
 

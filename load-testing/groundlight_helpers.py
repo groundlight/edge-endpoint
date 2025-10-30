@@ -3,12 +3,14 @@ from groundlight import ExperimentalApi, Detector, ApiException, ImageQuery
 import os
 import requests
 import json
+import yaml
 import time
 from tqdm import trange
 
 import image_helpers as imgh
+from urllib.parse import urlparse
 
-CLOUD_ENDPOINT = 'https://api.groundlight.ai/device-api'
+CLOUD_ENDPOINT_PROD = 'https://api.groundlight.ai/device-api'
 
 # Image query submission args that will ensure a query is never escalated to the cloud, 
 # unless an inference pod doesn't exist for the detector, in which case we have no choice but to escalate
@@ -75,6 +77,12 @@ def get_detector_stats(gl: ExperimentalApi, detector_id: str) -> dict:
         }
 
 def get_detector_pipeline_configs(gl: ExperimentalApi, detector_id: str) -> dict:
+    """
+    Get the detector pipeline configs that have been trained in the cloud for the Edge Endpoint.
+
+    These haven't necessary been downloaded to the Edge Endpoint yet; they simply represent the 
+    latest available pipeline config in the cloud for the Edge Endpoint. 
+    """
     path = f'/v1/fetch-model-urls/{detector_id}/'
     params = {}
     
@@ -157,9 +165,12 @@ def error_if_not_from_edge(iq: ImageQuery) -> None:
         )
 
 def error_if_endpoint_is_cloud(gl: ExperimentalApi) -> None:
-    if CLOUD_ENDPOINT == gl.endpoint:
+    gl_endpoint = gl.endpoint
+    host = (urlparse(gl_endpoint).hostname or "").lower()
+    is_cloud = host.startswith("api.") and host.endswith(".groundlight.ai")
+    if is_cloud:
         raise RuntimeError(
-            'You are connected to Groundlight cloud. This app should only be run against an Edge Endpoint. '
+            f'You are connected to Groundlight cloud at {gl_endpoint}. This app should only be run against an Edge Endpoint. '
             'Please visit https://github.com/groundlight/edge-endpoint/blob/main/deploy/README.md to learn more about deploying an Edge Endpoint.'
         )
 
@@ -212,7 +223,8 @@ def wait_for_ready_inference_pod(
             pod_status = detector_edge_metrics.get('status')
             edge_pipeline_config = detector_edge_metrics.get('pipeline_config')
 
-            if pod_status == 'ready' and pipeline_config == edge_pipeline_config:
+            if pod_status == "ready" and \
+                yaml.safe_load(pipeline_config or "") == yaml.safe_load(edge_pipeline_config or ""):
 
                 # Correct pipeline is used and the pod is ready
                 # Double check that the pod is returning edge answers

@@ -147,7 +147,10 @@ def _get_annotation(pod: client.V1Pod, key: str) -> str | None:
 
 
 def get_detector_details() -> dict:
-    """Return details for detectors with primary inference pods, keyed by detector-id annotation."""
+    """Return details for detectors with primary inference pods, keyed by detector-id annotation.
+
+    Only counts pods whose model-name annotation equals "<detector_id>/primary".
+    """
     config.load_incluster_config()
     v1_core = client.CoreV1Api()
     namespace = get_namespace()
@@ -157,6 +160,10 @@ def get_detector_details() -> dict:
     for pod in pods.items:
         det_id = _get_annotation(pod, "groundlight.dev/detector-id")
         if not det_id:
+            continue
+
+        # Skip OODD pods; we only want primary inference pods here
+        if _get_annotation(pod, "groundlight.dev/model-name") != f"{det_id}/primary":
             continue
 
         if _primary_pod_is_ready(pod):
