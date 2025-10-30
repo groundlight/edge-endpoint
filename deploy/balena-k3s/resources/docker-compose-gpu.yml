@@ -41,8 +41,9 @@ services:
     volumes:
       - k3s-server:/var/lib/rancher/k3s
       - shared:/shared
+      - pinamod:/opt/groundlight/edge/pinamod-public
     depends_on:
-     - gpu
+      - gpu
 
   bastion:
     build:
@@ -59,3 +60,4 @@ services:
 volumes:
   k3s-server: {}
   shared: {}
+  pinamod: {}
