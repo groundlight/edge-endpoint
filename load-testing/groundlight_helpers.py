@@ -1,5 +1,7 @@
 from groundlight import ExperimentalApi, Detector, ApiException, ImageQuery
 
+from groundlight_openapi_client.exceptions import ApiTypeError
+
 import os
 import requests
 import json
@@ -62,6 +64,12 @@ def get_detector_evaluation(gl: ExperimentalApi, detector_id: str) -> dict:
         "total_labels": total_ground_truth_examples,
         }
 
+def call_edge_api(gl_client: ExperimentalApi, path: str, params: dict) -> dict:
+
+    url = gl_client.endpoint.replace('/device-api', '/edge-api') + path
+
+    return call_api(url, params)
+
 def get_detector_pipeline_configs(gl: ExperimentalApi, detector_id: str) -> dict:
     """
     Get the detector pipeline configs that have been trained in the cloud for the Edge Endpoint.
@@ -69,12 +77,19 @@ def get_detector_pipeline_configs(gl: ExperimentalApi, detector_id: str) -> dict
     These haven't necessary been downloaded to the Edge Endpoint yet; they simply represent the 
     latest available pipeline config in the cloud for the Edge Endpoint. 
     """
+    
+    # Ideally we would use `gl.edge_api.get_model_urls` to get this info, but
+    # currently it raises an exception on new detectors (detectors that haven't trained), which makes it unusable for this script.
+    # model_urls = gl.edge_api.get_model_urls(detector_id)
 
-    model_urls = gl.edge_api.get_model_urls(detector_id)
+    path = f'/v1/fetch-model-urls/{detector_id}/'
+    params = {}
+    
+    decoded_response = call_edge_api(gl, path, params)
 
     return {
-        "pipeline_config": model_urls.pipeline_config,
-        "oodd_pipeline_config": model_urls.oodd_pipeline_config,
+        "pipeline_config": decoded_response.get('pipeline_config'),
+        "oodd_pipeline_config": decoded_response.get('oodd_pipeline_config'),
     }
 
 def get_detector_edge_metrics(gl: ExperimentalApi, detector_id: str) -> dict | None:
