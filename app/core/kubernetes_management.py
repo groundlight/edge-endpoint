@@ -9,10 +9,10 @@ from kubernetes import config
 from kubernetes.client import V1Deployment
 
 from .edge_inference import (
+    get_current_model_version,
     get_edge_inference_deployment_name,
     get_edge_inference_model_name,
     get_edge_inference_service_name,
-    get_current_model_version,
 )
 from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH, MODEL_REPOSITORY_PATH
 
