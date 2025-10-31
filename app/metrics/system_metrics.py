@@ -4,14 +4,15 @@ import os
 from datetime import datetime, timedelta
 
 import psutil
-import yaml
 import tzlocal
+import yaml
 from kubernetes import client, config
-from app.core.file_paths import MODEL_REPOSITORY_PATH
+
 from app.core.edge_inference import (
-    get_primary_edge_model_dir,
     get_current_pipeline_config,
+    get_primary_edge_model_dir,
 )
+from app.core.file_paths import MODEL_REPOSITORY_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -177,26 +178,24 @@ def get_detector_details() -> str:
 
             model_version = _get_annotation(pod, "groundlight.dev/model-version")
             if model_version is None:
-                logger.error(f'No model-version annotation found for {det_id}.')
+                logger.error(f"No model-version annotation found for {det_id}.")
                 continue
             elif not model_version.isdigit():
-                logger.error(f'model-version for {det_id} is not a digit.')
+                logger.error(f"model-version for {det_id} is not a digit.")
                 continue
 
             model_version_int = int(model_version)
             model_dir = get_primary_edge_model_dir(MODEL_REPOSITORY_PATH, det_id)
             cfg = get_current_pipeline_config(model_dir, model_version_int)
             if cfg is None:
-                logger.error(
-                    f"Pipeline config not found for detector {det_id} at version {model_version_int}"
-                )
+                logger.error(f"Pipeline config not found for detector {det_id} at version {model_version_int}")
                 continue
-            
+
             # Convert the pipeline config dict to a yaml string
             if isinstance(cfg, (dict, list)):
                 pipeline_config_str = yaml.safe_dump(cfg, sort_keys=False)
             else:
-                pipeline_config_str = str(cfg) # This avoids the yaml end of document marker (...)
+                pipeline_config_str = str(cfg)  # This avoids the yaml end of document marker (...)
 
             detector_details[det_id] = {
                 "pipeline_config": pipeline_config_str,
