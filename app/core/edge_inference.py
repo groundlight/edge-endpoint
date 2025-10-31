@@ -651,6 +651,7 @@ def get_current_pipeline_config(model_dir: str, model_version: int) -> dict | No
         logger.warning(f"No existing pipeline_config.yaml file found in {os.path.join(model_dir, str(model_version))}")
         return None
 
+
 def create_file_from_template(template_values: dict, destination: str, template: str) -> None:
     """
     This is a helper function to create a file from a Jinja2 template. In your template file,
