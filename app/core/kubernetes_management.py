@@ -12,9 +12,9 @@ from .edge_inference import (
     get_edge_inference_deployment_name,
     get_edge_inference_model_name,
     get_edge_inference_service_name,
-    get_latest_pipeline_config,
+    get_current_model_version,
 )
-from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH
+from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH, MODEL_REPOSITORY_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -24,18 +24,18 @@ class InferenceDeploymentManager:
         self._setup_kube_client()
         self._inference_deployment_template = self._load_inference_deployment_template()
 
-    def _set_runtime_annotations(self, ann: dict, detector_id: str, is_oodd: bool, pipeline_config: str | None) -> None:
+    def _set_runtime_annotations(self, ann: dict, detector_id: str, is_oodd: bool, model_version: int | None) -> None:
         """Populate standard runtime annotations for inference pods."""
         ann["groundlight.dev/detector-id"] = detector_id
         ann["groundlight.dev/model-name"] = get_edge_inference_model_name(detector_id, is_oodd)
-        ann["groundlight.dev/pipeline-config"] = str(pipeline_config)
+        ann["groundlight.dev/model-version"] = str(model_version)
 
-    def _annotate_pod_template(self, doc: dict, detector_id: str, is_oodd: bool, pipeline_config: str | None) -> None:
+    def _annotate_pod_template(self, doc: dict, detector_id: str, is_oodd: bool, model_version: int | None) -> None:
         """Ensure the Pod template has an annotations map and set runtime values on it."""
         tpl = doc.setdefault("spec", {}).setdefault("template", {})
         md = tpl.setdefault("metadata", {})
         ann = md.setdefault("annotations", {})
-        self._set_runtime_annotations(ann, detector_id, is_oodd, pipeline_config)
+        self._set_runtime_annotations(ann, detector_id, is_oodd, model_version)
 
     def _setup_kube_client(self) -> None:
         """Sets up the kubernetes client in order to access resources in the cluster."""
@@ -118,11 +118,11 @@ class InferenceDeploymentManager:
             service_name=service_name, deployment_name=deployment_name, model_name=model_name
         )
 
-        pipeline_config = get_latest_pipeline_config(detector_id, is_oodd)
+        model_version = get_current_model_version(MODEL_REPOSITORY_PATH, detector_id, is_oodd=is_oodd)
         docs = list(yaml.safe_load_all(inference_deployment))
         for doc in docs:
             if doc.get("kind") == "Deployment":
-                self._annotate_pod_template(doc, detector_id, is_oodd, pipeline_config)
+                self._annotate_pod_template(doc, detector_id, is_oodd, model_version)
 
         self._create_from_kube_manifest(namespace=self._target_namespace, manifest=yaml.safe_dump_all(docs))
 
@@ -203,9 +203,9 @@ class InferenceDeploymentManager:
         deployment.spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"] = now_iso
 
         # Set annotations with intended runtime details
-        pipeline_config = get_latest_pipeline_config(detector_id, is_oodd)
+        model_version = get_current_model_version(MODEL_REPOSITORY_PATH, detector_id, is_oodd=is_oodd)
         ann = deployment.spec.template.metadata.annotations
-        self._set_runtime_annotations(ann, detector_id, is_oodd, pipeline_config)
+        self._set_runtime_annotations(ann, detector_id, is_oodd, model_version)
 
         # Set the correct model name for this inference deployment
         for env_var in deployment.spec.template.spec.containers[0].env:
