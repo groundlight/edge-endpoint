@@ -173,7 +173,7 @@ def get_detector_details() -> str:
                 "last_updated_time": started.isoformat() if started else None,
             }
         else:
-            pass # We won't report any detector details until the detector has a ready pod
+            pass  # We won't report any detector details until the detector has a ready pod
 
     # Convert the dict to a JSON string to prevent opensearch from indexing all detector details
     return json.dumps(detector_details)
