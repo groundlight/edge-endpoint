@@ -83,17 +83,17 @@ def get_detector_pipeline_configs(gl: ExperimentalApi, detector_id: str) -> dict
     These haven't necessary been downloaded to the Edge Endpoint yet; they simply represent the 
     latest available pipeline config in the cloud for the Edge Endpoint. 
     """
-    path = f'/v1/fetch-model-urls/{detector_id}/'
-    params = {}
-    
-    decoded_response = call_edge_api(gl, path, params)
+
+    model_urls = gl.edge_api.get_model_urls(detector_id)
 
     return {
-        "pipeline_config": decoded_response.get('pipeline_config'),
-        "oodd_pipeline_config": decoded_response.get('oodd_pipeline_config'),
+        "pipeline_config": model_urls.pipeline_config,
+        "oodd_pipeline_config": model_urls.oodd_pipeline_config,
     }
 
 def get_detector_edge_metrics(gl: ExperimentalApi, detector_id: str) -> dict | None:
+
+
     metrics = _get_status_metrics(gl)
     raw = metrics.get('detector_details')
     if not raw:
