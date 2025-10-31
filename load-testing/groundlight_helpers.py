@@ -16,9 +16,6 @@ CLOUD_ENDPOINT_PROD = 'https://api.groundlight.ai/device-api'
 # unless an inference pod doesn't exist for the detector, in which case we have no choice but to escalate
 IQ_KWARGS_FOR_NO_ESCALATION = {'wait': 0.0, 'human_review': 'NEVER', 'confidence_threshold': 0.0}
 
-# We need to establish a client here so that we can use functions like `gl.create_roi`, but we won't
-# actually use it to submit anything to Groundlight
-gl = ExperimentalApi(endpoint=None)
 
 class APIError(Exception):
     """Any response from the Groundlight API that is not 200
@@ -26,6 +23,7 @@ class APIError(Exception):
     pass
 
 def call_api(url: str, params: dict) -> dict:
+    """Perform a GET request with API token and return decoded JSON or raise APIError."""
 
     headers = {
         "X-API-Token": os.environ.get('GROUNDLIGHT_API_TOKEN')
@@ -40,18 +38,6 @@ def call_api(url: str, params: dict) -> dict:
             f"Request failed with status code {response.status_code} | "
             f"Response content: {response.content}" 
             )
-
-def call_reef_api(gl_client: ExperimentalApi, path: str, params: dict) -> dict:
-
-    url = gl_client.endpoint.replace('/device-api', '/reef-api') + path
-
-    return call_api(url, params)
-
-def call_edge_api(gl_client: ExperimentalApi, path: str, params: dict) -> dict:
-
-    url = gl_client.endpoint.replace('/device-api', '/edge-api') + path
-
-    return call_api(url, params)
 
 def get_detector_evaluation(gl: ExperimentalApi, detector_id: str) -> dict:
     """
@@ -92,7 +78,7 @@ def get_detector_pipeline_configs(gl: ExperimentalApi, detector_id: str) -> dict
     }
 
 def get_detector_edge_metrics(gl: ExperimentalApi, detector_id: str) -> dict | None:
-
+    """Fetch edge status metrics and return details for a detector currently running on edge."""
 
     metrics = _get_status_metrics(gl)
     raw = metrics.get('detector_details')
@@ -102,11 +88,13 @@ def get_detector_edge_metrics(gl: ExperimentalApi, detector_id: str) -> dict | N
     return detector_details.get(detector_id)
 
 def _get_status_metrics(gl: ExperimentalApi) -> dict:
+    """Retrieve the consolidated edge status metrics JSON from the Edge Endpoint's /status/metrics.json."""
     base = gl.endpoint.replace('/device-api', '')
     url = base + '/status/metrics.json'
     return call_api(url, {})
 
 def get_container_images_map(gl: ExperimentalApi) -> dict[str, dict[str, str]]:
+    """Return a map of pod -> {container: image_id} from edge status metrics."""
     metrics = _get_status_metrics(gl)
     k3s_stats = metrics.get('k3s_stats', {}) or {}
     raw = k3s_stats.get('container_images', {})
@@ -146,6 +134,7 @@ def get_or_create_count_detector(
     max_count: int, 
     group_name: str,
     ) -> list[Detector]:
+    """Create a counting detector or return an existing one with the same name if it already exists."""
 
     query_text = f"Count all the {class_name}s"
     try:
@@ -162,6 +151,7 @@ def get_or_create_count_detector(
         return gl.get_detector_by_name(name)
 
 def error_if_not_from_edge(iq: ImageQuery) -> None:
+    """Raise an error if the provided ImageQuery result did not originate from the Edge Endpoint."""
     if not iq.result.from_edge:
         raise ValueError(
             'Got a non-edge answer from the Edge Endpoint. '
@@ -169,6 +159,7 @@ def error_if_not_from_edge(iq: ImageQuery) -> None:
         )
 
 def error_if_endpoint_is_cloud(gl: ExperimentalApi) -> None:
+    """Raise if the connected endpoint appears to be the Groundlight cloud instead of an Edge Endpoint."""
     gl_endpoint = gl.endpoint
     host = (urlparse(gl_endpoint).hostname or "").lower()
     is_cloud = host.startswith("api.") and host.endswith(".groundlight.ai")
@@ -247,6 +238,7 @@ def detector_is_sufficiently_trained(
     min_projected_ml_accuracy: float,
     min_total_labels: int,
     ) -> bool:
+    """Return True if projected ML accuracy and label count exceed provided thresholds."""
     projected_ml_accuracy = stats['projected_ml_accuracy'] 
     total_labels = stats['total_labels'] 
     return projected_ml_accuracy is not None and \
@@ -261,6 +253,7 @@ def wait_until_sufficiently_trained(
     timeout_sec: float,
     poll_interval_sec: float = 5.0,
 ) -> dict:
+    """Poll detector evaluation until it meets training thresholds or timeout, then return stats."""
     start = time.time()
     while True:
         stats = get_detector_evaluation(gl, detector.id)
