@@ -120,7 +120,7 @@ def get_container_images() -> str:
     return json.dumps(containers)
 
 
-def _primary_pod_is_ready(pod: client.V1Pod) -> bool:
+def _pod_is_ready(pod: client.V1Pod) -> bool:
     if not pod or not pod.status or pod.status.phase != "Running":
         return False
 
@@ -166,14 +166,14 @@ def get_detector_details() -> dict:
         if _get_annotation(pod, "groundlight.dev/model-name") != f"{det_id}/primary":
             continue
 
-        if _primary_pod_is_ready(pod):
+        if _pod_is_ready(pod):
             started = _get_container_started_at(pod)
             details[det_id] = {
-                "status": "ready",
+                # "status": "ready",
                 "pipeline_config": _get_annotation(pod, "groundlight.dev/pipeline-config"),
                 "last_updated_time": started.isoformat() if started else None,
             }
-        elif det_id not in details:
-            details[det_id] = {"status": "pending"}
+        # elif det_id not in details:
+        #     details[det_id] = {"status": "pending"}
 
     return details

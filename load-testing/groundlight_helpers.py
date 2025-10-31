@@ -220,11 +220,13 @@ def wait_for_ready_inference_pod(
         # Check if correct pipeline is used
         detector_edge_metrics = get_detector_edge_metrics(gl, detector.id)
         if detector_edge_metrics is not None:
-            pod_status = detector_edge_metrics.get('status')
+            # pod_status = detector_edge_metrics.get('status')
             edge_pipeline_config = detector_edge_metrics.get('pipeline_config')
 
-            if pod_status == "ready" and \
-                yaml.safe_load(pipeline_config or "") == yaml.safe_load(edge_pipeline_config or ""):
+            # if pod_status == "ready" and \
+            #     yaml.safe_load(pipeline_config or "") == yaml.safe_load(edge_pipeline_config or ""):
+                
+            if yaml.safe_load(pipeline_config or "") == yaml.safe_load(edge_pipeline_config or ""):
 
                 # Correct pipeline is used and the pod is ready
                 # Double check that the pod is returning edge answers

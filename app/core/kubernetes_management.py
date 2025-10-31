@@ -203,7 +203,7 @@ class InferenceDeploymentManager:
         deployment.spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"] = now_iso
 
         # Set annotations with intended runtime details
-        pipeline_config = self._fetch_pipeline_config(detector_id, is_oodd)
+        pipeline_config = get_latest_pipeline_config(detector_id, is_oodd)
         ann = deployment.spec.template.metadata.annotations
         self._set_runtime_annotations(ann, detector_id, is_oodd, pipeline_config)
 
