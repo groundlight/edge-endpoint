@@ -547,7 +547,7 @@ def save_model_to_repository(
         if isinstance(safe_loaded, (dict, list)):
             yaml.safe_dump(safe_loaded, f, sort_keys=False, allow_unicode=True)
         else:
-            f.write(model_info.pipeline_config) # avoids the YAML document end marker for strings (...)
+            f.write(model_info.pipeline_config)  # avoids the YAML document end marker for strings (...)
     with open(os.path.join(model_version_dir, "predictor_metadata.json"), "w") as f:
         f.write(model_info.predictor_metadata)
 
