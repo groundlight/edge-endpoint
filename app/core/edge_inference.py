@@ -651,37 +651,6 @@ def get_current_pipeline_config(model_dir: str, model_version: int) -> dict | No
         logger.warning(f"No existing pipeline_config.yaml file found in {os.path.join(model_dir, str(model_version))}")
         return None
 
-
-def get_latest_pipeline_config(detector_id: str, is_oodd: bool = False) -> str | None:
-    """Return the contents of the latest pipeline_config.yaml for the detector from the model repository.
-
-    Reads from the new repository layout at
-    <MODEL_REPOSITORY_PATH>/<detector_id>/(primary|oodd)/<version>/pipeline_config.yaml
-    and returns the file contents as a string, or None if unavailable.
-    """
-    try:
-        model_dir = (
-            get_oodd_model_dir(MODEL_REPOSITORY_PATH, detector_id)
-            if is_oodd
-            else get_primary_edge_model_dir(MODEL_REPOSITORY_PATH, detector_id)
-        )
-        version = get_current_model_version(MODEL_REPOSITORY_PATH, detector_id, is_oodd=is_oodd)
-        if version is None:
-            logger.error(f"No saved {'OODD' if is_oodd else 'primary'} model version found for {detector_id}")
-            return None
-
-        pipeline_config_path = os.path.join(model_dir, str(version), "pipeline_config.yaml")
-        if os.path.exists(pipeline_config_path):
-            with open(pipeline_config_path, "r") as f:
-                return f.read()
-
-        logger.warning(f"pipeline_config.yaml not found at {pipeline_config_path}")
-        return None
-    except Exception:
-        logger.error(f"Error while fetching pipeline_config for {detector_id}", exc_info=True)
-        return None
-
-
 def create_file_from_template(template_values: dict, destination: str, template: str) -> None:
     """
     This is a helper function to create a file from a Jinja2 template. In your template file,
