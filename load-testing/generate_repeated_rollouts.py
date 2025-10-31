@@ -80,7 +80,7 @@ def main(num_detectors: int) -> None:
 
     # Prime the detectors, if necessary
     for detector in detectors:
-        detector_stats = glh.get_detector_stats(gl, detector.id)
+        detector_stats = glh.get_detector_evaluation(gl, detector.id)
 
         projected_ml_accuracy = detector_stats['projected_ml_accuracy']
         if projected_ml_accuracy is not None:
@@ -115,7 +115,7 @@ def main(num_detectors: int) -> None:
         print(f'Checking evaluation results for {detector.id}...')
         pollstart = time.time()
         while True:
-            detector_stats = glh.get_detector_stats(gl, detector.id)
+            detector_stats = glh.get_detector_evaluation(gl, detector.id)
             projected_ml_accuracy = detector_stats['projected_ml_accuracy']
 
             if projected_ml_accuracy is not None:

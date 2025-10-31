@@ -542,9 +542,12 @@ def save_model_to_repository(
         with open(os.path.join(model_version_dir, "model.buf"), "wb") as f:
             f.write(model_buffer)
 
+    safe_loaded = yaml.safe_load(model_info.pipeline_config)
     with open(os.path.join(model_version_dir, "pipeline_config.yaml"), "w") as f:
-        # f.write(model_info.pipeline_config)
-        yaml.dump(yaml.safe_load(model_info.pipeline_config), f)
+        if isinstance(safe_loaded, (dict, list)):
+            yaml.safe_dump(safe_loaded, f, sort_keys=False, allow_unicode=True)
+        else:
+            f.write(model_info.pipeline_config) # avoids the YAML document end marker for strings (...)
     with open(os.path.join(model_version_dir, "predictor_metadata.json"), "w") as f:
         f.write(model_info.predictor_metadata)
 

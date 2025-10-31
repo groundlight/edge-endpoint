@@ -53,26 +53,26 @@ def call_edge_api(gl_client: ExperimentalApi, path: str, params: dict) -> dict:
 
     return call_api(url, params)
 
-def get_detector_stats(gl: ExperimentalApi, detector_id: str) -> dict:
-    path = f'/detectors/{detector_id}'
-    params = {
-        'type': 'summary',
-        'answer_type': 'current_best_answer',
-    }
-    
-    decoded_response = call_reef_api(gl, path, params)
-        
-    evaluation_results = decoded_response.get('evaluation_results')
-    if evaluation_results is None:
-        projected_ml_accuracy = None
-        total_ground_truth_examples = 0
+def get_detector_evaluation(gl: ExperimentalApi, detector_id: str) -> dict:
+    """
+    Get the detector evaluation stats that we will use to determine if a detector is
+    sufficiently trained, i.e. `kfold_pooled__balanced_accuracy` and `total_ground_truth_examples`
+    """
+
+    full_detector_evaluation = gl.get_detector_evaluation(detector_id)
+    if full_detector_evaluation is None:
+        kfold_pooled__balanced_accuracy = None
+        total_ground_truth_examples = None
     else:
-        projected_ml_accuracy = evaluation_results['kfold_pooled__balanced_accuracy']
-        total_ground_truth_examples = evaluation_results["total_ground_truth_examples"]
-
-
+        evaluation_results = full_detector_evaluation.get('evaluation_results')
+        if evaluation_results is None:
+            kfold_pooled__balanced_accuracy = None
+            total_ground_truth_examples = None
+        else:
+            kfold_pooled__balanced_accuracy = evaluation_results.get('kfold_pooled__balanced_accuracy')
+            total_ground_truth_examples = evaluation_results.get('total_ground_truth_examples')
     return {
-        "projected_ml_accuracy": projected_ml_accuracy,
+        "projected_ml_accuracy": kfold_pooled__balanced_accuracy,
         "total_labels": total_ground_truth_examples,
         }
 
@@ -95,7 +95,11 @@ def get_detector_pipeline_configs(gl: ExperimentalApi, detector_id: str) -> dict
 
 def get_detector_edge_metrics(gl: ExperimentalApi, detector_id: str) -> dict | None:
     metrics = _get_status_metrics(gl)
-    return (metrics.get('detector_details') or {}).get(detector_id)
+    raw = metrics.get('detector_details')
+    if not raw:
+        return None
+    detector_details = json.loads(raw)
+    return detector_details.get(detector_id)
 
 def _get_status_metrics(gl: ExperimentalApi) -> dict:
     base = gl.endpoint.replace('/device-api', '')
@@ -263,7 +267,7 @@ def wait_until_sufficiently_trained(
 ) -> dict:
     start = time.time()
     while True:
-        stats = get_detector_stats(gl, detector.id)
+        stats = get_detector_evaluation(gl, detector.id)
         if detector_is_sufficiently_trained(stats, min_projected_ml_accuracy, min_total_labels):
             return stats
 

@@ -109,7 +109,7 @@
 
                     const parseSection = (section) => {
                         if (!section) return section;
-                        const parsed = {...section};
+                        const parsed = { ...section };
                         for (const [key, value] of Object.entries(parsed)) {
                             parsed[key] = parseIfJson(value);
                         }
@@ -121,7 +121,7 @@
                     document.getElementById('activity-metrics').textContent =
                         JSON.stringify(parseSection(data.activity_metrics), null, 2);
                     document.getElementById('detector-details').textContent =
-                        JSON.stringify(parseSection(data.detector_details), null, 2);
+                        JSON.stringify(parseIfJson(data.detector_details), null, 2);
                     document.getElementById('k3s-stats').textContent =
                         JSON.stringify(parseSection(data.k3s_stats), null, 2);
                     document.getElementById('loading').style.display = 'none';

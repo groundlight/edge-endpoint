@@ -98,7 +98,7 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
     print(f"Found the following pipeline config as the most recently trained Edge pipeline config in the cloud. We will use this for testing: {latest_edge_pipeline_config_in_cloud}")
     
     # Check if the detector has trained. If not, prime it with some labels
-    stats = glh.get_detector_stats(gl, detector.id)
+    stats = glh.get_detector_evaluation(gl, detector.id)
     sufficiently_trained = glh.detector_is_sufficiently_trained(stats, MIN_PROJECTED_ML_ACCURACY, MIN_TOTAL_LABELS)
     if sufficiently_trained:
         print(f'{detector.id} is sufficiently trained. Evaluation results: {stats}')

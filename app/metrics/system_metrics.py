@@ -146,7 +146,7 @@ def _get_annotation(pod: client.V1Pod, key: str) -> str | None:
     return (pod.metadata.annotations or {}).get(key)
 
 
-def get_detector_details() -> dict:
+def get_detector_details() -> str:
     """Return details for detectors with primary inference pods, keyed by detector-id annotation.
 
     Only counts pods whose model-name annotation equals "<detector_id>/primary".
@@ -156,7 +156,7 @@ def get_detector_details() -> dict:
     namespace = get_namespace()
     pods = v1_core.list_namespaced_pod(namespace=namespace)
 
-    details: dict[str, dict] = {}
+    detector_details: dict[str, dict] = {}
     for pod in pods.items:
         det_id = _get_annotation(pod, "groundlight.dev/detector-id")
         if not det_id:
@@ -168,12 +168,12 @@ def get_detector_details() -> dict:
 
         if _pod_is_ready(pod):
             started = _get_container_started_at(pod)
-            details[det_id] = {
-                # "status": "ready",
+            detector_details[det_id] = {
                 "pipeline_config": _get_annotation(pod, "groundlight.dev/pipeline-config"),
                 "last_updated_time": started.isoformat() if started else None,
             }
-        # elif det_id not in details:
-        #     details[det_id] = {"status": "pending"}
+        else:
+            pass # We won't report any detector details until the detector has a ready pod
 
-    return details
+    # Convert the dict to a JSON string to prevent opensearch from indexing all detector details
+    return json.dumps(detector_details)
