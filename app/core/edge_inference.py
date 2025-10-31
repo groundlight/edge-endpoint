@@ -664,9 +664,7 @@ def get_latest_pipeline_config(detector_id: str, is_oodd: bool = False) -> str |
         )
         version = get_current_model_version(MODEL_REPOSITORY_PATH, detector_id, is_oodd=is_oodd)
         if version is None:
-            logger.error(
-                f"No saved {'OODD' if is_oodd else 'primary'} model version found for {detector_id}"
-            )
+            logger.error(f"No saved {'OODD' if is_oodd else 'primary'} model version found for {detector_id}")
             return None
 
         pipeline_config_path = os.path.join(model_dir, str(version), "pipeline_config.yaml")
