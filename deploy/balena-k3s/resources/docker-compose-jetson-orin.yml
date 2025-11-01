@@ -4,7 +4,7 @@ version: "2.4"
 # Limitations: Currently only works on `Jetson Nano Orin` devices.
 
 services:
-  server-jetson:
+  server:
     # https://docs.k3s.io/advanced#running-k3s-in-docker
     build:
       context: deploy/balena-k3s/server-jetson-orin
@@ -35,6 +35,7 @@ services:
     volumes:
       - k3s-server:/var/lib/rancher/k3s
       - shared:/shared
+      - pinamod:/opt/groundlight/edge/pinamod-public
 
   bastion:
     build:
@@ -46,8 +47,9 @@ services:
     volumes:
       - shared:/shared:ro
     depends_on:
-      - server-jetson
+      - server
 
 volumes:
   k3s-server: {}
   shared: {}
+  pinamod: {}

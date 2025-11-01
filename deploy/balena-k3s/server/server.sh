@@ -7,10 +7,10 @@ set -eux
 
 # Kill any existing k3s server processes and reset them -
 # WARNING: this will remove all cluster data such as running pods, services, etc., except for
-# pre-load images
+# pre-load images and containerd image cache
 pkill -f k3s || true
 if [ -d /var/lib/rancher/k3s/agent ]; then
-    find /var/lib/rancher/k3s/agent -mindepth 1 -maxdepth 1 ! -path /var/lib/rancher/k3s/agent/images -exec rm -rf {} +
+    find /var/lib/rancher/k3s/agent -mindepth 1 -maxdepth 1 ! -path /var/lib/rancher/k3s/agent/images ! -path /var/lib/rancher/k3s/agent/containerd -exec rm -rf {} +
 fi
 if [ -d /var/lib/rancher/k3s ]; then
     find /var/lib/rancher/k3s -mindepth 1 -maxdepth 1 ! -path /var/lib/rancher/k3s/agent -exec rm -rf {} +
