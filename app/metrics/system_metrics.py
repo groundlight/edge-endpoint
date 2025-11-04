@@ -5,7 +5,14 @@ from datetime import datetime, timedelta
 
 import psutil
 import tzlocal
+import yaml
 from kubernetes import client, config
+
+from app.core.edge_inference import (
+    get_current_pipeline_config,
+    get_primary_edge_model_dir,
+)
+from app.core.file_paths import MODEL_REPOSITORY_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -118,3 +125,84 @@ def get_container_images() -> str:
     # Convert the containers dict to a JSON string to prevent opensearch from indexing all
     # the individual container fields
     return json.dumps(containers)
+
+
+def _pod_is_ready(pod: client.V1Pod) -> bool:
+    if not pod or not pod.status or pod.status.phase != "Running":
+        return False
+
+    if not any(c.type == "Ready" and c.status == "True" for c in (pod.status.conditions or [])):
+        return False
+
+    for cs in pod.status.container_statuses or []:
+        if cs.name == "inference-server" and cs.ready:
+            return True
+
+    return False
+
+
+def _get_container_started_at(pod: client.V1Pod) -> datetime | None:
+    for cs in pod.status.container_statuses or []:
+        if cs.name == "inference-server" and cs.state and cs.state.running and cs.state.running.started_at:
+            return cs.state.running.started_at
+
+    return None
+
+
+def _get_annotation(pod: client.V1Pod, key: str) -> str | None:
+    return (pod.metadata.annotations or {}).get(key)
+
+
+def get_detector_details() -> str:
+    """Return details for detectors with primary inference pods, keyed by detector-id annotation.
+
+    Only counts pods whose model-name annotation equals "<detector_id>/primary".
+    """
+    config.load_incluster_config()
+    v1_core = client.CoreV1Api()
+    namespace = get_namespace()
+    pods = v1_core.list_namespaced_pod(namespace=namespace)
+
+    detector_details: dict[str, dict] = {}
+    for pod in pods.items:
+        det_id = _get_annotation(pod, "groundlight.dev/detector-id")
+        if not det_id:
+            continue
+
+        # Skip OODD pods; we only want primary inference pods here
+        if _get_annotation(pod, "groundlight.dev/model-name") != f"{det_id}/primary":
+            continue
+
+        if _pod_is_ready(pod):
+            started = _get_container_started_at(pod)
+
+            model_version = _get_annotation(pod, "groundlight.dev/model-version")
+            if model_version is None:
+                logger.error(f"No model-version annotation found for {det_id}.")
+                continue
+            elif not model_version.isdigit():
+                logger.error(f"model-version for {det_id} is not a digit.")
+                continue
+
+            model_version_int = int(model_version)
+            model_dir = get_primary_edge_model_dir(MODEL_REPOSITORY_PATH, det_id)
+            cfg = get_current_pipeline_config(model_dir, model_version_int)
+            if cfg is None:
+                logger.error(f"Pipeline config not found for detector {det_id} at version {model_version_int}")
+                continue
+
+            # Convert the pipeline config dict to a yaml string
+            if isinstance(cfg, (dict, list)):
+                pipeline_config_str = yaml.safe_dump(cfg, sort_keys=False)
+            else:
+                pipeline_config_str = str(cfg)  # This avoids the yaml end of document marker (...)
+
+            detector_details[det_id] = {
+                "pipeline_config": pipeline_config_str,
+                "last_updated_time": started.isoformat() if started else None,
+            }
+        else:
+            pass  # We won't report any detector details until the detector has a ready pod
+
+    # Convert the dict to a JSON string to prevent opensearch from indexing all detector details
+    return json.dumps(detector_details)

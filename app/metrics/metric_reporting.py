@@ -79,9 +79,13 @@ class MetricsReporter:
         k3s_stats.add("pod_statuses", lambda: system_metrics.get_pods())
         k3s_stats.add("container_images", lambda: system_metrics.get_container_images())
 
+        detector_details = SafeMetricsDict()
+        detector_details.add("detector_details", lambda: system_metrics.get_detector_details())
+
         return {
             "device_info": device_info.as_dict(),
             "activity_metrics": activity_metrics.as_dict(),
+            "detector_details": detector_details.as_dict().get("detector_details"),
             "k3s_stats": k3s_stats.as_dict(),
         }
 

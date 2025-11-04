@@ -164,6 +164,8 @@ spec:
             mountPath: /etc/groundlight/edge-config
           - name: device-info-volume
             mountPath: /opt/groundlight/device
+          - name: edge-endpoint-persistent-volume
+            mountPath: /opt/groundlight/edge/serving/model-repo
       
       - name: escalation-queue-reader
         image: *edgeEndpointImage

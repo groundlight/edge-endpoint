@@ -1,11 +1,12 @@
-from groundlight import Groundlight
-import os
+from groundlight import ExperimentalApi
+from datetime import datetime, timezone
 import time
 import argparse
 from tqdm import tqdm
 import statistics
 
-import utils as u
+import groundlight_helpers as glh
+import image_helpers as imgh
 
 SUPPORTED_DETECTOR_MODES = {
     'BINARY',
@@ -16,7 +17,7 @@ DETECTOR_GROUP_NAME = "Load Testing"
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description='Groundlight load testing script with configurable number of detectors'
+        description='Groundlight load testing script for a single detector'
     )
     parser.add_argument(
         'detector_mode',
@@ -39,21 +40,22 @@ def parse_arguments():
     return parser.parse_args()
 
 def main(detector_mode: str, image_width: int, image_height: int) -> None:
-    WARMUP_ITERATIONS = 200
-    TESTING_ITERATIONS = 100
+    TRAINING_TIMEOUT_SEC = 60 * 20
+    INFERENCE_POD_READY_TIMEOUT_SEC = 60 * 10
+
+    WARMUP_ITERATIONS = 300
+    TESTING_ITERATIONS = 1000
     MIN_PROJECTED_ML_ACCURACY = 0.6
-    MIN_TOTAL_LABELS = 20
-    # MIN_CONFIDENCE = 0.6 # Confidence calibration doesn't work well on COUNT detectors, so we won't evaluate confidences for now
+    MIN_TOTAL_LABELS = 30
 
-    endpoint = os.environ.get('GROUNDLIGHT_ENDPOINT')
-    if endpoint is None:
-        raise ValueError(
-            'Please set GROUNDLIGHT_ENDPOINT in your environment variables.'
-        ) 
+    # Connect to the GROUNDLIGHT_ENDPOINT defined in the env vars. Should be an edge endpoint.
+    gl = ExperimentalApi() 
+    glh.error_if_endpoint_is_cloud(gl)
+    endpoint = gl.endpoint
 
-    gl = Groundlight(endpoint=endpoint)
-    cloud_endpoint = 'https://api.groundlight.ai/device-api'
-    gl_cloud = Groundlight(endpoint=cloud_endpoint)
+    # Connect to a Groundlight cloud endpoint, for certain operations that require the cloud (like gl.ask_async)
+    # This points to prod, so this test currently would not work if the user wants to benchmark an Edge Endpoint that talks to integ
+    gl_cloud = ExperimentalApi(endpoint=glh.CLOUD_ENDPOINT_PROD)
 
     detector_name = f'Single Client FPS Test {image_width} x {image_height} - {detector_mode}'
     if detector_mode == "BINARY":
@@ -62,7 +64,7 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
             query='Is the image background black?',
             group_name=DETECTOR_GROUP_NAME
         )
-        generate_image = u.generate_random_binary_image
+        generate_image = imgh.generate_random_binary_image
         generate_image_kwargs = {
             "gl": gl,
             "image_width": image_width,
@@ -71,14 +73,14 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
     elif detector_mode == "COUNT":
         class_name = "circle"
         max_count = 10
-        detector = u.get_or_create_count_detector(
+        detector = glh.get_or_create_count_detector(
             gl,
             name=detector_name,
             class_name=class_name,
             max_count=max_count,
             group_name=DETECTOR_GROUP_NAME
         )
-        generate_image = u.generate_random_count_image
+        generate_image = imgh.generate_random_count_image
         generate_image_kwargs = {
             "gl": gl,
             "image_width": image_width,
@@ -89,40 +91,43 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
     else:
         raise ValueError(f'Detector mode {detector_mode} not recognized.')
 
+    # Get the pipeline config and log it
+    pipeline_configs = glh.get_detector_pipeline_configs(gl, detector.id)
+    latest_edge_pipeline_config_in_cloud = pipeline_configs.get('pipeline_config')
+
+    print(f"Found the following pipeline config as the most recently trained Edge pipeline config in the cloud. We will use this for testing: {latest_edge_pipeline_config_in_cloud}")
+    
     # Check if the detector has trained. If not, prime it with some labels
-    stats = u.get_detector_stats(gl, detector.id)
-    sufficiently_trained = u.detector_is_sufficiently_trained(stats, MIN_PROJECTED_ML_ACCURACY, MIN_TOTAL_LABELS)
+    stats = glh.get_detector_evaluation(gl, detector.id)
+    sufficiently_trained = glh.detector_is_sufficiently_trained(stats, MIN_PROJECTED_ML_ACCURACY, MIN_TOTAL_LABELS)
     if sufficiently_trained:
-        print(f'{detector.id} is sufficiently trained. Stats: {stats}')
+        print(f'{detector.id} is sufficiently trained. Evaluation results: {stats}')
     else:
-        print(f'{detector.id} is not sufficiently trained: Stats: {stats}')
-        print('Priming detector...')
-        u.prime_detector(gl_cloud, detector, MIN_TOTAL_LABELS, image_width, image_height)
+        print(f'{detector.id} is not yet sufficiently trained. Evaluation results: {stats}')
+        glh.prime_detector(gl_cloud, detector, MIN_TOTAL_LABELS, image_width, image_height)
 
         # After priming, wait until it trains to a sufficient level
-        print(f'Waiting for {detector.id} to finish training...')
-        timeout_sec = 60 * 5
-        poll_start = time.time()
-        while True:
-            stats = u.get_detector_stats(gl, detector.id)
-            sufficiently_trained = u.detector_is_sufficiently_trained(stats, MIN_PROJECTED_ML_ACCURACY, MIN_TOTAL_LABELS)
-            if sufficiently_trained:
-                print(f'{detector.id} is sufficiently trained.')
-                break
+        print(f'Waiting up to {TRAINING_TIMEOUT_SEC} seconds for training to complete...')
+        stats = glh.wait_until_sufficiently_trained(
+            gl,
+            detector,
+            min_projected_ml_accuracy=MIN_PROJECTED_ML_ACCURACY,
+            min_total_labels=MIN_TOTAL_LABELS,
+            timeout_sec=TRAINING_TIMEOUT_SEC,
+        )
+        print(f'{detector.id} is now sufficiently trained. Evaluation results: {stats}')
 
-            elapsed_time = time.time() - poll_start
-            if elapsed_time > timeout_sec:
-                raise RuntimeError(
-                    f'{detector.id} failed to trained sufficiently after {timeout_sec} seconds. Stats: {stats}'
-                )
-            time.sleep(5)
+    # Wait for the inference pod to become available
+    print(f"Waiting up to {INFERENCE_POD_READY_TIMEOUT_SEC} seconds for inference pod to be ready for {detector.id} with pipeline_config='{latest_edge_pipeline_config_in_cloud}'...")
+    glh.wait_for_ready_inference_pod(gl, detector, image_width, image_height, latest_edge_pipeline_config_in_cloud, timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC)
+    edge_pipeline_config = glh.get_detector_edge_metrics(gl, detector.id).get('pipeline_config')
+    print(f"Inference pod is ready for {detector.id} with pipeline_config='{edge_pipeline_config}'")
 
     # Warm up
-    iq_submission_kwargs = {'wait': 0.0, 'human_review': 'NEVER'}
     for _ in tqdm(range(WARMUP_ITERATIONS), "Warming up"):
         image, _, _ = generate_image(**generate_image_kwargs)
-        iq = gl.submit_image_query(detector, image, **iq_submission_kwargs)
-        u.error_if_not_from_edge(iq)
+        iq = gl.submit_image_query(detector, image, **glh.IQ_KWARGS_FOR_NO_ESCALATION)
+        glh.error_if_not_from_edge(iq)
 
     # Test
     fps_list = []
@@ -130,17 +135,10 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
         image, _, _ = generate_image(**generate_image_kwargs)
 
         t1 = time.time()
-        iq = gl.submit_image_query(detector, image, **iq_submission_kwargs)
+        iq = gl.submit_image_query(detector, image, **glh.IQ_KWARGS_FOR_NO_ESCALATION)
         t2 = time.time()
 
-        u.error_if_not_from_edge(iq)
-
-        # Counting mode confidence calibration is off, so this check always fails
-        # if iq.result.confidence < MIN_CONFIDENCE:
-        #     raise RuntimeError(
-        #         f'Got a below confidence answer for {detector.id}. '
-        #         f'Confidence: {iq.result.confidence:.3f} < MIN_CONFIDENCE ({MIN_CONFIDENCE}). '
-        #     )
+        glh.error_if_not_from_edge(iq)
 
         elapsed_time = t2 - t1
         fps = 1 / elapsed_time
@@ -153,9 +151,28 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
     fps_p50 = statistics.median(fps_list)
     fps_p10 = statistics.quantiles(fps_list, n=10)[0]  # 1st element (0-indexed) of 10 quantiles = 10th percentile
 
+    # Check if the pipeline running on the edge changed during the test. This seems extremely unlikely, but 
+    # it would invalidate the test.
+    edge_pipeline_config_end = glh.get_detector_edge_metrics(gl, detector.id).get('pipeline_config')
+    if edge_pipeline_config != edge_pipeline_config_end:
+        raise RuntimeError(
+            f'The pipeline configuration on the Edge Endpoint changed from `{edge_pipeline_config}` to `{edge_pipeline_config_end}`. This test is invalid.'
+        )
+
+    # Check which images were used for the `edge-endpoint` container and the inference server container
+    edge_image, inference_image = glh.get_edge_and_inference_images(gl)
+
+    test_timestamp = datetime.now(timezone.utc).isoformat()
+
     # Report results
     print('-' * 10, 'Test Results', '-' * 10)
+    print(f'test_timestamp: {test_timestamp}')
+    print(f"edge_endpoint_image: {edge_image}")
+    print(f"inference_server_image: {inference_image}")
     print(f'detector_id: {detector.id}')
+    print(f'pipeline_config: {edge_pipeline_config}')
+    print(f'detector_name: {detector.name}')
+    print(f'detector_query: {detector.query}')
     print(f'detector_mode: {detector_mode}')
     print(f'image_size: {image_width}x{image_height}')
     print(f'endpoint: {endpoint}')

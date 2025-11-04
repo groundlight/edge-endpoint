@@ -64,7 +64,7 @@
     <div class="container">
         <div id="loading">Loading status...</div>
         <div id="error">Failed to load metrics data.</div>
-        
+
         <div class="section">
             <div class="section-title">Device Information</div>
             <pre id="device-info"></pre>
@@ -73,6 +73,11 @@
         <div class="section">
             <div class="section-title">Activity Metrics</div>
             <pre id="activity-metrics"></pre>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Detector Details</div>
+            <pre id="detector-details"></pre>
         </div>
 
         <div class="section">
@@ -104,18 +109,20 @@
 
                     const parseSection = (section) => {
                         if (!section) return section;
-                        const parsed = {...section};
+                        const parsed = { ...section };
                         for (const [key, value] of Object.entries(parsed)) {
                             parsed[key] = parseIfJson(value);
                         }
                         return parsed;
                     };
 
-                    document.getElementById('device-info').textContent = 
+                    document.getElementById('device-info').textContent =
                         JSON.stringify(parseSection(data.device_info), null, 2);
-                    document.getElementById('activity-metrics').textContent = 
+                    document.getElementById('activity-metrics').textContent =
                         JSON.stringify(parseSection(data.activity_metrics), null, 2);
-                    document.getElementById('k3s-stats').textContent = 
+                    document.getElementById('detector-details').textContent =
+                        JSON.stringify(parseIfJson(data.detector_details), null, 2);
+                    document.getElementById('k3s-stats').textContent =
                         JSON.stringify(parseSection(data.k3s_stats), null, 2);
                     document.getElementById('loading').style.display = 'none';
                 })

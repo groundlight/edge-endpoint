@@ -1,7 +1,7 @@
 [project]
 name = "load-testing"
 version = "0.1.0"
-description = "Add your description here"
+description = "Scripts for testing the performance of the Groundlight Edge Endpoint"
 requires-python = ">=3.13"
 dependencies = [
     "gputil>=1.4.0",
@@ -10,4 +10,6 @@ dependencies = [
     "opencv-python>=4.12.0.88",
     "psutil>=7.1.0",
     "pydantic>=2.11.9",
+    "pyyaml>=6.0.3",
+    "tqdm>=4.67.1",
 ]
