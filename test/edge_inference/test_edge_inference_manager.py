@@ -3,6 +3,7 @@ import tempfile
 from unittest import mock
 
 import pytest
+import yaml
 from model import ModeEnum
 
 from app.core.configs import EdgeInferenceConfig
@@ -26,7 +27,8 @@ def validate_model_directory(
     # Validate pipeline_config.yaml contents
     pipeline_config_file = os.path.join(model_dir, "pipeline_config.yaml")
     with open(pipeline_config_file, "r") as f:
-        assert f.read() == model_info.pipeline_config + "\n...\n"  # YAML adds three dots by default
+        file_content = f.read()
+    assert yaml.safe_load(file_content) == yaml.safe_load(model_info.pipeline_config)
 
     # Validate files for when a model binary is present
     if isinstance(model_info, ModelInfoWithBinary):
