@@ -65,6 +65,9 @@ spec:
       - name: inference-server
         image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference{{ if .Values.useMinimalImage }}-minimal{{ end }}:{{ include "groundlight-edge-endpoint.inferenceTag" . }}
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.inferencePullPolicy" . }}"
+        resources:
+          requests:
+            cpu: {{ .Values.inferenceCpuRequest | quote }}
         env:
         - name: MODEL_REPOSITORY
           value: &modelRepository /opt/groundlight/edge/serving/model-repo
@@ -78,6 +81,18 @@ spec:
           value: "false"
         - name: INFERENCE_FLAVOR
           value: "{{ .Values.inferenceFlavor }}"
+{{- if .Values.setCpuThreadCaps }}
+        - name: OMP_NUM_THREADS
+          value: "{{ .Values.cpuThreadsPerProcess }}"
+        - name: OPENBLAS_NUM_THREADS
+          value: "{{ .Values.cpuThreadsPerProcess }}"
+        - name: MKL_NUM_THREADS
+          value: "{{ .Values.cpuThreadsPerProcess }}"
+        - name: NUMEXPR_NUM_THREADS
+          value: "{{ .Values.cpuThreadsPerProcess }}"
+        - name: TORCH_NUM_THREADS
+          value: "{{ .Values.cpuThreadsPerProcess }}"
+{{- end }}
         - name: WORKERS  # Number of uvicorn workers for the inference server
           value: "1"
         volumeMounts:

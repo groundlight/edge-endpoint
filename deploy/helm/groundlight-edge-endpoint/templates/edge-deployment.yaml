@@ -104,8 +104,11 @@ spec:
         # that they are never evicted, even when the system is under memory pressure. 
         resources:
           requests:
+            cpu: {{ .Values.edgeEndpointCpuRequest | quote }}
             memory: "700Mi"
         env:
+        - name: EDGE_ENDPOINT_WORKERS
+          value: {{ .Values.edgeEndpointWorkers | quote }}
         - name: LOG_LEVEL
           value: {{ .Values.logLevel | quote }}
         # We need this feature flag since we run the edge logic server in two separate environments:

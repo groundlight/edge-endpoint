@@ -293,3 +293,17 @@ opentelemetry-collector:
   securityContext:
     runAsUser: 0
     runAsGroup: 0
+
+# Edge Endpoint runtime tuning
+# Number of uvicorn workers serving the API (routing/IO). Keep modest to avoid CPU contention.
+edgeEndpointWorkers: 4
+# CPU request for the edge-endpoint container
+edgeEndpointCpuRequest: "500m"
+
+# Inference server CPU tuning
+# Request some CPU to avoid throttling; set based on your node capacity
+inferenceCpuRequest: "2"
+# Cap CPU threads per process to avoid oversubscription (recommended true)
+setCpuThreadCaps: true
+# Threads per process for BLAS/OpenMP/Torch CPU paths
+cpuThreadsPerProcess: 1
