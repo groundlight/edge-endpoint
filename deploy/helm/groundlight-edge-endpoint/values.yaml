@@ -301,8 +301,9 @@ edgeEndpointWorkers: 4
 edgeEndpointCpuRequest: "500m"
 
 # Inference server CPU tuning
-# Request some CPU to avoid throttling; set based on your node capacity
-inferenceCpuRequest: "2"
+# Request some CPU to avoid throttling; set based on your node capacity.
+# Leave empty to disable (useful on small k3s CI nodes).
+inferenceCpuRequest: ""
 # Cap CPU threads per process to avoid oversubscription (recommended true)
 setCpuThreadCaps: true
 # Threads per process for BLAS/OpenMP/Torch CPU paths
