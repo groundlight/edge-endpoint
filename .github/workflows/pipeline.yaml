@@ -490,35 +490,6 @@ jobs:
       - name: declare success
         run: echo "Main suite of tests all pass."
   
-  update-glhub:
-    if: github.ref == 'refs/heads/main'
-    needs:
-      - main-tests-pass
-    runs-on: ubuntu-latest
-    environment: live
-
-    steps:
-      - name: Checkout glhub
-        uses: actions/checkout@v4
-        with:
-          repository: groundlight/glhub
-          token: ${{ secrets.BOT_GITHUB_TOKEN }}
-          path: glhub
-
-      - name: Update GLHub
-        run: |
-          cd glhub
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git submodule update --init --recursive
-          git submodule update --remote edge-endpoint
-          git add .
-          git commit -m "Update edge endpoint submodule"
-          git push https://edge-glhub-bot:${{ secrets.BOT_GITHUB_TOKEN }}@github.com/groundlight/glhub.git main
-        env:
-          GIT_AUTHOR_NAME: "github-actions[bot]"
-          GIT_AUTHOR_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com"
-
   tag-pre-release:
     if: github.ref == 'refs/heads/main'
     needs:
