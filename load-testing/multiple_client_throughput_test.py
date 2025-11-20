@@ -2,7 +2,6 @@ import argparse
 import json
 import multiprocessing
 import os
-import subprocess
 import sys
 import time
 from datetime import datetime
@@ -12,9 +11,21 @@ from parse_load_test_logs import show_load_test_results
 
 import groundlight_helpers as glh
 import image_helpers as imgh
+from system_helpers import SystemMonitor
 
 SUPPORTED_DETECTOR_MODES = {"BINARY", "COUNT"}
 DETECTOR_GROUP_NAME = "Load Testing"
+
+
+def _create_runtime_directory() -> tuple[str, str]:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    load_tests_dir = os.path.join(script_dir, "load_tests")
+    os.makedirs(load_tests_dir, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    runtime_dir = os.path.join(load_tests_dir, timestamp)
+    os.makedirs(runtime_dir, exist_ok=True)
+    log_file = os.path.join(runtime_dir, "load_test.log")
+    return runtime_dir, log_file
 
 
 def _provision_detector(
@@ -72,64 +83,6 @@ def _provision_detector(
     print(f'Inference pod ready for {detector.id}.')
 
     return detector, generate_image, generate_image_kwargs
-
-
-def _monitor_gpu_usage(log_file: str, duration: float, sample_interval: float = 1.0) -> None:
-    """Periodically logs GPU utilization to the provided log file."""
-    end_time = time.time() + duration
-    util_uses_nvml = False
-    nvml = None
-    device_handles = []
-    try:
-        import pynvml as _pynvml
-
-        _pynvml.nvmlInit()
-        nvml = _pynvml
-        util_uses_nvml = True
-        device_count = nvml.nvmlDeviceGetCount()
-        for i in range(device_count):
-            device_handles.append(nvml.nvmlDeviceGetHandleByIndex(i))
-    except Exception:
-        util_uses_nvml = False
-        nvml = None
-
-    try:
-        while time.time() < end_time:
-            utilization = 0.0
-            try:
-                if util_uses_nvml and nvml is not None and device_handles:
-                    totals = []
-                    for handle in device_handles:
-                        rates = nvml.nvmlDeviceGetUtilizationRates(handle)
-                        totals.append(float(rates.gpu))
-                    if totals:
-                        utilization = sum(totals) / len(totals)
-                else:
-                    output = subprocess.check_output(
-                        ["nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
-                        stderr=subprocess.DEVNULL,
-                        text=True,
-                    )
-                    values = [float(line.strip()) for line in output.strip().splitlines() if line.strip()]
-                    if values:
-                        utilization = sum(values) / len(values)
-            except Exception:
-                utilization = 0.0
-
-            log_data = {
-                "asctime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "event": "gpu",
-                "gpu_utilization": round(utilization, 2),
-            }
-            with open(log_file, "a") as log:
-                log.write(json.dumps(log_data) + "\n")
-            time.sleep(sample_interval)
-    finally:
-        try:
-            if util_uses_nvml and nvml is not None:
-                nvml.nvmlShutdown()
-        except Exception:
-            pass
 
 
 def send_image_requests(  # noqa: PLR0913
@@ -233,11 +186,6 @@ def incremental_client_ramp_up(  # noqa: PLR0913
     start_time = time.time()
     num_detectors = len(detectors)
 
-    gpu_monitor = multiprocessing.Process(
-        target=_monitor_gpu_usage, args=(log_file, total_duration)
-    )
-    gpu_monitor.start()
-
     for num_clients_ramping_to in ramp_steps:
         print(f"Ramping up to {num_clients_ramping_to} clients.")
         with open(log_file, "a") as log:
@@ -270,13 +218,11 @@ def incremental_client_ramp_up(  # noqa: PLR0913
 
     for process in active_processes:
         process.join()
-    gpu_monitor.join()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Load test an endpoint by submitting generated images.")
     parser.add_argument("detector_mode", choices=SUPPORTED_DETECTOR_MODES, help="Detector mode to test.")
-    parser.add_argument("--log-file", required=True, help="Path to write load test logs.")
     parser.add_argument("--max-clients", type=int, default=10, help="Number of processes to ramp up to.")
     parser.add_argument("--step-size", type=int, default=1, help="Number of clients to add at each step.")
     parser.add_argument("--use-preset-schedule", action="store_true", help="Enable using a preset schedule.")
@@ -294,6 +240,9 @@ if __name__ == "__main__":
         gl, gl_cloud, args.detector_mode, args.image_width, args.image_height
     )
 
+    runtime_dir, log_file = _create_runtime_directory()
+    print(f"Writing load test artifacts to {runtime_dir}.")
+
     for _ in range(50):
         img, _, _ = generate_image(**generate_image_kwargs)
         iq = gl.submit_image_query(detector, img, **glh.IQ_KWARGS_FOR_NO_ESCALATION)
@@ -304,17 +253,22 @@ if __name__ == "__main__":
     if args.use_preset_schedule:
         print("Using preset schedule. Step size and max clients will be ignored.")
 
-    incremental_client_ramp_up(
-        args.max_clients,
-        args.step_size,
-        args.requests_per_second,
-        detectors,
-        args.detector_mode,
-        args.image_width,
-        args.image_height,
-        args.log_file,
-        args.time_between_ramp,
-        args.use_preset_schedule,
-    )
+    system_monitor = SystemMonitor(log_file)
+    system_monitor.start()
+    try:
+        incremental_client_ramp_up(
+            args.max_clients,
+            args.step_size,
+            args.requests_per_second,
+            detectors,
+            args.detector_mode,
+            args.image_width,
+            args.image_height,
+            log_file,
+            args.time_between_ramp,
+            args.use_preset_schedule,
+        )
+    finally:
+        system_monitor.stop()
 
-    show_load_test_results(args.log_file, args.requests_per_second)
+    show_load_test_results(log_file, args.requests_per_second, output_dir=runtime_dir)
