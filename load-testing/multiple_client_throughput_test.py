@@ -2,39 +2,173 @@ import argparse
 import json
 import multiprocessing
 import os
+import subprocess
 import sys
 import time
 from datetime import datetime
 
-from config import (
-    DETECTOR_IDS,
-    ENDPOINT_URL,
-    IMAGE_PATH,
-    LOG_FILE,
-    NUM_OBJECTS_EXPECTED,
-    REQUESTS_PER_SECOND,
-    TIME_BETWEEN_RAMP,
-)
-from groundlight import Detector, Groundlight
+from groundlight import ExperimentalApi
 from parse_load_test_logs import show_load_test_results
 
-if ENDPOINT_URL == "":
-    raise ValueError("ENDPOINT_URL cannot be an empty string.")
+import groundlight_helpers as glh
+import image_helpers as imgh
+
+SUPPORTED_DETECTOR_MODES = {"BINARY", "COUNT"}
+DETECTOR_GROUP_NAME = "Load Testing"
+
+
+def _provision_detector(
+    gl: ExperimentalApi, gl_cloud: ExperimentalApi, detector_mode: str, image_width: int, image_height: int
+):
+    TRAINING_TIMEOUT_SEC = 60 * 20
+    INFERENCE_POD_READY_TIMEOUT_SEC = 60 * 10
+
+    detector_name = f"Throughput Test {image_width} x {image_height} - {detector_mode}"
+    if detector_mode == "BINARY":
+        detector = gl.get_or_create_detector(
+            name=detector_name,
+            query="Is the image background black?",
+            group_name=DETECTOR_GROUP_NAME,
+        )
+        generate_image = imgh.generate_random_binary_image
+        generate_image_kwargs = {
+            "gl": gl,
+            "image_width": image_width,
+            "image_height": image_height,
+        }
+    elif detector_mode == "COUNT":
+        class_name = "circle"
+        max_count = 10
+        detector = glh.get_or_create_count_detector(
+            gl,
+            name=detector_name,
+            class_name=class_name,
+            max_count=max_count,
+            group_name=DETECTOR_GROUP_NAME,
+        )
+        generate_image = imgh.generate_random_count_image
+        generate_image_kwargs = {
+            "gl": gl,
+            "image_width": image_width,
+            "image_height": image_height,
+            "class_name": class_name,
+            "max_count": max_count,
+        }
+    else:
+        raise ValueError(f"Detector mode {detector_mode} not recognized.")
+
+    pipeline_configs = glh.get_detector_pipeline_configs(gl, detector.id)
+    latest_edge_pipeline_config_in_cloud = pipeline_configs.get("pipeline_config")
+
+    stats = glh.get_detector_evaluation(gl, detector.id)
+    if not glh.detector_is_sufficiently_trained(stats, 0.6, 30):
+        glh.prime_detector(gl_cloud, detector, 30, image_width, image_height)
+        glh.wait_until_sufficiently_trained(gl, detector, 0.6, 30, timeout_sec=TRAINING_TIMEOUT_SEC)
+
+    print(f'Waiting for inference pod to be ready for {detector.id}...')
+    glh.wait_for_ready_inference_pod(
+        gl, detector, image_width, image_height, latest_edge_pipeline_config_in_cloud, timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC
+    )
+    print(f'Inference pod ready for {detector.id}.')
+
+    return detector, generate_image, generate_image_kwargs
+
+
+def _monitor_gpu_usage(log_file: str, duration: float, sample_interval: float = 1.0) -> None:
+    """Periodically logs GPU utilization to the provided log file."""
+    end_time = time.time() + duration
+    util_uses_nvml = False
+    nvml = None
+    device_handles = []
+    try:
+        import pynvml as _pynvml
+
+        _pynvml.nvmlInit()
+        nvml = _pynvml
+        util_uses_nvml = True
+        device_count = nvml.nvmlDeviceGetCount()
+        for i in range(device_count):
+            device_handles.append(nvml.nvmlDeviceGetHandleByIndex(i))
+    except Exception:
+        util_uses_nvml = False
+        nvml = None
+
+    try:
+        while time.time() < end_time:
+            utilization = 0.0
+            try:
+                if util_uses_nvml and nvml is not None and device_handles:
+                    totals = []
+                    for handle in device_handles:
+                        rates = nvml.nvmlDeviceGetUtilizationRates(handle)
+                        totals.append(float(rates.gpu))
+                    if totals:
+                        utilization = sum(totals) / len(totals)
+                else:
+                    output = subprocess.check_output(
+                        ["nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
+                        stderr=subprocess.DEVNULL,
+                        text=True,
+                    )
+                    values = [float(line.strip()) for line in output.strip().splitlines() if line.strip()]
+                    if values:
+                        utilization = sum(values) / len(values)
+            except Exception:
+                utilization = 0.0
+
+            log_data = {
+                "asctime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "gpu",
+                "gpu_utilization": round(utilization, 2),
+            }
+            with open(log_file, "a") as log:
+                log.write(json.dumps(log_data) + "\n")
+            time.sleep(sample_interval)
+    finally:
+        try:
+            if util_uses_nvml and nvml is not None:
+                nvml.nvmlShutdown()
+        except Exception:
+            pass
 
 
 def send_image_requests(  # noqa: PLR0913
     process_id: int,
-    detector: Detector,
-    gl_client: Groundlight,
+    detector_id: str,
+    detector_mode: str,
+    image_width: int,
+    image_height: int,
     num_requests_per_second: float,
     duration: float,
     log_file: str,
 ):
     """Sends image requests to a Groundlight endpoint for a specified duration and logs results."""
-    os.makedirs(os.path.dirname(log_file), exist_ok=True)
+    log_dir = os.path.dirname(log_file)
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
 
-    # Prevent errors from appearing in terminal
     sys.stderr = open(os.devnull, "w")
+
+    gl = ExperimentalApi()
+    glh.error_if_endpoint_is_cloud(gl)
+    detector = gl.get_detector(detector_id)
+
+    if detector_mode == "BINARY":
+        generate_image = imgh.generate_random_binary_image
+        generate_image_kwargs = {
+            "gl": gl,
+            "image_width": image_width,
+            "image_height": image_height,
+        }
+    else:
+        generate_image = imgh.generate_random_count_image
+        generate_image_kwargs = {
+            "gl": gl,
+            "image_width": image_width,
+            "image_height": image_height,
+            "class_name": "circle",
+            "max_count": 10,
+        }
 
     start_time = time.time()
     request_number = 1
@@ -42,15 +176,16 @@ def send_image_requests(  # noqa: PLR0913
     while time.time() - start_time < duration:
         log_data = {
             "asctime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "event": "request",
             "worker_number": process_id,
             "request_number": request_number,
         }
         request_start_time = time.time()
 
         try:
-            answer = gl_client.ask_ml(detector=detector, image=IMAGE_PATH, wait=1)
-            if NUM_OBJECTS_EXPECTED is not None and answer.result.count != NUM_OBJECTS_EXPECTED:
-                print(f"Error: Expected count {NUM_OBJECTS_EXPECTED}, got {answer.result.count}")
+            image, _, _ = generate_image(**generate_image_kwargs)
+            iq = gl.submit_image_query(detector, image, **glh.IQ_KWARGS_FOR_NO_ESCALATION)
+            glh.error_if_not_from_edge(iq)
             log_data.update({"latency": round(time.time() - request_start_time, 4), "success": True})
         except Exception as e:
             log_data.update({"latency": round(time.time() - request_start_time, 4), "success": False, "error": str(e)})
@@ -59,7 +194,6 @@ def send_image_requests(  # noqa: PLR0913
             log.write(json.dumps(log_data) + "\n")
 
         request_number += 1
-
         time.sleep(max(0, (1 / num_requests_per_second) - (time.time() - request_start_time)))
 
 
@@ -67,91 +201,120 @@ def incremental_client_ramp_up(  # noqa: PLR0913
     max_processes: int,
     step_size: int,
     requests_per_second: int,
-    detectors: list[Detector],
-    gl_client: Groundlight,
+    detectors: list[str],
+    detector_mode: str,
+    image_width: int,
+    image_height: int,
+    log_file: str,
+    time_between_ramp: int,
     use_preset_schedule: bool = False,
 ):
     """Ramps up the number of client processes over time and distributes them across multiple detectors."""
-    if os.path.exists(LOG_FILE):
-        os.remove(LOG_FILE)
-    os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+    if os.path.exists(log_file):
+        os.remove(log_file)
+    log_dir = os.path.dirname(log_file)
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
 
     if use_preset_schedule:
         ramp_steps = [1, 2, 3, 4, 5, 10, 15, 20, 30, 40, 50, 60]
-        print(f"Using preset ramp schedule: {ramp_steps} with {TIME_BETWEEN_RAMP} seconds between each step.")
+        print(f"Using preset ramp schedule: {ramp_steps} with {time_between_ramp} seconds between each step.")
     else:
         ramp_steps = [step_size * i for i in range(1, round((max_processes / step_size)) + 1)]
         print(
-            f"Using step size of {step_size} with {TIME_BETWEEN_RAMP} seconds between each step. "
+            f"Using step size of {step_size} with {time_between_ramp} seconds between each step. "
             f"Ramp schedule is: {ramp_steps}"
         )
 
-    total_duration = TIME_BETWEEN_RAMP * len(ramp_steps)
+    total_duration = time_between_ramp * len(ramp_steps)
     print(f"Ramping up to {ramp_steps[-1]} over {total_duration:.2f} seconds.")
 
     active_processes = []
     start_time = time.time()
     num_detectors = len(detectors)
 
+    gpu_monitor = multiprocessing.Process(
+        target=_monitor_gpu_usage, args=(log_file, total_duration)
+    )
+    gpu_monitor.start()
+
     for num_clients_ramping_to in ramp_steps:
         print(f"Ramping up to {num_clients_ramping_to} clients.")
-        with open(LOG_FILE, "a") as log:
+        with open(log_file, "a") as log:
             log.write(f"RAMP {num_clients_ramping_to}\n")
-        # Start new processes in incremental steps
         num_existing_clients = len(active_processes)
         for _ in range(num_clients_ramping_to - num_existing_clients):
             process_id = len(active_processes)
             remaining_time = total_duration - (time.time() - start_time)
-            # Distribute clients across detectors
-            detector = detectors[process_id % num_detectors]
+            detector_id = detectors[process_id % num_detectors]
 
             process = multiprocessing.Process(
                 target=send_image_requests,
                 args=(
                     process_id,
-                    detector,
-                    gl_client,
+                    detector_id,
+                    detector_mode,
+                    image_width,
+                    image_height,
                     requests_per_second,
                     remaining_time,
-                    LOG_FILE,
+                    log_file,
                 ),
             )
             process.start()
             active_processes.append(process)
 
         print(f"Running with {len(active_processes)} clients...")
+        print(f"Sleeping for {time_between_ramp} seconds.")
+        time.sleep(time_between_ramp)
 
-        # Allow processes to run for some time before ramping up again
-        print(f"Sleeping for {TIME_BETWEEN_RAMP} seconds.")
-        time.sleep(TIME_BETWEEN_RAMP)
-
-    # Ensure all processes finish
     for process in active_processes:
         process.join()
+    gpu_monitor.join()
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Load test an endpoint by submitting images.")
-    parser.add_argument("--max-clients", type=int, default=10, help="Number of processes to ramp up to")
-    parser.add_argument(
-        "--step-size", type=int, default=1, help="Number of clients to add at each step in ramp-up mode."
-    )
+    parser = argparse.ArgumentParser(description="Load test an endpoint by submitting generated images.")
+    parser.add_argument("detector_mode", choices=SUPPORTED_DETECTOR_MODES, help="Detector mode to test.")
+    parser.add_argument("--log-file", required=True, help="Path to write load test logs.")
+    parser.add_argument("--max-clients", type=int, default=10, help="Number of processes to ramp up to.")
+    parser.add_argument("--step-size", type=int, default=1, help="Number of clients to add at each step.")
     parser.add_argument("--use-preset-schedule", action="store_true", help="Enable using a preset schedule.")
+    parser.add_argument("--time-between-ramp", type=int, default=30, help="Seconds to run each ramp step.")
+    parser.add_argument("--requests-per-second", type=int, default=10, help="Per-client request rate.")
+    parser.add_argument("--image-width", type=int, default=640)
+    parser.add_argument("--image-height", type=int, default=480)
     args = parser.parse_args()
 
-    gl = Groundlight(endpoint=ENDPOINT_URL)
+    gl = ExperimentalApi()
+    glh.error_if_endpoint_is_cloud(gl)
+    gl_cloud = ExperimentalApi(endpoint=glh.CLOUD_ENDPOINT_PROD)
 
-    # Fetch detectors ahead of time
-    detectors = [gl.get_detector(id=detector_id) for detector_id in DETECTOR_IDS]
-    if len(detectors) == 0:
-        raise ValueError("At least one detector must be specified in the config.")
+    detector, generate_image, generate_image_kwargs = _provision_detector(
+        gl, gl_cloud, args.detector_mode, args.image_width, args.image_height
+    )
+
+    for _ in range(50):
+        img, _, _ = generate_image(**generate_image_kwargs)
+        iq = gl.submit_image_query(detector, img, **glh.IQ_KWARGS_FOR_NO_ESCALATION)
+        glh.error_if_not_from_edge(iq)
+
+    detectors = [detector.id]
     print(f"Running load test for {len(detectors)} detector(s).")
-
     if args.use_preset_schedule:
         print("Using preset schedule. Step size and max clients will be ignored.")
 
     incremental_client_ramp_up(
-        args.max_clients, args.step_size, REQUESTS_PER_SECOND, detectors, gl, args.use_preset_schedule
+        args.max_clients,
+        args.step_size,
+        args.requests_per_second,
+        detectors,
+        args.detector_mode,
+        args.image_width,
+        args.image_height,
+        args.log_file,
+        args.time_between_ramp,
+        args.use_preset_schedule,
     )
 
-    show_load_test_results()
+    show_load_test_results(args.log_file, args.requests_per_second)
