@@ -7,7 +7,7 @@ import time
 from datetime import datetime
 
 from groundlight import ExperimentalApi
-from parse_load_test_logs import show_load_test_results
+from parse_load_test_logs import plot_load_test_results
 
 import groundlight_helpers as glh
 import image_helpers as imgh
@@ -271,4 +271,4 @@ if __name__ == "__main__":
     finally:
         system_monitor.stop()
 
-    show_load_test_results(log_file, args.requests_per_second, output_dir=runtime_dir)
+    plot_load_test_results(log_file, args.requests_per_second, output_dir=runtime_dir)

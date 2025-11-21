@@ -18,7 +18,6 @@ class LoadTestResults(BaseModel):
     gpu_by_time: dict[datetime, float]
     cpu_by_time: dict[datetime, float]
 
-
 def parse_log_file(log_file: str) -> LoadTestResults:
     """Parse the log file to gather load test results."""
     start_time = None
@@ -119,7 +118,7 @@ def plot_throughput_and_system_utilizationby_time(
     cpu_utilization = [value for _, value in cpu_items]
 
     # Create the main plot
-    fig, ax1 = plt.subplots(figsize=(8, 6))
+    fig, ax1 = plt.subplots(figsize=(10, 6))
 
     # Plot throughput, successes, and errors on the main y-axis
     ax1.plot(request_elapsed_seconds, request_rate, linestyle="-", color="#1f77b4", label="Throughput", alpha=0.9)
@@ -136,10 +135,11 @@ def plot_throughput_and_system_utilizationby_time(
     ax1.set_xlabel("Elapsed Time (s)")
     ax1.set_ylabel("Requests / Second")
     ax1.grid(True)
-    ax1.legend(loc="upper left")
-    # Set a fixed y-axis limit to avoid it adjusting based on the expected response rate
     combined_rates = (*request_rate, *success_rate, *error_rate, *expected_response_rate)
-    ax1.set_ylim((0, max(combined_rates) * 1.4 if combined_rates else 1))
+    max_expected_requests = max(expected_response_rate) if expected_response_rate else 0
+    max_requests = max_expected_requests or (max(combined_rates) if combined_rates else 0)
+    ylim_upper = max_requests if max_requests else 1
+    ax1.set_ylim((0, ylim_upper))
 
     # Create system utilization axis for CPU/GPU
     utilization_axis = None
@@ -185,13 +185,18 @@ def plot_throughput_and_system_utilizationby_time(
         client_axis.set_ylim(ax1.get_ylim())
     client_axis.set_ylabel("Number of Clients")
 
-    if utilization_lines:
-        utilization_axis.legend(loc="upper right")
-
     # Set title and save the figure
     plt.title("Throughput and System Utilization Over Time")
 
+    handles, labels = ax1.get_legend_handles_labels()
+    if utilization_axis:
+        util_handles, util_labels = utilization_axis.get_legend_handles_labels()
+        handles.extend(util_handles)
+        labels.extend(util_labels)
+    ax1.legend(handles, labels, loc="upper left")
+
     # Save the figure
+    ax1.set_xlim(left=0)
     fig.tight_layout()
     os.makedirs(output_dir, exist_ok=True)
     output_file = os.path.join(output_dir, "throughput_and_system_utilization_over_time.png")
@@ -241,7 +246,7 @@ def plot_latency_over_time(
     print(f"Plot saved to: {output_file}")
 
 
-def show_load_test_results(log_file: str, requests_per_second: int, output_dir: str | None = None):
+def plot_load_test_results(log_file: str, requests_per_second: int, output_dir: str | None = None):
     if not os.path.exists(log_file):
         print(f"Log file {log_file} not found.")
         return
