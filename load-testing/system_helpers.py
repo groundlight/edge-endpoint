@@ -1,24 +1,12 @@
-import importlib
 import json
 import multiprocessing
 import os
-import sys
 import time
 from datetime import datetime
 from typing import Optional
 
 import psutil
-
-try:  # pragma: no cover - compatibility shim for Python >=3.12
-    import distutils  # type: ignore  # noqa: F401
-except ModuleNotFoundError:  # pragma: no cover
-    try:
-        distutils = importlib.import_module("setuptools._distutils")  # type: ignore
-        sys.modules["distutils"] = distutils  # type: ignore
-    except ModuleNotFoundError as exc:  # pragma: no cover
-        raise ImportError("setuptools is required for GPUtil on Python >=3.12") from exc
-
-import GPUtil  # type: ignore
+import GPUtil
 
 
 class SystemMonitor:

@@ -11,7 +11,6 @@ from pydantic import BaseModel
 class LoadTestResults(BaseModel):
     start_time: datetime
     average_latency_by_time: dict[datetime, float]
-    successes_by_time: dict[datetime, int]
     errors_by_time: dict[datetime, int]
     requests_by_time: dict[datetime, int]
     clients_by_time: dict[datetime, int]
@@ -22,7 +21,6 @@ def parse_log_file(log_file: str) -> LoadTestResults:
     """Parse the log file to gather load test results."""
     start_time = None
     latency_buckets = {}
-    success_buckets = {}
     error_buckets = {}
     total_request_buckets = {}
     client_buckets = {}
@@ -57,16 +55,13 @@ def parse_log_file(log_file: str) -> LoadTestResults:
                 latency_buckets[time_bucket].append(log_data["latency"])
 
                 # Bucketing throughput
-                success_buckets.setdefault(time_bucket, 0)
                 error_buckets.setdefault(time_bucket, 0)
                 total_request_buckets.setdefault(time_bucket, 0)
-                client_buckets.setdefault(time_bucket, num_clients)
+                client_buckets[time_bucket] = num_clients
 
                 total_request_buckets[time_bucket] += 1
                 if not log_data["success"]:
                     error_buckets[time_bucket] += 1
-                else:
-                    success_buckets[time_bucket] += 1
             elif event_type == "cpu":
                 cpu_buckets.setdefault(time_bucket, [])
                 cpu_buckets[time_bucket].append(float(log_data.get("cpu_percent", 0.0)))
@@ -81,7 +76,6 @@ def parse_log_file(log_file: str) -> LoadTestResults:
     output_dict = {
         "start_time": start_time,
         "average_latency_by_time": average_latencies,
-        "successes_by_time": success_buckets,
         "errors_by_time": error_buckets,
         "requests_by_time": total_request_buckets,
         "clients_by_time": client_buckets,
@@ -97,7 +91,6 @@ def plot_throughput_and_system_utilizationby_time(
     output_dir: str,
 ):
     # Sort the latency data by time
-    success_times, success_rate = zip(*sorted(load_test_results.successes_by_time.items()))
     error_times, error_rate = zip(*sorted(load_test_results.errors_by_time.items()))
     request_times, request_rate = zip(*sorted(load_test_results.requests_by_time.items()))
     client_items = sorted(load_test_results.clients_by_time.items())
@@ -106,7 +99,6 @@ def plot_throughput_and_system_utilizationby_time(
 
     # Calculate elapsed time in seconds
     start_time = load_test_results.start_time
-    success_elapsed_seconds = [(time - start_time).total_seconds() for time in success_times]
     error_elapsed_seconds = [(time - start_time).total_seconds() for time in error_times]
     request_elapsed_seconds = [(time - start_time).total_seconds() for time in request_times]
     client_elapsed_seconds = [(time - start_time).total_seconds() for time in client_times]
@@ -120,22 +112,21 @@ def plot_throughput_and_system_utilizationby_time(
     # Create the main plot
     fig, ax1 = plt.subplots(figsize=(10, 6))
 
-    # Plot throughput, successes, and errors on the main y-axis
-    ax1.plot(request_elapsed_seconds, request_rate, linestyle="-", color="#1f77b4", label="Throughput", alpha=0.9)
-    ax1.plot(success_elapsed_seconds, success_rate, linestyle="--", color="green", label="Successes", alpha=0.9)
+    # Plot throughput and errors on the main y-axis
+    ax1.plot(request_elapsed_seconds, request_rate, linestyle="-", color="green", label="Throughput", alpha=0.9)
     ax1.plot(error_elapsed_seconds, error_rate, linestyle="-", color="red", label="Errors", alpha=0.9)
-    ax1.plot(
+    ax1.step(
         client_elapsed_seconds,
         expected_response_rate,
-        linestyle="-",
+        where="post",
         color="black",
         label="Expected Requests / Num Clients",
         alpha=0.9,
     )
     ax1.set_xlabel("Elapsed Time (s)")
-    ax1.set_ylabel("Requests / Second")
+    ax1.set_ylabel("Total Requests / Second")
     ax1.grid(True)
-    combined_rates = (*request_rate, *success_rate, *error_rate, *expected_response_rate)
+    combined_rates = (*request_rate, *error_rate, *expected_response_rate)
     max_expected_requests = max(expected_response_rate) if expected_response_rate else 0
     max_requests = max_expected_requests or (max(combined_rates) if combined_rates else 0)
     ylim_upper = max_requests if max_requests else 1
