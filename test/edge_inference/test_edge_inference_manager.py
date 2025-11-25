@@ -175,8 +175,9 @@ class TestEdgeInferenceManager:
             "secondary_predictions": None,
         }
 
-        with tempfile.TemporaryDirectory() as temp_dir, mock.patch.object(
-            EdgeInferenceManager, "MODEL_REPOSITORY", temp_dir
+        with (
+            tempfile.TemporaryDirectory() as temp_dir,
+            mock.patch.object(EdgeInferenceManager, "MODEL_REPOSITORY", temp_dir),
         ):
             with mock.patch("app.core.edge_inference.submit_image_for_inference") as mock_submit:
                 mock_submit.return_value = mock_response
@@ -202,8 +203,9 @@ class TestEdgeInferenceManager:
             "secondary_predictions": None,
         }
 
-        with tempfile.TemporaryDirectory() as temp_dir, mock.patch.object(
-            EdgeInferenceManager, "MODEL_REPOSITORY", temp_dir
+        with (
+            tempfile.TemporaryDirectory() as temp_dir,
+            mock.patch.object(EdgeInferenceManager, "MODEL_REPOSITORY", temp_dir),
         ):
             with mock.patch("app.core.edge_inference.submit_image_for_inference") as mock_submit:
                 mock_submit.return_value = mock_response

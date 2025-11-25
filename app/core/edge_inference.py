@@ -782,9 +782,7 @@ def get_edge_inference_runtime_config_path(repository_root: str, detector_id: st
     return os.path.join(get_detector_models_dir(repository_root, detector_id), EDGE_INFERENCE_RUNTIME_CONFIG_FILENAME)
 
 
-def persist_edge_inference_runtime_config(
-    repository_root: str, detector_id: str, config: EdgeInferenceConfig
-) -> str:
+def persist_edge_inference_runtime_config(repository_root: str, detector_id: str, config: EdgeInferenceConfig) -> str:
     """
     Persist the runtime-safe subset of an EdgeInferenceConfig for later inspection (e.g., metrics).
     Only non-sensitive fields are saved.
