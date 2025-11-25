@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import shutil
@@ -666,6 +667,23 @@ def get_current_pipeline_config(model_dir: str, model_version: int) -> dict | No
         return None
 
 
+def get_predictor_metadata(model_dir: str, model_version: int) -> dict | None:
+    """Read the predictor_metadata.json file in the current model version directory and return the result as a dictionary."""
+    metadata_file = os.path.join(model_dir, str(model_version), "predictor_metadata.json")
+    if not os.path.exists(metadata_file):
+        logger.warning(
+            f"No existing predictor_metadata.json file found in {os.path.join(model_dir, str(model_version))}"
+        )
+        return None
+
+    try:
+        with open(metadata_file, "r") as f:
+            return json.load(f)
+    except json.JSONDecodeError as exc:
+        logger.error(f"Failed to parse predictor metadata at {metadata_file}: {exc}")
+        return None
+
+
 def create_file_from_template(template_values: dict, destination: str, template: str) -> None:
     """
     This is a helper function to create a file from a Jinja2 template. In your template file,
@@ -784,7 +802,7 @@ def persist_edge_inference_runtime_config(
     return config_path
 
 
-def load_persisted_edge_inference_config(repository_root: str, detector_id: str) -> dict | None:
+def load_edge_inference_config(repository_root: str, detector_id: str) -> dict | None:
     config_path = get_edge_inference_runtime_config_path(repository_root, detector_id)
     if not os.path.exists(config_path):
         logger.debug(f"No persisted edge inference config found at {config_path}")

@@ -13,7 +13,7 @@ from .edge_inference import (
     get_edge_inference_deployment_name,
     get_edge_inference_model_name,
     get_edge_inference_service_name,
-    load_persisted_edge_inference_config,
+    load_edge_inference_config,
 )
 from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH, MODEL_REPOSITORY_PATH
 
@@ -44,7 +44,7 @@ class InferenceDeploymentManager:
         ann["groundlight.dev/model-name"] = get_edge_inference_model_name(detector_id, is_oodd)
         ann["groundlight.dev/model-version"] = str(model_version)
 
-        config = load_persisted_edge_inference_config(MODEL_REPOSITORY_PATH, detector_id) or {}
+        config = load_edge_inference_config(MODEL_REPOSITORY_PATH, detector_id) or {}
         for field, annotation_key in EDGE_INFERENCE_CONFIG_ANNOTATIONS.items():
             value = config.get(field)
             if value is None:
