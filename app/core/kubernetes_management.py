@@ -13,10 +13,24 @@ from .edge_inference import (
     get_edge_inference_deployment_name,
     get_edge_inference_model_name,
     get_edge_inference_service_name,
+    load_persisted_edge_inference_config,
 )
 from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH, MODEL_REPOSITORY_PATH
 
 logger = logging.getLogger(__name__)
+
+EDGE_INFERENCE_CONFIG_ANNOTATIONS = {
+    "enabled": "groundlight.dev/edge-enabled",
+    "always_return_edge_prediction": "groundlight.dev/edge-always-return-edge-prediction",
+    "disable_cloud_escalation": "groundlight.dev/edge-disable-cloud-escalation",
+    "min_time_between_escalations": "groundlight.dev/edge-min-time-between-escalations",
+}
+
+
+def _format_annotation_value(value):
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
 
 
 class InferenceDeploymentManager:
@@ -29,6 +43,13 @@ class InferenceDeploymentManager:
         ann["groundlight.dev/detector-id"] = detector_id
         ann["groundlight.dev/model-name"] = get_edge_inference_model_name(detector_id, is_oodd)
         ann["groundlight.dev/model-version"] = str(model_version)
+
+        config = load_persisted_edge_inference_config(MODEL_REPOSITORY_PATH, detector_id) or {}
+        for field, annotation_key in EDGE_INFERENCE_CONFIG_ANNOTATIONS.items():
+            value = config.get(field)
+            if value is None:
+                continue
+            ann[annotation_key] = _format_annotation_value(value)
 
     def _annotate_pod_template(self, doc: dict, detector_id: str, is_oodd: bool, model_version: int | None) -> None:
         """Ensure the Pod template has an annotations map and set runtime values on it."""

@@ -19,6 +19,14 @@ from app.core.utils import ModelInfoBase, ModelInfoWithBinary, parse_model_info
 
 logger = logging.getLogger(__name__)
 
+EDGE_INFERENCE_RUNTIME_CONFIG_FILENAME = "edge_inference_config.yaml"
+EDGE_INFERENCE_CONFIG_FIELDS = (
+    "enabled",
+    "always_return_edge_prediction",
+    "disable_cloud_escalation",
+    "min_time_between_escalations",
+)
+
 # Simple TTL cache for is_edge_inference_ready checks to avoid having to re-check every time a request is processed.
 # This will be process-specific, so each edge-endpoint worker will have its own cache instance.
 ttl_cache = TTLCache(maxsize=128, ttl=5)
@@ -247,6 +255,8 @@ class EdgeInferenceManager:
 
         if detector_inference_configs:
             self.detector_inference_configs = detector_inference_configs
+            for detector_id, detector_config in self.detector_inference_configs.items():
+                persist_edge_inference_runtime_config(self.MODEL_REPOSITORY, detector_id, detector_config)
             self.inference_client_urls = {
                 detector_id: get_edge_inference_service_name(detector_id) + ":8000"
                 for detector_id in self.detector_inference_configs.keys()
@@ -284,6 +294,10 @@ class EdgeInferenceManager:
                     get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
                 )
             logger.info(f"Set up edge inference for {detector_id}")
+
+        config = self.detector_inference_configs.get(detector_id)
+        if config is not None:
+            persist_edge_inference_runtime_config(self.MODEL_REPOSITORY, detector_id, config)
 
     def detector_configured_for_edge_inference(self, detector_id: str) -> bool:
         """
@@ -744,3 +758,37 @@ def get_primary_edge_model_dir(repository_root: str, detector_id: str) -> str:
 
 def get_oodd_model_dir(repository_root: str, detector_id: str) -> str:
     return os.path.join(get_detector_models_dir(repository_root, detector_id), "oodd")
+
+
+def get_edge_inference_runtime_config_path(repository_root: str, detector_id: str) -> str:
+    return os.path.join(get_detector_models_dir(repository_root, detector_id), EDGE_INFERENCE_RUNTIME_CONFIG_FILENAME)
+
+
+def persist_edge_inference_runtime_config(
+    repository_root: str, detector_id: str, config: EdgeInferenceConfig
+) -> str:
+    """
+    Persist the runtime-safe subset of an EdgeInferenceConfig for later inspection (e.g., metrics).
+    Only non-sensitive fields are saved.
+    """
+    config_path = get_edge_inference_runtime_config_path(repository_root, detector_id)
+    os.makedirs(os.path.dirname(config_path), exist_ok=True)
+
+    serialized_config = {}
+    for field in EDGE_INFERENCE_CONFIG_FIELDS:
+        serialized_config[field] = getattr(config, field, None)
+
+    with open(config_path, "w") as f:
+        yaml.safe_dump(serialized_config, f, sort_keys=False)
+
+    return config_path
+
+
+def load_persisted_edge_inference_config(repository_root: str, detector_id: str) -> dict | None:
+    config_path = get_edge_inference_runtime_config_path(repository_root, detector_id)
+    if not os.path.exists(config_path):
+        logger.debug(f"No persisted edge inference config found at {config_path}")
+        return None
+
+    with open(config_path, "r") as f:
+        return yaml.safe_load(f) or {}

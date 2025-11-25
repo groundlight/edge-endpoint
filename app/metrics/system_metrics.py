@@ -9,8 +9,10 @@ import yaml
 from kubernetes import client, config
 
 from app.core.edge_inference import (
+    EDGE_INFERENCE_CONFIG_FIELDS,
     get_current_pipeline_config,
     get_primary_edge_model_dir,
+    load_persisted_edge_inference_config,
 )
 from app.core.file_paths import MODEL_REPOSITORY_PATH
 
@@ -200,6 +202,15 @@ def get_detector_details() -> str:
             detector_details[det_id] = {
                 "pipeline_config": pipeline_config_str,
                 "last_updated_time": started.isoformat() if started else None,
+            }
+
+            runtime_config = load_persisted_edge_inference_config(MODEL_REPOSITORY_PATH, det_id)
+            if runtime_config is None:
+                logger.warning(f"Edge inference config not found for detector {det_id}.")
+                runtime_config = {}
+
+            detector_details[det_id]["edge_inference_config"] = {
+                field: runtime_config.get(field) for field in EDGE_INFERENCE_CONFIG_FIELDS
             }
         else:
             pass  # We won't report any detector details until the detector has a ready pod
