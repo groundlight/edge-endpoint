@@ -9,7 +9,6 @@ import yaml
 from kubernetes import client, config
 
 from app.core.edge_inference import (
-    EDGE_INFERENCE_CONFIG_FIELDS,
     get_current_pipeline_config,
     get_predictor_metadata,
     get_primary_edge_model_dir,
