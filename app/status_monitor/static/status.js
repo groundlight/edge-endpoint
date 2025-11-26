@@ -125,7 +125,7 @@ const renderDetectorDetails = (rawDetails) => {
     const thead = document.createElement("thead");
     const headerRow = document.createElement("tr");
 
-    ["Detector", "Mode", "Pipeline", "Edge Config", "Last Updated"].forEach((heading) => {
+    ["Detector", "Pipeline", "Edge Config", "Last Updated"].forEach((heading) => {
         const th = document.createElement("th");
         th.textContent = heading;
         headerRow.appendChild(th);
@@ -144,12 +144,11 @@ const renderDetectorDetails = (rawDetails) => {
         idLine.appendChild(createDetectorLink(detectorId));
         const queryLine = document.createElement("div");
         queryLine.textContent = info.query || "—";
-        detectorCell.append(idLine, queryLine);
+        const modeLine = document.createElement("div");
+        modeLine.textContent = info.mode ? info.mode : "—";
+        modeLine.style.fontWeight = "bold";
+        detectorCell.append(idLine, queryLine, modeLine);
         row.appendChild(detectorCell);
-
-        const modeCell = document.createElement("td");
-        modeCell.textContent = info.mode || "—";
-        row.appendChild(modeCell);
 
         const pipelineCell = document.createElement("td");
         pipelineCell.appendChild(renderPipeline(info.pipeline_config));
