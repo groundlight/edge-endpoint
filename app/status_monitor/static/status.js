@@ -1,3 +1,69 @@
+const createDetectorLink = (detectorId) => {
+    const link = document.createElement("a");
+    link.href = `https://dashboard.groundlight.ai/reef/detectors/${detectorId}`;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = detectorId;
+    return link;
+};
+
+const renderPipeline = (pipelineConfig) => {
+    if (!pipelineConfig) {
+        return document.createTextNode("—");
+    }
+
+    const element = document.createElement("code");
+    element.textContent = pipelineConfig;
+    return element;
+};
+
+const formatTimestamp = (isoString) => {
+    if (!isoString) {
+        return null;
+    }
+
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) {
+        return null;
+    }
+
+    const formatter = new Intl.DateTimeFormat("en-US", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "numeric",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+        timeZoneName: "short",
+    });
+
+    const parts = formatter.formatToParts(date);
+    const getPart = (type) => parts.find((p) => p.type === type)?.value || "";
+    const dateStr = `${getPart("month")}/${getPart("day")}/${getPart("year")}`;
+    const timeStr = `${getPart("hour")}:${getPart("minute")}:${getPart("second")} ${getPart("dayPeriod")} ${getPart(
+        "timeZoneName",
+    )}`.trim();
+
+    const diffMs = Date.now() - date.getTime();
+    const diffSec = Math.max(0, Math.floor(diffMs / 1000));
+    let relative;
+    if (diffSec < 60) {
+        relative = `${diffSec} second${diffSec === 1 ? "" : "s"} ago`;
+    } else if (diffSec < 3600) {
+        const mins = Math.floor(diffSec / 60);
+        relative = `${mins} minute${mins === 1 ? "" : "s"} ago`;
+    } else if (diffSec < 86400) {
+        const hours = Math.floor(diffSec / 3600);
+        relative = `${hours} hour${hours === 1 ? "" : "s"} ago`;
+    } else {
+        const days = Math.floor(diffSec / 86400);
+        relative = `${days} day${days === 1 ? "" : "s"} ago`;
+    }
+
+    return { date: dateStr, time: timeStr, relative };
+};
+
 const parseIfJson = (value) => {
     if (typeof value === "string") {
         try {
@@ -20,18 +86,24 @@ const parseSection = (section) => {
     return parsed;
 };
 
-const createEdgeConfigList = (config) => {
+const createEdgeConfigTable = (config) => {
     if (!config || Object.keys(config).length === 0) {
         return document.createTextNode("—");
     }
 
-    const list = document.createElement("ul");
+    const table = document.createElement("table");
+    table.className = "edge-config-table";
     Object.entries(config).forEach(([key, value]) => {
-        const item = document.createElement("li");
-        item.textContent = `${key}: ${value}`;
-        list.appendChild(item);
+        const row = document.createElement("tr");
+        const keyCell = document.createElement("td");
+        keyCell.textContent = key;
+        const valueCell = document.createElement("td");
+        valueCell.textContent = value;
+        row.append(keyCell, valueCell);
+        table.appendChild(row);
     });
-    return list;
+
+    return table;
 };
 
 const renderDetectorDetails = (rawDetails) => {
@@ -44,7 +116,7 @@ const renderDetectorDetails = (rawDetails) => {
     if (detectorIds.length === 0) {
         const emptyState = document.createElement("div");
         emptyState.className = "empty-state";
-        emptyState.textContent = "No detector details available.";
+        emptyState.textContent = "No detectors are currently running on edge.";
         container.appendChild(emptyState);
         return;
     }
@@ -53,7 +125,7 @@ const renderDetectorDetails = (rawDetails) => {
     const thead = document.createElement("thead");
     const headerRow = document.createElement("tr");
 
-    ["Detector ID", "Pipeline", "Last Updated", "Mode", "Query", "Edge Config"].forEach((heading) => {
+    ["Detector", "Mode", "Pipeline", "Edge Config", "Last Updated"].forEach((heading) => {
         const th = document.createElement("th");
         th.textContent = heading;
         headerRow.appendChild(th);
@@ -67,24 +139,45 @@ const renderDetectorDetails = (rawDetails) => {
         const info = details[detectorId] || {};
         const row = document.createElement("tr");
 
-        const cells = [
-            detectorId,
-            info.pipeline_config || "—",
-            info.last_updated_time || "—",
-            info.mode || "—",
-            info.query || "—",
-        ];
+        const detectorCell = document.createElement("td");
+        const idLine = document.createElement("div");
+        idLine.appendChild(createDetectorLink(detectorId));
+        const queryLine = document.createElement("div");
+        queryLine.textContent = info.query || "—";
+        detectorCell.append(idLine, queryLine);
+        row.appendChild(detectorCell);
 
-        cells.forEach((value) => {
-            const td = document.createElement("td");
-            td.textContent = value;
-            row.appendChild(td);
-        });
+        const modeCell = document.createElement("td");
+        modeCell.textContent = info.mode || "—";
+        row.appendChild(modeCell);
+
+        const pipelineCell = document.createElement("td");
+        pipelineCell.appendChild(renderPipeline(info.pipeline_config));
+        row.appendChild(pipelineCell);
 
         const edgeConfigCell = document.createElement("td");
-        const edgeConfigContent = createEdgeConfigList(info.edge_inference_config);
+        const edgeConfigContent = createEdgeConfigTable(info.edge_inference_config);
         edgeConfigCell.appendChild(edgeConfigContent);
         row.appendChild(edgeConfigCell);
+
+        const lastUpdatedCell = document.createElement("td");
+        const timestampInfo = formatTimestamp(info.last_updated_time);
+        if (!timestampInfo) {
+            lastUpdatedCell.textContent = "—";
+        } else {
+            const dateLine = document.createElement("div");
+            dateLine.textContent = timestampInfo.date;
+
+            const timeLine = document.createElement("div");
+            timeLine.textContent = timestampInfo.time;
+
+            const relativeLine = document.createElement("div");
+            relativeLine.className = "timestamp-relative";
+            relativeLine.textContent = `(${timestampInfo.relative})`;
+
+            lastUpdatedCell.append(dateLine, timeLine, relativeLine);
+        }
+        row.appendChild(lastUpdatedCell);
 
         tbody.appendChild(row);
     });

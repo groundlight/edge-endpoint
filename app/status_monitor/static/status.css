@@ -61,6 +61,10 @@ pre {
     vertical-align: top;
 }
 
+.detector-details a {
+    color: #165a8a;
+}
+
 .detector-details th {
     background-color: #f0f6ff;
     text-align: left;
@@ -75,8 +79,30 @@ pre {
     padding-left: 18px;
 }
 
+.detector-details code {
+    white-space: pre-wrap;
+    display: block;
+    font-family: "Courier New", Courier, monospace;
+}
+
+.edge-config-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.edge-config-table td {
+    border: 1px solid #e5e5e5;
+    padding: 4px 6px;
+    font-size: 0.9em;
+}
+
 .detector-details .empty-state {
     font-style: italic;
     color: #555;
+}
+
+.timestamp-relative {
+    color: #555;
+    font-size: 0.85em;
 }
 
