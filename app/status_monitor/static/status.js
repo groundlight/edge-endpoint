@@ -109,6 +109,7 @@ const createEdgeConfigTable = (config) => {
 const renderDetectorDetails = (rawDetails) => {
     const container = document.getElementById("detector-details");
     container.innerHTML = "";
+    container.classList.remove("skeleton");
 
     const details = parseIfJson(rawDetails) || {};
     const detectorIds = Object.keys(details);
@@ -140,6 +141,7 @@ const renderDetectorDetails = (rawDetails) => {
         const row = document.createElement("tr");
 
         const detectorCell = document.createElement("td");
+        detectorCell.className = "detector-column";
         const idLine = document.createElement("div");
         idLine.appendChild(createDetectorLink(detectorId));
         const queryLine = document.createElement("div");
@@ -187,6 +189,9 @@ const renderDetectorDetails = (rawDetails) => {
 };
 
 document.addEventListener("DOMContentLoaded", () => {
+    const detectorDetailsContainer = document.getElementById("detector-details");
+    detectorDetailsContainer.classList.add("skeleton");
+
     fetch("/status/metrics.json")
         .then((response) => {
             if (!response.ok) {
@@ -207,6 +212,7 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("loading").style.display = "none";
         })
         .catch((error) => {
+            detectorDetailsContainer.classList.remove("skeleton");
             document.getElementById("loading").style.display = "none";
             document.getElementById("error").style.display = "block";
             console.error("Error fetching metrics:", error);

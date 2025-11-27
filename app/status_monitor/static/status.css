@@ -59,6 +59,7 @@ pre {
     white-space: pre-wrap;
     margin: 0;
     font-family: inherit;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 #loading {
@@ -70,6 +71,14 @@ pre {
     color: red;
     margin: 20px;
     display: none;
+}
+
+#detector-details.skeleton,
+#detector-details .empty-state {
+    background-color: var(--groundlight-white);
+    padding: 15px;
+    border-radius: 5px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .detector-details table {
@@ -124,6 +133,10 @@ pre {
     color: var(--groundlight-muted);
 }
 
+.detector-details .detector-column div:not(:last-child) {
+    margin-bottom: 8px;
+}
+
 .edge-config-table {
     width: 100%;
     border-collapse: collapse;
@@ -144,4 +157,3 @@ pre {
     color: var(--groundlight-muted);
     font-size: 0.85em;
 }
-
