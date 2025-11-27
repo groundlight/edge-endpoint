@@ -146,7 +146,7 @@ const renderDetectorDetails = (rawDetails) => {
         queryLine.textContent = info.query || "—";
         const modeLine = document.createElement("div");
         modeLine.textContent = info.mode ? info.mode : "—";
-        modeLine.style.fontWeight = "bold";
+        modeLine.className = "detector-mode";
         detectorCell.append(idLine, queryLine, modeLine);
         row.appendChild(detectorCell);
 
@@ -160,6 +160,7 @@ const renderDetectorDetails = (rawDetails) => {
         row.appendChild(edgeConfigCell);
 
         const lastUpdatedCell = document.createElement("td");
+        lastUpdatedCell.className = "last-updated";
         const timestampInfo = formatTimestamp(info.last_updated_time);
         if (!timestampInfo) {
             lastUpdatedCell.textContent = "—";
