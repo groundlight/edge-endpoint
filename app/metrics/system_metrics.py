@@ -10,7 +10,9 @@ from kubernetes import client, config
 
 from app.core.edge_inference import (
     get_current_pipeline_config,
+    get_predictor_metadata,
     get_primary_edge_model_dir,
+    load_edge_inference_config,
 )
 from app.core.file_paths import MODEL_REPOSITORY_PATH
 
@@ -197,10 +199,25 @@ def get_detector_details() -> str:
             else:
                 pipeline_config_str = str(cfg)  # This avoids the yaml end of document marker (...)
 
+            # Get the detector metadata
+            metadata = get_predictor_metadata(model_dir, model_version_int)
+            if metadata is None:
+                logger.warning(f"Predictor metadata not found for detector {det_id} at version {model_version_int}")
+            detector_query = metadata.get("text_query")
+            detector_mode = metadata.get("mode")
+
             detector_details[det_id] = {
                 "pipeline_config": pipeline_config_str,
                 "last_updated_time": started.isoformat() if started else None,
+                "query": detector_query,
+                "mode": detector_mode,
             }
+
+            edge_inference_config = load_edge_inference_config(MODEL_REPOSITORY_PATH, det_id)
+            if edge_inference_config is None:
+                logger.warning(f"Edge inference config not found for detector {det_id}.")
+            else:
+                detector_details[det_id]["edge_inference_config"] = edge_inference_config
         else:
             pass  # We won't report any detector details until the detector has a ready pod
 
