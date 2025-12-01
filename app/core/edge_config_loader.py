@@ -71,4 +71,3 @@ def get_detector_edge_configs_by_id() -> Dict[str, EdgeInferenceConfig]:
     root_config = load_edge_config()
     detector_configs = get_detector_inference_configs(root_config)
     return detector_configs or {}
-

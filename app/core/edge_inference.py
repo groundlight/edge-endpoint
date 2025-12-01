@@ -762,4 +762,3 @@ def get_primary_edge_model_dir(repository_root: str, detector_id: str) -> str:
 
 def get_oodd_model_dir(repository_root: str, detector_id: str) -> str:
     return os.path.join(get_detector_models_dir(repository_root, detector_id), "oodd")
-

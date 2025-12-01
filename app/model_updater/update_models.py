@@ -2,9 +2,9 @@ import logging
 import os
 import time
 
-from app.core.edge_config_loader import get_detector_inference_configs, load_edge_config
 from app.core.configs import RootEdgeConfig
 from app.core.database import DatabaseManager
+from app.core.edge_config_loader import get_detector_inference_configs, load_edge_config
 from app.core.edge_inference import (
     EdgeInferenceManager,
     delete_old_model_versions,
