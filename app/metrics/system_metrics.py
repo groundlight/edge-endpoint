@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_cpu_utilization() -> str:
-    """Returns the percentage of total CPU used."""
+    """Returns the percentage of total CPU used.."""
     percent = psutil.cpu_percent(interval=1)
     return percent
 
