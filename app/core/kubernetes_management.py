@@ -8,8 +8,6 @@ from kubernetes import client as kube_client
 from kubernetes import config
 from kubernetes.client import V1Deployment
 
-from .configs import EdgeInferenceConfig
-from .edge_config_loader import get_detector_edge_configs_by_id
 from .edge_inference import (
     get_current_model_version,
     get_edge_inference_deployment_name,
