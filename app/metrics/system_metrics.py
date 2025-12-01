@@ -210,10 +210,13 @@ def get_detector_details() -> str:
 
             # Get the detector metadata
             metadata = get_predictor_metadata(model_dir, model_version_int)
-            if metadata is None:
+            if metadata is not None:
+                detector_query = metadata.get("text_query")
+                detector_mode = metadata.get("mode")
+            else:
                 logger.warning(f"Predictor metadata not found for detector {det_id} at version {model_version_int}")
-            detector_query = metadata.get("text_query")
-            detector_mode = metadata.get("mode")
+                detector_query = None
+                detector_mode = None
 
             detector_details[det_id] = {
                 "pipeline_config": pipeline_config_str,
@@ -226,7 +229,7 @@ def get_detector_details() -> str:
             if edge_inference_config:
                 detector_details[det_id]["edge_inference_config"] = edge_inference_config
         else:
-            pass  # We won't report any detector details until the detector has a ready pod
+            pass # We won't report any detector details until the detector has a ready pod
 
     # Convert the dict to a JSON string to prevent opensearch from indexing all detector details
     return json.dumps(detector_details)
