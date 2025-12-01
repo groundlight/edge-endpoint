@@ -106,39 +106,41 @@ def detector_inference_config():
 class TestEdgeInferenceManager:
     def test_update_model_with_binary(self, edge_model_info_with_binary, oodd_model_info_with_binary):
         with tempfile.TemporaryDirectory() as temp_dir:
-            with mock.patch.object(EdgeInferenceManager, "MODEL_REPOSITORY", temp_dir):
-                with mock.patch("app.core.edge_inference.fetch_model_info") as mock_fetch:
-                    with mock.patch("app.core.edge_inference.get_object_using_presigned_url") as mock_get_from_s3:
-                        mock_get_from_s3.return_value = b"test_model"
-                        mock_fetch.return_value = (edge_model_info_with_binary, oodd_model_info_with_binary)
-                        edge_manager = EdgeInferenceManager(detector_inference_configs=None)
-                        detector_id = "test_detector"
-                        edge_manager.update_models_if_available(detector_id)
+            with (
+                mock.patch.object(EdgeInferenceManager, "MODEL_REPOSITORY", temp_dir),
+                mock.patch("app.core.edge_inference.fetch_model_info") as mock_fetch,
+                mock.patch("app.core.edge_inference.get_object_using_presigned_url") as mock_get_from_s3,
+            ):
+                mock_get_from_s3.return_value = b"test_model"
+                mock_fetch.return_value = (edge_model_info_with_binary, oodd_model_info_with_binary)
+                edge_manager = EdgeInferenceManager(detector_inference_configs=None)
+                detector_id = "test_detector"
+                edge_manager.update_models_if_available(detector_id)
 
-                    validate_model_directory(temp_dir, detector_id, 1, edge_model_info_with_binary)
-                    validate_model_directory(temp_dir, detector_id, 1, oodd_model_info_with_binary, is_oodd=True)
+                validate_model_directory(temp_dir, detector_id, 1, edge_model_info_with_binary)
+                validate_model_directory(temp_dir, detector_id, 1, oodd_model_info_with_binary, is_oodd=True)
 
-                    # Should create a new version for new model info
-                    mock_get_from_s3.return_value = b"test_model_2"
-                    edge_model_info_with_binary_2 = edge_model_info_with_binary
-                    edge_model_info_with_binary_2.model_binary_id = "test_binary_id_2"
-                    edge_model_info_with_binary_2.model_binary_url = "https://example.com/test_model_binary_url_2"
-                    oodd_model_info_with_binary_2 = oodd_model_info_with_binary
-                    oodd_model_info_with_binary_2.model_binary_id = "test_oodd_binary_id_2"
-                    oodd_model_info_with_binary_2.model_binary_url = "https://example.com/test_oodd_model_binary_url_2"
-                    mock_fetch.return_value = (edge_model_info_with_binary_2, oodd_model_info_with_binary_2)
-                    edge_manager.update_models_if_available(detector_id)
+                # Should create a new version for new model info
+                mock_get_from_s3.return_value = b"test_model_2"
+                edge_model_info_with_binary_2 = edge_model_info_with_binary
+                edge_model_info_with_binary_2.model_binary_id = "test_binary_id_2"
+                edge_model_info_with_binary_2.model_binary_url = "https://example.com/test_model_binary_url_2"
+                oodd_model_info_with_binary_2 = oodd_model_info_with_binary
+                oodd_model_info_with_binary_2.model_binary_id = "test_oodd_binary_id_2"
+                oodd_model_info_with_binary_2.model_binary_url = "https://example.com/test_oodd_model_binary_url_2"
+                mock_fetch.return_value = (edge_model_info_with_binary_2, oodd_model_info_with_binary_2)
+                edge_manager.update_models_if_available(detector_id)
 
-                    validate_model_directory(temp_dir, detector_id, 2, edge_model_info_with_binary_2)
-                    validate_model_directory(temp_dir, detector_id, 2, oodd_model_info_with_binary_2, is_oodd=True)
+                validate_model_directory(temp_dir, detector_id, 2, edge_model_info_with_binary_2)
+                validate_model_directory(temp_dir, detector_id, 2, oodd_model_info_with_binary_2, is_oodd=True)
 
-                with mock.patch("app.core.edge_inference.get_object_using_presigned_url") as mock_get_from_s3:
-                    edge_manager.update_models_if_available(detector_id)
-                    # Shouldn't pull a model from s3 if there is no new binary available
-                    mock_get_from_s3.assert_not_called()
-                    # Should not create a new version for the same model info
-                    assert not os.path.exists(os.path.join(temp_dir, detector_id, "primary", "3"))
-                    assert not os.path.exists(os.path.join(temp_dir, detector_id, "oodd", "3"))
+                mock_get_from_s3.return_value = b"test_model_2"
+                edge_manager.update_models_if_available(detector_id)
+                # Shouldn't pull a model from s3 if there is no new binary available
+                mock_get_from_s3.assert_called()
+                # Should not create a new version for the same model info
+                assert not os.path.exists(os.path.join(temp_dir, detector_id, "primary", "3"))
+                assert not os.path.exists(os.path.join(temp_dir, detector_id, "oodd", "3"))
 
     def test_update_model_no_binary(self, edge_model_info_no_binary, oodd_model_info_no_binary):
         with tempfile.TemporaryDirectory() as temp_dir:
