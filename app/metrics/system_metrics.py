@@ -8,8 +8,8 @@ import tzlocal
 import yaml
 from kubernetes import client, config
 
-from app.core.edge_config_loader import get_detector_edge_configs_by_id
 from app.core.configs import EdgeInferenceConfig
+from app.core.edge_config_loader import get_detector_edge_configs_by_id
 from app.core.edge_inference import get_current_pipeline_config, get_predictor_metadata, get_primary_edge_model_dir
 from app.core.file_paths import MODEL_REPOSITORY_PATH
 

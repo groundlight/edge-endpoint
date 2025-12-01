@@ -11,10 +11,9 @@ from urllib3.util.retry import Retry
 
 from app.escalation_queue.queue_writer import QueueWriter
 
-from .configs import EdgeInferenceConfig
 from .database import DatabaseManager
-from .edge_inference import EdgeInferenceManager
 from .edge_config_loader import get_detector_inference_configs, load_edge_config
+from .edge_inference import EdgeInferenceManager
 from .utils import TimestampedCache, safe_call_sdk
 
 logger = logging.getLogger(__name__)
