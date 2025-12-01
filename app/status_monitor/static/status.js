@@ -188,9 +188,13 @@ const renderDetectorDetails = (rawDetails) => {
     container.appendChild(table);
 };
 
-document.addEventListener("DOMContentLoaded", () => {
+const fetchMetrics = (showLoading = false) => {
     const detectorDetailsContainer = document.getElementById("detector-details");
-    detectorDetailsContainer.classList.add("skeleton");
+    if (showLoading) {
+        detectorDetailsContainer.classList.add("skeleton");
+        document.getElementById("loading").style.display = "block";
+        document.getElementById("error").style.display = "none";
+    }
 
     fetch("/status/metrics.json")
         .then((response) => {
@@ -210,12 +214,46 @@ document.addEventListener("DOMContentLoaded", () => {
 
             renderDetectorDetails(data.detector_details);
             document.getElementById("loading").style.display = "none";
+            document.getElementById("error").style.display = "none";
         })
         .catch((error) => {
             detectorDetailsContainer.classList.remove("skeleton");
-            document.getElementById("loading").style.display = "none";
+            if (showLoading) {
+                document.getElementById("loading").style.display = "none";
+            }
             document.getElementById("error").style.display = "block";
             console.error("Error fetching metrics:", error);
         });
+};
+
+let refreshIntervalId = null;
+
+const startAutoRefresh = () => {
+    if (refreshIntervalId !== null) {
+        return;
+    }
+    refreshIntervalId = setInterval(() => fetchMetrics(false), 10000);
+};
+
+const stopAutoRefresh = () => {
+    if (refreshIntervalId === null) {
+        return;
+    }
+    clearInterval(refreshIntervalId);
+    refreshIntervalId = null;
+};
+
+document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+        stopAutoRefresh();
+    } else {
+        fetchMetrics(false);
+        startAutoRefresh();
+    }
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+    fetchMetrics(true);
+    startAutoRefresh();
 });
 
