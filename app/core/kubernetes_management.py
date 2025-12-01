@@ -8,12 +8,13 @@ from kubernetes import client as kube_client
 from kubernetes import config
 from kubernetes.client import V1Deployment
 
+from .configs import EdgeInferenceConfig
+from .edge_config_loader import get_detector_edge_configs_by_id
 from .edge_inference import (
     get_current_model_version,
     get_edge_inference_deployment_name,
     get_edge_inference_model_name,
     get_edge_inference_service_name,
-    load_edge_inference_config,
 )
 from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH, MODEL_REPOSITORY_PATH
 
@@ -44,9 +45,10 @@ class InferenceDeploymentManager:
         ann["groundlight.dev/model-name"] = get_edge_inference_model_name(detector_id, is_oodd)
         ann["groundlight.dev/model-version"] = str(model_version)
 
-        config = load_edge_inference_config(MODEL_REPOSITORY_PATH, detector_id) or {}
+        detector_configs = get_detector_edge_configs_by_id()
+        config_model = detector_configs.get(detector_id, EdgeInferenceConfig())
         for field, annotation_key in EDGE_INFERENCE_CONFIG_ANNOTATIONS.items():
-            value = config.get(field)
+            value = getattr(config_model, field, None)
             if value is None:
                 continue
             ann[annotation_key] = _format_annotation_value(value)

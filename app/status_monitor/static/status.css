@@ -22,7 +22,20 @@ header {
     background-color: var(--axon-dark);
     color: var(--axon-yellow);
     padding: 20px;
-    text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+header .header-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+header .header-logo {
+    height: 34px;
+    width: auto;
 }
 
 header h1 {
