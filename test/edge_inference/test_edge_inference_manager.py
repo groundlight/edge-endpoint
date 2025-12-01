@@ -47,10 +47,10 @@ def edge_model_info_with_binary() -> ModelInfoWithBinary:
         "pipeline_config": "test_pipeline_config",
         "predictor_metadata": test_predictor_metadata,
         "model_binary_id": "test_binary_id",
-        "model_binary_url": "test_model_binary_url",
+        "model_binary_url": "https://example.com/test_model_binary_url",
         "oodd_pipeline_config": "test_oodd_pipeline_config",
         "oodd_model_binary_id": "test_oodd_binary_id",
-        "oodd_model_binary_url": "test_oodd_model_binary_url",
+        "oodd_model_binary_url": "https://example.com/test_oodd_model_binary_url",
     }
     return ModelInfoWithBinary(**model_info)
 
@@ -62,7 +62,7 @@ def oodd_model_info_with_binary() -> ModelInfoWithBinary:
         "oodd_pipeline_config": "test_oodd_pipeline_config",
         "predictor_metadata": test_predictor_metadata,
         "oodd_model_binary_id": "test_oodd_binary_id",
-        "oodd_model_binary_url": "test_oodd_model_binary_url",
+        "oodd_model_binary_url": "https://example.com/test_oodd_model_binary_url",
     }
     return ModelInfoWithBinary(
         pipeline_config=model_info["oodd_pipeline_config"],
@@ -122,10 +122,10 @@ class TestEdgeInferenceManager:
                     mock_get_from_s3.return_value = b"test_model_2"
                     edge_model_info_with_binary_2 = edge_model_info_with_binary
                     edge_model_info_with_binary_2.model_binary_id = "test_binary_id_2"
-                    edge_model_info_with_binary_2.model_binary_url = "test_model_binary_url_2"
+                    edge_model_info_with_binary_2.model_binary_url = "https://example.com/test_model_binary_url_2"
                     oodd_model_info_with_binary_2 = oodd_model_info_with_binary
                     oodd_model_info_with_binary_2.model_binary_id = "test_oodd_binary_id_2"
-                    oodd_model_info_with_binary_2.model_binary_url = "test_oodd_model_binary_url_2"
+                    oodd_model_info_with_binary_2.model_binary_url = "https://example.com/test_oodd_model_binary_url_2"
                     mock_fetch.return_value = (edge_model_info_with_binary_2, oodd_model_info_with_binary_2)
                     edge_manager.update_models_if_available(detector_id)
 
@@ -149,24 +149,24 @@ class TestEdgeInferenceManager:
                     detector_id = "test_detector"
                     edge_manager.update_models_if_available(detector_id)
 
-                validate_model_directory(temp_dir, detector_id, 1, edge_model_info_no_binary)
-                validate_model_directory(temp_dir, detector_id, 1, oodd_model_info_no_binary, is_oodd=True)
+                    validate_model_directory(temp_dir, detector_id, 1, edge_model_info_no_binary)
+                    validate_model_directory(temp_dir, detector_id, 1, oodd_model_info_no_binary, is_oodd=True)
 
-                # Should create a new version for new pipeline config
-                edge_model_info_no_binary_2 = edge_model_info_no_binary
-                edge_model_info_no_binary_2.pipeline_config = "test_pipeline_config_2"
-                oodd_model_info_no_binary_2 = oodd_model_info_no_binary
-                oodd_model_info_no_binary_2.pipeline_config = "test_oodd_pipeline_config_2"
-                mock_fetch.return_value = (edge_model_info_no_binary_2, oodd_model_info_no_binary_2)
-                edge_manager.update_models_if_available(detector_id)
+                    # Should create a new version for new pipeline config
+                    edge_model_info_no_binary_2 = edge_model_info_no_binary
+                    edge_model_info_no_binary_2.pipeline_config = "test_pipeline_config_2"
+                    oodd_model_info_no_binary_2 = oodd_model_info_no_binary
+                    oodd_model_info_no_binary_2.pipeline_config = "test_oodd_pipeline_config_2"
+                    mock_fetch.return_value = (edge_model_info_no_binary_2, oodd_model_info_no_binary_2)
+                    edge_manager.update_models_if_available(detector_id)
 
-                validate_model_directory(temp_dir, detector_id, 2, edge_model_info_no_binary_2)
-                validate_model_directory(temp_dir, detector_id, 2, oodd_model_info_no_binary_2, is_oodd=True)
+                    validate_model_directory(temp_dir, detector_id, 2, edge_model_info_no_binary_2)
+                    validate_model_directory(temp_dir, detector_id, 2, oodd_model_info_no_binary_2, is_oodd=True)
 
-                edge_manager.update_models_if_available(detector_id)
-                # Should not create a new version for the same pipeline config
-                assert not os.path.exists(os.path.join(temp_dir, detector_id, "primary", "3"))
-                assert not os.path.exists(os.path.join(temp_dir, detector_id, "oodd", "3"))
+                    edge_manager.update_models_if_available(detector_id)
+                    # Should not create a new version for the same pipeline config
+                    assert not os.path.exists(os.path.join(temp_dir, detector_id, "primary", "3"))
+                    assert not os.path.exists(os.path.join(temp_dir, detector_id, "oodd", "3"))
 
     def test_run_inference_with_oodd(self, detector_inference_config):
         mock_response = {
