@@ -214,7 +214,7 @@ def get_detector_details() -> str:
                 detector_query = metadata.get("text_query")
                 detector_mode = metadata.get("mode")
             else:
-                logger.warning(f"Predictor metadata not found for detector {det_id} at version {model_version_int}")
+                logger.warning(f"Detector metadata not found for detector {det_id} at version {model_version_int}")
                 detector_query = None
                 detector_mode = None
 
