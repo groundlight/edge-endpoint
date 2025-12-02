@@ -229,7 +229,7 @@ def get_detector_details() -> str:
             if edge_inference_config:
                 detector_details[det_id]["edge_inference_config"] = edge_inference_config
         else:
-            pass # We won't report any detector details until the detector has a ready pod
+            pass  # We won't report any detector details until the detector has a ready pod
 
     # Convert the dict to a JSON string to prevent opensearch from indexing all detector details
     return json.dumps(detector_details)
