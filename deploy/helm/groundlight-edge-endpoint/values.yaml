@@ -293,3 +293,5 @@ opentelemetry-collector:
   securityContext:
     runAsUser: 0
     runAsGroup: 0
+# Threads per process for BLAS/OpenMP/Torch CPU paths
+cpuThreadsPerProcess: 1
