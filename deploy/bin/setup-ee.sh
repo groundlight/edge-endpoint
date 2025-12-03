@@ -98,6 +98,11 @@ while ! $K get nodes >/dev/null 2>&1; do
 done
 echo "k3s is ready"
 
+# Ensure k3s network-change hook is installed (automatic restart on IP changes)
+if [ -f "./deploy/bin/install-k3s-network-change-hook.sh" ]; then
+    ./deploy/bin/install-k3s-network-change-hook.sh || true
+fi
+
 # Create Secrets
 if ! ./deploy/bin/make-aws-secret.sh; then
     echo "Failed to execute make-aws-secret.sh successfully. Exiting."
