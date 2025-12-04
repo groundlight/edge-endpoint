@@ -293,3 +293,9 @@ opentelemetry-collector:
   securityContext:
     runAsUser: 0
     runAsGroup: 0
+
+# Network healer - automatically recovers service networking after host IP changes
+networkHealer:
+  enabled: true
+  checkIntervalSeconds: 30
+  failConsecutive: 3
