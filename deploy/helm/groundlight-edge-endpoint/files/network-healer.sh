@@ -5,8 +5,9 @@ CHECK_INTERVAL_SECONDS="${CHECK_INTERVAL_SECONDS:-30}"
 FAIL_CONSECUTIVE="${FAIL_CONSECUTIVE:-3}"
 
 # Use host kubectl if available (inside chroot later)
-HOST_KUBECTL_CMD="chroot /host /usr/local/bin/kubectl"
-HOST_SHELL="/host/bin/sh"
+HOST_KUBECTL_CMD="/bin/busybox chroot /host /usr/local/bin/kubectl"
+# Use busybox chroot inside the container to execute host commands
+HOST_CHROOT_CMD="/bin/busybox chroot"
 
 log() {
   echo "network-healer: $*"
@@ -39,12 +40,9 @@ apiserver_reachable() {
 }
 
 restart_k3s_on_host() {
-  if [ -x "$HOST_SHELL" ]; then
-    $HOST_SHELL -c 'systemctl restart k3s || systemctl restart k3s-agent' || true
-    host_log "k3s restart command executed on host"
-  else
-    host_log "host shell not found at $HOST_SHELL"
-  fi
+  # shellcheck disable=SC2086
+  $HOST_CHROOT_CMD /host /bin/sh -c 'systemctl restart k3s || systemctl restart k3s-agent' || true
+  host_log "k3s restart command executed on host (via $HOST_CHROOT_CMD)"
 }
 
 wait_for_api() {
