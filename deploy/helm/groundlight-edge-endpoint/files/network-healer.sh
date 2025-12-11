@@ -11,6 +11,8 @@ CHECK_INTERVAL_SECONDS="${CHECK_INTERVAL_SECONDS:-10}"
 CHROOT="/bin/busybox chroot"
 KCTL="$CHROOT /host /usr/local/bin/kubectl"
 API_VIP="${KUBERNETES_SERVICE_HOST:-10.43.0.1}"
+BOOT_WAIT_TIMEOUT="${BOOT_WAIT_TIMEOUT:-300}"
+BOOT_WAIT_INTERVAL="${BOOT_WAIT_INTERVAL:-5}"
 
 log() {
   echo "network-healer: $*"
@@ -28,6 +30,34 @@ restart_k3s() {
 api_vip_reachable() { nc -z -w 2 "${API_VIP}" 443 >/dev/null 2>&1; }
 
 log "Starting (interval=${CHECK_INTERVAL_SECONDS}s). Monitoring API VIP ${API_VIP} and CoreDNS."
+
+# Wait for initial healthy state before monitoring
+start_ts="$(date +%s)"
+log "Boot check: waiting for Kubernetes API VIP ${API_VIP}:443 and CoreDNS to be Ready (timeout=${BOOT_WAIT_TIMEOUT}s)..."
+# Wait for API VIP reachability
+while ! api_vip_reachable; do
+  if [ $(( $(date +%s) - start_ts )) -ge "$BOOT_WAIT_TIMEOUT" ]; then
+    log "Timed out waiting for API VIP reachability; proceeding to monitoring."
+    break
+  fi
+  sleep "$BOOT_WAIT_INTERVAL"
+done
+if api_vip_reachable; then
+  log "API VIP ${API_VIP}:443 is reachable."
+fi
+# Wait for CoreDNS readiness
+while :; do
+  ready_boot="$(get_coredns_ready)"; ready_boot="${ready_boot:-0}"
+  if [ "$ready_boot" != "0" ]; then
+    log "CoreDNS is Ready (readyReplicas=${ready_boot})."
+    break
+  fi
+  if [ $(( $(date +%s) - start_ts )) -ge "$BOOT_WAIT_TIMEOUT" ]; then
+    log "Timed out waiting for CoreDNS readiness; proceeding to monitoring."
+    break
+  fi
+  sleep "$BOOT_WAIT_INTERVAL"
+done
 
 last_status="unknown"
 vip_fail=0
