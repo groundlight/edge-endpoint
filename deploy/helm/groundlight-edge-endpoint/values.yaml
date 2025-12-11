@@ -298,4 +298,3 @@ opentelemetry-collector:
 networkHealer:
   enabled: true
   checkIntervalSeconds: 30
-  failConsecutive: 3

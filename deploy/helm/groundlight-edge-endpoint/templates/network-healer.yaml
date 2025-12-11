@@ -40,8 +40,6 @@ spec:
         env:
         - name: CHECK_INTERVAL_SECONDS
           value: "{{ .Values.networkHealer.checkIntervalSeconds }}"
-        - name: FAIL_CONSECUTIVE
-          value: "{{ .Values.networkHealer.failConsecutive }}"
         volumeMounts:
         - name: healer-script
           mountPath: /opt/network-healer/network-healer.sh
