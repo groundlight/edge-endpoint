@@ -40,6 +40,9 @@ spec:
         env:
         - name: CHECK_INTERVAL_SECONDS
           value: "{{ .Values.networkHealer.checkIntervalSeconds }}"
+        resources:
+          requests:
+            memory: "64Mi"
         volumeMounts:
         - name: healer-script
           mountPath: /opt/network-healer/network-healer.sh
