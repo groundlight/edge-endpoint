@@ -17,6 +17,7 @@ CLOUD_ENDPOINT_PROD = 'https://api.groundlight.ai/device-api'
 # Image query submission args that will ensure a query is never escalated to the cloud, 
 # unless an inference pod doesn't exist for the detector, in which case we have no choice but to escalate
 IQ_KWARGS_FOR_NO_ESCALATION = {'wait': 0.0, 'human_review': 'NEVER', 'confidence_threshold': 0.0}
+IQ_KWARGS_NON_HUMAN_CLOUD_ESCALATION = {'wait': 0.0, 'human_review': 'NEVER', 'confidence_threshold': 1.0}
 
 
 class APIError(Exception):
@@ -30,7 +31,6 @@ def call_api(url: str, params: dict) -> dict:
     headers = {
         "X-API-Token": os.environ.get('GROUNDLIGHT_API_TOKEN')
     }
-    
     response = requests.get(url, params=params, headers=headers)
     if response.status_code == 200:
         response_content = response.content.decode('utf-8')
