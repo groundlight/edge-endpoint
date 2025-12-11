@@ -1,112 +1,91 @@
 #!/bin/sh
 set -eu
 
-# Simple network healer:
-# - Restart k3s if either:
-#   * CoreDNS is NotReady, OR
-#   * the Kubernetes API VIP TCP:443 is unreachable for N consecutive checks.
-# - Loop every CHECK_INTERVAL_SECONDS.
-
-CHECK_INTERVAL_SECONDS="${CHECK_INTERVAL_SECONDS:-10}"
-CHROOT="/bin/busybox chroot"
-KCTL="$CHROOT /host /usr/local/bin/kubectl"
-API_VIP="${KUBERNETES_SERVICE_HOST:-10.43.0.1}"
-BOOT_WAIT_TIMEOUT="${BOOT_WAIT_TIMEOUT:-300}"
-BOOT_WAIT_INTERVAL="${BOOT_WAIT_INTERVAL:-5}"
-
 log() {
   echo "network-healer: $*"
 }
+
+CHECK_INTERVAL_SECONDS="${CHECK_INTERVAL_SECONDS:-5}"
+CHROOT="/bin/busybox chroot"
+KCTL="$CHROOT /host /usr/local/bin/kubectl"
+API_VIP="${KUBERNETES_SERVICE_HOST:-10.43.0.1}"
+PERSIST_DIR="${PERSIST_DIR:-/opt/groundlight/edge/healer}"
+HOST_IP_FILE="${HOST_IP_FILE:-$PERSIST_DIR/host_ip}"
 
 get_coredns_ready() {
   $KCTL -n kube-system get deploy coredns -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo ""
 }
 
-restart_k3s() {
-  $CHROOT /host /bin/sh -c 'systemctl restart k3s || systemctl restart k3s-agent' || true
-  log "Requested k3s restart on host. Waiting for CoreDNS to recover..."
+api_vip_reachable() {
+  nc -z -w 2 "${API_VIP}" 443 >/dev/null 2>&1
 }
 
-api_vip_reachable() { nc -z -w 2 "${API_VIP}" 443 >/dev/null 2>&1; }
+resolve_host_ip() {
+  $CHROOT /host ip -4 route get 1.1.1.1 2>/dev/null | awk '/src/ {for(i=1;i<=NF;i++) if ($i=="src") print $(i+1)}'
+}
 
-log "Starting (interval=${CHECK_INTERVAL_SECONDS}s). Monitoring API VIP ${API_VIP} and CoreDNS."
+is_valid_ip() {
+  ip="$1"
+  [ -n "$ip" ] && printf "%s" "$ip" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'
+}
 
-# Wait for initial healthy state before monitoring
-start_ts="$(date +%s)"
-log "Boot check: waiting for Kubernetes API VIP ${API_VIP}:443 and CoreDNS to be Ready (timeout=${BOOT_WAIT_TIMEOUT}s)..."
-# Wait for API VIP reachability
-while ! api_vip_reachable; do
-  if [ $(( $(date +%s) - start_ts )) -ge "$BOOT_WAIT_TIMEOUT" ]; then
-    log "Timed out waiting for API VIP reachability; proceeding to monitoring."
-    break
-  fi
-  sleep "$BOOT_WAIT_INTERVAL"
-done
-if api_vip_reachable; then
-  log "API VIP ${API_VIP}:443 is reachable."
-fi
-# Wait for CoreDNS readiness
-while :; do
-  ready_boot="$(get_coredns_ready)"; ready_boot="${ready_boot:-0}"
-  if [ "$ready_boot" != "0" ]; then
-    log "CoreDNS is Ready (readyReplicas=${ready_boot})."
-    break
-  fi
-  if [ $(( $(date +%s) - start_ts )) -ge "$BOOT_WAIT_TIMEOUT" ]; then
-    log "Timed out waiting for CoreDNS readiness; proceeding to monitoring."
-    break
-  fi
-  sleep "$BOOT_WAIT_INTERVAL"
-done
+restart_k3s() {
+  $CHROOT /host /bin/sh -c 'systemctl restart k3s || systemctl restart k3s-agent' || true
+}
 
-last_status="unknown"
-vip_fail=0
-# Number of consecutive VIP failures before triggering a restart
-VIP_FAIL_THRESHOLD=2
-while true; do
-  # 1) Check API VIP reachability (TCP)
-  if api_vip_reachable; then
-    if [ "$vip_fail" -gt 0 ]; then
-      log "API VIP ${API_VIP}:443 is reachable again (was failing ${vip_fail} checks)."
-    fi
-    vip_fail=0
-  else
-    vip_fail=$((vip_fail+1))
-    log "API VIP ${API_VIP}:443 unreachable (fail ${vip_fail}/${VIP_FAIL_THRESHOLD})."
-  fi
-
-  # 2) Check CoreDNS readiness
-  ready="$(get_coredns_ready)"
-  ready="${ready:-0}"
-
-  if [ "$ready" = "0" ] || [ "$vip_fail" -ge "$VIP_FAIL_THRESHOLD" ]; then
-    if [ "$last_status" != "unready" ]; then
-      if [ "$ready" = "0" ]; then
-        log "CoreDNS is NotReady (readyReplicas=0). Triggering k3s restart..."
-      else
-        log "API VIP still unreachable after ${vip_fail} checks. Triggering k3s restart..."
-      fi
+get_health_metrics() {
+    coredns="$(get_coredns_ready)"; coredns="${coredns:-0}"
+    if api_vip_reachable; then
+      vip_status="Reachable"
     else
-      log "Condition persists (CoreDNS NotReady or VIP unreachable). Triggering k3s restart again..."
+      vip_status="Unreachable"
     fi
-    restart_k3s
-    vip_fail=0
-    last_status="unready"
+    host_ip="$(resolve_host_ip)"; host_ip="${host_ip:-unknown}"
+    echo "CoreDNS readyReplicas=${coredns} | API VIP=${vip_status}(${API_VIP}) | host_ip=${host_ip}"
+}
 
-    # Give k3s plenty of time to come back up
-    k3s_wait_time_sec="60"
-    log "Waiting $k3s_wait_time_sec seconds for k3s to restart..."
-    sleep "$k3s_wait_time_sec"
-  else
-    if [ "$last_status" = "unready" ]; then
-      log "CoreDNS recovered after k3s restart and is now Ready (readyReplicas=${ready})."
-    elif [ "$last_status" != "ready" ]; then
-      log "CoreDNS is Ready (readyReplicas=${ready})."
+system_healthy() {
+  coredns="$(get_coredns_ready)"; coredns="${coredns:-0}"
+  [ "$coredns" = "1" ] && api_vip_reachable
+}
+
+log "Monitor started (interval=${CHECK_INTERVAL_SECONDS}s)."
+while true; do
+  previous_host_ip="$(cat "$HOST_IP_FILE" 2>/dev/null || true)"
+  host_ip="$(resolve_host_ip)"; host_ip="${host_ip:-unknown}"
+  
+  # Persist current host IP
+  mkdir -p "$PERSIST_DIR" 2>/dev/null || true
+  if is_valid_ip "$host_ip"; then
+    printf "%s" "$host_ip" > "$HOST_IP_FILE" 2>/dev/null || true
+  fi
+
+  # If the host IP changed, log and restart k3s.
+  # Also log the health metrics. We won't take action on the health metrics for now, but they might be useful. 
+  if ! is_valid_ip "$host_ip"; then
+    log "Host IP is invalid or unavailable (${host_ip}). System appears offline; taking no action."
+  elif [ -n "${previous_host_ip:-}" ] && [ "$previous_host_ip" != "$host_ip" ]; then
+    log "Host IP changed: ${previous_host_ip} -> ${host_ip}."
+    log "System health $(system_healthy && echo healthy || echo unhealthy)"
+    log "Health metrics: $(get_health_metrics)"
+    log "Restarting k3s..."
+    restart_k3s
+    log "Requested k3s restart on host as a result of host IP address change. Waiting for system to recover..."
+
+    # Poll until healthy or timeout
+    health_polling_timeout_sec="120"
+    start_ts="$(date +%s)"
+    while ! system_healthy; do
+      if [ $(( $(date +%s) - start_ts )) -ge "$health_polling_timeout_sec" ]; then
+        log "Recovery timed out after ${health_polling_timeout_sec}s. $(get_health_metrics)"
+        break
+      fi
+      sleep 5
+    done
+    if system_healthy; then
+      log "Recovery complete. $(get_health_metrics)"
     fi
-    last_status="ready"
   fi
 
   sleep "$CHECK_INTERVAL_SECONDS"
 done
-
-

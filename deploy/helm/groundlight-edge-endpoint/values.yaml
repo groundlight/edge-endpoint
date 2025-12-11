@@ -297,4 +297,4 @@ opentelemetry-collector:
 # Network healer - automatically recovers service networking after host IP changes
 networkHealer:
   enabled: true
-  checkIntervalSeconds: 30
+  checkIntervalSeconds: 10
