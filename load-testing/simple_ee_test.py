@@ -62,7 +62,6 @@ def main() -> None:
     # Wait for the inference pod to become available
     print(f"Waiting up to {INFERENCE_POD_READY_TIMEOUT_SEC} seconds for inference pod to be ready for {detector.id} with pipeline_config='{latest_edge_pipeline_config_in_cloud}'...")
     glh.wait_for_ready_inference_pod(gl, detector, IMAGE_WIDTH, IMAGE_HEIGHT, latest_edge_pipeline_config_in_cloud, timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC)
-    print('done waiting')
     edge_pipeline_config = glh.get_detector_edge_metrics(gl, detector.id).get('pipeline_config')
     print(f"Inference pod is ready for {detector.id} with pipeline_config='{edge_pipeline_config}'")
 
