@@ -31,6 +31,7 @@ def call_api(url: str, params: dict) -> dict:
     headers = {
         "X-API-Token": os.environ.get('GROUNDLIGHT_API_TOKEN')
     }
+    
     response = requests.get(url, params=params, headers=headers)
     if response.status_code == 200:
         response_content = response.content.decode('utf-8')
