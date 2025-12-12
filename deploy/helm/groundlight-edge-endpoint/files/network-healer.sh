@@ -11,13 +11,20 @@ KCTL="$CHROOT /host /usr/local/bin/kubectl"
 API_VIP="${KUBERNETES_SERVICE_HOST:-10.43.0.1}"
 PERSIST_DIR="${PERSIST_DIR:-/opt/groundlight/edge/healer}"
 HOST_IP_FILE="${HOST_IP_FILE:-$PERSIST_DIR/host_ip}"
+KCTL_TIMEOUT_SECONDS="${KCTL_TIMEOUT_SECONDS:-5}"
+VIP_TIMEOUT_SECONDS="${VIP_TIMEOUT_SECONDS:-3}"
+TIMEOUT_BIN="${TIMEOUT_BIN:-/bin/busybox timeout}"
+HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-6s}"
 
 get_coredns_ready() {
-  $KCTL -n kube-system get deploy coredns -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo ""
+  $TIMEOUT_BIN -k 1s "$HEALTH_TIMEOUT" \
+    $KCTL --request-timeout="${KCTL_TIMEOUT_SECONDS}s" \
+    -n kube-system get deploy coredns -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo ""
 }
 
 api_vip_reachable() {
-  nc -z -w 2 "${API_VIP}" 443 >/dev/null 2>&1
+  $TIMEOUT_BIN -k 1s "${VIP_TIMEOUT_SECONDS}s" \
+    nc -z -w "${VIP_TIMEOUT_SECONDS}" "${API_VIP}" 443 >/dev/null 2>&1
 }
 
 resolve_host_ip() {
@@ -46,10 +53,11 @@ get_health_metrics() {
 
 system_healthy() {
   coredns="$(get_coredns_ready)"; coredns="${coredns:-0}"
-  [ "$coredns" = "1" ] && api_vip_reachable
+  [ "$coredns" -ge 1 ] && api_vip_reachable
 }
 
 log "Monitor started (interval=${CHECK_INTERVAL_SECONDS}s)."
+last_offline=""
 while true; do
   previous_host_ip="$(cat "$HOST_IP_FILE" 2>/dev/null || true)"
   host_ip="$(resolve_host_ip)"; host_ip="${host_ip:-unknown}"
@@ -60,11 +68,29 @@ while true; do
     printf "%s" "$host_ip" > "$HOST_IP_FILE" 2>/dev/null || true
   fi
 
-  # If the host IP changed, log and restart k3s.
-  # Also log the health metrics. We won't take action on the health metrics for now, but they might be useful. 
-  if ! is_valid_ip "$host_ip"; then
-    log "Host IP is invalid or unavailable (${host_ip}). System appears offline; taking no action."
-  elif [ -n "${previous_host_ip:-}" ] && [ "$previous_host_ip" != "$host_ip" ]; then
+  # Track offline/online transitions to avoid repeated logs
+  if is_valid_ip "$host_ip"; then
+    current_offline="0"
+  else
+    current_offline="1"
+  fi
+  if [ -n "$last_offline" ] && [ "$last_offline" != "$current_offline" ]; then
+    if [ "$current_offline" = "1" ]; then
+      log "Host IP is invalid or unavailable (${host_ip}). System appears offline; taking no action."
+    else
+      log "System is back online at ${host_ip}."
+    fi
+  fi
+  last_offline="$current_offline"
+
+  # While offline, skip any heal actions
+  if [ "$current_offline" = "1" ]; then
+    sleep "$CHECK_INTERVAL_SECONDS"
+    continue
+  fi
+
+  # If the host IP changed, log and restart k3s. Also log health metrics.
+  if [ -n "${previous_host_ip:-}" ] && [ "$previous_host_ip" != "$host_ip" ]; then
     log "Host IP changed: ${previous_host_ip} -> ${host_ip}."
     log "System health $(system_healthy && echo healthy || echo unhealthy)"
     log "Health metrics: $(get_health_metrics)"
@@ -72,19 +98,23 @@ while true; do
     restart_k3s
     log "Requested k3s restart on host as a result of host IP address change. Waiting for system to recover..."
 
-    # Poll until healthy or timeout
-    health_polling_timeout_sec="120"
+    # Poll until healthy or timeout with progress logs
+    sleep 10
+    health_polling_timeout_sec="180"
     start_ts="$(date +%s)"
-    while ! system_healthy; do
-      if [ $(( $(date +%s) - start_ts )) -ge "$health_polling_timeout_sec" ]; then
+    while :; do
+      elapsed=$(( $(date +%s) - start_ts ))
+      if system_healthy; then
+        log "Recovery complete. $(get_health_metrics)"
+        break
+      fi
+      if [ "$elapsed" -ge "$health_polling_timeout_sec" ]; then
         log "Recovery timed out after ${health_polling_timeout_sec}s. $(get_health_metrics)"
         break
       fi
+      log "Recovering... elapsed=${elapsed}s $(get_health_metrics)"
       sleep 5
     done
-    if system_healthy; then
-      log "Recovery complete. $(get_health_metrics)"
-    fi
   fi
 
   sleep "$CHECK_INTERVAL_SECONDS"
