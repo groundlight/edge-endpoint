@@ -1,7 +1,7 @@
 """
-A simple of the basic functions of the Edge Endpoint, including
+A simple test of the basic functions of the Edge Endpoint, including
 both edge inference and operations that need to be rerouted to the cloud, such as adding a label, 
-ask_async, contacting the edge metrics API, etc.
+ask_async, etc.
 
 Used for testing robustness to network changes.
 """
