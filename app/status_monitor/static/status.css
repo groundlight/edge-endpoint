@@ -146,6 +146,14 @@ pre {
     color: var(--groundlight-muted);
 }
 
+.detector-name {
+    font-weight: normal;
+}
+
+.detector-query {
+    font-weight: 500;
+}
+
 .detector-details .detector-column div:not(:last-child) {
     margin-bottom: 8px;
 }

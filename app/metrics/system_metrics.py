@@ -213,16 +213,19 @@ def get_detector_details() -> str:
             if metadata is not None:
                 detector_query = metadata.get("text_query")
                 detector_mode = metadata.get("mode")
+                detector_name = metadata.get("detector_name")
             else:
                 logger.warning(f"Detector metadata not found for detector {det_id} at version {model_version_int}")
                 detector_query = None
                 detector_mode = None
+                detector_name = None
 
             detector_details[det_id] = {
                 "pipeline_config": pipeline_config_str,
                 "last_updated_time": started.isoformat() if started else None,
                 "query": detector_query,
                 "mode": detector_mode,
+                "detector_name": detector_name,
             }
 
             edge_inference_config = _edge_config_to_dict(detector_edge_configs.get(det_id))
