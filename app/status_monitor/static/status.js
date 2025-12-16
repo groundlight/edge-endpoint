@@ -144,12 +144,16 @@ const renderDetectorDetails = (rawDetails) => {
         detectorCell.className = "detector-column";
         const idLine = document.createElement("div");
         idLine.appendChild(createDetectorLink(detectorId));
+        const nameLine = document.createElement("div");
+        nameLine.className = "detector-name";
+        nameLine.textContent = info.detector_name || "—";
         const queryLine = document.createElement("div");
+        queryLine.className = "detector-query";
         queryLine.textContent = info.query || "—";
         const modeLine = document.createElement("div");
         modeLine.textContent = info.mode ? info.mode : "—";
         modeLine.className = "detector-mode";
-        detectorCell.append(idLine, queryLine, modeLine);
+        detectorCell.append(idLine, nameLine, queryLine, modeLine);
         row.appendChild(detectorCell);
 
         const pipelineCell = document.createElement("td");
