@@ -2,6 +2,7 @@ import json
 import os
 import re
 from datetime import datetime
+from math import ceil, floor
 
 import matplotlib.pyplot as plt
 from matplotlib import ticker as mticker
@@ -16,6 +17,25 @@ class LoadTestResults(BaseModel):
     clients_by_time: dict[datetime, int]
     gpu_by_time: dict[datetime, float]
     cpu_by_time: dict[datetime, float]
+
+
+class BucketMetrics(BaseModel):
+    index: int
+    num_clients: int
+    total_requests: int
+    success_count: int
+    duration_sec: float
+    achieved_rps: float
+    expected_rps: float
+    success_rate: float
+    latency_p50: float
+    latency_p95: float
+    is_steady: bool
+
+
+STEADY_THROUGHPUT_RATIO = 0.99
+STEADY_SUCCESS_RATE = 0.99
+DEFAULT_MIN_STEADY_DURATION_SEC = 5.0
 
 def parse_log_file(log_file: str) -> LoadTestResults:
     """Parse the log file to gather load test results."""
@@ -83,6 +103,117 @@ def parse_log_file(log_file: str) -> LoadTestResults:
         "cpu_by_time": average_cpu,
     }
     return LoadTestResults(**output_dict)
+
+
+def _percentile(values: list[float], percentile_value: float) -> float:
+    if not values:
+        return 0.0
+    sorted_vals = sorted(values)
+    if len(sorted_vals) == 1:
+        return sorted_vals[0]
+    clamped = min(max(percentile_value, 0.0), 1.0)
+    target = clamped * (len(sorted_vals) - 1)
+    lower_idx = floor(target)
+    upper_idx = ceil(target)
+    if lower_idx == upper_idx:
+        return sorted_vals[int(target)]
+    lower_weight = upper_idx - target
+    upper_weight = target - lower_idx
+    return (sorted_vals[lower_idx] * lower_weight) + (sorted_vals[upper_idx] * upper_weight)
+
+
+def calculate_bucket_metrics(
+    log_file: str,
+    requests_per_second: int,
+    bucket_duration_hint_sec: int | None = None,
+) -> list[BucketMetrics]:
+    """Aggregate per-ramp throughput information."""
+    min_steady_duration = DEFAULT_MIN_STEADY_DURATION_SEC
+    if bucket_duration_hint_sec:
+        min_steady_duration = max(DEFAULT_MIN_STEADY_DURATION_SEC, bucket_duration_hint_sec * 0.5)
+
+    buckets: list[dict] = []
+    current_bucket: dict | None = None
+
+    with open(log_file) as file:
+        for line in file:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith("RAMP"):
+                client_match = re.search(r"\d+", stripped)
+                if not client_match:
+                    continue
+                num_clients = int(client_match.group())
+                current_bucket = {
+                    "index": len(buckets),
+                    "num_clients": num_clients,
+                    "timestamps": [],
+                    "latencies": [],
+                    "total_requests": 0,
+                    "success_count": 0,
+                }
+                buckets.append(current_bucket)
+                continue
+
+            if stripped.startswith("{"):
+                log_data = json.loads(stripped)
+            else:
+                continue
+
+            if log_data.get("event", "request") != "request":
+                continue
+            if current_bucket is None:
+                continue
+
+            timestamp = datetime.strptime(log_data["asctime"], "%Y-%m-%d %H:%M:%S")
+            current_bucket["timestamps"].append(timestamp)
+            current_bucket["latencies"].append(float(log_data.get("latency", 0.0)))
+            current_bucket["total_requests"] += 1
+            if log_data.get("success", False):
+                current_bucket["success_count"] += 1
+
+    bucket_metrics: list[BucketMetrics] = []
+
+    for bucket in buckets:
+        total_requests = bucket["total_requests"]
+        if total_requests == 0:
+            continue
+
+        timestamps = bucket["timestamps"]
+        start_time = min(timestamps)
+        end_time = max(timestamps)
+        duration_sec = max((end_time - start_time).total_seconds(), 1e-6)
+        achieved_rps = total_requests / duration_sec
+        expected_rps = requests_per_second * bucket["num_clients"]
+        success_rate = bucket["success_count"] / total_requests if total_requests else 0.0
+        latency_p50 = _percentile(bucket["latencies"], 0.5)
+        latency_p95 = _percentile(bucket["latencies"], 0.95)
+
+        is_steady = (
+            duration_sec >= min_steady_duration
+            and expected_rps > 0
+            and achieved_rps >= expected_rps * STEADY_THROUGHPUT_RATIO
+            and success_rate >= STEADY_SUCCESS_RATE
+        )
+
+        bucket_metrics.append(
+            BucketMetrics(
+                index=bucket["index"],
+                num_clients=bucket["num_clients"],
+                total_requests=total_requests,
+                success_count=bucket["success_count"],
+                duration_sec=duration_sec,
+                achieved_rps=achieved_rps,
+                expected_rps=expected_rps,
+                success_rate=success_rate,
+                latency_p50=latency_p50,
+                latency_p95=latency_p95,
+                is_steady=is_steady,
+            )
+        )
+
+    return bucket_metrics
 
 
 def plot_throughput_and_system_utilizationby_time(
@@ -238,9 +369,7 @@ def plot_latency_over_time(
 
 
 def plot_load_test_results(log_file: str, requests_per_second: int, output_dir: str | None = None):
-    if not os.path.exists(log_file):
-        print(f"Log file {log_file} not found.")
-        return
+
     resolved_output_dir = output_dir or os.path.dirname(os.path.abspath(log_file))
     load_test_results = parse_log_file(log_file)
     plot_throughput_and_system_utilizationby_time(

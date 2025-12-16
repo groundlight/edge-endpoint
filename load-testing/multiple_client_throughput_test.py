@@ -7,7 +7,8 @@ import time
 from datetime import datetime
 
 from groundlight import ExperimentalApi
-from parse_load_test_logs import plot_load_test_results
+from parse_load_test_logs import BucketMetrics, calculate_bucket_metrics, plot_load_test_results
+from pydantic import BaseModel
 
 import groundlight_helpers as glh
 import image_helpers as imgh
@@ -160,7 +161,6 @@ def incremental_client_ramp_up(  # noqa: PLR0913
     image_height: int,
     log_file: str,
     time_between_ramp: int,
-    use_preset_schedule: bool = False,
 ):
     """Ramps up the number of client processes over time and distributes them across multiple detectors."""
     if os.path.exists(log_file):
@@ -169,18 +169,15 @@ def incremental_client_ramp_up(  # noqa: PLR0913
     if log_dir:
         os.makedirs(log_dir, exist_ok=True)
 
-    if use_preset_schedule:
-        ramp_steps = [1, 2, 3, 4, 5, 10, 15, 20, 30, 40, 50, 60]
-        print(f"Using preset ramp schedule: {ramp_steps} with {time_between_ramp} seconds between each step.")
-    else:
-        ramp_steps = [step_size * i for i in range(1, round((max_processes / step_size)) + 1)]
-        print(
-            f"Using step size of {step_size} with {time_between_ramp} seconds between each step. "
-            f"Ramp schedule is: {ramp_steps}"
-        )
+
+    ramp_steps = [step_size * i for i in range(1, round((max_processes / step_size)) + 1)]
+    print(
+        f"Using step size of {step_size} with {time_between_ramp} seconds between each step. "
+        f"Ramp schedule is: {ramp_steps}"
+    )
 
     total_duration = time_between_ramp * len(ramp_steps)
-    print(f"Ramping up to {ramp_steps[-1]} over {total_duration:.2f} seconds.")
+    print(f"Ramping up to {ramp_steps[-1]} clients over a period of {total_duration:.2f} seconds.")
 
     active_processes = []
     start_time = time.time()
@@ -220,12 +217,33 @@ def incremental_client_ramp_up(  # noqa: PLR0913
         process.join()
 
 
+class ThroughputSummary(BaseModel):
+    maximum_rps: float | None = None
+    maximum_steady_rps: float | None = None
+    maximum_steady_clients: int | None = None
+
+
+def summarize_throughput(bucket_metrics: list[BucketMetrics]) -> ThroughputSummary:
+
+    max_rps_bucket = max(bucket_metrics, key=lambda bucket: bucket.achieved_rps)
+
+    steady_buckets = [bucket for bucket in bucket_metrics if bucket.is_steady]
+    if steady_buckets:
+        max_steady_bucket = max(steady_buckets, key=lambda bucket: bucket.achieved_rps)
+        return ThroughputSummary(
+            maximum_rps=max_rps_bucket.achieved_rps,
+            maximum_steady_rps=max_steady_bucket.expected_rps,
+            maximum_steady_clients=max_steady_bucket.num_clients,
+        )
+
+    return ThroughputSummary(maximum_rps=max_rps_bucket.achieved_rps)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Load test an endpoint by submitting generated images.")
     parser.add_argument("detector_mode", choices=SUPPORTED_DETECTOR_MODES, help="Detector mode to test.")
     parser.add_argument("--max-clients", type=int, default=10, help="Number of processes to ramp up to.")
     parser.add_argument("--step-size", type=int, default=1, help="Number of clients to add at each step.")
-    parser.add_argument("--use-preset-schedule", action="store_true", help="Enable using a preset schedule.")
     parser.add_argument("--time-between-ramp", type=int, default=30, help="Seconds to run each ramp step.")
     parser.add_argument("--requests-per-second", type=int, default=10, help="Per-client request rate.")
     parser.add_argument("--image-width", type=int, default=640)
@@ -243,15 +261,8 @@ if __name__ == "__main__":
     runtime_dir, log_file = _create_runtime_directory()
     print(f"Writing load test artifacts to {runtime_dir}.")
 
-    for _ in range(50):
-        img, _, _ = generate_image(**generate_image_kwargs)
-        iq = gl.submit_image_query(detector, img, **glh.IQ_KWARGS_FOR_NO_ESCALATION)
-        glh.error_if_not_from_edge(iq)
-
     detectors = [detector.id]
     print(f"Running load test for {len(detectors)} detector(s).")
-    if args.use_preset_schedule:
-        print("Using preset schedule. Step size and max clients will be ignored.")
 
     system_monitor = SystemMonitor(log_file)
     system_monitor.start()
@@ -266,9 +277,15 @@ if __name__ == "__main__":
             args.image_height,
             log_file,
             args.time_between_ramp,
-            args.use_preset_schedule,
         )
     finally:
         system_monitor.stop()
 
     plot_load_test_results(log_file, args.requests_per_second, output_dir=runtime_dir)
+    bucket_metrics = calculate_bucket_metrics(
+        log_file,
+        requests_per_second=args.requests_per_second,
+        bucket_duration_hint_sec=args.time_between_ramp,
+    )
+    throughput_summary = summarize_throughput(bucket_metrics)
+    print(throughput_summary.model_dump())
