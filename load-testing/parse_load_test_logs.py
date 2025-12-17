@@ -1,8 +1,10 @@
+from argparse import Namespace
 import json
 import os
 import re
 from datetime import datetime
 from math import ceil, floor
+from typing import Any
 
 import matplotlib.pyplot as plt
 from matplotlib import ticker as mticker
@@ -17,6 +19,7 @@ class LoadTestResults(BaseModel):
     clients_by_time: dict[datetime, int]
     gpu_by_time: dict[datetime, float]
     cpu_by_time: dict[datetime, float]
+    vram_by_time: dict[datetime, float]
 
 
 class BucketMetrics(BaseModel):
@@ -33,9 +36,19 @@ class BucketMetrics(BaseModel):
     is_steady: bool
 
 
-STEADY_THROUGHPUT_RATIO = 0.99
+class ThroughputSummary(BaseModel):
+    maximum_rps: float = 0.0
+    maximum_steady_rps: float = 0.0
+    maximum_steady_clients: int = 0
+    maximum_steady_ramp: int = 0
+
+class SystemUtilizationSummary(BaseModel):
+    average_gpu_utilization_during_max_steady_ramp: float
+    average_cpu_utilization_during_max_steady_ramp: float
+    average_vram_utilization_during_max_steady_ramp: float
+
+STEADY_THROUGHPUT_RATIO = 0.95
 STEADY_SUCCESS_RATE = 0.99
-DEFAULT_MIN_STEADY_DURATION_SEC = 5.0
 
 def parse_log_file(log_file: str) -> LoadTestResults:
     """Parse the log file to gather load test results."""
@@ -46,6 +59,7 @@ def parse_log_file(log_file: str) -> LoadTestResults:
     client_buckets = {}
     gpu_buckets = {}
     cpu_buckets = {}
+    vram_buckets = {}
 
     # Read the log file and extract request start timestamps, response times, and errors
     with open(log_file) as file:
@@ -66,7 +80,9 @@ def parse_log_file(log_file: str) -> LoadTestResults:
 
             if event_type == "gpu":
                 gpu_buckets.setdefault(time_bucket, [])
+                vram_buckets.setdefault(time_bucket, [])
                 gpu_buckets[time_bucket].append(float(log_data.get("gpu_utilization", 0.0)))
+                vram_buckets[time_bucket].append(float(log_data.get("vram_utilization", 0.0)))
             elif event_type == "request":
                 if start_time is None:
                     start_time = timestamp
@@ -92,6 +108,7 @@ def parse_log_file(log_file: str) -> LoadTestResults:
     average_latencies = {bucket: sum(latencies) / len(latencies) for bucket, latencies in latency_buckets.items()}
     average_gpu = {bucket: sum(vals) / len(vals) for bucket, vals in gpu_buckets.items()}
     average_cpu = {bucket: sum(vals) / len(vals) for bucket, vals in cpu_buckets.items()}
+    average_vram = {bucket: sum(vals) / len(vals) for bucket, vals in vram_buckets.items()}
 
     output_dict = {
         "start_time": start_time,
@@ -101,6 +118,7 @@ def parse_log_file(log_file: str) -> LoadTestResults:
         "clients_by_time": client_buckets,
         "gpu_by_time": average_gpu,
         "cpu_by_time": average_cpu,
+        "vram_by_time": average_vram,
     }
     return LoadTestResults(**output_dict)
 
@@ -122,18 +140,91 @@ def _percentile(values: list[float], percentile_value: float) -> float:
     return (sorted_vals[lower_idx] * lower_weight) + (sorted_vals[upper_idx] * upper_weight)
 
 
-def calculate_bucket_metrics(
+def summarize_throughput(
     log_file: str,
     requests_per_second: int,
     bucket_duration_hint_sec: int | None = None,
-) -> list[BucketMetrics]:
-    """Aggregate per-ramp throughput information."""
-    min_steady_duration = DEFAULT_MIN_STEADY_DURATION_SEC
-    if bucket_duration_hint_sec:
-        min_steady_duration = max(DEFAULT_MIN_STEADY_DURATION_SEC, bucket_duration_hint_sec * 0.5)
+) -> ThroughputSummary:
+    """Compute throughput summary for the log file."""
 
-    buckets: list[dict] = []
-    current_bucket: dict | None = None
+
+    bucket_metrics = _calculate_bucket_metrics(log_file, requests_per_second)
+    if not bucket_metrics:
+        return ThroughputSummary()
+
+    max_rps_bucket = max(bucket_metrics, key=lambda bucket: bucket.achieved_rps)
+    steady_buckets = [bucket for bucket in bucket_metrics if bucket.is_steady]
+    if steady_buckets:
+        max_steady_bucket = max(steady_buckets, key=lambda bucket: bucket.achieved_rps)
+        return ThroughputSummary(
+            maximum_rps=max_rps_bucket.achieved_rps,
+            maximum_steady_rps=max_steady_bucket.expected_rps,
+            maximum_steady_clients=max_steady_bucket.num_clients,
+            maximum_steady_ramp=max_steady_bucket.num_clients,
+        )
+
+    return ThroughputSummary(maximum_rps=max_rps_bucket.achieved_rps)
+
+
+def summarize_system_utilization(
+    log_file: str,
+    maximum_steady_ramp: int,
+) -> SystemUtilizationSummary:
+    """Estimate system utilization while running the maximum steady ramp."""
+    if maximum_steady_ramp <= 0:
+        raise RuntimeError("maximum_steady_ramp must be greater than zero.")
+
+    load_test_results = parse_log_file(log_file)
+    if not load_test_results.requests_by_time:
+        raise RuntimeError("Log file did not contain request time series.")
+
+    candidate_times = [
+        timestamp
+        for timestamp, clients in load_test_results.clients_by_time.items()
+        if clients == maximum_steady_ramp
+    ]
+    if not candidate_times:
+        raise RuntimeError("No time buckets matched the maximum steady ramp.")
+
+    window_start = min(candidate_times)
+    window_end = max(candidate_times)
+
+    gpu_samples = [
+        value
+        for timestamp, value in load_test_results.gpu_by_time.items()
+        if window_start <= timestamp <= window_end
+    ]
+    cpu_samples = [
+        value
+        for timestamp, value in load_test_results.cpu_by_time.items()
+        if window_start <= timestamp <= window_end
+    ]
+    vram_samples = [
+        value
+        for timestamp, value in load_test_results.vram_by_time.items()
+        if window_start <= timestamp <= window_end
+    ]
+
+    if not gpu_samples:
+        raise RuntimeError("No GPU samples recorded during the steady ramp window.")
+    if not cpu_samples:
+        raise RuntimeError("No CPU samples recorded during the steady ramp window.")
+    if not vram_samples:
+        raise RuntimeError("No VRAM samples recorded during the steady ramp window.")
+
+    return SystemUtilizationSummary(
+        average_gpu_utilization_during_max_steady_ramp=_average(gpu_samples),
+        average_cpu_utilization_during_max_steady_ramp=_average(cpu_samples),
+        average_vram_utilization_during_max_steady_ramp=_average(vram_samples),
+    )
+
+
+def _calculate_bucket_metrics(
+    log_file: str,
+    requests_per_second: int,
+) -> list[BucketMetrics]:
+    buckets: list[dict[str, Any]] = []
+    current_bucket: dict[str, Any] | None = None
 
     with open(log_file) as file:
         for line in file:
@@ -156,10 +247,9 @@ def calculate_bucket_metrics(
                 buckets.append(current_bucket)
                 continue
 
-            if stripped.startswith("{"):
-                log_data = json.loads(stripped)
-            else:
+            if not stripped.startswith("{"):
                 continue
+            log_data = json.loads(stripped)
 
             if log_data.get("event", "request") != "request":
                 continue
@@ -191,8 +281,7 @@ def calculate_bucket_metrics(
         latency_p95 = _percentile(bucket["latencies"], 0.95)
 
         is_steady = (
-            duration_sec >= min_steady_duration
-            and expected_rps > 0
+            expected_rps > 0
             and achieved_rps >= expected_rps * STEADY_THROUGHPUT_RATIO
             and success_rate >= STEADY_SUCCESS_RATE
         )
@@ -216,10 +305,15 @@ def calculate_bucket_metrics(
     return bucket_metrics
 
 
-def plot_throughput_and_system_utilizationby_time(
+def _average(values: list[float]) -> float:
+    return sum(values) / len(values)
+
+
+def plot_throughput_and_system_utilization_by_time(
     load_test_results: LoadTestResults,
     requests_per_second: int,
     output_dir: str,
+    maximum_steady_rps: float | None = None,
 ):
     # Sort the latency data by time
     error_times, error_rate = zip(*sorted(load_test_results.errors_by_time.items()))
@@ -235,10 +329,13 @@ def plot_throughput_and_system_utilizationby_time(
     client_elapsed_seconds = [(time - start_time).total_seconds() for time in client_times]
     gpu_items = sorted(load_test_results.gpu_by_time.items())
     cpu_items = sorted(load_test_results.cpu_by_time.items())
+    vram_items = sorted(load_test_results.vram_by_time.items())
     gpu_elapsed_seconds = [(time - start_time).total_seconds() for time, _ in gpu_items]
     gpu_utilization = [value for _, value in gpu_items]
     cpu_elapsed_seconds = [(time - start_time).total_seconds() for time, _ in cpu_items]
     cpu_utilization = [value for _, value in cpu_items]
+    vram_elapsed_seconds = [(time - start_time).total_seconds() for time, _ in vram_items]
+    vram_utilization = [value for _, value in vram_items]
 
     # Create the main plot
     fig, ax1 = plt.subplots(figsize=(10, 6))
@@ -263,10 +360,13 @@ def plot_throughput_and_system_utilizationby_time(
     ylim_upper = max_requests if max_requests else 1
     ax1.set_ylim((0, ylim_upper))
 
+    if maximum_steady_rps is not None:
+        ax1.axhline(y=maximum_steady_rps, color="blue", linestyle="-", linewidth=1.5, label="Max Steady RPS")
+
     # Create system utilization axis for CPU/GPU
     utilization_axis = None
     utilization_lines = []
-    if gpu_elapsed_seconds or cpu_elapsed_seconds:
+    if gpu_elapsed_seconds or cpu_elapsed_seconds or vram_elapsed_seconds:
         utilization_axis = ax1.twinx()
         utilization_axis.spines["right"].set_position(("axes", 1.1))
         utilization_axis.set_ylabel("System Utilization (%)")
@@ -291,6 +391,15 @@ def plot_throughput_and_system_utilizationby_time(
                 label="CPU Utilization",
             )
             utilization_lines.append(cpu_line)
+        if vram_elapsed_seconds:
+            (vram_line,) = utilization_axis.plot(
+                vram_elapsed_seconds,
+                vram_utilization,
+                color="magenta",
+                linestyle=":",
+                label="VRAM Utilization",
+            )
+            utilization_lines.append(vram_line)
         utilization_axis.set_xlim(ax1.get_xlim())
 
     # Create a secondary y-axis for the number of clients aligned to expected request rate
@@ -368,18 +477,51 @@ def plot_latency_over_time(
     print(f"Plot saved to: {output_file}")
 
 
-def plot_load_test_results(log_file: str, requests_per_second: int, output_dir: str | None = None):
+def plot_load_test_results(
+    log_file: str,
+    requests_per_second: int,
+    output_dir: str,
+    steady_rps: float | None = None,
+) -> None:
 
-    resolved_output_dir = output_dir or os.path.dirname(os.path.abspath(log_file))
     load_test_results = parse_log_file(log_file)
-    plot_throughput_and_system_utilizationby_time(
+    plot_throughput_and_system_utilization_by_time(
         load_test_results,
         requests_per_second=requests_per_second,
-        output_dir=resolved_output_dir,
+        output_dir=output_dir,
+        maximum_steady_rps=steady_rps,
     )
     plot_latency_over_time(
         load_test_results.average_latency_by_time,
         load_test_results.clients_by_time,
         load_test_results.start_time,
-        output_dir=resolved_output_dir,
+        output_dir=output_dir,
     )
+
+
+def write_load_test_results_to_file(
+    log_file: str,
+    cli_args: Namespace,
+    throughput_summary: ThroughputSummary,
+    system_utilization_summary: SystemUtilizationSummary | None = None,
+) -> str:
+    """Persist CLI inputs and throughput summary alongside the log file."""
+    output_dir = os.path.dirname(os.path.abspath(log_file))
+    os.makedirs(output_dir, exist_ok=True)
+
+    model_dump = getattr(throughput_summary, "model_dump", None)
+    summary_payload = model_dump() if callable(model_dump) else throughput_summary
+
+    outputs: dict[str, Any] = {"throughput_summary": summary_payload}
+    if system_utilization_summary is not None:
+        outputs["system_utilization_summary"] = system_utilization_summary.model_dump()
+
+    payload = {
+        "inputs": vars(cli_args),
+        "outputs": outputs,
+    }
+    output_file = os.path.join(output_dir, "load_test_results.json")
+    with open(output_file, "w", encoding="utf-8") as file:
+        json.dump(payload, file, indent=2)
+    print(f"Load test results saved to: {output_file}")
+    return output_file

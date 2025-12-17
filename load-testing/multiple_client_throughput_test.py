@@ -7,8 +7,12 @@ import time
 from datetime import datetime
 
 from groundlight import ExperimentalApi
-from parse_load_test_logs import BucketMetrics, calculate_bucket_metrics, plot_load_test_results
-from pydantic import BaseModel
+from parse_load_test_logs import (
+    plot_load_test_results,
+    summarize_system_utilization,
+    summarize_throughput,
+    write_load_test_results_to_file,
+)
 
 import groundlight_helpers as glh
 import image_helpers as imgh
@@ -217,28 +221,6 @@ def incremental_client_ramp_up(  # noqa: PLR0913
         process.join()
 
 
-class ThroughputSummary(BaseModel):
-    maximum_rps: float | None = None
-    maximum_steady_rps: float | None = None
-    maximum_steady_clients: int | None = None
-
-
-def summarize_throughput(bucket_metrics: list[BucketMetrics]) -> ThroughputSummary:
-
-    max_rps_bucket = max(bucket_metrics, key=lambda bucket: bucket.achieved_rps)
-
-    steady_buckets = [bucket for bucket in bucket_metrics if bucket.is_steady]
-    if steady_buckets:
-        max_steady_bucket = max(steady_buckets, key=lambda bucket: bucket.achieved_rps)
-        return ThroughputSummary(
-            maximum_rps=max_rps_bucket.achieved_rps,
-            maximum_steady_rps=max_steady_bucket.expected_rps,
-            maximum_steady_clients=max_steady_bucket.num_clients,
-        )
-
-    return ThroughputSummary(maximum_rps=max_rps_bucket.achieved_rps)
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Load test an endpoint by submitting generated images.")
     parser.add_argument("detector_mode", choices=SUPPORTED_DETECTOR_MODES, help="Detector mode to test.")
@@ -281,11 +263,19 @@ if __name__ == "__main__":
     finally:
         system_monitor.stop()
 
-    plot_load_test_results(log_file, args.requests_per_second, output_dir=runtime_dir)
-    bucket_metrics = calculate_bucket_metrics(
+    throughput_summary = summarize_throughput(
         log_file,
         requests_per_second=args.requests_per_second,
         bucket_duration_hint_sec=args.time_between_ramp,
     )
-    throughput_summary = summarize_throughput(bucket_metrics)
-    print(throughput_summary.model_dump())
+
+    system_utilization_summary = summarize_system_utilization(log_file, throughput_summary.maximum_steady_ramp)
+
+    plot_load_test_results(
+        log_file,
+        args.requests_per_second,
+        output_dir=runtime_dir,
+        steady_rps=throughput_summary.maximum_steady_rps,
+    )
+
+    write_load_test_results_to_file(log_file, args, throughput_summary, system_utilization_summary)

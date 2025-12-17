@@ -59,11 +59,14 @@ class SystemMonitor:
 
             gpus = GPUtil.getGPUs()
             gpu_utilizations = [gpu.load * 100 for gpu in gpus]
+            vram_utilizations = [gpu.memoryUtil * 100 for gpu in gpus]
             average_gpu_utilization = sum(gpu_utilizations) / len(gpu_utilizations) if gpu_utilizations else 0.0
+            average_vram_utilization = sum(vram_utilizations) / len(vram_utilizations) if vram_utilizations else 0.0
             gpu_payload = {
                 "asctime": timestamp,
                 "event": "gpu",
                 "gpu_utilization": round(average_gpu_utilization, 2),
+                "vram_utilization": round(average_vram_utilization, 2),
                 "gpus": [
                     {
                         "id": gpu.id,
