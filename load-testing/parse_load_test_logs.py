@@ -358,7 +358,9 @@ def plot_throughput_and_system_utilization_by_time(
     max_expected_requests = max(expected_response_rate) if expected_response_rate else 0
     max_requests = max_expected_requests or (max(combined_rates) if combined_rates else 0)
     ylim_upper = max_requests if max_requests else 1
-    ax1.set_ylim((0, ylim_upper))
+    if maximum_steady_rps is not None:
+        ylim_upper = max(ylim_upper, maximum_steady_rps)
+    ax1.set_ylim((0, ylim_upper * 1.05))
 
     if maximum_steady_rps is not None:
         ax1.axhline(y=maximum_steady_rps, color="blue", linestyle="-", linewidth=1.5, label="Max Steady RPS")
@@ -415,6 +417,7 @@ def plot_throughput_and_system_utilization_by_time(
         client_axis = ax1.twinx()
         client_axis.set_ylim(ax1.get_ylim())
     client_axis.set_ylabel("Number of Clients")
+    client_axis.yaxis.set_major_locator(mticker.MaxNLocator(integer=True))
 
     # Set title and save the figure
     plt.title("Throughput and System Utilization Over Time")
