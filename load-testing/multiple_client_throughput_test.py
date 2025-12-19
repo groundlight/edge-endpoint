@@ -4,7 +4,7 @@ import multiprocessing
 import os
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from groundlight import ExperimentalApi
 from parse_load_test_logs import (
@@ -20,6 +20,34 @@ from system_helpers import SystemMonitor
 
 SUPPORTED_DETECTOR_MODES = {"BINARY", "COUNT"}
 DETECTOR_GROUP_NAME = "Load Testing"
+
+
+def _collect_run_metadata(
+    gl: ExperimentalApi,
+    detector,
+    detector_mode: str,
+    image_width: int,
+    image_height: int,
+) -> dict:
+    edge_pipeline_config = (glh.get_detector_edge_metrics(gl, detector.id) or {}).get("pipeline_config")
+    edge_image, inference_image = glh.get_edge_and_inference_images(gl)
+    test_timestamp = datetime.now(timezone.utc).isoformat()
+
+    detector_payload = {
+        "detector_id": detector.id,
+        "detector_name": detector.name,
+        "detector_query": detector.query,
+        "pipeline_config": edge_pipeline_config,
+    }
+    return {
+        "test_timestamp": test_timestamp,
+        "endpoint": gl.endpoint,
+        "edge_endpoint_image": edge_image,
+        "inference_server_image": inference_image,
+        "image_size": f"{image_width}x{image_height}",
+        "detector_mode": detector_mode,
+        "detector": detector_payload,
+    }
 
 
 def _create_runtime_directory() -> tuple[str, str]:
@@ -278,4 +306,12 @@ if __name__ == "__main__":
         steady_rps=throughput_summary.maximum_steady_rps,
     )
 
-    write_load_test_results_to_file(log_file, args, throughput_summary, system_utilization_summary)
+
+    metadata = _collect_run_metadata(gl, detector, args.detector_mode, args.image_width, args.image_height)
+    write_load_test_results_to_file(
+        log_file,
+        args,
+        throughput_summary,
+        metadata=metadata,
+        system_utilization_summary=system_utilization_summary,
+    )

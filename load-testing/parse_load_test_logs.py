@@ -19,6 +19,7 @@ class LoadTestResults(BaseModel):
     clients_by_time: dict[datetime, int]
     gpu_by_time: dict[datetime, float]
     cpu_by_time: dict[datetime, float]
+    ram_by_time: dict[datetime, float]
     vram_by_time: dict[datetime, float]
 
 
@@ -45,6 +46,7 @@ class ThroughputSummary(BaseModel):
 class SystemUtilizationSummary(BaseModel):
     average_gpu_utilization_during_max_steady_ramp: float
     average_cpu_utilization_during_max_steady_ramp: float
+    average_ram_utilization_during_max_steady_ramp: float
     average_vram_utilization_during_max_steady_ramp: float
 
 STEADY_THROUGHPUT_RATIO = 0.95
@@ -59,6 +61,7 @@ def parse_log_file(log_file: str) -> LoadTestResults:
     client_buckets = {}
     gpu_buckets = {}
     cpu_buckets = {}
+    ram_buckets = {}
     vram_buckets = {}
 
     # Read the log file and extract request start timestamps, response times, and errors
@@ -101,6 +104,10 @@ def parse_log_file(log_file: str) -> LoadTestResults:
             elif event_type == "cpu":
                 cpu_buckets.setdefault(time_bucket, [])
                 cpu_buckets[time_bucket].append(float(log_data.get("cpu_percent", 0.0)))
+                memory_percent = log_data.get("memory_percent")
+                if memory_percent is not None:
+                    ram_buckets.setdefault(time_bucket, [])
+                    ram_buckets[time_bucket].append(float(memory_percent))
             else:
                 continue
 
@@ -108,6 +115,7 @@ def parse_log_file(log_file: str) -> LoadTestResults:
     average_latencies = {bucket: sum(latencies) / len(latencies) for bucket, latencies in latency_buckets.items()}
     average_gpu = {bucket: sum(vals) / len(vals) for bucket, vals in gpu_buckets.items()}
     average_cpu = {bucket: sum(vals) / len(vals) for bucket, vals in cpu_buckets.items()}
+    average_ram = {bucket: sum(vals) / len(vals) for bucket, vals in ram_buckets.items()}
     average_vram = {bucket: sum(vals) / len(vals) for bucket, vals in vram_buckets.items()}
 
     output_dict = {
@@ -118,6 +126,7 @@ def parse_log_file(log_file: str) -> LoadTestResults:
         "clients_by_time": client_buckets,
         "gpu_by_time": average_gpu,
         "cpu_by_time": average_cpu,
+        "ram_by_time": average_ram,
         "vram_by_time": average_vram,
     }
     return LoadTestResults(**output_dict)
@@ -199,6 +208,11 @@ def summarize_system_utilization(
         for timestamp, value in load_test_results.cpu_by_time.items()
         if window_start <= timestamp <= window_end
     ]
+    ram_samples = [
+        value
+        for timestamp, value in load_test_results.ram_by_time.items()
+        if window_start <= timestamp <= window_end
+    ]
     vram_samples = [
         value
         for timestamp, value in load_test_results.vram_by_time.items()
@@ -209,12 +223,15 @@ def summarize_system_utilization(
         raise RuntimeError("No GPU samples recorded during the steady ramp window.")
     if not cpu_samples:
         raise RuntimeError("No CPU samples recorded during the steady ramp window.")
+    if not ram_samples:
+        raise RuntimeError("No RAM samples recorded during the steady ramp window.")
     if not vram_samples:
         raise RuntimeError("No VRAM samples recorded during the steady ramp window.")
 
     return SystemUtilizationSummary(
         average_gpu_utilization_during_max_steady_ramp=_average(gpu_samples),
         average_cpu_utilization_during_max_steady_ramp=_average(cpu_samples),
+        average_ram_utilization_during_max_steady_ramp=_average(ram_samples),
         average_vram_utilization_during_max_steady_ramp=_average(vram_samples),
     )
 
@@ -329,11 +346,14 @@ def plot_throughput_and_system_utilization_by_time(
     client_elapsed_seconds = [(time - start_time).total_seconds() for time in client_times]
     gpu_items = sorted(load_test_results.gpu_by_time.items())
     cpu_items = sorted(load_test_results.cpu_by_time.items())
+    ram_items = sorted(load_test_results.ram_by_time.items())
     vram_items = sorted(load_test_results.vram_by_time.items())
     gpu_elapsed_seconds = [(time - start_time).total_seconds() for time, _ in gpu_items]
     gpu_utilization = [value for _, value in gpu_items]
     cpu_elapsed_seconds = [(time - start_time).total_seconds() for time, _ in cpu_items]
     cpu_utilization = [value for _, value in cpu_items]
+    ram_elapsed_seconds = [(time - start_time).total_seconds() for time, _ in ram_items]
+    ram_utilization = [value for _, value in ram_items]
     vram_elapsed_seconds = [(time - start_time).total_seconds() for time, _ in vram_items]
     vram_utilization = [value for _, value in vram_items]
 
@@ -368,7 +388,7 @@ def plot_throughput_and_system_utilization_by_time(
     # Create system utilization axis for CPU/GPU
     utilization_axis = None
     utilization_lines = []
-    if gpu_elapsed_seconds or cpu_elapsed_seconds or vram_elapsed_seconds:
+    if gpu_elapsed_seconds or cpu_elapsed_seconds or ram_elapsed_seconds or vram_elapsed_seconds:
         utilization_axis = ax1.twinx()
         utilization_axis.spines["right"].set_position(("axes", 1.1))
         utilization_axis.set_ylabel("System Utilization (%)")
@@ -393,6 +413,15 @@ def plot_throughput_and_system_utilization_by_time(
                 label="CPU Utilization",
             )
             utilization_lines.append(cpu_line)
+        if ram_elapsed_seconds:
+            (ram_line,) = utilization_axis.plot(
+                ram_elapsed_seconds,
+                ram_utilization,
+                color="brown",
+                linestyle=":",
+                label="RAM Utilization",
+            )
+            utilization_lines.append(ram_line)
         if vram_elapsed_seconds:
             (vram_line,) = utilization_axis.plot(
                 vram_elapsed_seconds,
@@ -422,12 +451,28 @@ def plot_throughput_and_system_utilization_by_time(
     # Set title and save the figure
     plt.title("Throughput and System Utilization Over Time")
 
+    handle_by_label: dict[str, Any] = {}
     handles, labels = ax1.get_legend_handles_labels()
+    for handle, label in zip(handles, labels):
+        handle_by_label.setdefault(label, handle)
     if utilization_axis:
         util_handles, util_labels = utilization_axis.get_legend_handles_labels()
-        handles.extend(util_handles)
-        labels.extend(util_labels)
-    ax1.legend(handles, labels, loc="upper left")
+        for handle, label in zip(util_handles, util_labels):
+            handle_by_label.setdefault(label, handle)
+
+    legend_order = [
+        "Expected Requests / Num Clients",
+        "Throughput",
+        "Errors",
+        "Max Steady RPS",
+        "GPU Utilization",
+        "VRAM Utilization",
+        "CPU Utilization",
+        "RAM Utilization",
+    ]
+    ordered_handles = [handle_by_label[label] for label in legend_order if label in handle_by_label]
+    ordered_labels = [label for label in legend_order if label in handle_by_label]
+    ax1.legend(ordered_handles, ordered_labels, loc="upper left")
 
     # Save the figure
     ax1.set_xlim(left=0)
@@ -506,9 +551,10 @@ def write_load_test_results_to_file(
     log_file: str,
     cli_args: Namespace,
     throughput_summary: ThroughputSummary,
+    metadata: dict[str, Any],
     system_utilization_summary: SystemUtilizationSummary | None = None,
 ) -> str:
-    """Persist CLI inputs and throughput summary alongside the log file."""
+    """Persist CLI inputs, outputs, and metadata alongside the log file."""
     output_dir = os.path.dirname(os.path.abspath(log_file))
     os.makedirs(output_dir, exist_ok=True)
 
@@ -522,6 +568,7 @@ def write_load_test_results_to_file(
     payload = {
         "inputs": vars(cli_args),
         "outputs": outputs,
+        "metadata": metadata,
     }
     output_file = os.path.join(output_dir, "load_test_results.json")
     with open(output_file, "w", encoding="utf-8") as file:
