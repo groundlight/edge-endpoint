@@ -152,3 +152,4 @@ docker-compose.yml
 # Load testing outputs - local performance data and plots
 load-testing/logs/
 load-testing/plots/
+load-testing/load_tests/

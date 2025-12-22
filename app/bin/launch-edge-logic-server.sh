@@ -9,7 +9,7 @@ cd ../..
 nginx 
 
 poetry run uvicorn \
-    --workers 8 \
+    --workers ${EDGE_ENDPOINT_WORKERS:-4} \
     --host 0.0.0.0 \
     --port ${APP_PORT} \
     --proxy-headers \
