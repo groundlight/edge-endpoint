@@ -39,9 +39,9 @@ class BucketMetrics(BaseModel):
 
 class ThroughputSummary(BaseModel):
     maximum_rps: float = 0.0
-    maximum_steady_rps: float = 0.0
-    maximum_steady_clients: int = 0
-    maximum_steady_ramp: int = 0
+    maximum_steady_rps: float | None = None
+    maximum_steady_clients: int | None = None
+    maximum_steady_ramp: int | None = None
 
 class SystemUtilizationSummary(BaseModel):
     average_gpu_utilization_during_max_steady_ramp: float
@@ -177,11 +177,11 @@ def summarize_throughput(
 
 def summarize_system_utilization(
     log_file: str,
-    maximum_steady_ramp: int,
-) -> SystemUtilizationSummary:
+    maximum_steady_ramp: int | None,
+) -> SystemUtilizationSummary | None:
     """Estimate system utilization while running the maximum steady ramp."""
-    if maximum_steady_ramp <= 0:
-        raise RuntimeError("maximum_steady_ramp must be greater than zero.")
+    if maximum_steady_ramp is None or maximum_steady_ramp <= 0:
+        return None
 
     load_test_results = parse_log_file(log_file)
     if not load_test_results.requests_by_time:
