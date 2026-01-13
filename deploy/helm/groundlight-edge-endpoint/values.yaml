@@ -77,6 +77,10 @@ k3sConfig:
   evictionSoftMinGB: "8"
   evictionGracePeriod: "10s"
 
+# Experimental NetworkManager dispatcher hook to restart k3s on IP/network changes.
+networkChangeHook:
+  enabled: false
+
 serviceAccount:
   create: true
   name: ""
