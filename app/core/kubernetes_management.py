@@ -220,6 +220,68 @@ class InferenceDeploymentManager:
         )
         return True
 
+    def ensure_cuda_liveness_probe(self, detector_id: str, is_oodd: bool = False) -> bool:
+        """
+        Ensure GPU inference pods have a liveness probe that validates CUDA availability.
+
+        On some hosts (notably laptops), suspend/resume can leave CUDA unusable inside an otherwise
+        healthy HTTP server. An exec-based liveness probe forces Kubernetes to restart the pod in
+        that state.
+        """
+        deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd)
+        deployment = self.get_inference_deployment(deployment_name)
+        if deployment is None:
+            return False
+
+        tpl_spec = deployment.spec.template.spec
+        if tpl_spec is None or tpl_spec.runtime_class_name != "nvidia":
+            return False
+
+        containers = tpl_spec.containers or []
+        inference_container = next((c for c in containers if c.name == "inference-server"), None)
+        if inference_container is None:
+            return False
+
+        desired_cmd = [
+            "python3",
+            "-c",
+            "import torch; assert torch.cuda.is_available(); assert torch.cuda.device_count() > 0",
+        ]
+
+        lp = inference_container.liveness_probe
+        current_cmd = None
+        if lp is not None and lp.exec is not None:
+            current_cmd = lp.exec.command
+        if current_cmd == desired_cmd:
+            return False
+
+        patch = {
+            "spec": {
+                "template": {
+                    "spec": {
+                        "containers": [
+                            {
+                                "name": "inference-server",
+                                "livenessProbe": {
+                                    "exec": {"command": desired_cmd},
+                                    "initialDelaySeconds": 60,
+                                    "periodSeconds": 10,
+                                    "timeoutSeconds": 5,
+                                    "failureThreshold": 6,
+                                },
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+
+        logger.info(f"Patching CUDA livenessProbe for inference deployment: {deployment_name}")
+        self._app_kube_client.patch_namespaced_deployment(
+            name=deployment_name, namespace=self._target_namespace, body=patch
+        )
+        return True
+
     def is_inference_deployment_rollout_complete(self, deployment_name: str) -> bool:
         """
         Checks if the rollout of the inference deployment for a given deployment name is complete.
