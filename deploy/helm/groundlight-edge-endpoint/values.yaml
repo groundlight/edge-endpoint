@@ -293,5 +293,13 @@ opentelemetry-collector:
   securityContext:
     runAsUser: 0
     runAsGroup: 0
-# Threads per process for BLAS/OpenMP/Torch CPU paths
-cpuThreadsPerProcess: 1
+
+# Network healer - automatically recovers service networking after host IP changes
+#
+# An alternative experimental approach is implemented on the `tim/network-hooks` branch:
+# a NetworkManager dispatcher hook that restarts k3s when network/IP changes are detected.
+# That approach has worked in testing, but it likely deserves deeper consideration before use
+# in production deployments (operational risk, platform assumptions, and restart frequency).
+networkHealer:
+  enabled: true
+  checkIntervalSeconds: 10

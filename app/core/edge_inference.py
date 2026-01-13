@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import shutil
@@ -649,6 +650,23 @@ def get_current_pipeline_config(model_dir: str, model_version: int) -> dict | No
             return yaml.safe_load(f)
     else:
         logger.warning(f"No existing pipeline_config.yaml file found in {os.path.join(model_dir, str(model_version))}")
+        return None
+
+
+def get_predictor_metadata(model_dir: str, model_version: int) -> dict | None:
+    """Read the predictor_metadata.json file in the current model version directory and return the result as a dictionary."""
+    metadata_file = os.path.join(model_dir, str(model_version), "predictor_metadata.json")
+    if not os.path.exists(metadata_file):
+        logger.warning(
+            f"No existing predictor_metadata.json file found in {os.path.join(model_dir, str(model_version))}"
+        )
+        return None
+
+    try:
+        with open(metadata_file, "r") as f:
+            return json.load(f)
+    except json.JSONDecodeError as exc:
+        logger.error(f"Failed to parse predictor metadata at {metadata_file}: {exc}")
         return None
 
 

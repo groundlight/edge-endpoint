@@ -1,0 +1,180 @@
+@import url("https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;700&display=swap");
+
+:root {
+    --yellow: #FEC62E;
+    --dark: #141217;
+    --medium: #1F1D23;
+    --light: #2C2A30;
+    --groundlight-white: #FFFFFF;
+    --groundlight-background: #F2F5F6;
+    --groundlight-muted: #909399;
+    --groundlight-row-alt: #F2F5F6;
+}
+
+body {
+    font-family: "Barlow", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: var(--groundlight-background);
+}
+
+header {
+    background-color: var(--dark);
+    color: var(--yellow);
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+header .header-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+header .header-logo {
+    height: 34px;
+    width: auto;
+}
+
+header h1 {
+    font-family: "Barlow", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+    font-weight: 400;
+    font-size: 30px;
+    line-height: 36px;
+    margin: 0;
+}
+
+.container {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.section {
+    margin-bottom: 30px;
+}
+
+.section-title {
+    font-size: 1.25em;
+    margin-bottom: 10px;
+    color: var(--medium);
+    font-family: "Barlow", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+    font-weight: 500;
+}
+
+pre {
+    background-color: var(--groundlight-white);
+    padding: 15px;
+    border-radius: 5px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    margin: 0;
+    font-family: inherit;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+#loading {
+    text-align: center;
+    margin: 20px;
+}
+
+#error {
+    color: red;
+    margin: 20px;
+    display: none;
+}
+
+#detector-details.skeleton,
+#detector-details .empty-state {
+    background-color: var(--groundlight-white);
+    padding: 15px;
+    border-radius: 5px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.detector-details table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95em;
+}
+
+.detector-details th,
+.detector-details td {
+    border: 1px solid #dcdcdc;
+    padding: 10px;
+    vertical-align: top;
+    word-wrap: break-word;
+}
+
+.detector-details .last-updated {
+    white-space: nowrap;
+}
+
+.detector-details a {
+    color: #165a8a;
+}
+
+.detector-details th {
+    background-color: #3a383c;
+    text-align: left;
+    color: var(--groundlight-white);
+}
+
+.detector-details tbody tr:nth-child(odd) {
+    background-color: var(--groundlight-row-alt);
+}
+
+.detector-details tbody tr:nth-child(even) {
+    background-color: var(--groundlight-white);
+}
+
+.detector-details ul {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.detector-details code {
+    white-space: pre-wrap;
+    display: block;
+    font-family: inherit;
+}
+
+.detector-mode {
+    font-weight: bold;
+    color: var(--groundlight-muted);
+}
+
+.detector-name {
+    font-weight: normal;
+}
+
+.detector-query {
+    font-weight: 500;
+}
+
+.detector-details .detector-column div:not(:last-child) {
+    margin-bottom: 8px;
+}
+
+.edge-config-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.edge-config-table td {
+    border: 1px solid #e5e5e5;
+    padding: 4px 6px;
+    font-size: 0.9em;
+}
+
+.detector-details .empty-state {
+    font-style: italic;
+    color: var(--groundlight-muted);
+}
+
+.timestamp-relative {
+    color: var(--groundlight-muted);
+    font-size: 0.85em;
+}

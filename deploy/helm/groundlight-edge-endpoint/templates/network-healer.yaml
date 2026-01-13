@@ -1,0 +1,67 @@
+{{- if .Values.networkHealer.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "groundlight-edge-endpoint.fullname" . }}-network-healer
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+data:
+  network-healer.sh: |-
+{{- tpl (.Files.Get "files/network-healer.sh") . | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "groundlight-edge-endpoint.fullname" . }}-network-healer
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: network-healer
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: network-healer
+  template:
+    metadata:
+      labels:
+        app: network-healer
+    spec:
+      hostNetwork: true
+      hostPID: true
+      containers:
+      - name: healer
+        image: alpine:3.20
+        securityContext:
+          privileged: true
+        command: ["/bin/sh","-c"]
+        args: ["/opt/network-healer/network-healer.sh"]
+        env:
+        - name: CHECK_INTERVAL_SECONDS
+          value: "{{ .Values.networkHealer.checkIntervalSeconds }}"
+        resources:
+          requests:
+            memory: "64Mi"
+        volumeMounts:
+        - name: healer-script
+          mountPath: /opt/network-healer/network-healer.sh
+          subPath: network-healer.sh
+        - name: host-root
+          mountPath: /host
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge
+      volumes:
+      - name: healer-script
+        configMap:
+          name: {{ include "groundlight-edge-endpoint.fullname" . }}-network-healer
+          defaultMode: 0755
+      - name: host-root
+        hostPath:
+          path: /
+      - name: edge-endpoint-persistent-volume
+        persistentVolumeClaim:
+          claimName: edge-endpoint-pvc
+{{- end }}
+
+
