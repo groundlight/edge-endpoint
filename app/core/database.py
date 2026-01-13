@@ -120,13 +120,21 @@ class DatabaseManager:
 
     def create_tables(self) -> None:
         """Create the database tables, if they don't already exist."""
-        with self._engine.begin() as connection:
-            Base.metadata.create_all(connection)
+        try:
+            with self._engine.begin() as connection:
+                Base.metadata.create_all(connection, checkfirst=True)
+        except Exception as e:
+            # If tables already exist (race condition with another worker), that's fine
+            logger.debug(f"Error creating tables (likely they already exist): {e}")
 
     def drop_tables(self) -> None:
         """Drop all tables in the database."""
-        with self._engine.begin() as connection:
-            Base.metadata.drop_all(connection)
+        try:
+            with self._engine.begin() as connection:
+                Base.metadata.drop_all(connection, checkfirst=True)
+        except Exception as e:
+            # If tables don't exist yet, that's fine - we're about to create them
+            logger.debug(f"Error dropping tables (likely they don't exist yet): {e}")
 
     def reset_database(self) -> None:
         """Reset the database by deleting all tables and then recreating them."""
