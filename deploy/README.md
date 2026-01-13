@@ -169,7 +169,7 @@ helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint
 
 #### Variation: Disable the network healer
 
-The chart includes a small "network healer" deployment that can restart k3s when cluster DNS is unhealthy. It is enabled by default.
+The chart includes a small "network healer" deployment that restarts k3s when cluster DNS (CoreDNS) is unhealthy. This is most useful on devices where the host IP can change (for example laptops moving between networks), which can leave CoreDNS broken until k3s is restarted. It is enabled by default.
 
 To disable it, set `networkHealer.enabled=false`:
 
