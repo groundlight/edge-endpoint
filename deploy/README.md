@@ -365,22 +365,6 @@ be back online.
 If you're running edge-endpoint on a transportable device, such as a laptop, you should run `ip-changed.sh` every time you switch
 access points.
 
-### Laptop suspend/resume causes GPU (CUDA) inference pods to fail
-
-On some NVIDIA laptop setups, suspending and resuming can leave CUDA unusable inside the inference containers while the HTTP
-server continues running. A common symptom is primary inference pods logging errors like "CUDA unknown error" during model load,
-followed by inference failures.
-
-Mitigation:
-
-- The inference deployment liveness probe for GPU deployments checks CUDA availability. If CUDA becomes unusable, Kubernetes will
-  restart the pod until CUDA is healthy again.
-- If immediate recovery is needed, deleting the affected inference pod(s) will trigger recreation:
-
-```shell
-kubectl delete pod -n <YOUR-NAMESPACE> -l app=inference-server
-```
-
 ### EC2 Networking Setup Creates a Rule That Causes DNS Failures and Other Problems
 
 Another source of DNS/Kubernetes service problems is the netplan setup that some EC2 nodes use. I don't know why this

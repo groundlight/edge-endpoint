@@ -68,18 +68,6 @@ def _check_new_models_and_inference_deployments(
             deployment_manager.create_inference_deployment(detector_id=detector_id, is_oodd=True)
             deployment_created = True
 
-    # Keep the liveness probe robust across host suspend/resume for GPU deployments.
-    # This is safe to run repeatedly; it only patches when needed.
-    try:
-        deployment_manager.ensure_cuda_liveness_probe(detector_id=detector_id, is_oodd=False)
-        if separate_oodd_inference:
-            deployment_manager.ensure_cuda_liveness_probe(detector_id=detector_id, is_oodd=True)
-    except Exception as e:
-        logger.info(
-            f"Failed to ensure CUDA liveness probe for {detector_id=}. Error: {e}",
-            exc_info=True,
-        )
-
     # Only need to update the deployment if there is a new model and the deployment wasn't just created.
     # Attempting to update a recently created deployment can result in a Kubernetes 409 exception, so it's best to avoid this.
     # During start up this step will be skipped because deployment_created = True, which has the nice effect that inference pods will all

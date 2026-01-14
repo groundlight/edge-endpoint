@@ -107,22 +107,14 @@ spec:
           periodSeconds: 10
           failureThreshold: 3  # after 30 seconds of failure, stop sending traffic to the pod
         livenessProbe:
-{{ if eq .Values.inferenceFlavor "gpu" }}
-          exec:
-            # CUDA can break across host suspend/resume while the server still responds to HTTP.
-            # Checking CUDA directly forces a restart when the GPU is unusable.
-            command:
-            - python3
-            - -c
-            - import torch; assert torch.cuda.is_available(); assert torch.cuda.device_count() > 0
-{{ else }}
           httpGet:
+            # We use "ready" here because the current liveness probe is too simple and
+            # doesn't check if the model is loaded.  If the models fail because of GPU memory
+            # issues, we need this to fail and restart the pod.
             path: /health/ready
             port: 8000
-{{ end }}
           initialDelaySeconds: 60
           periodSeconds: 10
-          timeoutSeconds: 5
           failureThreshold: 6  # after 60 seconds of failure, restart the pod
 
       volumes:
