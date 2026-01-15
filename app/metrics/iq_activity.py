@@ -202,7 +202,12 @@ def record_activity_for_metrics(detector_id: str, activity_type: str):
     f = _tracker().hourly_activity_file(activity_type, current_hour, detector_id)
     _tracker().increment_counter_file(f)
 
+    # per detector activity tracking
     f = _tracker().last_activity_file(activity_type, detector_id)
+    f.touch()
+
+    # edge endpoint wide activity tracking
+    f = _tracker().last_activity_file(activity_type)
     f.touch()
 
 
