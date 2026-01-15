@@ -46,7 +46,7 @@ def test_activity_tracking(monkeypatch, tmp_base_dir, _test_tracker):
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "iqs_12345_2025-04-03_12").read_text() == "1"
         # Also make sure that the last_iqs file is created and updated correctly for the edge endpoint and the individual detector
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "last_iqs").exists()
-        # assert Path(tmp_base_dir, "last_iqs").exists()
+        assert Path(tmp_base_dir, "last_iqs").exists()
 
         # Record another IQ, it updates the hourly file for the same PID
         record_activity_for_metrics("det_recordactivitytest", "iqs")
@@ -68,11 +68,13 @@ def test_activity_tracking(monkeypatch, tmp_base_dir, _test_tracker):
             Path(tmp_base_dir, "detectors", "det_recordactivitytest", "escalations_67890_2025-04-03_12").read_text()
             == "1"
         )
+        assert Path(tmp_base_dir, "last_escalations").exists()
         record_activity_for_metrics("det_recordactivitytest", "audits")
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "audits_67890_2025-04-03_12").exists()
         assert (
             Path(tmp_base_dir, "detectors", "det_recordactivitytest", "audits_67890_2025-04-03_12").read_text() == "1"
         )
+        assert Path(tmp_base_dir, "last_audits").exists()
 
 
 def test_wrong_activity_type():
