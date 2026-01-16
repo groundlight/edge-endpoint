@@ -46,7 +46,7 @@ def test_activity_tracking(monkeypatch, tmp_base_dir, _test_tracker):
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "iqs_12345_2025-04-03_12").read_text() == "1"
         # Also make sure that the last_iqs file is created and updated correctly for the edge endpoint and the individual detector
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "last_iqs").exists()
-        # assert Path(tmp_base_dir, "last_iqs").exists()
+        assert Path(tmp_base_dir, "last_iqs").exists()
 
         # Record another IQ, it updates the hourly file for the same PID
         record_activity_for_metrics("det_recordactivitytest", "iqs")
@@ -68,11 +68,13 @@ def test_activity_tracking(monkeypatch, tmp_base_dir, _test_tracker):
             Path(tmp_base_dir, "detectors", "det_recordactivitytest", "escalations_67890_2025-04-03_12").read_text()
             == "1"
         )
+        assert Path(tmp_base_dir, "last_escalations").exists()
         record_activity_for_metrics("det_recordactivitytest", "audits")
         assert Path(tmp_base_dir, "detectors", "det_recordactivitytest", "audits_67890_2025-04-03_12").exists()
         assert (
             Path(tmp_base_dir, "detectors", "det_recordactivitytest", "audits_67890_2025-04-03_12").read_text() == "1"
         )
+        assert Path(tmp_base_dir, "last_audits").exists()
 
 
 def test_wrong_activity_type():
@@ -162,9 +164,9 @@ def test_get_detector_activity_metrics(monkeypatch, tmp_base_dir, _test_tracker)
         assert det_123_metrics["hourly_total_iqs"] == 28
         assert det_123_metrics["hourly_total_escalations"] == 2
         assert det_123_metrics["hourly_total_audits"] == 1
-        assert det_123_metrics["last_iq"] != "none"
-        assert det_123_metrics["last_escalation"] != "none"
-        assert det_123_metrics["last_audit"] != "none"
+        assert det_123_metrics["last_iq"] is not None
+        assert det_123_metrics["last_escalation"] is not None
+        assert det_123_metrics["last_audit"] is not None
 
         # Test that it's fine to have an activity type missing
         # Total iqs should be 10, total escalations should be 1, and total audits should be 0
@@ -177,9 +179,9 @@ def test_get_detector_activity_metrics(monkeypatch, tmp_base_dir, _test_tracker)
         assert det_456_metrics["hourly_total_iqs"] == 10
         assert det_456_metrics["hourly_total_escalations"] == 1
         assert det_456_metrics["hourly_total_audits"] == 0
-        assert det_456_metrics["last_iq"] != "none"
-        assert det_456_metrics["last_escalation"] != "none"
-        assert det_456_metrics["last_audit"] == "none"
+        assert det_456_metrics["last_iq"] is not None
+        assert det_456_metrics["last_escalation"] is not None
+        assert det_456_metrics["last_audit"] is None
 
         # Test that it's fine to have empty files or files that contain "0"
         # Total iqs should be 80, total escalations and audits should both be 0
@@ -193,9 +195,9 @@ def test_get_detector_activity_metrics(monkeypatch, tmp_base_dir, _test_tracker)
         assert det_789_metrics["hourly_total_iqs"] == 80
         assert det_789_metrics["hourly_total_escalations"] == 0
         assert det_789_metrics["hourly_total_audits"] == 0
-        assert det_789_metrics["last_iq"] == "none"
-        assert det_789_metrics["last_escalation"] == "none"
-        assert det_789_metrics["last_audit"] == "none"
+        assert det_789_metrics["last_iq"] is None
+        assert det_789_metrics["last_escalation"] is None
+        assert det_789_metrics["last_audit"] is None
 
 
 def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_tracker):
@@ -231,15 +233,15 @@ def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_t
         assert all_detector_activity["det_123"]["hourly_total_iqs"] == 28
         assert all_detector_activity["det_123"]["hourly_total_escalations"] == 2
         assert all_detector_activity["det_123"]["hourly_total_audits"] == 1
-        assert all_detector_activity["det_123"]["last_iq"] != "none"
-        assert all_detector_activity["det_123"]["last_escalation"] != "none"
-        assert all_detector_activity["det_123"]["last_audit"] != "none"
+        assert all_detector_activity["det_123"]["last_iq"] is not None
+        assert all_detector_activity["det_123"]["last_escalation"] is not None
+        assert all_detector_activity["det_123"]["last_audit"] is not None
         assert all_detector_activity["det_456"]["hourly_total_iqs"] == 0
         assert all_detector_activity["det_456"]["hourly_total_escalations"] == 0
         assert all_detector_activity["det_456"]["hourly_total_audits"] == 0
-        assert all_detector_activity["det_456"]["last_iq"] != "none"
-        assert all_detector_activity["det_456"]["last_escalation"] != "none"
-        assert all_detector_activity["det_456"]["last_audit"] == "none"
+        assert all_detector_activity["det_456"]["last_iq"] is not None
+        assert all_detector_activity["det_456"]["last_escalation"] is not None
+        assert all_detector_activity["det_456"]["last_audit"] is None
 
         active_detector_activity = json.loads(retriever.get_active_detector_activity())
         assert "det_123" in active_detector_activity
@@ -247,6 +249,6 @@ def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_t
         assert active_detector_activity["det_123"]["hourly_total_iqs"] == 28
         assert active_detector_activity["det_123"]["hourly_total_escalations"] == 2
         assert active_detector_activity["det_123"]["hourly_total_audits"] == 1
-        assert active_detector_activity["det_123"]["last_iq"] != "none"
-        assert active_detector_activity["det_123"]["last_escalation"] != "none"
-        assert active_detector_activity["det_123"]["last_audit"] != "none"
+        assert active_detector_activity["det_123"]["last_iq"] is not None
+        assert active_detector_activity["det_123"]["last_escalation"] is not None
+        assert active_detector_activity["det_123"]["last_audit"] is not None

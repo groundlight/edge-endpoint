@@ -114,11 +114,11 @@ class FilesystemActivityTrackingHelper:
 class ActivityRetriever:
     """Retrieve IQ activity metrics from the filesystem to report them."""
 
-    def last_activity_time(self) -> str:
+    def last_activity_time(self) -> str | None:
         """Get the last time an image was processed by the edge-endpoint as an ISO 8601 timestamp."""
         activity_file = _tracker().last_activity_file("iqs")
         last_file_activity = _tracker().get_last_file_modification_time(activity_file)
-        return last_file_activity.isoformat() if last_file_activity else "none"
+        return last_file_activity.isoformat() if last_file_activity else None
 
     def num_detectors_lifetime(self) -> int:
         """Get the total number of detectors."""
@@ -170,7 +170,7 @@ class ActivityRetriever:
             total_activity = sum([_tracker().get_activity_from_file(f) for f in files])
             f = _tracker().last_activity_file(activity_type, detector_id)
             last_activity = _tracker().get_last_file_modification_time(f)
-            last_activity = last_activity.isoformat() if last_activity else "none"
+            last_activity = last_activity.isoformat() if last_activity else None
 
             detector_metrics[f"hourly_total_{activity_type}"] = total_activity
             detector_metrics[f"last_{activity_type[:-1]}"] = last_activity
@@ -202,7 +202,12 @@ def record_activity_for_metrics(detector_id: str, activity_type: str):
     f = _tracker().hourly_activity_file(activity_type, current_hour, detector_id)
     _tracker().increment_counter_file(f)
 
+    # per detector activity tracking
     f = _tracker().last_activity_file(activity_type, detector_id)
+    f.touch()
+
+    # edge endpoint wide activity tracking
+    f = _tracker().last_activity_file(activity_type)
     f.touch()
 
 
