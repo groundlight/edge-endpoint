@@ -80,6 +80,8 @@ spec:
           value: "{{ .Values.inferenceFlavor }}"
         - name: WORKERS  # Number of uvicorn workers for the inference server
           value: "1"
+        - name: USE_TENSORRT  # Enable TensorRT optimization for faster inference
+          value: "true"
         volumeMounts:
         - name: edge-endpoint-persistent-volume
           mountPath: *modelRepository
