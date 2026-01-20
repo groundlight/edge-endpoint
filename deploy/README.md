@@ -167,6 +167,18 @@ helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint
   --set inferenceFlavor=cpu
 ```
 
+#### Variation: Disable the network healer
+
+The chart includes a small "network healer" deployment that restarts k3s when cluster DNS (CoreDNS) is unhealthy. This is most useful on devices where the host IP can change (for example laptops moving between networks), which can leave CoreDNS broken until k3s is restarted. It is enabled by default.
+
+To disable it, set `networkHealer.enabled=false`:
+
+```shell
+helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint \
+  --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}" \
+  --set networkHealer.enabled=false
+```
+
 #### Variation: Further Customization
 
 The Helm chart supports various configuration options which can be set using `--set` flags. For the full list, with default values and documentation, see the [values.yaml](helm/groundlight-edge-endpoint/values.yaml) file.

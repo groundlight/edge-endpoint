@@ -5,6 +5,7 @@ from pathlib import Path
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.metrics.iq_activity import clear_old_activity_files
 from app.metrics.metric_reporting import MetricsReporter
@@ -12,7 +13,9 @@ from app.metrics.metric_reporting import MetricsReporter
 ONE_HOUR_IN_SECONDS = 3600
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
+STATIC_DIR = Path(__file__).parent / "static"
 app = FastAPI(title="status-monitor")
+app.mount("/status/static", StaticFiles(directory=STATIC_DIR), name="status-static")
 scheduler = AsyncIOScheduler()
 reporter = MetricsReporter()
 

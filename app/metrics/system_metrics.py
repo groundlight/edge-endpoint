@@ -8,13 +8,23 @@ import tzlocal
 import yaml
 from kubernetes import client, config
 
-from app.core.edge_inference import (
-    get_current_pipeline_config,
-    get_primary_edge_model_dir,
-)
+from app.core.configs import EdgeInferenceConfig
+from app.core.edge_config_loader import get_detector_edge_configs_by_id
+from app.core.edge_inference import get_current_pipeline_config, get_predictor_metadata, get_primary_edge_model_dir
 from app.core.file_paths import MODEL_REPOSITORY_PATH
 
 logger = logging.getLogger(__name__)
+
+
+def _edge_config_to_dict(config: EdgeInferenceConfig | None) -> dict | None:
+    if config is None:
+        return None
+    return {
+        "enabled": config.enabled,
+        "always_return_edge_prediction": config.always_return_edge_prediction,
+        "disable_cloud_escalation": config.disable_cloud_escalation,
+        "min_time_between_escalations": config.min_time_between_escalations,
+    }
 
 
 def get_cpu_utilization() -> str:
@@ -163,6 +173,7 @@ def get_detector_details() -> str:
     namespace = get_namespace()
     pods = v1_core.list_namespaced_pod(namespace=namespace)
 
+    detector_edge_configs = get_detector_edge_configs_by_id()
     detector_details: dict[str, dict] = {}
     for pod in pods.items:
         det_id = _get_annotation(pod, "groundlight.dev/detector-id")
@@ -197,10 +208,29 @@ def get_detector_details() -> str:
             else:
                 pipeline_config_str = str(cfg)  # This avoids the yaml end of document marker (...)
 
+            # Get the detector metadata
+            metadata = get_predictor_metadata(model_dir, model_version_int)
+            if metadata is not None:
+                detector_query = metadata.get("text_query")
+                detector_mode = metadata.get("mode")
+                detector_name = metadata.get("detector_name")
+            else:
+                logger.warning(f"Detector metadata not found for detector {det_id} at version {model_version_int}")
+                detector_query = None
+                detector_mode = None
+                detector_name = None
+
             detector_details[det_id] = {
                 "pipeline_config": pipeline_config_str,
                 "last_updated_time": started.isoformat() if started else None,
+                "query": detector_query,
+                "mode": detector_mode,
+                "detector_name": detector_name,
             }
+
+            edge_inference_config = _edge_config_to_dict(detector_edge_configs.get(det_id))
+            if edge_inference_config:
+                detector_details[det_id]["edge_inference_config"] = edge_inference_config
         else:
             pass  # We won't report any detector details until the detector has a ready pod
 

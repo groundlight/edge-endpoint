@@ -104,7 +104,6 @@ spec:
         # that they are never evicted, even when the system is under memory pressure. 
         resources:
           requests:
-            cpu: "500m"
             memory: "700Mi"
         env:
         - name: LOG_LEVEL

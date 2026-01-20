@@ -1,24 +1,12 @@
-import importlib
 import json
 import multiprocessing
 import os
-import sys
 import time
 from datetime import datetime
 from typing import Optional
 
 import psutil
-
-try:  # pragma: no cover - compatibility shim for Python >=3.12
-    import distutils  # type: ignore  # noqa: F401
-except ModuleNotFoundError:  # pragma: no cover
-    try:
-        distutils = importlib.import_module("setuptools._distutils")  # type: ignore
-        sys.modules["distutils"] = distutils  # type: ignore
-    except ModuleNotFoundError as exc:  # pragma: no cover
-        raise ImportError("setuptools is required for GPUtil on Python >=3.12") from exc
-
-import GPUtil  # type: ignore
+import GPUtil
 
 
 class SystemMonitor:
@@ -71,11 +59,14 @@ class SystemMonitor:
 
             gpus = GPUtil.getGPUs()
             gpu_utilizations = [gpu.load * 100 for gpu in gpus]
+            vram_utilizations = [gpu.memoryUtil * 100 for gpu in gpus]
             average_gpu_utilization = sum(gpu_utilizations) / len(gpu_utilizations) if gpu_utilizations else 0.0
+            average_vram_utilization = sum(vram_utilizations) / len(vram_utilizations) if vram_utilizations else 0.0
             gpu_payload = {
                 "asctime": timestamp,
                 "event": "gpu",
                 "gpu_utilization": round(average_gpu_utilization, 2),
+                "vram_utilization": round(average_vram_utilization, 2),
                 "gpus": [
                     {
                         "id": gpu.id,
