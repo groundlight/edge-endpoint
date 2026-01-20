@@ -129,7 +129,25 @@ def consume_queued_escalation(
 
     The `delete_image` argument is used by tests only, and otherwise defaults to True.
     """
-    escalation_info = EscalationInfo(**json.loads(escalation_str))
+    # Skip empty/whitespace lines
+    stripped = escalation_str.strip()
+    if not stripped:
+        logger.warning("Skipping empty line in escalation queue.")
+        return None
+
+    # Skip lines with null bytes (corruption indicator)
+    if "\x00" in escalation_str:
+        logger.warning("Skipping corrupted line with null bytes in escalation queue.")
+        return None
+
+    try:
+        escalation_info = EscalationInfo(**json.loads(stripped))
+    except json.JSONDecodeError as e:
+        logger.warning(f"Skipping line with invalid JSON: {e}")
+        return None
+    except Exception as e:
+        logger.warning(f"Skipping line that failed to parse as EscalationInfo: {e}")
+        return None
 
     if request_cache.contains(escalation_info.request_id):
         logger.info(
