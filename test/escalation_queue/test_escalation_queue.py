@@ -607,9 +607,7 @@ class TestReadFromEscalationQueue:
             any_order=False,
         )
 
-    def test_continues_after_corrupted_line(
-        self, test_reader: QueueReader, test_request_cache: RequestCache
-    ):
+    def test_continues_after_corrupted_line(self, test_reader: QueueReader, test_request_cache: RequestCache):
         """Verifies that read_from_escalation_queue continues processing after a corrupted line."""
         corrupted_line = "\x00\x00corrupted\x00\x00"
         # Create two valid escalation strings with different request_ids to avoid deduplication
