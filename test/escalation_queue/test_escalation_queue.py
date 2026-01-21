@@ -607,6 +607,36 @@ class TestReadFromEscalationQueue:
             any_order=False,
         )
 
+    def test_continues_after_corrupted_line(
+        self, test_reader: QueueReader, test_request_cache: RequestCache
+    ):
+        """Verifies that read_from_escalation_queue continues processing after a corrupted line."""
+        corrupted_line = "\x00\x00corrupted\x00\x00"
+        # Create two valid escalation strings with different request_ids to avoid deduplication
+        escalation_str_1 = convert_escalation_info_to_str(
+            generate_test_escalation_info(request_id=generate_request_id())
+        )
+        escalation_str_2 = convert_escalation_info_to_str(
+            generate_test_escalation_info(request_id=generate_request_id())
+        )
+        # Sequence: valid, corrupted, valid - should process both valid lines
+        escalation_strs = [escalation_str_1, corrupted_line, escalation_str_2]
+
+        dummy_iq = Mock(id="test-iq-id")
+
+        with (
+            patch.object(QueueReader, "__iter__", return_value=iter(escalation_strs)),
+            patch(
+                "app.escalation_queue.manage_reader._escalate_once",
+                return_value=(dummy_iq, False),
+            ) as mock_escalate,
+        ):
+            read_from_escalation_queue(test_reader, test_request_cache)
+
+        # Should have called _escalate_once twice (for the two valid lines)
+        # The corrupted line should be skipped without calling _escalate_once
+        assert mock_escalate.call_count == 2
+
 
 class TestQueueUtils:
     @pytest.fixture
