@@ -610,30 +610,38 @@ class TestReadFromEscalationQueue:
     def test_continues_after_corrupted_line(self, test_reader: QueueReader, test_request_cache: RequestCache):
         """Verifies that read_from_escalation_queue continues processing after a corrupted line."""
         corrupted_line = "\x00\x00corrupted\x00\x00"
-        # Create two valid escalation strings with different request_ids to avoid deduplication
-        escalation_str_1 = convert_escalation_info_to_str(
-            generate_test_escalation_info(request_id=generate_request_id())
-        )
-        escalation_str_2 = convert_escalation_info_to_str(
-            generate_test_escalation_info(request_id=generate_request_id())
-        )
-        # Sequence: valid, corrupted, valid - should process both valid lines
-        escalation_strs = [escalation_str_1, corrupted_line, escalation_str_2]
 
-        dummy_iq = Mock(id="test-iq-id")
+        # Use temp copies of the test image since consume_queued_escalation deletes images after processing
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_image_1 = Path(temp_dir) / "image1.jpeg"
+            temp_image_2 = Path(temp_dir) / "image2.jpeg"
+            shutil.copy("test/assets/cat.jpeg", temp_image_1)
+            shutil.copy("test/assets/cat.jpeg", temp_image_2)
 
-        with (
-            patch.object(QueueReader, "__iter__", return_value=iter(escalation_strs)),
-            patch(
-                "app.escalation_queue.manage_reader._escalate_once",
-                return_value=(dummy_iq, False),
-            ) as mock_escalate,
-        ):
-            read_from_escalation_queue(test_reader, test_request_cache)
+            # Create two valid escalation strings with different request_ids to avoid deduplication
+            escalation_str_1 = convert_escalation_info_to_str(
+                generate_test_escalation_info(request_id=generate_request_id(), image_path=str(temp_image_1))
+            )
+            escalation_str_2 = convert_escalation_info_to_str(
+                generate_test_escalation_info(request_id=generate_request_id(), image_path=str(temp_image_2))
+            )
+            # Sequence: valid, corrupted, valid - should process both valid lines
+            escalation_strs = [escalation_str_1, corrupted_line, escalation_str_2]
 
-        # Should have called _escalate_once twice (for the two valid lines)
-        # The corrupted line should be skipped without calling _escalate_once
-        assert mock_escalate.call_count == 2
+            dummy_iq = Mock(id="test-iq-id")
+
+            with (
+                patch.object(QueueReader, "__iter__", return_value=iter(escalation_strs)),
+                patch(
+                    "app.escalation_queue.manage_reader._escalate_once",
+                    return_value=(dummy_iq, False),
+                ) as mock_escalate,
+            ):
+                read_from_escalation_queue(test_reader, test_request_cache)
+
+            # Should have called _escalate_once twice (for the two valid lines)
+            # The corrupted line should be skipped without calling _escalate_once
+            assert mock_escalate.call_count == 2
 
 
 class TestQueueUtils:
