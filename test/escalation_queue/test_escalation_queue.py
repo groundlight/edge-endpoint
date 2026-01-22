@@ -532,6 +532,56 @@ class TestConsumeQueuedEscalation:
         # The request ID should still be in the request cache
         assert test_request_cache.contains(escalation_info_1.request_id)
 
+    def test_skips_empty_string(self, test_request_cache: RequestCache):
+        """Empty string should return None without attempting escalation or updating cache."""
+        with patch("app.escalation_queue.manage_reader._escalate_once") as mock_escalate:
+            result = consume_queued_escalation("", test_request_cache, delete_image=False)
+
+        assert result is None
+        mock_escalate.assert_not_called()
+        # Request cache should not have been updated (nothing to cache)
+        assert len(list(test_request_cache.cache_dir.iterdir())) == 0
+
+    def test_skips_whitespace_only(self, test_request_cache: RequestCache):
+        """Whitespace-only string should return None without attempting escalation or updating cache."""
+        with patch("app.escalation_queue.manage_reader._escalate_once") as mock_escalate:
+            result = consume_queued_escalation("   \n\t  ", test_request_cache, delete_image=False)
+
+        assert result is None
+        mock_escalate.assert_not_called()
+        assert len(list(test_request_cache.cache_dir.iterdir())) == 0
+
+    def test_skips_null_bytes(self, test_request_cache: RequestCache):
+        """String with null bytes (corruption) should return None without attempting escalation."""
+        corrupted_str = "\x00\x00\x00\x00"
+        with patch("app.escalation_queue.manage_reader._escalate_once") as mock_escalate:
+            result = consume_queued_escalation(corrupted_str, test_request_cache, delete_image=False)
+
+        assert result is None
+        mock_escalate.assert_not_called()
+        assert len(list(test_request_cache.cache_dir.iterdir())) == 0
+
+    def test_skips_invalid_json(self, test_request_cache: RequestCache):
+        """Invalid JSON should return None without attempting escalation."""
+        invalid_json = "this is not valid json {"
+        with patch("app.escalation_queue.manage_reader._escalate_once") as mock_escalate:
+            result = consume_queued_escalation(invalid_json, test_request_cache, delete_image=False)
+
+        assert result is None
+        mock_escalate.assert_not_called()
+        assert len(list(test_request_cache.cache_dir.iterdir())) == 0
+
+    def test_skips_malformed_escalation_info(self, test_request_cache: RequestCache):
+        """Valid JSON but wrong schema should return None without attempting escalation."""
+        # Valid JSON but missing required EscalationInfo fields
+        malformed_json = json.dumps({"some_key": "some_value"})
+        with patch("app.escalation_queue.manage_reader._escalate_once") as mock_escalate:
+            result = consume_queued_escalation(malformed_json, test_request_cache, delete_image=False)
+
+        assert result is None
+        mock_escalate.assert_not_called()
+        assert len(list(test_request_cache.cache_dir.iterdir())) == 0
+
 
 class TestReadFromEscalationQueue:
     def test_consume_from_reader(self, test_reader: QueueReader, escalation_str: str):
@@ -556,6 +606,42 @@ class TestReadFromEscalationQueue:
             [call(escalation, mock_request_cache) for escalation in escalation_strs],
             any_order=False,
         )
+
+    def test_continues_after_corrupted_line(self, test_reader: QueueReader, test_request_cache: RequestCache):
+        """Verifies that read_from_escalation_queue continues processing after a corrupted line."""
+        corrupted_line = "\x00\x00corrupted\x00\x00"
+
+        # Use temp copies of the test image since consume_queued_escalation deletes images after processing
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_image_1 = Path(temp_dir) / "image1.jpeg"
+            temp_image_2 = Path(temp_dir) / "image2.jpeg"
+            shutil.copy("test/assets/cat.jpeg", temp_image_1)
+            shutil.copy("test/assets/cat.jpeg", temp_image_2)
+
+            # Create two valid escalation strings with different request_ids to avoid deduplication
+            escalation_str_1 = convert_escalation_info_to_str(
+                generate_test_escalation_info(request_id=generate_request_id(), image_path=str(temp_image_1))
+            )
+            escalation_str_2 = convert_escalation_info_to_str(
+                generate_test_escalation_info(request_id=generate_request_id(), image_path=str(temp_image_2))
+            )
+            # Sequence: valid, corrupted, valid - should process both valid lines
+            escalation_strs = [escalation_str_1, corrupted_line, escalation_str_2]
+
+            dummy_iq = Mock(id="test-iq-id")
+
+            with (
+                patch.object(QueueReader, "__iter__", return_value=iter(escalation_strs)),
+                patch(
+                    "app.escalation_queue.manage_reader._escalate_once",
+                    return_value=(dummy_iq, False),
+                ) as mock_escalate,
+            ):
+                read_from_escalation_queue(test_reader, test_request_cache)
+
+            # Should have called _escalate_once twice (for the two valid lines)
+            # The corrupted line should be skipped without calling _escalate_once
+            assert mock_escalate.call_count == 2
 
 
 class TestQueueUtils:
