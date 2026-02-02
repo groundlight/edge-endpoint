@@ -468,7 +468,9 @@ class TestConsumeQueuedEscalation:
         escalation_str = convert_escalation_info_to_str(test_escalation_info)
 
         num_retries = 3
-        side_effects = [(None, True, None, None)] * num_retries + [(None, False, DroppedEscalationReason.HTTP_ERROR, "")]
+        side_effects = [(None, True, None, None)] * num_retries + [
+            (None, False, DroppedEscalationReason.HTTP_ERROR, "")
+        ]
 
         with (
             patch("app.escalation_queue.manage_reader._escalate_once", side_effect=side_effects) as mock_escalate,
@@ -523,7 +525,9 @@ class TestConsumeQueuedEscalation:
         escalation_str_1 = convert_escalation_info_to_str(escalation_info_1)
         escalation_str_2 = convert_escalation_info_to_str(escalation_info_2)
 
-        with patch("app.escalation_queue.manage_reader._escalate_once", return_value=(None, False, None, None)) as mock_escalate_1:
+        with patch(
+            "app.escalation_queue.manage_reader._escalate_once", return_value=(None, False, None, None)
+        ) as mock_escalate_1:
             consume_queued_escalation(escalation_str_1, test_request_cache, delete_image=False)
 
         mock_escalate_1.assert_called_once()

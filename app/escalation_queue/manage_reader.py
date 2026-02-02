@@ -119,7 +119,12 @@ def _escalate_once(  # noqa: PLR0911
             )
             # NOTE This could inspect the 'retry-after' key in the header response to find the exact time needed to
             # wait. For now we just do our normal retry backoff.
-            return None, True, None, str(ex)  # Should retry because the escalation may succeed after some time has passed.
+            return (
+                None,
+                True,
+                None,
+                str(ex),
+            )  # Should retry because the escalation may succeed after some time has passed.
         else:
             logger.info(f"Got HTTPException with unhandled status code {ex.status_code}. {ex=}")
             return None, False, DroppedEscalationReason.HTTP_ERROR, str(ex)

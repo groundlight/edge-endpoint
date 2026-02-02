@@ -92,13 +92,15 @@ def record_dropped_escalation(
             "error": error,
             "retry_count": retry_count,
             "escalation_info": escalation_info.model_dump() if escalation_info is not None else None,
-            "partial_context": None
-            if escalation_info is not None
-            else {
-                "detector_id": detector_id,
-                "submit_iq_params": submit_iq_params,
-                "request_id": request_id,
-            },
+            "partial_context": (
+                None
+                if escalation_info is not None
+                else {
+                    "detector_id": detector_id,
+                    "submit_iq_params": submit_iq_params,
+                    "request_id": request_id,
+                }
+            ),
             "raw_line": raw_line,
         }
 
@@ -208,4 +210,3 @@ def metrics_summary() -> dict:
         "max_bytes": _max_bytes(),
         "base_dir": str(_base_dir()),
     }
-
