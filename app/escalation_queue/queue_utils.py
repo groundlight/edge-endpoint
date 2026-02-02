@@ -4,6 +4,7 @@ from groundlight import Groundlight
 from model import ImageQuery
 
 from app.core.utils import get_formatted_timestamp_str, safe_call_sdk
+from app.escalation_queue.dropped_escalations import DroppedEscalationReason, record_dropped_escalation
 from app.escalation_queue.models import EscalationInfo, SubmitImageQueryParams
 from app.escalation_queue.queue_writer import QueueWriter
 
@@ -25,9 +26,22 @@ def write_escalation_to_queue(
             submit_iq_params=submit_iq_params,
             request_id=request_id,
         )
-        writer.write_escalation(escalation_info)
+        wrote = writer.write_escalation(escalation_info)
+        if not wrote:
+            record_dropped_escalation(
+                reason=DroppedEscalationReason.QUEUE_WRITE_FAILED,
+                escalation_info=escalation_info,
+                error="QueueWriter.write_escalation returned False",
+            )
     except Exception as e:
         logger.error(f"Failed to write escalation to queue for detector {detector_id} with error {e}.")
+        record_dropped_escalation(
+            reason=DroppedEscalationReason.QUEUE_WRITE_FAILED,
+            detector_id=detector_id,
+            submit_iq_params=submit_iq_params.model_dump(),
+            request_id=request_id,
+            error=str(e),
+        )
 
 
 def safe_escalate_with_queue_write(

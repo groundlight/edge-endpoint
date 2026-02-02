@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import random  # TODO: remove with temporary chaos injection block before shipping
 import time
 from functools import lru_cache
 from pathlib import Path
@@ -10,6 +11,7 @@ from groundlight import Groundlight, GroundlightClientError, ImageQuery
 from urllib3.exceptions import MaxRetryError, ReadTimeoutError
 
 from app.core.utils import safe_call_sdk
+from app.escalation_queue.dropped_escalations import DroppedEscalationReason, record_dropped_escalation
 from app.escalation_queue.models import EscalationInfo
 from app.escalation_queue.queue_reader import QueueReader
 from app.escalation_queue.request_cache import RequestCache
@@ -33,8 +35,8 @@ def _groundlight_client() -> Groundlight:
 
 
 def _escalate_once(  # noqa: PLR0911
-    escalation_info: EscalationInfo, submit_iq_request_timeout_s: int
-) -> tuple[ImageQuery | None, bool]:
+    escalation_info: EscalationInfo, submit_iq_request_timeout_s: int | tuple[int, int]
+) -> tuple[ImageQuery | None, bool, DroppedEscalationReason | None, str | None]:
     """
     Consumes escalation info for a query and attempts to complete the escalation.
 
@@ -62,14 +64,19 @@ def _escalate_once(  # noqa: PLR0911
         # GroundlightClientError exception will be raised for other kinds of errors, including when the client could
         # not be created due to no internet connection.
         logger.info(f"Got error {ex=} while trying to create the Groundlight client. Will retry.")
-        return None, True  # Should retry because the escalation may succeed if connection is down and gets restored.
+        return (
+            None,
+            True,  # Should retry because the escalation may succeed if connection is down and gets restored.
+            None,
+            str(ex),
+        )
 
     image_path = Path(escalation_info.image_path_str)
     try:
         image_bytes = image_path.read_bytes()
     except FileNotFoundError:
         logger.info(f"Could not locate image at path {image_path}. Skipping this escalation.")
-        return None, False  # Should not retry because the image cannot be located.
+        return None, False, DroppedEscalationReason.IMAGE_NOT_FOUND, f"image_path={image_path}"
 
     submit_iq_params = escalation_info.submit_iq_params
     try:
@@ -86,17 +93,17 @@ def _escalate_once(  # noqa: PLR0911
             metadata=submit_iq_params.metadata,
             request_timeout=submit_iq_request_timeout_s,
         )
-        return res, False  # Should not retry because the escalation was successful.
+        return res, False, None, None  # Should not retry because the escalation was successful.
     except MaxRetryError as ex:
         # Raised when the API client tried to retry the request but did not succeed. This exception is most often seen
         # when there's network connectivity problems.
         logger.info(f"Got MaxRetryError, {ex=}. This could be due to network connectivity issues. Will retry.")
-        return None, True  # Should retry because the escalation could succeed in the future.
+        return None, True, None, str(ex)  # Should retry because the escalation could succeed in the future.
     except ReadTimeoutError as ex:
         # Raised when the upstream server doesn't respond within the read timeout after connection. This exception is
         # most often seen when there's network connectivity problems.
         logger.info(f"Got ReadTimeoutError, {ex=}. This could be due to network connectivity issues. Will retry.")
-        return None, True  # Should retry because the escalation could succeed in the future.
+        return None, True, None, str(ex)  # Should retry because the escalation could succeed in the future.
     except HTTPException as ex:
         if ex.status_code == status.HTTP_400_BAD_REQUEST:
             logger.info(
@@ -104,7 +111,7 @@ def _escalate_once(  # noqa: PLR0911
                 "which case we can move on. This could also be due to a malformed request, which is not expected to "
                 f"succeed upon retry. Scrapping the escalation. \nThe exception was: {ex}"
             )
-            return None, False  # Should not retry because we already escalated the query or the request is bad.
+            return None, False, DroppedEscalationReason.HTTP_400_BAD_REQUEST, str(ex)
         elif ex.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
             logger.info(
                 "Got HTTPException with status code 429. This likely means we have hit our throttling limit. Will "
@@ -112,13 +119,13 @@ def _escalate_once(  # noqa: PLR0911
             )
             # NOTE This could inspect the 'retry-after' key in the header response to find the exact time needed to
             # wait. For now we just do our normal retry backoff.
-            return None, True  # Should retry because the escalation may succeed after some time has passed.
+            return None, True, None, str(ex)  # Should retry because the escalation may succeed after some time has passed.
         else:
             logger.info(f"Got HTTPException with unhandled status code {ex.status_code}. {ex=}")
-            return None, False  # Do not retry.
+            return None, False, DroppedEscalationReason.HTTP_ERROR, str(ex)
     except Exception as ex:
         logger.info(f"Got some other kind of exception that we aren't explicitly catching. {ex=}")
-        return None, False  # Do not retry.
+        return None, False, DroppedEscalationReason.UNHANDLED_EXCEPTION, str(ex)  # Do not retry.
 
 
 def consume_queued_escalation(
@@ -133,20 +140,26 @@ def consume_queued_escalation(
     stripped = escalation_str.strip()
     if not stripped:
         logger.warning("Skipping empty line in escalation queue.")
+        record_dropped_escalation(reason=DroppedEscalationReason.EMPTY_LINE, raw_line=escalation_str)
         return None
 
     # Skip lines with null bytes (corruption indicator)
     if "\x00" in escalation_str:
         logger.warning("Skipping corrupted line with null bytes in escalation queue.")
+        record_dropped_escalation(reason=DroppedEscalationReason.CORRUPTED_NULL_BYTES, raw_line=escalation_str)
         return None
 
     try:
         escalation_info = EscalationInfo(**json.loads(stripped))
     except json.JSONDecodeError as e:
         logger.warning(f"Skipping line with invalid JSON: {e}")
+        record_dropped_escalation(reason=DroppedEscalationReason.INVALID_JSON, raw_line=escalation_str, error=str(e))
         return None
     except Exception as e:
         logger.warning(f"Skipping line that failed to parse as EscalationInfo: {e}")
+        record_dropped_escalation(
+            reason=DroppedEscalationReason.MALFORMED_ESCALATION_INFO, raw_line=escalation_str, error=str(e)
+        )
         return None
 
     if request_cache.contains(escalation_info.request_id):
@@ -158,6 +171,8 @@ def consume_queued_escalation(
 
     should_retry_escalation = True
     escalation_result = None
+    last_failure_reason: DroppedEscalationReason | None = None
+    last_failure_error: str | None = None
 
     submit_iq_request_timeout_s = (5, 15)  # How long the image query request should be allowed to try to complete.
     # The first element of the tuple is the connect timeout and the second is the read timeout.
@@ -165,8 +180,12 @@ def consume_queued_escalation(
     retry_count = 0
 
     while should_retry_escalation:
-        escalation_result, should_try_again = _escalate_once(escalation_info, submit_iq_request_timeout_s)
+        escalation_result, should_try_again, failure_reason, failure_error = _escalate_once(
+            escalation_info, submit_iq_request_timeout_s
+        )
         if escalation_result is None:
+            last_failure_reason = failure_reason
+            last_failure_error = failure_error
             logger.info(f"Escalation attempt {retry_count + 1} failed.")
             if should_try_again:
                 should_retry_escalation = True
@@ -184,6 +203,14 @@ def consume_queued_escalation(
         else:  # Successfully escalated.
             should_retry_escalation = False
 
+    if escalation_result is None:
+        record_dropped_escalation(
+            reason=last_failure_reason or DroppedEscalationReason.UNHANDLED_EXCEPTION,
+            escalation_info=escalation_info,
+            error=last_failure_error,
+            retry_count=retry_count,
+        )
+
     # Once we're done with this escalation, add the request ID to the cache so that we don't try to escalate duplicate
     # requests (stemming from, e.g., client-side retries).
     request_cache.add(escalation_info.request_id)
@@ -196,14 +223,46 @@ def consume_queued_escalation(
     return escalation_result
 
 
+def inject_chaos(escalation: str) -> str:
+    """
+    TODO: Remove this chaos injection function before shipping.
+    """
+    chaos_prob = 1 / 5
+    if random.random() >= chaos_prob:
+        return escalation
+
+    chaos_mode = random.choice(["null_bytes", "invalid_json", "empty_line", "delete_image"])
+    logger.warning(f"Chaos injection enabled. Injecting mode={chaos_mode}.")
+
+    if chaos_mode == "null_bytes":
+        return "\x00\x00corrupted\x00\x00"
+    if chaos_mode == "invalid_json":
+        return "this is not json {"
+    if chaos_mode == "empty_line":
+        return "   \n\t  "
+    if chaos_mode == "delete_image":
+        try:
+            data = json.loads(escalation.strip())
+            image_path_str = data.get("image_path_str")
+            if image_path_str:
+                Path(image_path_str).unlink(missing_ok=True)
+        except Exception:
+            logger.exception("Chaos injector failed to delete image.")
+
+    return escalation
+
+
 def read_from_escalation_queue(reader: QueueReader, request_cache: RequestCache) -> None:
     """Reads escalations from the queue reader and attempts to escalates them."""
     # Because the QueueReader will block until it has something to yield, this will loop forever
     for escalation in reader:
+        # TODO: Remove this chaos injection function before shipping.
+        escalation = inject_chaos(escalation)
+
         logger.info("Got queued escalation from reader.")
         result = consume_queued_escalation(escalation, request_cache)
         if result is None:
-            logger.info("Escalation permanently failed or skipped, moving on.")
+            logger.error("Escalation permanently failed or skipped, moving on.")
         else:
             logger.info(f"Escalation succeeded for escalation with ID {result.id}.")
 
