@@ -165,7 +165,7 @@ class ActivityRetriever:
         activity_files = list(detector_folder.glob(f"*_{time}"))
 
         detector_metrics = {}
-        for activity_type in ["iqs", "escalations", "audits"]:
+        for activity_type in ["iqs", "escalations", "audits", "low_confidence_iqs"]:
             files = [f for f in activity_files if f.name.startswith(activity_type)]
             total_activity = sum([_tracker().get_activity_from_file(f) for f in files])
             f = _tracker().last_activity_file(activity_type, detector_id)
@@ -190,7 +190,7 @@ def record_activity_for_metrics(detector_id: str, activity_type: str):
     - escalations
     - audits
     """
-    supported_activity_types = ["iqs", "escalations", "audits"]
+    supported_activity_types = ["iqs", "escalations", "audits", "low_confidence_iqs"]
     if activity_type not in supported_activity_types:
         raise ValueError(
             f"The provided activity type ({activity_type}) is not currently supported. Supported types are: {supported_activity_types}"
