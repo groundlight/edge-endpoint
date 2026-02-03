@@ -243,6 +243,8 @@ def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_t
         Path(tmp_base_dir, "detectors", "det_123", "escalations_102394_2025-04-03_11").write_text("2")
         Path(tmp_base_dir, "detectors", "det_123", "audits_102394_2025-04-03_11").write_text("1")
         Path(tmp_base_dir, "detectors", "det_123", "below_threshold_iqs_102394_2025-04-03_11").write_text("3")
+        Path(tmp_base_dir, "detectors", "det_123", "confidence_70-75_102394_2025-04-03_11").write_text("15")
+        Path(tmp_base_dir, "detectors", "det_123", "confidence_95-100_102394_2025-04-03_11").write_text("10")
         Path(tmp_base_dir, "detectors", "det_123", "last_iqs").touch()
         Path(tmp_base_dir, "detectors", "det_123", "last_escalations").touch()
         Path(tmp_base_dir, "detectors", "det_123", "last_audits").touch()
@@ -267,6 +269,7 @@ def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_t
         assert all_detector_activity["det_123"]["last_escalation"] is not None
         assert all_detector_activity["det_123"]["last_audit"] is not None
         assert all_detector_activity["det_123"]["last_below_threshold_iq"] is not None
+        assert all_detector_activity["det_123"]["confidence_histogram"] == {"70-75": 15, "95-100": 10}
         assert all_detector_activity["det_456"]["hourly_total_iqs"] == 0
         assert all_detector_activity["det_456"]["hourly_total_escalations"] == 0
         assert all_detector_activity["det_456"]["hourly_total_audits"] == 0
@@ -287,6 +290,7 @@ def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_t
         assert active_detector_activity["det_123"]["last_escalation"] is not None
         assert active_detector_activity["det_123"]["last_audit"] is not None
         assert active_detector_activity["det_123"]["last_below_threshold_iq"] is not None
+        assert active_detector_activity["det_123"]["confidence_histogram"] == {"70-75": 15, "95-100": 10}
 
 
 def test_confidence_to_bucket():
