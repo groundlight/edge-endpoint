@@ -70,7 +70,12 @@ def _escalate_once(  # noqa: PLR0911
         # GroundlightClientError exception will be raised for other kinds of errors, including when the client could
         # not be created due to no internet connection.
         logger.info(f"Got error {ex=} while trying to create the Groundlight client. Will retry.")
-        return None, True, ex, False  # Should retry because the escalation may succeed if connection is down and gets restored.
+        return (
+            None,
+            True,
+            ex,
+            False,
+        )  # Should retry because the escalation may succeed if connection is down and gets restored.
 
     image_path = Path(escalation_info.image_path_str)
     try:
