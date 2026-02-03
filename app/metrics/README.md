@@ -7,9 +7,9 @@ This module tracks image query activity metrics for each detector and reports th
 | Metric | Description |
 |--------|-------------|
 | `iqs` | Total image queries submitted |
-| `escalations` | Queries sent to the cloud for processing (below confidence threshold, but may be rate limited) |
+| `escalations` | Queries under the confidence threshold sent to the cloud for processing |
 | `audits` | Confident edge predictions sampled for quality auditing |
-| `below_threshold_iqs` | Queries where edge confidence was below the threshold (includes both escalated and rate-limited) |
+| `below_threshold_iqs` | Queries where edge confidence was below the threshold (includes both escalated iqs and iqs that were candidates for escalation but were rate-limited) |
 
 ## Reported Fields
 
