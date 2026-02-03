@@ -76,6 +76,19 @@ def test_activity_tracking(monkeypatch, tmp_base_dir, _test_tracker):
         )
         assert Path(tmp_base_dir, "last_audits").exists()
 
+        # Record low_confidence_iqs, make sure the detector-specific files are created and have the correct values
+        record_activity_for_metrics("det_recordactivitytest", "low_confidence_iqs")
+        assert Path(
+            tmp_base_dir, "detectors", "det_recordactivitytest", "low_confidence_iqs_67890_2025-04-03_12"
+        ).exists()
+        assert (
+            Path(
+                tmp_base_dir, "detectors", "det_recordactivitytest", "low_confidence_iqs_67890_2025-04-03_12"
+            ).read_text()
+            == "1"
+        )
+        assert Path(tmp_base_dir, "last_low_confidence_iqs").exists()
+
 
 def test_wrong_activity_type():
     with pytest.raises(ValueError):
@@ -150,26 +163,32 @@ def test_get_detector_activity_metrics(monkeypatch, tmp_base_dir, _test_tracker)
         mock_datetime.now.return_value = datetime(2025, 4, 3, 12, 0, 0)
         retriever = ActivityRetriever()
 
-        # Total iqs should be 28, total escalations should be 2, and total audits should be 1
+        # Total iqs should be 28, total escalations should be 2, total audits should be 1,
+        # and total low_confidence_iqs should be 5
         os.makedirs(Path(tmp_base_dir, "detectors", "det_123"), exist_ok=True)
         Path(tmp_base_dir, "detectors", "det_123", "iqs_10294_2025-04-03_11").write_text("10")
         Path(tmp_base_dir, "detectors", "det_123", "iqs_12323_2025-04-03_11").write_text("1")
         Path(tmp_base_dir, "detectors", "det_123", "iqs_12345_2025-04-03_11").write_text("17")
         Path(tmp_base_dir, "detectors", "det_123", "escalations_102394_2025-04-03_11").write_text("2")
         Path(tmp_base_dir, "detectors", "det_123", "audits_102394_2025-04-03_11").write_text("1")
+        Path(tmp_base_dir, "detectors", "det_123", "low_confidence_iqs_102394_2025-04-03_11").write_text("5")
         Path(tmp_base_dir, "detectors", "det_123", "last_iqs").touch()
         Path(tmp_base_dir, "detectors", "det_123", "last_escalations").touch()
         Path(tmp_base_dir, "detectors", "det_123", "last_audits").touch()
+        Path(tmp_base_dir, "detectors", "det_123", "last_low_confidence_iqs").touch()
         det_123_metrics = retriever.get_detector_activity_metrics("det_123")
         assert det_123_metrics["hourly_total_iqs"] == 28
         assert det_123_metrics["hourly_total_escalations"] == 2
         assert det_123_metrics["hourly_total_audits"] == 1
+        assert det_123_metrics["hourly_total_low_confidence_iqs"] == 5
         assert det_123_metrics["last_iq"] is not None
         assert det_123_metrics["last_escalation"] is not None
         assert det_123_metrics["last_audit"] is not None
+        assert det_123_metrics["last_low_confidence_iq"] is not None
 
         # Test that it's fine to have an activity type missing
-        # Total iqs should be 10, total escalations should be 1, and total audits should be 0
+        # Total iqs should be 10, total escalations should be 1, total audits should be 0,
+        # and total low_confidence_iqs should be 0
         os.makedirs(Path(tmp_base_dir, "detectors", "det_456"), exist_ok=True)
         Path(tmp_base_dir, "detectors", "det_456", "iqs_102394_2025-04-03_11").write_text("10")
         Path(tmp_base_dir, "detectors", "det_456", "escalations_12345_2025-04-03_11").write_text("1")
@@ -179,25 +198,30 @@ def test_get_detector_activity_metrics(monkeypatch, tmp_base_dir, _test_tracker)
         assert det_456_metrics["hourly_total_iqs"] == 10
         assert det_456_metrics["hourly_total_escalations"] == 1
         assert det_456_metrics["hourly_total_audits"] == 0
+        assert det_456_metrics["hourly_total_low_confidence_iqs"] == 0
         assert det_456_metrics["last_iq"] is not None
         assert det_456_metrics["last_escalation"] is not None
         assert det_456_metrics["last_audit"] is None
+        assert det_456_metrics["last_low_confidence_iq"] is None
 
         # Test that it's fine to have empty files or files that contain "0"
-        # Total iqs should be 80, total escalations and audits should both be 0
+        # Total iqs should be 80, total escalations, audits, and low_confidence_iqs should all be 0
         os.makedirs(Path(tmp_base_dir, "detectors", "det_789"), exist_ok=True)
         Path(tmp_base_dir, "detectors", "det_789", "iqs_10294_2025-04-03_11").write_text("80")
         Path(tmp_base_dir, "detectors", "det_789", "iqs_12345_2025-04-03_11").write_text("0")
         Path(tmp_base_dir, "detectors", "det_789", "iqs_12345_2025-04-03_11").write_text("")
         Path(tmp_base_dir, "detectors", "det_789", "escalations_102394_2025-04-03_11").write_text("0")
         Path(tmp_base_dir, "detectors", "det_789", "audits_102394_2025-04-03_11").write_text("")
+        Path(tmp_base_dir, "detectors", "det_789", "low_confidence_iqs_102394_2025-04-03_11").write_text("0")
         det_789_metrics = retriever.get_detector_activity_metrics("det_789")
         assert det_789_metrics["hourly_total_iqs"] == 80
         assert det_789_metrics["hourly_total_escalations"] == 0
         assert det_789_metrics["hourly_total_audits"] == 0
+        assert det_789_metrics["hourly_total_low_confidence_iqs"] == 0
         assert det_789_metrics["last_iq"] is None
         assert det_789_metrics["last_escalation"] is None
         assert det_789_metrics["last_audit"] is None
+        assert det_789_metrics["last_low_confidence_iq"] is None
 
 
 def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_tracker):
@@ -208,16 +232,19 @@ def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_t
         mock_datetime.fromtimestamp.return_value = datetime(2025, 4, 3, 11, 30, 0)
         retriever = ActivityRetriever()
 
-        # Total iqs should be 28, total escalations should be 2, and total audits should be 1
+        # Total iqs should be 28, total escalations should be 2, total audits should be 1,
+        # and total low_confidence_iqs should be 3
         os.makedirs(Path(tmp_base_dir, "detectors", "det_123"), exist_ok=True)
         Path(tmp_base_dir, "detectors", "det_123", "iqs_10294_2025-04-03_11").write_text("10")
         Path(tmp_base_dir, "detectors", "det_123", "iqs_12323_2025-04-03_11").write_text("1")
         Path(tmp_base_dir, "detectors", "det_123", "iqs_12345_2025-04-03_11").write_text("17")
         Path(tmp_base_dir, "detectors", "det_123", "escalations_102394_2025-04-03_11").write_text("2")
         Path(tmp_base_dir, "detectors", "det_123", "audits_102394_2025-04-03_11").write_text("1")
+        Path(tmp_base_dir, "detectors", "det_123", "low_confidence_iqs_102394_2025-04-03_11").write_text("3")
         Path(tmp_base_dir, "detectors", "det_123", "last_iqs").touch()
         Path(tmp_base_dir, "detectors", "det_123", "last_escalations").touch()
         Path(tmp_base_dir, "detectors", "det_123", "last_audits").touch()
+        Path(tmp_base_dir, "detectors", "det_123", "last_low_confidence_iqs").touch()
 
         # This detector has no iqs in the last hour, so it should not be included in the active detectors
         # It will still be included in the all detectors activity
@@ -233,15 +260,19 @@ def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_t
         assert all_detector_activity["det_123"]["hourly_total_iqs"] == 28
         assert all_detector_activity["det_123"]["hourly_total_escalations"] == 2
         assert all_detector_activity["det_123"]["hourly_total_audits"] == 1
+        assert all_detector_activity["det_123"]["hourly_total_low_confidence_iqs"] == 3
         assert all_detector_activity["det_123"]["last_iq"] is not None
         assert all_detector_activity["det_123"]["last_escalation"] is not None
         assert all_detector_activity["det_123"]["last_audit"] is not None
+        assert all_detector_activity["det_123"]["last_low_confidence_iq"] is not None
         assert all_detector_activity["det_456"]["hourly_total_iqs"] == 0
         assert all_detector_activity["det_456"]["hourly_total_escalations"] == 0
         assert all_detector_activity["det_456"]["hourly_total_audits"] == 0
+        assert all_detector_activity["det_456"]["hourly_total_low_confidence_iqs"] == 0
         assert all_detector_activity["det_456"]["last_iq"] is not None
         assert all_detector_activity["det_456"]["last_escalation"] is not None
         assert all_detector_activity["det_456"]["last_audit"] is None
+        assert all_detector_activity["det_456"]["last_low_confidence_iq"] is None
 
         active_detector_activity = json.loads(retriever.get_active_detector_activity())
         assert "det_123" in active_detector_activity
@@ -249,6 +280,8 @@ def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_t
         assert active_detector_activity["det_123"]["hourly_total_iqs"] == 28
         assert active_detector_activity["det_123"]["hourly_total_escalations"] == 2
         assert active_detector_activity["det_123"]["hourly_total_audits"] == 1
+        assert active_detector_activity["det_123"]["hourly_total_low_confidence_iqs"] == 3
         assert active_detector_activity["det_123"]["last_iq"] is not None
         assert active_detector_activity["det_123"]["last_escalation"] is not None
         assert active_detector_activity["det_123"]["last_audit"] is not None
+        assert active_detector_activity["det_123"]["last_low_confidence_iq"] is not None
