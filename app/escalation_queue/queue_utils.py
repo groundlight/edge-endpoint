@@ -4,7 +4,7 @@ from groundlight import Groundlight
 from model import ImageQuery
 
 from app.core.utils import get_formatted_timestamp_str, safe_call_sdk
-from app.escalation_queue.dropped_escalations import DroppedEscalationReason, record_dropped_escalation
+from app.escalation_queue.failed_escalations import record_failed_enqueue
 from app.escalation_queue.models import EscalationInfo, SubmitImageQueryParams
 from app.escalation_queue.queue_writer import QueueWriter
 
@@ -15,6 +15,7 @@ def write_escalation_to_queue(
     writer: QueueWriter, detector_id: str, image_bytes: bytes, submit_iq_params: SubmitImageQueryParams, request_id: str
 ) -> None:
     """Writes an escalation to the queue. On failure, logs an error and does NOT raise an exception."""
+    escalation_info = None
     try:  # We don't want this to ever raise an exception because it's called synchronously before we return an answer.
         timestamp = get_formatted_timestamp_str()
         image_path_str = writer.write_image_bytes(image_bytes, detector_id, timestamp)
@@ -28,20 +29,10 @@ def write_escalation_to_queue(
         )
         wrote = writer.write_escalation(escalation_info)
         if not wrote:
-            record_dropped_escalation(
-                reason=DroppedEscalationReason.QUEUE_WRITE_FAILED,
-                escalation_info=escalation_info,
-                error="QueueWriter.write_escalation returned False",
-            )
+            record_failed_enqueue(escalation_info=escalation_info, exc=RuntimeError("QueueWriter.write_escalation returned False"))
     except Exception as e:
         logger.error(f"Failed to write escalation to queue for detector {detector_id} with error {e}.")
-        record_dropped_escalation(
-            reason=DroppedEscalationReason.QUEUE_WRITE_FAILED,
-            detector_id=detector_id,
-            submit_iq_params=submit_iq_params.model_dump(),
-            request_id=request_id,
-            error=str(e),
-        )
+        record_failed_enqueue(escalation_info=escalation_info, exc=e)
 
 
 def safe_escalate_with_queue_write(

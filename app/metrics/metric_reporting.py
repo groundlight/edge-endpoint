@@ -13,7 +13,7 @@ from typing import Any, Callable
 from groundlight import Groundlight
 
 from app.core import deviceid
-from app.escalation_queue import dropped_escalations
+from app.escalation_queue import failed_escalations
 from app.metrics import iq_activity, system_metrics
 
 logger = logging.getLogger(__name__)
@@ -84,7 +84,7 @@ class MetricsReporter:
         detector_details.add("detector_details", lambda: system_metrics.get_detector_details())
 
         dropped_escalation_metrics = SafeMetricsDict()
-        dropped_escalation_metrics.add("dropped_escalations", lambda: dropped_escalations.metrics_summary())
+        dropped_escalation_metrics.add("dropped_escalations", lambda: failed_escalations.metrics_summary())
 
         return {
             "device_info": device_info.as_dict(),

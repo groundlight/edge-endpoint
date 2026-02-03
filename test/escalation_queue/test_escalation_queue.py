@@ -14,9 +14,9 @@ from urllib3.exceptions import MaxRetryError
 
 from app.core.utils import generate_iq_id, generate_request_id, get_formatted_timestamp_str
 from app.escalation_queue.constants import MAX_QUEUE_FILE_LINES
-from app.escalation_queue.dropped_escalations import DroppedEscalationReason
 from app.escalation_queue.manage_reader import (
     RETRY_WAIT_TIMES,
+    EscalateOnceResult,
     _escalate_once,
     consume_queued_escalation,
     read_from_escalation_queue,
@@ -111,6 +111,11 @@ def test_base_dir() -> Generator[str, None, None]:
     # Clean up the directory once the test finishes
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
+
+
+@pytest.fixture(autouse=True)
+def _failed_escalations_dir(test_base_dir: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FAILED_ESCALATIONS_DIR", os.path.join(test_base_dir, "failed"))
 
 
 @pytest.fixture
@@ -372,14 +377,12 @@ class TestEscalateOnce:
         dummy_iq = Mock()
 
         with patch("app.escalation_queue.manage_reader.safe_call_sdk", return_value=dummy_iq) as mock_safe_call_sdk:
-            escalation_result, should_try_again, reason, error = _escalate_once(
-                test_escalation_info, submit_iq_request_timeout_s=5
-            )
+            outcome = _escalate_once(test_escalation_info, submit_iq_request_timeout_s=5)
 
-            assert escalation_result is dummy_iq
-            assert not should_try_again
-            assert reason is None
-            assert error is None
+            assert outcome.image_query is dummy_iq
+            assert not outcome.should_retry
+            assert outcome.exc is None
+            assert not outcome.treat_as_success
 
             mock_safe_call_sdk.assert_called_once()
             first_call_args, _ = mock_safe_call_sdk.call_args
@@ -388,54 +391,57 @@ class TestEscalateOnce:
     def test_image_not_found(self, test_escalation_info: EscalationInfo, mock_gl: Mock):
         """If the image path does not exist, _escalate_once should skip escalation and not retry."""
         test_escalation_info.image_path_str = "this-path-does-not-exist.jpeg"
-        result, should_retry, reason, _ = _escalate_once(test_escalation_info, submit_iq_request_timeout_s=5)
+        outcome = _escalate_once(test_escalation_info, submit_iq_request_timeout_s=5)
 
-        assert result is None
-        assert not should_retry
-        assert reason == DroppedEscalationReason.IMAGE_NOT_FOUND
+        assert outcome.image_query is None
+        assert not outcome.should_retry
+        assert isinstance(outcome.exc, FileNotFoundError)
 
     def test_no_connection_during_submit(self, test_escalation_info: EscalationInfo, mock_gl: Mock):
         """If submitting the IQ fails due to connection problems, _escalate_once should suggest a retry."""
         mock_gl.submit_image_query.side_effect = MaxRetryError(pool=None, url=None)
-        result, should_retry, _, _ = _escalate_once(test_escalation_info, submit_iq_request_timeout_s=5)
+        outcome = _escalate_once(test_escalation_info, submit_iq_request_timeout_s=5)
 
-        assert result is None
-        assert should_retry
+        assert outcome.image_query is None
+        assert outcome.should_retry
+        assert isinstance(outcome.exc, MaxRetryError)
 
     def test_400_exception(self, test_escalation_info: EscalationInfo, mock_gl: Mock):
         """HTTP 400 exceptions should not trigger a retry. This includes if the IQ already exists in the cloud."""
         mock_gl.submit_image_query.side_effect = HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
-        result, should_retry, reason, _ = _escalate_once(test_escalation_info, submit_iq_request_timeout_s=5)
+        outcome = _escalate_once(test_escalation_info, submit_iq_request_timeout_s=5)
 
-        assert result is None
-        assert not should_retry
-        assert reason == DroppedEscalationReason.HTTP_400_BAD_REQUEST
+        assert outcome.image_query is None
+        assert not outcome.should_retry
+        assert outcome.treat_as_success
 
     def test_429_exception(self, test_escalation_info: EscalationInfo, mock_gl: Mock):
         """HTTP 429 exceptions should trigger a retry."""
         mock_gl.submit_image_query.side_effect = HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS)
-        result, should_retry, _, _ = _escalate_once(test_escalation_info, submit_iq_request_timeout_s=5)
+        outcome = _escalate_once(test_escalation_info, submit_iq_request_timeout_s=5)
 
-        assert result is None
-        assert should_retry
+        assert outcome.image_query is None
+        assert outcome.should_retry
+        assert isinstance(outcome.exc, HTTPException)
 
     def test_non_429_http_exception(self, test_escalation_info: EscalationInfo, mock_gl: Mock):
         """Other non-429 HTTP exceptions should not trigger a retry.."""
         mock_gl.submit_image_query.side_effect = HTTPException(status_code=status.HTTP_418_IM_A_TEAPOT)
-        result, should_retry, reason, _ = _escalate_once(test_escalation_info, submit_iq_request_timeout_s=5)
+        outcome = _escalate_once(test_escalation_info, submit_iq_request_timeout_s=5)
 
-        assert result is None
-        assert not should_retry
-        assert reason == DroppedEscalationReason.HTTP_ERROR
+        assert outcome.image_query is None
+        assert not outcome.should_retry
+        assert isinstance(outcome.exc, HTTPException)
 
     def test_gl_client_creation_failure(self, test_escalation_info: EscalationInfo):
         """If the Groundlight client cannot be created, _escalate_once should suggest a retry."""
         with patch("app.escalation_queue.manage_reader._groundlight_client") as mock_gl:
             mock_gl.side_effect = GroundlightClientError()
-            result, should_retry, _, _ = _escalate_once(test_escalation_info, submit_iq_request_timeout_s=5)
+            outcome = _escalate_once(test_escalation_info, submit_iq_request_timeout_s=5)
 
-        assert result is None
-        assert should_retry
+        assert outcome.image_query is None
+        assert outcome.should_retry
+        assert isinstance(outcome.exc, GroundlightClientError)
 
 
 class TestConsumeQueuedEscalation:
@@ -449,7 +455,7 @@ class TestConsumeQueuedEscalation:
 
         with (
             patch(
-                "app.escalation_queue.manage_reader._escalate_once", return_value=(dummy_result, False, None, None)
+                "app.escalation_queue.manage_reader._escalate_once", return_value=EscalateOnceResult.success(dummy_result)
             ) as mock_escalate,
             patch.object(test_request_cache, "contains", wraps=test_request_cache.contains) as mock_contains,
         ):
@@ -468,15 +474,17 @@ class TestConsumeQueuedEscalation:
         escalation_str = convert_escalation_info_to_str(test_escalation_info)
 
         num_retries = 3
-        side_effects = [(None, True, None, None)] * num_retries + [(None, False, DroppedEscalationReason.HTTP_ERROR, "")]
+        side_effects = [EscalateOnceResult.retryable_failure(MaxRetryError(pool=None, url=None))] * num_retries + [
+            EscalateOnceResult.dropped_failure(HTTPException(status_code=status.HTTP_418_IM_A_TEAPOT))
+        ]
 
         with (
             patch("app.escalation_queue.manage_reader._escalate_once", side_effect=side_effects) as mock_escalate,
             patch("app.escalation_queue.manage_reader.time.sleep") as mock_sleep,  # Avoid waiting during the test
         ):
-            result = consume_queued_escalation(escalation_str, test_request_cache, delete_image=False)
+            with pytest.raises(HTTPException):
+                consume_queued_escalation(escalation_str, test_request_cache, delete_image=False)
 
-        assert result is None
         assert mock_escalate.call_count == len(side_effects)
 
         # All retries should use a shorter request time than the first attempt
@@ -504,7 +512,7 @@ class TestConsumeQueuedEscalation:
             dummy_result = Mock()
 
             with patch(
-                "app.escalation_queue.manage_reader._escalate_once", return_value=(dummy_result, False, None, None)
+                "app.escalation_queue.manage_reader._escalate_once", return_value=EscalateOnceResult.success(dummy_result)
             ) as mock_escalate:
                 result = consume_queued_escalation(escalation_str, test_request_cache)
 
@@ -523,7 +531,7 @@ class TestConsumeQueuedEscalation:
         escalation_str_1 = convert_escalation_info_to_str(escalation_info_1)
         escalation_str_2 = convert_escalation_info_to_str(escalation_info_2)
 
-        with patch("app.escalation_queue.manage_reader._escalate_once", return_value=(None, False, None, None)) as mock_escalate_1:
+        with patch("app.escalation_queue.manage_reader._escalate_once", return_value=EscalateOnceResult.success(Mock())) as mock_escalate_1:
             consume_queued_escalation(escalation_str_1, test_request_cache, delete_image=False)
 
         mock_escalate_1.assert_called_once()
@@ -543,9 +551,9 @@ class TestConsumeQueuedEscalation:
     def test_skips_empty_string(self, test_request_cache: RequestCache):
         """Empty string should return None without attempting escalation or updating cache."""
         with patch("app.escalation_queue.manage_reader._escalate_once") as mock_escalate:
-            result = consume_queued_escalation("", test_request_cache, delete_image=False)
+            with pytest.raises(json.JSONDecodeError):
+                consume_queued_escalation("", test_request_cache, delete_image=False)
 
-        assert result is None
         mock_escalate.assert_not_called()
         # Request cache should not have been updated (nothing to cache)
         assert len(list(test_request_cache.cache_dir.iterdir())) == 0
@@ -553,9 +561,9 @@ class TestConsumeQueuedEscalation:
     def test_skips_whitespace_only(self, test_request_cache: RequestCache):
         """Whitespace-only string should return None without attempting escalation or updating cache."""
         with patch("app.escalation_queue.manage_reader._escalate_once") as mock_escalate:
-            result = consume_queued_escalation("   \n\t  ", test_request_cache, delete_image=False)
+            with pytest.raises(json.JSONDecodeError):
+                consume_queued_escalation("   \n\t  ", test_request_cache, delete_image=False)
 
-        assert result is None
         mock_escalate.assert_not_called()
         assert len(list(test_request_cache.cache_dir.iterdir())) == 0
 
@@ -563,9 +571,9 @@ class TestConsumeQueuedEscalation:
         """String with null bytes (corruption) should return None without attempting escalation."""
         corrupted_str = "\x00\x00\x00\x00"
         with patch("app.escalation_queue.manage_reader._escalate_once") as mock_escalate:
-            result = consume_queued_escalation(corrupted_str, test_request_cache, delete_image=False)
+            with pytest.raises(json.JSONDecodeError):
+                consume_queued_escalation(corrupted_str, test_request_cache, delete_image=False)
 
-        assert result is None
         mock_escalate.assert_not_called()
         assert len(list(test_request_cache.cache_dir.iterdir())) == 0
 
@@ -573,9 +581,9 @@ class TestConsumeQueuedEscalation:
         """Invalid JSON should return None without attempting escalation."""
         invalid_json = "this is not valid json {"
         with patch("app.escalation_queue.manage_reader._escalate_once") as mock_escalate:
-            result = consume_queued_escalation(invalid_json, test_request_cache, delete_image=False)
+            with pytest.raises(json.JSONDecodeError):
+                consume_queued_escalation(invalid_json, test_request_cache, delete_image=False)
 
-        assert result is None
         mock_escalate.assert_not_called()
         assert len(list(test_request_cache.cache_dir.iterdir())) == 0
 
@@ -584,9 +592,9 @@ class TestConsumeQueuedEscalation:
         # Valid JSON but missing required EscalationInfo fields
         malformed_json = json.dumps({"some_key": "some_value"})
         with patch("app.escalation_queue.manage_reader._escalate_once") as mock_escalate:
-            result = consume_queued_escalation(malformed_json, test_request_cache, delete_image=False)
+            with pytest.raises(Exception):
+                consume_queued_escalation(malformed_json, test_request_cache, delete_image=False)
 
-        assert result is None
         mock_escalate.assert_not_called()
         assert len(list(test_request_cache.cache_dir.iterdir())) == 0
 
@@ -642,7 +650,7 @@ class TestReadFromEscalationQueue:
                 patch.object(QueueReader, "__iter__", return_value=iter(escalation_strs)),
                 patch(
                     "app.escalation_queue.manage_reader._escalate_once",
-                    return_value=(dummy_iq, False, None, None),
+                    return_value=EscalateOnceResult.success(dummy_iq),
                 ) as mock_escalate,
             ):
                 read_from_escalation_queue(test_reader, test_request_cache)
