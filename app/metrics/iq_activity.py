@@ -1,5 +1,5 @@
 """Uses the filesystem to track various metrics about image-query activity. Tracks iqs, escalations,
-and audits for each detector, as well as iqs submitted to the edge-endpoint as a whole.
+audits, and below_threshold_iqs for each detector, as well as iqs submitted to the edge-endpoint as a whole.
 
 Filesystem structure:
 /opt/groundlight/edge-metrics/
@@ -8,6 +8,7 @@ Filesystem structure:
             last_iqs
             last_escalations
             last_audits
+            last_below_threshold_iqs
             iqs_<pid1>_YYYY-MM-DD_HH    <-- arbitrary number of files, one per process. hourly files cleared out regularly
             iqs_<pid1>_YYYY-MM-DD_HH
             iqs_<pid2>_YYYY-MM-DD_HH
@@ -15,6 +16,7 @@ Filesystem structure:
             escalations_<pid1>_YYYY-MM-DD_HH
             escalations_<pid2>_YYYY-MM-DD_HH
             audits_<pid1>_YYYY-MM-DD_HH
+            below_threshold_iqs_<pid1>_YYYY-MM-DD_HH
         <detector_id2>/
             repeat of above detector
 """
@@ -189,6 +191,7 @@ def record_activity_for_metrics(detector_id: str, activity_type: str):
     - iqs
     - escalations
     - audits
+    - below_threshold_iqs
     """
     supported_activity_types = ["iqs", "escalations", "audits", "below_threshold_iqs"]
     if activity_type not in supported_activity_types:
