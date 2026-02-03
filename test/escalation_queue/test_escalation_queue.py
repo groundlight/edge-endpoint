@@ -474,8 +474,9 @@ class TestConsumeQueuedEscalation:
         escalation_str = convert_escalation_info_to_str(test_escalation_info)
 
         num_retries = 3
-        side_effects = [EscalateOnceResult.retryable_failure(MaxRetryError(pool=None, url=None))] * num_retries + [
-            EscalateOnceResult.dropped_failure(HTTPException(status_code=status.HTTP_418_IM_A_TEAPOT))
+        side_effects = [
+            EscalateOnceResult.retryable_failure(MaxRetryError(pool=None, url=None, reason=Exception("network error")))
+        ] * num_retries + [EscalateOnceResult.dropped_failure(HTTPException(status_code=status.HTTP_418_IM_A_TEAPOT))]
         ]
 
         with (
@@ -531,7 +532,9 @@ class TestConsumeQueuedEscalation:
         escalation_str_1 = convert_escalation_info_to_str(escalation_info_1)
         escalation_str_2 = convert_escalation_info_to_str(escalation_info_2)
 
-        with patch("app.escalation_queue.manage_reader._escalate_once", return_value=EscalateOnceResult.success(Mock())) as mock_escalate_1:
+        with patch(
+            "app.escalation_queue.manage_reader._escalate_once", return_value=EscalateOnceResult.success(Mock())
+        ) as mock_escalate_1:
             consume_queued_escalation(escalation_str_1, test_request_cache, delete_image=False)
 
         mock_escalate_1.assert_called_once()
