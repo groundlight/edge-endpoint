@@ -29,7 +29,9 @@ def write_escalation_to_queue(
         )
         wrote = writer.write_escalation(escalation_info)
         if not wrote:
-            record_failed_enqueue(escalation_info=escalation_info, exc=RuntimeError("QueueWriter.write_escalation returned False"))
+            record_failed_enqueue(
+                escalation_info=escalation_info, exc=RuntimeError("QueueWriter.write_escalation returned False")
+            )
     except Exception as e:
         logger.error(f"Failed to write escalation to queue for detector {detector_id} with error {e}.")
         record_failed_enqueue(escalation_info=escalation_info, exc=e)

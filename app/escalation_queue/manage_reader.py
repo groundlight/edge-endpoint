@@ -101,7 +101,7 @@ def _escalate_once(  # noqa: PLR0911
         image_bytes = image_path.read_bytes()
     except FileNotFoundError as ex:
         logger.info(f"Could not locate image at path {image_path}. Skipping this escalation.")
-        return EscalateOnceResult.dropped_failure(ex) # Should not retry because the image cannot be located
+        return EscalateOnceResult.dropped_failure(ex)  # Should not retry because the image cannot be located
 
     submit_iq_params = escalation_info.submit_iq_params
     try:
