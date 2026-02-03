@@ -318,47 +318,33 @@ def test_record_confidence_for_metrics(monkeypatch, tmp_base_dir, _test_tracker)
 
         # Record some confidence values
         record_confidence_for_metrics("det_confidence_test", 0.73)
-        assert Path(
-            tmp_base_dir, "detectors", "det_confidence_test", "confidence_70-75_11111_2025-04-03_14"
-        ).exists()
+        assert Path(tmp_base_dir, "detectors", "det_confidence_test", "confidence_70-75_11111_2025-04-03_14").exists()
         assert (
-            Path(
-                tmp_base_dir, "detectors", "det_confidence_test", "confidence_70-75_11111_2025-04-03_14"
-            ).read_text()
+            Path(tmp_base_dir, "detectors", "det_confidence_test", "confidence_70-75_11111_2025-04-03_14").read_text()
             == "1"
         )
 
         # Record another value in the same bucket
         record_confidence_for_metrics("det_confidence_test", 0.71)
         assert (
-            Path(
-                tmp_base_dir, "detectors", "det_confidence_test", "confidence_70-75_11111_2025-04-03_14"
-            ).read_text()
+            Path(tmp_base_dir, "detectors", "det_confidence_test", "confidence_70-75_11111_2025-04-03_14").read_text()
             == "2"
         )
 
         # Record in a different bucket
         record_confidence_for_metrics("det_confidence_test", 0.95)
-        assert Path(
-            tmp_base_dir, "detectors", "det_confidence_test", "confidence_95-100_11111_2025-04-03_14"
-        ).exists()
+        assert Path(tmp_base_dir, "detectors", "det_confidence_test", "confidence_95-100_11111_2025-04-03_14").exists()
         assert (
-            Path(
-                tmp_base_dir, "detectors", "det_confidence_test", "confidence_95-100_11111_2025-04-03_14"
-            ).read_text()
+            Path(tmp_base_dir, "detectors", "det_confidence_test", "confidence_95-100_11111_2025-04-03_14").read_text()
             == "1"
         )
 
         # Record from a different PID
         monkeypatch.setattr(os, "getpid", lambda: 22222)
         record_confidence_for_metrics("det_confidence_test", 0.72)
-        assert Path(
-            tmp_base_dir, "detectors", "det_confidence_test", "confidence_70-75_22222_2025-04-03_14"
-        ).exists()
+        assert Path(tmp_base_dir, "detectors", "det_confidence_test", "confidence_70-75_22222_2025-04-03_14").exists()
         assert (
-            Path(
-                tmp_base_dir, "detectors", "det_confidence_test", "confidence_70-75_22222_2025-04-03_14"
-            ).read_text()
+            Path(tmp_base_dir, "detectors", "det_confidence_test", "confidence_70-75_22222_2025-04-03_14").read_text()
             == "1"
         )
 
