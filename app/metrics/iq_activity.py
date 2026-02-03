@@ -1,5 +1,6 @@
 """Uses the filesystem to track various metrics about image-query activity. Tracks iqs, escalations,
-audits, and below_threshold_iqs for each detector, as well as iqs submitted to the edge-endpoint as a whole.
+audits, below_threshold_iqs, and confidence histograms for each detector, as well as iqs submitted to the
+edge-endpoint as a whole.
 
 Filesystem structure:
 /opt/groundlight/edge-metrics/
@@ -17,6 +18,8 @@ Filesystem structure:
             escalations_<pid2>_YYYY-MM-DD_HH
             audits_<pid1>_YYYY-MM-DD_HH
             below_threshold_iqs_<pid1>_YYYY-MM-DD_HH
+            confidence_0-5_<pid1>_YYYY-MM-DD_HH    <-- confidence histogram buckets (5% intervals)
+            confidence_95-100_<pid1>_YYYY-MM-DD_HH
         <detector_id2>/
             repeat of above detector
 """
@@ -158,7 +161,30 @@ class ActivityRetriever:
         """Get the last hour in UTC."""
         return (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
 
-    def get_detector_activity_metrics(self, detector_id: str) -> int:
+    def get_detector_confidence_histogram(self, detector_id: str) -> dict:
+        """Get the confidence histogram for a detector for the previous hour.
+
+        Returns:
+            A dictionary mapping bucket names to counts, e.g. {"70-75": 45, "95-100": 38}.
+            Only non-zero buckets are included.
+        """
+        time = (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
+        detector_folder = _tracker().detector_folder(detector_id)
+        activity_files = list(detector_folder.glob(f"confidence_*_{time}"))
+
+        histogram = {}
+        for f in activity_files:
+            # Extract bucket from filename like "confidence_70-75_12345_2025-04-03_12"
+            parts = f.name.split("_")
+            if len(parts) >= 2 and parts[0] == "confidence":
+                bucket = parts[1]
+                count = _tracker().get_activity_from_file(f)
+                if count > 0:
+                    histogram[bucket] = histogram.get(bucket, 0) + count
+
+        return histogram
+
+    def get_detector_activity_metrics(self, detector_id: str) -> dict:
         """Get the activity on a detector for the previous hour."""
         time = (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
         logger.info(f"Getting activity for detector {detector_id} at {time}")
@@ -176,6 +202,9 @@ class ActivityRetriever:
 
             detector_metrics[f"hourly_total_{activity_type}"] = total_activity
             detector_metrics[f"last_{activity_type[:-1]}"] = last_activity
+
+        # Add confidence histogram
+        detector_metrics["confidence_histogram"] = self.get_detector_confidence_histogram(detector_id)
 
         return detector_metrics
 
@@ -212,6 +241,35 @@ def record_activity_for_metrics(detector_id: str, activity_type: str):
     # edge endpoint wide activity tracking
     f = _tracker().last_activity_file(activity_type)
     f.touch()
+
+
+def _confidence_to_bucket(confidence: float) -> str:
+    """Convert confidence (0.0-1.0) to bucket name like '70-75'.
+
+    Buckets are 5 percentage points each: 0-5, 5-10, ..., 95-100.
+    """
+    if confidence == 1.0:
+        return "95-100"
+    bucket_start = int(confidence * 100) // 5 * 5
+    bucket_end = bucket_start + 5
+    return f"{bucket_start}-{bucket_end}"
+
+
+def record_confidence_for_metrics(detector_id: str, confidence: float):
+    """Records a confidence value from an image query for histogram tracking.
+
+    Args:
+        detector_id: The detector that processed the image query.
+        confidence: The confidence value (0.0-1.0) from the inference result.
+    """
+    bucket = _confidence_to_bucket(confidence)
+    activity_type = f"confidence_{bucket}"
+
+    logger.debug(f"Recording confidence {confidence} (bucket {bucket}) on detector {detector_id}")
+
+    current_hour = datetime.now()
+    f = _tracker().hourly_activity_file(activity_type, current_hour, detector_id)
+    _tracker().increment_counter_file(f)
 
 
 def clear_old_activity_files():

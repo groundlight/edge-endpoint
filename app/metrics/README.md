@@ -20,10 +20,12 @@ Tracked per detector in `iq_activity.py`:
 | `escalations` | Queries under the confidence threshold sent to the cloud for processing |
 | `audits` | Confident edge predictions sampled for quality auditing |
 | `below_threshold_iqs` | Queries where edge confidence was below the threshold (includes both escalated iqs and iqs that were candidates for escalation but were rate-limited) |
+| `confidence_histogram` | Distribution of confidence values across buckets of 5% confidence intervals (0-5, 5-10, ..., 95-100) |
 
 Reported fields per detector:
 - `hourly_total_<metric>` - count for the previous hour
 - `last_<metric>` - timestamp of most recent occurrence (singular form, e.g., `last_iq`)
+- `confidence_histogram` - dict mapping bucket names to counts (e.g., `{"70-75": 45, "95-100": 38}`)
 
 ### Filesystem Storage
 
@@ -38,6 +40,7 @@ iqs_<pid>_YYYY-MM-DD_HH               # hourly counter files (per process)
 escalations_<pid>_YYYY-MM-DD_HH
 audits_<pid>_YYYY-MM-DD_HH
 below_threshold_iqs_<pid>_YYYY-MM-DD_HH
+confidence_<bucket>_<pid>_YYYY-MM-DD_HH  # confidence histogram (e.g., confidence_70-75_12345_2025-04-03_12)
 ```
 
 Hourly files older than 2 hours are automatically cleaned up.
