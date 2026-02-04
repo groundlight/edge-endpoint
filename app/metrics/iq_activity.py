@@ -246,7 +246,7 @@ def record_activity_for_metrics(detector_id: str, activity_type: str):
 def _confidence_to_bucket(confidence: float) -> str:
     """Convert confidence (0.0-1.0) to bucket name like '70-75'.
 
-    Buckets are 5 percentage points each: 0-5, 5-10, ..., 95-100.
+    Buckets are 5 percentage points each, inclusive at the bottom: [0-5), [5-10), ..., [95-100].
     """
     if confidence == 1.0:
         return "95-100"
