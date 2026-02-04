@@ -17,7 +17,7 @@ Tracked per detector in `iq_activity.py`:
 | Metric | Description |
 |--------|-------------|
 | `iqs` | Total image queries submitted |
-| `escalations` | Queries under the confidence threshold sent to the cloud for processing |
+| `escalations` | Queries sent to the cloud for processing (includes low-confidence IQs, but also `want_async` requests, `human_review=ALWAYS` requests, and cases where edge inference is unavailable) |
 | `audits` | Confident edge predictions sampled for quality auditing |
 | `below_threshold_iqs` | Queries where edge confidence was below the threshold (includes both escalated iqs and iqs that were candidates for escalation but were rate-limited) |
 | `confidence_histogram` | Distribution of confidence values across buckets of 5% confidence intervals (0-5, 5-10, ..., 95-100) |
