@@ -17,7 +17,7 @@ from app.core.edge_inference import get_edge_inference_model_name
 from app.core.utils import create_iq, generate_iq_id, generate_metadata_dict, generate_request_id
 from app.escalation_queue.models import SubmitImageQueryParams
 from app.escalation_queue.queue_utils import safe_escalate_with_queue_write, write_escalation_to_queue
-from app.metrics.iq_activity import record_activity_for_metrics
+from app.metrics.iq_activity import record_activity_for_metrics, record_confidence_for_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -170,8 +170,12 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             detector_id=detector_id, image_bytes=image_bytes, content_type=content_type, mode=detector_metadata.mode
         )
         ml_confidence = results["confidence"]
+        record_confidence_for_metrics(detector_id, ml_confidence)
 
         is_confident_enough = ml_confidence >= confidence_threshold
+        if not is_confident_enough:
+            record_activity_for_metrics(detector_id, activity_type="below_threshold_iqs")
+
         if return_edge_prediction or is_confident_enough:  # Return the edge prediction
             if return_edge_prediction:
                 logger.debug(f"Returning edge prediction without cloud escalation. {detector_id=}")
