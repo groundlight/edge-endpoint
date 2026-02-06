@@ -90,6 +90,13 @@ def prune_failed_escalations() -> None:
     if MAX_RECORDS <= 0:
         return
 
+    # Best-effort cleanup for crash leftovers from atomic record writes (write to `*.json.tmp`, then rename).
+    for path in FAILED_ESCALATIONS_DIR.glob("*.json.tmp"):
+        try:
+            path.unlink(missing_ok=True)
+        except Exception:
+            logger.debug(f"Failed to remove temp file {path}", exc_info=True)
+
     files = sorted(FAILED_ESCALATIONS_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime_ns)
     while len(files) > MAX_RECORDS:
         (files.pop(0)).unlink(missing_ok=True)
@@ -151,8 +158,10 @@ def metrics_summary() -> dict[str, Any]:
         "activity_hour": last_hour_cutoff.strftime("%Y-%m-%d_%H"),
         "last_dropped_time": last_failed_time,
         "dropped_last_hour_total": dropped_last_hour_total,
-        "dropped_last_hour_by_exception": dropped_last_hour_by_exception,
+        # Stringify to avoid dynamic keys being indexed in OpenSearch.
+        "dropped_last_hour_by_exception": json.dumps(dropped_last_hour_by_exception, sort_keys=True),
         "dropped_lifetime_total": len(files),
-        "dropped_lifetime_by_exception": dropped_lifetime_by_exception,
+        # Stringify to avoid dynamic keys being indexed in OpenSearch.
+        "dropped_lifetime_by_exception": json.dumps(dropped_lifetime_by_exception, sort_keys=True),
     }
 
