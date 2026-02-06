@@ -16,6 +16,7 @@ MAX_RECORDS = 200
 MAX_EXCEPTION_MESSAGE_CHARS = 1000
 MAX_TRACEBACK_CHARS = 4000
 
+
 def _ensure_dir() -> None:
     FAILED_ESCALATIONS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -164,4 +165,3 @@ def metrics_summary() -> dict[str, Any]:
         # Stringify to avoid dynamic keys being indexed in OpenSearch.
         "dropped_lifetime_by_exception": json.dumps(dropped_lifetime_by_exception, sort_keys=True),
     }
-
