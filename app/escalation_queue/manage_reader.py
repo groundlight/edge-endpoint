@@ -10,6 +10,7 @@ from groundlight import Groundlight, GroundlightClientError, ImageQuery
 from urllib3.exceptions import MaxRetryError, ReadTimeoutError
 
 from app.core.utils import safe_call_sdk
+from app.escalation_queue.failed_escalations import record_failed_escalation
 from app.escalation_queue.models import EscalationInfo
 from app.escalation_queue.queue_reader import QueueReader
 from app.escalation_queue.request_cache import RequestCache
@@ -129,35 +130,20 @@ def consume_queued_escalation(
 
     The `delete_image` argument is used by tests only, and otherwise defaults to True.
     """
-    # Skip empty/whitespace lines
-    stripped = escalation_str.strip()
-    if not stripped:
-        logger.warning("Skipping empty line in escalation queue.")
-        return None
-
-    # Skip lines with null bytes (corruption indicator)
-    if "\x00" in escalation_str:
-        logger.warning("Skipping corrupted line with null bytes in escalation queue.")
-        return None
-
-    try:
-        escalation_info = EscalationInfo(**json.loads(stripped))
-    except json.JSONDecodeError as e:
-        logger.warning(f"Skipping line with invalid JSON: {e}")
-        return None
-    except Exception as e:
-        logger.warning(f"Skipping line that failed to parse as EscalationInfo: {e}")
-        return None
+    escalation_info = EscalationInfo(**json.loads(escalation_str.strip()))
 
     if request_cache.contains(escalation_info.request_id):
         logger.info(
             "Skipping escalation because we've already done an escalation related to request ID "
             f"{escalation_info.request_id}."
         )
+        if delete_image:
+            Path(escalation_info.image_path_str).unlink(missing_ok=True)
         return None
 
     should_retry_escalation = True
     escalation_result = None
+    final_exception: BaseException | None = None
 
     submit_iq_request_timeout_s = (5, 15)  # How long the image query request should be allowed to try to complete.
     # The first element of the tuple is the connect timeout and the second is the read timeout.
@@ -179,8 +165,11 @@ def consume_queued_escalation(
                 time.sleep(wait_time)
                 retry_count += 1
             else:
-                # If there isn't reason to try again, we move on to the next escalation.
-                should_retry_escalation = False
+                final_exception = RuntimeError(
+                    "Escalation permanently failed for "
+                    f"{escalation_info.submit_iq_params.image_query_id=} {escalation_info.request_id=}."
+                )
+                break
         else:  # Successfully escalated.
             should_retry_escalation = False
 
@@ -193,6 +182,9 @@ def consume_queued_escalation(
         image_path = Path(escalation_info.image_path_str)
         image_path.unlink(missing_ok=True)
 
+    if final_exception is not None:
+        raise final_exception
+
     return escalation_result
 
 
@@ -201,11 +193,12 @@ def read_from_escalation_queue(reader: QueueReader, request_cache: RequestCache)
     # Because the QueueReader will block until it has something to yield, this will loop forever
     for escalation in reader:
         logger.info("Got queued escalation from reader.")
-        result = consume_queued_escalation(escalation, request_cache)
-        if result is None:
-            logger.info("Escalation permanently failed or skipped, moving on.")
-        else:
-            logger.info(f"Escalation succeeded for escalation with ID {result.id}.")
+        try:
+            consume_queued_escalation(escalation, request_cache)
+            logger.info("Escalation processed.")
+        except Exception as e:
+            logger.error("Escalation permanently failed, moving on.", exc_info=True)
+            record_failed_escalation(escalation, e)
 
 
 if __name__ == "__main__":

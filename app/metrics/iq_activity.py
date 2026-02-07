@@ -3,7 +3,7 @@ audits, below_threshold_iqs, and confidence histograms for each detector, as wel
 edge-endpoint as a whole.
 
 Filesystem structure:
-/opt/groundlight/edge-metrics/
+/opt/groundlight/device/edge-metrics/
     detectors/
         <detector_id1>/
             last_iqs
