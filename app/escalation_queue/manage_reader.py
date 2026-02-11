@@ -33,9 +33,7 @@ def _groundlight_client() -> Groundlight:
     return Groundlight()  # NOTE this will wait the default 10 seconds when there's no connection.
 
 
-def _escalate_once(
-    escalation_info: EscalationInfo, submit_iq_request_timeout_s: int | tuple[int, int]
-) -> ImageQuery:
+def _escalate_once(escalation_info: EscalationInfo, submit_iq_request_timeout_s: int | tuple[int, int]) -> ImageQuery:
     """
     Consumes escalation info for a query and attempts to complete the escalation.
 

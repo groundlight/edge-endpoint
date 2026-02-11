@@ -4,7 +4,7 @@ import shutil
 import tempfile
 from pathlib import Path
 from typing import Generator, Iterator
-from unittest.mock import Mock, call, patch
+from unittest.mock import Mock, patch
 
 import ksuid
 import pytest
