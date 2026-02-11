@@ -18,10 +18,12 @@ MAX_TRACEBACK_CHARS = 4000
 
 
 def _ensure_dir() -> None:
+    """Ensure the failed-escalations directory exists."""
     FAILED_ESCALATIONS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _truncate(text: str | None, max_chars: int) -> str | None:
+    """Return a string truncated to at most `max_chars` characters."""
     if text is None:
         return None
     if max_chars <= 0:
@@ -32,6 +34,7 @@ def _truncate(text: str | None, max_chars: int) -> str | None:
 
 
 def _format_traceback(exc: BaseException, max_chars: int) -> str | None:
+    """Format an exception traceback and truncate it to a maximum length."""
     try:
         tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
     except Exception:
@@ -40,6 +43,7 @@ def _format_traceback(exc: BaseException, max_chars: int) -> str | None:
 
 
 def _parse_escalation(value: str | None, max_chars: int) -> tuple[str, Any]:
+    """Parse a queued escalation line as JSON or preserve it as raw text."""
     if value is None:
         return "none", None
     stripped = value.strip()
@@ -87,6 +91,7 @@ def record_failed_escalation(escalation_line: str | None, exc: BaseException) ->
 
 
 def prune_failed_escalations() -> None:
+    """Apply retention limits and cleanup for failed-escalation record files."""
     _ensure_dir()
     if MAX_RECORDS <= 0:
         return
