@@ -141,7 +141,10 @@ class TestFailureRecordingIntegration:
             image_path_str="test/assets/cat.jpeg",
             request_id=generate_request_id(),
             submit_iq_params=SubmitImageQueryParams(
-                patience_time=None, confidence_threshold=0.9, human_review=None, image_query_id="iq_test",
+                patience_time=None,
+                confidence_threshold=0.9,
+                human_review=None,
+                image_query_id="iq_test",
             ),
         )
         return convert_escalation_info_to_str(info)
