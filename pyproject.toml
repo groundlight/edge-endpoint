@@ -67,6 +67,9 @@ trailing_comma_inline_array = true
 
 [tool.pytest.ini_options]
 testpaths = ["test"]
+markers = [
+    "live: marks tests that will be run against the live edge endpoint",
+]
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
