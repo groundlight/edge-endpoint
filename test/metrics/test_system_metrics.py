@@ -79,12 +79,15 @@ class TestPodIsReady:
 
 
 class TestGetPodErrorReason:
-    @pytest.mark.parametrize("reason", [
-        "CrashLoopBackOff",
-        "ImagePullBackOff",
-        "ErrImagePull",
-        "CreateContainerConfigError",
-    ])
+    @pytest.mark.parametrize(
+        "reason",
+        [
+            "CrashLoopBackOff",
+            "ImagePullBackOff",
+            "ErrImagePull",
+            "CreateContainerConfigError",
+        ],
+    )
     def test_error_reasons(self, reason):
         pod = _make_pod(waiting_reason=reason)
         assert _get_pod_error_reason(pod) == reason
@@ -122,27 +125,35 @@ class TestHasProgressDeadlineExceeded:
 
 class TestDeriveDetectorStatus:
     def test_ready(self):
-        dep = _make_deployment(replicas=1, status_replicas=1, ready_replicas=1, updated_replicas=1, available_replicas=1)
+        dep = _make_deployment(
+            replicas=1, status_replicas=1, ready_replicas=1, updated_replicas=1, available_replicas=1
+        )
         status, detail = _derive_detector_status(dep, [])
         assert status == "ready"
         assert detail is None
 
     def test_updating_surge_pod(self):
         """Rolling update: old pod available, new pod starting (total > desired)."""
-        dep = _make_deployment(replicas=1, status_replicas=2, ready_replicas=1, updated_replicas=1, available_replicas=1)
+        dep = _make_deployment(
+            replicas=1, status_replicas=2, ready_replicas=1, updated_replicas=1, available_replicas=1
+        )
         status, detail = _derive_detector_status(dep, [])
         assert status == "updating"
         assert detail is None
 
     def test_updating_not_yet_updated(self):
         """Rolling update: available pod exists but updated count is behind."""
-        dep = _make_deployment(replicas=1, status_replicas=1, ready_replicas=1, updated_replicas=0, available_replicas=1)
+        dep = _make_deployment(
+            replicas=1, status_replicas=1, ready_replicas=1, updated_replicas=0, available_replicas=1
+        )
         status, detail = _derive_detector_status(dep, [])
         assert status == "updating"
         assert detail is None
 
     def test_initializing_no_pods(self):
-        dep = _make_deployment(replicas=1, status_replicas=1, ready_replicas=0, updated_replicas=1, available_replicas=0)
+        dep = _make_deployment(
+            replicas=1, status_replicas=1, ready_replicas=0, updated_replicas=1, available_replicas=0
+        )
         pod = _make_pod(phase="Pending", ready_condition=False, container_ready=False)
         # No error reason on pod
         pod.status.container_statuses[0].state.waiting = None
@@ -151,20 +162,26 @@ class TestDeriveDetectorStatus:
         assert detail is None
 
     def test_initializing_no_pods_at_all(self):
-        dep = _make_deployment(replicas=1, status_replicas=0, ready_replicas=0, updated_replicas=0, available_replicas=0)
+        dep = _make_deployment(
+            replicas=1, status_replicas=0, ready_replicas=0, updated_replicas=0, available_replicas=0
+        )
         status, detail = _derive_detector_status(dep, [])
         assert status == "initializing"
         assert detail is None
 
     def test_error_crash_loop(self):
-        dep = _make_deployment(replicas=1, status_replicas=1, ready_replicas=0, updated_replicas=1, available_replicas=0)
+        dep = _make_deployment(
+            replicas=1, status_replicas=1, ready_replicas=0, updated_replicas=1, available_replicas=0
+        )
         pod = _make_pod(waiting_reason="CrashLoopBackOff", ready_condition=False, container_ready=False)
         status, detail = _derive_detector_status(dep, [pod])
         assert status == "error"
         assert detail == "CrashLoopBackOff"
 
     def test_error_image_pull(self):
-        dep = _make_deployment(replicas=1, status_replicas=1, ready_replicas=0, updated_replicas=1, available_replicas=0)
+        dep = _make_deployment(
+            replicas=1, status_replicas=1, ready_replicas=0, updated_replicas=1, available_replicas=0
+        )
         pod = _make_pod(waiting_reason="ImagePullBackOff", ready_condition=False, container_ready=False)
         status, detail = _derive_detector_status(dep, [pod])
         assert status == "error"
@@ -176,8 +193,12 @@ class TestDeriveDetectorStatus:
         condition.status = "False"
         condition.reason = "ProgressDeadlineExceeded"
         dep = _make_deployment(
-            replicas=1, status_replicas=1, ready_replicas=1, updated_replicas=0,
-            available_replicas=1, conditions=[condition],
+            replicas=1,
+            status_replicas=1,
+            ready_replicas=1,
+            updated_replicas=0,
+            available_replicas=1,
+            conditions=[condition],
         )
         status, detail = _derive_detector_status(dep, [])
         assert status == "error"
