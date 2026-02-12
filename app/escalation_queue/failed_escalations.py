@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 FAILED_ESCALATIONS_DIR = Path(DEFAULT_QUEUE_BASE_DIR) / "failed"
 MAX_RECORDS = 200
 MAX_EXCEPTION_MESSAGE_CHARS = 1000
-MAX_TRACEBACK_CHARS = 4000
+MAX_TRACEBACK_CHARS = 4000  # Caps exception tracebacks in failure records
+MAX_ESCALATION_CHARS = 4000  # Caps raw (malformed) escalation payloads in failure records
 
 
 def _ensure_dir() -> None:
@@ -70,7 +71,7 @@ def record_failed_escalation(escalation_line: str | None, exc: BaseException) ->
         record_path = FAILED_ESCALATIONS_DIR / f"{timestamp}-{record_id}.json"
         tmp_path = record_path.with_suffix(".json.tmp")
 
-        escalation_format, escalation = _parse_escalation(escalation_line, max_chars=MAX_TRACEBACK_CHARS)
+        escalation_format, escalation = _parse_escalation(escalation_line, max_chars=MAX_ESCALATION_CHARS)
 
         record = {
             "id": record_id,
