@@ -163,76 +163,161 @@ def _get_annotation(pod: client.V1Pod, key: str) -> str | None:
     return (pod.metadata.annotations or {}).get(key)
 
 
-def get_detector_details() -> str:
-    """Return details for detectors with primary inference pods, keyed by detector-id annotation.
+def _get_template_annotation(deployment: client.V1Deployment, key: str) -> str | None:
+    tpl_meta = deployment.spec.template.metadata
+    if tpl_meta is None:
+        return None
+    return (tpl_meta.annotations or {}).get(key)
 
-    Only counts pods whose model-name annotation equals "<detector_id>/primary".
+
+# Waiting-state reasons that indicate a pod error (as opposed to normal startup)
+_POD_ERROR_REASONS = frozenset({
+    "CrashLoopBackOff",
+    "ImagePullBackOff",
+    "ErrImagePull",
+    "CreateContainerConfigError",
+    "InvalidImageName",
+    "RunContainerError",
+})
+
+
+def _get_pod_error_reason(pod: client.V1Pod) -> str | None:
+    """Return the first error waiting-reason found on any container in this pod, or None."""
+    for cs in pod.status.container_statuses or []:
+        if cs.state and cs.state.waiting and cs.state.waiting.reason in _POD_ERROR_REASONS:
+            return cs.state.waiting.reason
+    return None
+
+
+def _has_progress_deadline_exceeded(deployment: client.V1Deployment) -> bool:
+    for c in deployment.status.conditions or []:
+        if c.type == "Progressing" and c.status == "False" and c.reason == "ProgressDeadlineExceeded":
+            return True
+    return False
+
+
+def _derive_detector_status(
+    deployment: client.V1Deployment,
+    pods: list[client.V1Pod],
+) -> tuple[str, str | None]:
+    """Derive a human-readable status from a deployment and its pods.
+
+    Returns (status, status_detail) where status is one of:
+      "ready", "updating", "initializing", "error"
+    and status_detail is an optional reason string (used for errors).
+    """
+    desired = deployment.spec.replicas or 1
+    available = deployment.status.available_replicas or 0
+    updated = deployment.status.updated_replicas or 0
+    total = deployment.status.replicas or 0
+
+    # Check for stuck rollout
+    if _has_progress_deadline_exceeded(deployment):
+        return "error", "ProgressDeadlineExceeded"
+
+    # Check pod-level errors when nothing is available
+    if available == 0:
+        for pod in pods:
+            reason = _get_pod_error_reason(pod)
+            if reason:
+                return "error", reason
+        return "initializing", None
+
+    # At least one pod is available
+    if available >= desired and updated >= desired and total <= desired:
+        return "ready", None
+
+    return "updating", None
+
+
+def _enrich_detector_from_ready_pod(
+    det_id: str,
+    pod: client.V1Pod,
+    details: dict,
+) -> None:
+    """Fill in pipeline config and metadata fields from a ready pod."""
+    started = _get_container_started_at(pod)
+
+    model_version = _get_annotation(pod, "groundlight.dev/model-version")
+    if model_version is None:
+        logger.error(f"No model-version annotation found for {det_id}.")
+        return
+    if not model_version.isdigit():
+        logger.error(f"model-version for {det_id} is not a digit.")
+        return
+
+    model_version_int = int(model_version)
+    model_dir = get_primary_edge_model_dir(MODEL_REPOSITORY_PATH, det_id)
+    cfg = get_current_pipeline_config(model_dir, model_version_int)
+    if cfg is None:
+        logger.error(f"Pipeline config not found for detector {det_id} at version {model_version_int}")
+        return
+
+    if isinstance(cfg, (dict, list)):
+        pipeline_config_str = yaml.safe_dump(cfg, sort_keys=False)
+    else:
+        pipeline_config_str = str(cfg)
+
+    metadata = get_predictor_metadata(model_dir, model_version_int)
+    if metadata is not None:
+        details["query"] = metadata.get("text_query")
+        details["mode"] = metadata.get("mode")
+        details["detector_name"] = metadata.get("detector_name")
+    else:
+        logger.warning(f"Detector metadata not found for detector {det_id} at version {model_version_int}")
+
+    details["pipeline_config"] = pipeline_config_str
+    details["last_updated_time"] = started.isoformat() if started else None
+
+
+def get_detector_details() -> str:
+    """Return details for detector deployments, keyed by detector-id annotation.
+
+    Uses deployments to derive status and pods to get detailed metadata from ready instances.
     """
     config.load_incluster_config()
+    v1_apps = client.AppsV1Api()
     v1_core = client.CoreV1Api()
     namespace = get_namespace()
-    pods = v1_core.list_namespaced_pod(namespace=namespace)
+
+    deployments = v1_apps.list_namespaced_deployment(namespace=namespace)
+    all_pods = v1_core.list_namespaced_pod(namespace=namespace)
+
+    # Index pods by detector-id for quick lookup (primary pods only)
+    pods_by_detector: dict[str, list[client.V1Pod]] = {}
+    for pod in all_pods.items:
+        det_id = _get_annotation(pod, "groundlight.dev/detector-id")
+        if det_id and _get_annotation(pod, "groundlight.dev/model-name") == f"{det_id}/primary":
+            pods_by_detector.setdefault(det_id, []).append(pod)
 
     detector_edge_configs = get_detector_edge_configs_by_id()
     detector_details: dict[str, dict] = {}
-    for pod in pods.items:
-        det_id = _get_annotation(pod, "groundlight.dev/detector-id")
+
+    for dep in deployments.items:
+        det_id = _get_template_annotation(dep, "groundlight.dev/detector-id")
         if not det_id:
             continue
-
-        # Skip OODD pods; we only want primary inference pods here
-        if _get_annotation(pod, "groundlight.dev/model-name") != f"{det_id}/primary":
+        if _get_template_annotation(dep, "groundlight.dev/model-name") != f"{det_id}/primary":
             continue
 
-        if _pod_is_ready(pod):
-            started = _get_container_started_at(pod)
+        det_pods = pods_by_detector.get(det_id, [])
+        status, status_detail = _derive_detector_status(dep, det_pods)
 
-            model_version = _get_annotation(pod, "groundlight.dev/model-version")
-            if model_version is None:
-                logger.error(f"No model-version annotation found for {det_id}.")
-                continue
-            elif not model_version.isdigit():
-                logger.error(f"model-version for {det_id} is not a digit.")
-                continue
+        details: dict = {"status": status}
+        if status_detail:
+            details["status_detail"] = status_detail
 
-            model_version_int = int(model_version)
-            model_dir = get_primary_edge_model_dir(MODEL_REPOSITORY_PATH, det_id)
-            cfg = get_current_pipeline_config(model_dir, model_version_int)
-            if cfg is None:
-                logger.error(f"Pipeline config not found for detector {det_id} at version {model_version_int}")
-                continue
+        # Enrich with metadata from a ready pod if one exists
+        for pod in det_pods:
+            if _pod_is_ready(pod):
+                _enrich_detector_from_ready_pod(det_id, pod, details)
+                break
 
-            # Convert the pipeline config dict to a yaml string
-            if isinstance(cfg, (dict, list)):
-                pipeline_config_str = yaml.safe_dump(cfg, sort_keys=False)
-            else:
-                pipeline_config_str = str(cfg)  # This avoids the yaml end of document marker (...)
+        edge_inference_config = _edge_config_to_dict(detector_edge_configs.get(det_id))
+        if edge_inference_config:
+            details["edge_inference_config"] = edge_inference_config
 
-            # Get the detector metadata
-            metadata = get_predictor_metadata(model_dir, model_version_int)
-            if metadata is not None:
-                detector_query = metadata.get("text_query")
-                detector_mode = metadata.get("mode")
-                detector_name = metadata.get("detector_name")
-            else:
-                logger.warning(f"Detector metadata not found for detector {det_id} at version {model_version_int}")
-                detector_query = None
-                detector_mode = None
-                detector_name = None
+        detector_details[det_id] = details
 
-            detector_details[det_id] = {
-                "pipeline_config": pipeline_config_str,
-                "last_updated_time": started.isoformat() if started else None,
-                "query": detector_query,
-                "mode": detector_mode,
-                "detector_name": detector_name,
-            }
-
-            edge_inference_config = _edge_config_to_dict(detector_edge_configs.get(det_id))
-            if edge_inference_config:
-                detector_details[det_id]["edge_inference_config"] = edge_inference_config
-        else:
-            pass  # We won't report any detector details until the detector has a ready pod
-
-    # Convert the dict to a JSON string to prevent opensearch from indexing all detector details
+    # Convert to JSON string to prevent opensearch from indexing all detector details
     return json.dumps(detector_details)
