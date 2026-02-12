@@ -131,8 +131,8 @@ def read_from_escalation_queue(reader: QueueReader, request_cache: RequestCache)
         except Exception as e:
             logger.error("Escalation failed, moving on.", exc_info=True)
 
-            # Save the failed escalation details to disk. Once we integrate with Splunk, we could consider 
-            # removing this and just relying on the error log instead. 
+            # Save the failed escalation details to disk. Once we integrate with Splunk, we could consider
+            # removing this and just relying on the error log instead.
             record_failed_escalation(escalation, e)
         finally:
             # Delete the image
