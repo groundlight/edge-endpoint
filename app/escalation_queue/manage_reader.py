@@ -46,7 +46,7 @@ def _escalate_once(escalation_info: EscalationInfo, submit_iq_request_timeout_s:
         ImageQuery: The escalated ImageQuery result.
     """
 
-    logger.debug(
+    logger.info(
         f"Escalating queued escalation with ID {escalation_info.submit_iq_params.image_query_id} for detector "
         f"{escalation_info.detector_id} with timestamp {escalation_info.timestamp}."
     )
