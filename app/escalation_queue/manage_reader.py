@@ -47,11 +47,11 @@ def _escalate_once(
     Returns:
         ImageQuery: The escalated ImageQuery result.
     """
-    logger.info(
-        f"Consumed queued escalation with ID {escalation_info.submit_iq_params.image_query_id} for detector "
+
+    logger.debug(
+        f"Escalating queued escalation with ID {escalation_info.submit_iq_params.image_query_id} for detector "
         f"{escalation_info.detector_id} with timestamp {escalation_info.timestamp}."
     )
-
     gl = _groundlight_client()
     image_path = Path(escalation_info.image_path_str)
     image_bytes = image_path.read_bytes()
