@@ -470,8 +470,6 @@ class TestConsumeQueuedEscalation:
             with (
                 patch.object(QueueReader, "__iter__", return_value=iter([escalation_str])),
                 patch("app.escalation_queue.manage_reader._escalate_once", return_value=dummy_result) as mock_escalate,
-                patch("app.escalation_queue.manage_reader.inject_chaos", lambda x: x),
-                patch("app.escalation_queue.manage_reader.raise_random", lambda: None),
             ):
                 read_from_escalation_queue(generate_queue_reader(temp_dir), test_request_cache)
 
@@ -491,8 +489,6 @@ class TestConsumeQueuedEscalation:
         with (
             patch.object(QueueReader, "__iter__", return_value=iter([escalation_str_1, escalation_str_2])),
             patch("app.escalation_queue.manage_reader._escalate_once", return_value=dummy_iq) as mock_escalate,
-            patch("app.escalation_queue.manage_reader.inject_chaos", lambda x: x),
-            patch("app.escalation_queue.manage_reader.raise_random", lambda: None),
         ):
             read_from_escalation_queue(generate_queue_reader(str(test_request_cache.cache_dir)), test_request_cache)
 
@@ -519,8 +515,6 @@ class TestReadFromEscalationQueue:
                 "app.escalation_queue.manage_reader.consume_queued_escalation",
             ) as mock_consume_escalation,
             patch.object(QueueReader, "__iter__", return_value=iter(escalation_strs)),
-            patch("app.escalation_queue.manage_reader.inject_chaos", lambda x: x),
-            patch("app.escalation_queue.manage_reader.raise_random", lambda: None),
         ):
             dummy_iq = Mock(id="test-iq-id")
             mock_consume_escalation.return_value = dummy_iq
@@ -557,8 +551,6 @@ class TestReadFromEscalationQueue:
                     "app.escalation_queue.manage_reader._escalate_once",
                     return_value=dummy_iq,
                 ) as mock_escalate,
-                patch("app.escalation_queue.manage_reader.inject_chaos", lambda x: x),
-                patch("app.escalation_queue.manage_reader.raise_random", lambda: None),
             ):
                 read_from_escalation_queue(test_reader, test_request_cache)
 
