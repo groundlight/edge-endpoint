@@ -269,7 +269,12 @@ def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_t
         assert all_detector_activity["det_123"]["last_escalation"] is not None
         assert all_detector_activity["det_123"]["last_audit"] is not None
         assert all_detector_activity["det_123"]["last_below_threshold_iq"] is not None
-        assert all_detector_activity["det_123"]["confidence_histogram"] == {"70-75": 15, "95-100": 10}
+        histogram = all_detector_activity["det_123"]["confidence_histogram"]
+        assert histogram["version"] == 1
+        assert histogram["bucket_width"] == 5
+        assert len(histogram["counts"]) == 20
+        assert histogram["counts"][14] == 15  # 70-75 bucket
+        assert histogram["counts"][19] == 10  # 95-100 bucket
         assert all_detector_activity["det_456"]["hourly_total_iqs"] == 0
         assert all_detector_activity["det_456"]["hourly_total_escalations"] == 0
         assert all_detector_activity["det_456"]["hourly_total_audits"] == 0
@@ -290,7 +295,12 @@ def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_t
         assert active_detector_activity["det_123"]["last_escalation"] is not None
         assert active_detector_activity["det_123"]["last_audit"] is not None
         assert active_detector_activity["det_123"]["last_below_threshold_iq"] is not None
-        assert active_detector_activity["det_123"]["confidence_histogram"] == {"70-75": 15, "95-100": 10}
+        active_histogram = active_detector_activity["det_123"]["confidence_histogram"]
+        assert active_histogram["version"] == 1
+        assert active_histogram["bucket_width"] == 5
+        assert len(active_histogram["counts"]) == 20
+        assert active_histogram["counts"][14] == 15  # 70-75 bucket
+        assert active_histogram["counts"][19] == 10  # 95-100 bucket
 
 
 def test_confidence_to_bucket():
@@ -372,12 +382,15 @@ def test_get_detector_confidence_histogram(monkeypatch, tmp_base_dir, _test_trac
 
         histogram = retriever.get_detector_confidence_histogram("det_histogram_test")
 
+        assert histogram["version"] == 1
+        assert histogram["bucket_width"] == 5
+        assert len(histogram["counts"]) == 20
         # Should aggregate across PIDs
-        assert histogram["70-75"] == 15  # 10 + 5
-        assert histogram["95-100"] == 20
-        assert histogram["0-5"] == 2
+        assert histogram["counts"][14] == 15  # 70-75: 10 + 5
+        assert histogram["counts"][19] == 20  # 95-100
+        assert histogram["counts"][0] == 2  # 0-5
         # Should not include the different hour
-        assert "50-55" not in histogram
+        assert histogram["counts"][10] == 0  # 50-55 (from different hour)
 
 
 def test_detector_activity_metrics_includes_histogram(monkeypatch, tmp_base_dir, _test_tracker):
@@ -399,5 +412,9 @@ def test_detector_activity_metrics_includes_histogram(monkeypatch, tmp_base_dir,
 
         assert metrics["hourly_total_iqs"] == 50
         assert "confidence_histogram" in metrics
-        assert metrics["confidence_histogram"]["80-85"] == 30
-        assert metrics["confidence_histogram"]["90-95"] == 20
+        histogram = metrics["confidence_histogram"]
+        assert histogram["version"] == 1
+        assert histogram["bucket_width"] == 5
+        assert len(histogram["counts"]) == 20
+        assert histogram["counts"][16] == 30  # 80-85 bucket
+        assert histogram["counts"][18] == 20  # 90-95 bucket

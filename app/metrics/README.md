@@ -25,7 +25,7 @@ Tracked per detector in `iq_activity.py`:
 Reported fields per detector:
 - `hourly_total_<metric>` - count for the previous hour
 - `last_<metric>` - timestamp of most recent occurrence (singular form, e.g., `last_iq`)
-- `confidence_histogram` - dict mapping bucket names to counts (e.g., `{"70-75": 45, "95-100": 38}`)
+- `confidence_histogram` - versioned envelope: `{"version": 1, "bucket_width": 5, "counts": [c0, c1, ..., c19]}` where `counts[i]` is the count for bucket `[i*bucket_width, (i+1)*bucket_width)`. Version is bumped on any schema change (including bucket width changes).
 
 ### Filesystem Storage
 

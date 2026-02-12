@@ -161,28 +161,43 @@ class ActivityRetriever:
         """Get the last hour in UTC."""
         return (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
 
+    # Confidence histogram constants
+    CONFIDENCE_HISTOGRAM_VERSION = 1
+    CONFIDENCE_BUCKET_WIDTH = 5
+    CONFIDENCE_NUM_BUCKETS = 100 // CONFIDENCE_BUCKET_WIDTH  # 20
+
     def get_detector_confidence_histogram(self, detector_id: str) -> dict:
         """Get the confidence histogram for a detector for the previous hour.
 
         Returns:
-            A dictionary mapping bucket names to counts, e.g. {"70-75": 45, "95-100": 38}.
-            Only non-zero buckets are included.
+            A versioned, self-describing envelope:
+            {
+                "version": 1,
+                "bucket_width": 5,
+                "counts": [10, 25, ...]  # 20 elements, one per 5% bucket
+            }
+            The i-th element of counts is the count for [i*bucket_width, (i+1)*bucket_width).
         """
         time = (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
         detector_folder = _tracker().detector_folder(detector_id)
         activity_files = list(detector_folder.glob(f"confidence_*_{time}"))
 
-        histogram = {}
+        counts = [0] * self.CONFIDENCE_NUM_BUCKETS
         for f in activity_files:
             # Extract bucket from filename like "confidence_70-75_12345_2025-04-03_12"
             parts = f.name.split("_")
             if len(parts) >= 2 and parts[0] == "confidence":
                 bucket = parts[1]
-                count = _tracker().get_activity_from_file(f)
-                if count > 0:
-                    histogram[bucket] = histogram.get(bucket, 0) + count
+                index = _bucket_name_to_index(bucket, self.CONFIDENCE_BUCKET_WIDTH)
+                if index is not None:
+                    count = _tracker().get_activity_from_file(f)
+                    counts[index] += count
 
-        return histogram
+        return {
+            "version": self.CONFIDENCE_HISTOGRAM_VERSION,
+            "bucket_width": self.CONFIDENCE_BUCKET_WIDTH,
+            "counts": counts,
+        }
 
     def get_detector_activity_metrics(self, detector_id: str) -> dict:
         """Get the activity on a detector for the previous hour."""
@@ -241,6 +256,19 @@ def record_activity_for_metrics(detector_id: str, activity_type: str):
     # edge endpoint wide activity tracking
     f = _tracker().last_activity_file(activity_type)
     f.touch()
+
+
+def _bucket_name_to_index(bucket: str, bucket_width: int) -> int | None:
+    """Convert a bucket name like '70-75' to an index into the counts array.
+
+    Returns None if the bucket name is malformed.
+    """
+    try:
+        bucket_start = int(bucket.split("-")[0])
+        return bucket_start // bucket_width
+    except (ValueError, IndexError):
+        logger.warning(f"Malformed confidence bucket name: {bucket}")
+        return None
 
 
 def _confidence_to_bucket(confidence: float) -> str:
