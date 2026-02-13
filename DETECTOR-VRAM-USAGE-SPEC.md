@@ -103,19 +103,35 @@ Response:
             "oodd_vram_bytes": 536870912,
             "total_vram_bytes": 1610612736
         }
-    ]
+    ],
+    "loading_vram_bytes": 0
 }
 ```
+
+`loading_vram_bytes` is the total VRAM consumed by inference pods that are running but not yet
+ready (e.g., during rolling updates or initial deployments). Shown as "Loading Detector Models"
+in the frontend.
 
 Detector names are not included in this response; the frontend looks them up from the existing
 `/status/metrics.json` detector_details data.
 
-### Rolling updates
+### Pod readiness and rolling updates
 
-During a Kubernetes rolling update, a detector can temporarily have duplicate pods (e.g., two
-primary pods while the new one starts and the old one terminates). The aggregation logic **sums**
-VRAM for all running pods of the same type (primary or OODD) per detector, so the chart
-accurately reflects the temporary VRAM spike during rollouts.
+During a Kubernetes rolling update (or initial deployment), a detector can temporarily have pods
+that are not yet ready (model still loading). The VRAM endpoint distinguishes between these:
+
+- **Ready pods** pass `_pod_is_ready()` from `system_metrics.py` (phase is Running, pod Ready
+  condition is True, and the `inference-server` container is ready). VRAM from these pods is
+  attributed to their detector and shown as a colored slice in the pie chart.
+- **Non-ready pods** are Running but not yet ready. Their VRAM is summed into a single
+  **"Loading Detector Models"** value returned separately in the response. The frontend renders
+  this as a dark grey slice. Non-ready pods may still consume VRAM if the model is partially
+  loaded.
+- If ALL pods for a detector are non-ready, the detector does not get its own colored slice;
+  all its VRAM goes into "Loading Detector Models."
+
+This reuses the same `_pod_is_ready()` function used by the Detector Details section, avoiding
+code duplication.
 
 ### Status page changes
 

@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from kubernetes import client, config
 from kubernetes.stream import stream
 
-from app.metrics.system_metrics import get_namespace
+from app.metrics.system_metrics import _pod_is_ready, get_namespace
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ class GpuProcess:
 class VramMetricsCollector:
     """Collects VRAM usage per inference pod via k8s exec + nvidia-smi."""
 
-    def __init__(self, cache_ttl_sec: float = 30.0):
+    def __init__(self, cache_ttl_sec: float = 1.0):
         self._cache_ttl_sec = cache_ttl_sec
         self._cached_result: dict | None = None
         self._cache_time: float = 0
@@ -79,24 +79,24 @@ class VramMetricsCollector:
 
         inference_pods = _find_inference_pods(pods)
         if not inference_pods:
-            return {"gpus": [], "detectors": []}
+            return {"gpus": [], "detectors": [], "loading_vram_bytes": 0}
 
         # Exec nvidia-smi in any running inference pod to get global GPU state
         gpu_infos, gpu_processes = None, None
-        for pod, _, _ in inference_pods:
+        for pod, _, _, _ in inference_pods:
             result = _exec_nvidia_smi(v1, pod.metadata.name, namespace)
             if result is not None:
                 gpu_infos, gpu_processes = result
                 break
 
         if gpu_infos is None:
-            return {"gpus": [], "detectors": []}
+            return {"gpus": [], "detectors": [], "loading_vram_bytes": 0}
 
         return _build_response(gpu_infos, gpu_processes, inference_pods)
 
 
 def _find_inference_pods(pod_list) -> list[tuple]:
-    """Return (pod, detector_id, is_oodd) for running inference pods, sorted by creation time."""
+    """Return (pod, detector_id, is_oodd, is_ready) for running inference pods, sorted by creation time."""
     results = []
     for pod in pod_list.items:
         if pod.status.phase != "Running":
@@ -107,7 +107,8 @@ def _find_inference_pods(pod_list) -> list[tuple]:
         if not det_id or not model_name:
             continue
         is_oodd = model_name.endswith("/oodd")
-        results.append((pod, det_id, is_oodd))
+        is_ready = _pod_is_ready(pod)
+        results.append((pod, det_id, is_oodd, is_ready))
     # Sort by creation timestamp so ordering matches PID assignment order
     results.sort(key=lambda x: x[0].metadata.creation_timestamp or "")
     return results
@@ -196,16 +197,25 @@ def _build_response(
     are assigned monotonically and inference pods are sorted by creation time, we match processes
     to pods in order. If there are more nvidia-smi processes than inference pods, the extras are
     unattributed (they show up as "Other" in the frontend).
+
+    Ready pods have their VRAM attributed to their detector. Non-ready pods (still loading models
+    during rolling updates or initial deployments) have their VRAM summed into loading_vram_bytes.
     """
     gpus = {g.uuid: g for g in gpu_infos}
     detectors: dict[str, dict] = {}
+    loading_vram_bytes = 0
 
     # Match processes to pods by sorted order (PID order ~ pod creation order)
     num_pods = len(inference_pods)
     for i, proc in enumerate(gpu_processes):
         if i >= num_pods:
             break  # More processes than pods -- extras are unattributed
-        _, det_id, is_oodd = inference_pods[i]
+        _, det_id, is_oodd, is_ready = inference_pods[i]
+
+        if not is_ready:
+            loading_vram_bytes += proc.vram_bytes
+            continue
+
         if det_id not in detectors:
             detectors[det_id] = {
                 "detector_id": det_id,
@@ -233,4 +243,5 @@ def _build_response(
             for g in sorted(gpus.values(), key=lambda g: g.index)
         ],
         "detectors": sorted(detectors.values(), key=lambda d: d["detector_id"]),
+        "loading_vram_bytes": loading_vram_bytes,
     }

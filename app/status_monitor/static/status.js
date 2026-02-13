@@ -315,18 +315,25 @@ const renderVramUsage = (vramData, detectorDetails) => {
             legendItems.push({ color, label: name, value: formatBytes(bytes) });
         });
 
-        const freeBytes = Math.max(0, totalBytes - gpu.used_bytes);
-        slices.push({ fraction: freeBytes / totalBytes, color: VRAM_FREE_COLOR });
-        legendItems.push({ color: VRAM_FREE_COLOR, label: "Free", value: formatBytes(freeBytes) });
+        const loadingBytes = vramData.loading_vram_bytes || 0;
+        accountedBytes += loadingBytes;
+        if (loadingBytes > 0) {
+            const loadingColor = "#555555";
+            slices.push({ fraction: loadingBytes / totalBytes, color: loadingColor });
+            legendItems.push({ color: loadingColor, label: "Loading Detector Models", value: formatBytes(loadingBytes) });
+        }
 
-        // If GPU used_bytes exceeds what detectors account for, show "Other"
+        // If GPU used_bytes exceeds what detectors + loading account for, show "Other"
         const otherBytes = Math.max(0, gpu.used_bytes - accountedBytes);
         if (otherBytes > 0) {
             const otherColor = "#B0B0B0";
-            // Insert "Other" before "Free"
-            slices.splice(slices.length - 1, 0, { fraction: otherBytes / totalBytes, color: otherColor });
-            legendItems.splice(legendItems.length - 1, 0, { color: otherColor, label: "Other", value: formatBytes(otherBytes) });
+            slices.push({ fraction: otherBytes / totalBytes, color: otherColor });
+            legendItems.push({ color: otherColor, label: "Other", value: formatBytes(otherBytes) });
         }
+
+        const freeBytes = Math.max(0, totalBytes - gpu.used_bytes);
+        slices.push({ fraction: freeBytes / totalBytes, color: VRAM_FREE_COLOR });
+        legendItems.push({ color: VRAM_FREE_COLOR, label: "Free", value: formatBytes(freeBytes) });
 
         const row = document.createElement("div");
         row.className = "vram-chart-row";
@@ -412,7 +419,7 @@ const startAutoRefresh = () => {
     if (refreshIntervalId !== null) {
         return;
     }
-    refreshIntervalId = setInterval(() => fetchAll(false), 10000);
+    refreshIntervalId = setInterval(() => fetchAll(false), 1000);
 };
 
 const stopAutoRefresh = () => {
