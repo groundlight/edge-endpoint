@@ -171,14 +171,16 @@ def _get_template_annotation(deployment: client.V1Deployment, key: str) -> str |
 
 
 # Waiting-state reasons that indicate a pod error (as opposed to normal startup)
-_POD_ERROR_REASONS = frozenset({
-    "CrashLoopBackOff",
-    "ImagePullBackOff",
-    "ErrImagePull",
-    "CreateContainerConfigError",
-    "InvalidImageName",
-    "RunContainerError",
-})
+_POD_ERROR_REASONS = frozenset(
+    {
+        "CrashLoopBackOff",
+        "ImagePullBackOff",
+        "ErrImagePull",
+        "CreateContainerConfigError",
+        "InvalidImageName",
+        "RunContainerError",
+    }
+)
 
 
 def _get_pod_error_reason(pod: client.V1Pod) -> str | None:
