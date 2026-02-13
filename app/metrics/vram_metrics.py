@@ -43,6 +43,7 @@ class GpuInfo:
 @dataclass
 class GpuProcess:
     """A single GPU process as reported by nvidia-smi."""
+
     pid: int
     vram_bytes: int
     gpu_uuid: str
@@ -152,14 +153,16 @@ def _parse_nvidia_smi_output(output: str) -> tuple[list[GpuInfo], list[GpuProces
         if len(parts) < 6:
             continue
         try:
-            gpu_infos.append(GpuInfo(
-                index=int(parts[0]),
-                uuid=parts[1],
-                name=parts[2],
-                total_bytes=int(parts[3]) * MIB_TO_BYTES,
-                used_bytes=int(parts[4]) * MIB_TO_BYTES,
-                free_bytes=int(parts[5]) * MIB_TO_BYTES,
-            ))
+            gpu_infos.append(
+                GpuInfo(
+                    index=int(parts[0]),
+                    uuid=parts[1],
+                    name=parts[2],
+                    total_bytes=int(parts[3]) * MIB_TO_BYTES,
+                    used_bytes=int(parts[4]) * MIB_TO_BYTES,
+                    free_bytes=int(parts[5]) * MIB_TO_BYTES,
+                )
+            )
         except (ValueError, IndexError):
             logger.warning(f"Failed to parse GPU info line: {line}")
 
@@ -173,11 +176,13 @@ def _parse_nvidia_smi_output(output: str) -> tuple[list[GpuInfo], list[GpuProces
         if len(parts) < 3:
             continue
         try:
-            gpu_processes.append(GpuProcess(
-                pid=int(parts[0]),
-                vram_bytes=int(parts[1]) * MIB_TO_BYTES,
-                gpu_uuid=parts[2],
-            ))
+            gpu_processes.append(
+                GpuProcess(
+                    pid=int(parts[0]),
+                    vram_bytes=int(parts[1]) * MIB_TO_BYTES,
+                    gpu_uuid=parts[2],
+                )
+            )
         except (ValueError, IndexError):
             pass
     gpu_processes.sort(key=lambda p: p.pid)
