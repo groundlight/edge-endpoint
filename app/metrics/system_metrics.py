@@ -230,23 +230,26 @@ def _derive_detector_status(
     return "updating", None
 
 
-def _enrich_detector_from_ready_pod(
+def _enrich_detector_details(
     det_id: str,
-    pod: client.V1Pod,
+    model_version_str: str | None,
     details: dict,
+    ready_pod: client.V1Pod | None = None,
 ) -> None:
-    """Fill in pipeline config and metadata fields from a ready pod."""
-    started = _get_container_started_at(pod)
+    """Fill in pipeline config and metadata fields from model files on disk.
 
-    model_version = _get_annotation(pod, "groundlight.dev/model-version")
-    if model_version is None:
+    The model_version_str can come from either a ready pod's annotation or the
+    deployment's pod template annotation -- the on-disk model files are readable
+    regardless of pod state. Only last_updated_time requires a ready pod.
+    """
+    if model_version_str is None:
         logger.error(f"No model-version annotation found for {det_id}.")
         return
-    if not model_version.isdigit():
+    if not model_version_str.isdigit():
         logger.error(f"model-version for {det_id} is not a digit.")
         return
 
-    model_version_int = int(model_version)
+    model_version_int = int(model_version_str)
     model_dir = get_primary_edge_model_dir(MODEL_REPOSITORY_PATH, det_id)
     cfg = get_current_pipeline_config(model_dir, model_version_int)
     if cfg is None:
@@ -267,7 +270,10 @@ def _enrich_detector_from_ready_pod(
         logger.warning(f"Detector metadata not found for detector {det_id} at version {model_version_int}")
 
     details["pipeline_config"] = pipeline_config_str
-    details["last_updated_time"] = started.isoformat() if started else None
+
+    if ready_pod is not None:
+        started = _get_container_started_at(ready_pod)
+        details["last_updated_time"] = started.isoformat() if started else None
 
 
 def get_detector_details() -> str:
@@ -307,11 +313,21 @@ def get_detector_details() -> str:
         if status_detail:
             details["status_detail"] = status_detail
 
-        # Enrich with metadata from a ready pod if one exists
+        # Find a ready pod if one exists (for last_updated_time)
+        ready_pod = None
         for pod in det_pods:
             if _pod_is_ready(pod):
-                _enrich_detector_from_ready_pod(det_id, pod, details)
+                ready_pod = pod
                 break
+
+        # Prefer model version from a ready pod; fall back to the deployment template
+        model_version_str = None
+        if ready_pod is not None:
+            model_version_str = _get_annotation(ready_pod, "groundlight.dev/model-version")
+        if model_version_str is None:
+            model_version_str = _get_template_annotation(dep, "groundlight.dev/model-version")
+
+        _enrich_detector_details(det_id, model_version_str, details, ready_pod)
 
         edge_inference_config = _edge_config_to_dict(detector_edge_configs.get(det_id))
         if edge_inference_config:
