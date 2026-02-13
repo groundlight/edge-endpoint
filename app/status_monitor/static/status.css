@@ -178,3 +178,42 @@ pre {
     color: var(--groundlight-muted);
     font-size: 0.85em;
 }
+
+.status-column {
+    text-align: center;
+    white-space: nowrap;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    font-weight: 500;
+}
+
+.status-ready {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.status-updating {
+    background-color: #cce5ff;
+    color: #004085;
+}
+
+.status-initializing {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.status-error {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.status-detail {
+    margin-top: 4px;
+    font-size: 0.8em;
+    color: var(--groundlight-muted);
+}

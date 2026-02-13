@@ -106,6 +106,32 @@ const createEdgeConfigTable = (config) => {
     return table;
 };
 
+const STATUS_DISPLAY = {
+    ready: { label: "Ready", className: "status-ready" },
+    updating: { label: "Updating", className: "status-updating" },
+    initializing: { label: "Initializing", className: "status-initializing" },
+    error: { label: "Error", className: "status-error" },
+};
+
+const renderStatusBadge = (status, statusDetail) => {
+    const wrapper = document.createElement("div");
+    const display = STATUS_DISPLAY[status] || { label: status || "Unknown", className: "status-initializing" };
+
+    const badge = document.createElement("span");
+    badge.className = `status-badge ${display.className}`;
+    badge.textContent = display.label;
+    wrapper.appendChild(badge);
+
+    if (statusDetail) {
+        const detail = document.createElement("div");
+        detail.className = "status-detail";
+        detail.textContent = statusDetail;
+        wrapper.appendChild(detail);
+    }
+
+    return wrapper;
+};
+
 const renderDetectorDetails = (rawDetails) => {
     const container = document.getElementById("detector-details");
     container.innerHTML = "";
@@ -117,7 +143,7 @@ const renderDetectorDetails = (rawDetails) => {
     if (detectorIds.length === 0) {
         const emptyState = document.createElement("div");
         emptyState.className = "empty-state";
-        emptyState.textContent = "No detectors are currently running on edge.";
+        emptyState.textContent = "No detectors are currently deployed on edge.";
         container.appendChild(emptyState);
         return;
     }
@@ -126,7 +152,7 @@ const renderDetectorDetails = (rawDetails) => {
     const thead = document.createElement("thead");
     const headerRow = document.createElement("tr");
 
-    ["Detector", "Pipeline", "Edge Config", "Last Updated"].forEach((heading) => {
+    ["Detector", "Status", "Pipeline", "Edge Config", "Last Updated"].forEach((heading) => {
         const th = document.createElement("th");
         th.textContent = heading;
         headerRow.appendChild(th);
@@ -155,6 +181,11 @@ const renderDetectorDetails = (rawDetails) => {
         modeLine.className = "detector-mode";
         detectorCell.append(idLine, nameLine, queryLine, modeLine);
         row.appendChild(detectorCell);
+
+        const statusCell = document.createElement("td");
+        statusCell.className = "status-column";
+        statusCell.appendChild(renderStatusBadge(info.status, info.status_detail));
+        row.appendChild(statusCell);
 
         const pipelineCell = document.createElement("td");
         pipelineCell.appendChild(renderPipeline(info.pipeline_config));
