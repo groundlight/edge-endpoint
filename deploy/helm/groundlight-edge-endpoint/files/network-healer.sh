@@ -7,7 +7,7 @@ log() {
 
 CHECK_INTERVAL_SECONDS="${CHECK_INTERVAL_SECONDS:-5}"
 CHROOT="/bin/busybox chroot"
-# Explicitly use the k3s kubeconfig so the healer always talks to the local
+# Explicitly use the k3s kubeconfig so the healer always talks to the correct
 # cluster, even if the host has multiple kubeconfig contexts configured.
 KCTL="$CHROOT /host /usr/local/bin/kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml"
 API_VIP="${KUBERNETES_SERVICE_HOST:-10.43.0.1}"
