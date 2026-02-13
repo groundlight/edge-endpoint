@@ -178,3 +178,101 @@ pre {
     color: var(--groundlight-muted);
     font-size: 0.85em;
 }
+
+/* VRAM Usage Section */
+
+.vram-usage .empty-state {
+    background-color: var(--groundlight-white);
+    padding: 15px;
+    border-radius: 5px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    font-style: italic;
+    color: var(--groundlight-muted);
+}
+
+.vram-gpu-card {
+    background-color: var(--groundlight-white);
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    margin-bottom: 15px;
+}
+
+.vram-gpu-title {
+    font-weight: 500;
+    margin-bottom: 16px;
+    color: var(--medium);
+}
+
+.vram-chart-row {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    flex-wrap: wrap;
+}
+
+.vram-donut-container {
+    position: relative;
+    width: 180px;
+    height: 180px;
+    flex-shrink: 0;
+}
+
+.vram-donut-container svg {
+    transform: rotate(-90deg);
+}
+
+.vram-donut-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
+}
+
+.vram-donut-label .used-value {
+    font-size: 1.3em;
+    font-weight: 700;
+    color: var(--medium);
+}
+
+.vram-donut-label .used-caption {
+    font-size: 0.8em;
+    color: var(--groundlight-muted);
+}
+
+.vram-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 200px;
+}
+
+.vram-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9em;
+}
+
+.vram-legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.vram-legend-label {
+    flex: 1;
+    color: var(--medium);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vram-legend-value {
+    font-weight: 500;
+    white-space: nowrap;
+    color: var(--medium);
+}

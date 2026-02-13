@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.metrics.iq_activity import clear_old_activity_files
 from app.metrics.metric_reporting import MetricsReporter
+from app.metrics.vram_metrics import VramMetricsCollector
 
 ONE_HOUR_IN_SECONDS = 3600
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -18,6 +19,7 @@ app = FastAPI(title="status-monitor")
 app.mount("/status/static", StaticFiles(directory=STATIC_DIR), name="status-static")
 scheduler = AsyncIOScheduler()
 reporter = MetricsReporter()
+vram_collector = VramMetricsCollector()
 
 
 @app.on_event("startup")
@@ -41,6 +43,12 @@ async def startup_event():
 async def get_metrics():
     """Return system metrics as JSON."""
     return reporter.metrics_payload()
+
+
+@app.get("/status/vram.json")
+def get_vram():
+    """Return per-detector VRAM usage as JSON."""
+    return vram_collector.collect()
 
 
 @app.get("/status")
