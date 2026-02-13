@@ -192,7 +192,183 @@ const renderDetectorDetails = (rawDetails) => {
     container.appendChild(table);
 };
 
-const fetchMetrics = (showLoading = false) => {
+
+// -- VRAM Usage --
+
+const VRAM_COLORS = [
+    "#4A90D9", "#D94A6B", "#D9A94A", "#4AD9A9", "#9B59B6",
+    "#E67E22", "#1ABC9C", "#E74C3C", "#3498DB", "#2ECC71",
+];
+const VRAM_FREE_COLOR = "#E0E0E0";
+
+const formatBytes = (bytes) => {
+    if (bytes == null) return "--";
+    const gb = bytes / (1024 * 1024 * 1024);
+    if (gb >= 1) return `${gb.toFixed(1)} GB`;
+    const mb = bytes / (1024 * 1024);
+    return `${mb.toFixed(0)} MB`;
+};
+
+const createDonutChart = (slices, centerText) => {
+    const size = 180;
+    const strokeWidth = 28;
+    const radius = (size - strokeWidth) / 2;
+    const circumference = 2 * Math.PI * radius;
+
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("width", size);
+    svg.setAttribute("height", size);
+    svg.setAttribute("viewBox", `0 0 ${size} ${size}`);
+
+    let offset = 0;
+    slices.forEach(({ fraction, color }) => {
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("cx", size / 2);
+        circle.setAttribute("cy", size / 2);
+        circle.setAttribute("r", radius);
+        circle.setAttribute("fill", "none");
+        circle.setAttribute("stroke", color);
+        circle.setAttribute("stroke-width", strokeWidth);
+        const dashLen = fraction * circumference;
+        circle.setAttribute("stroke-dasharray", `${dashLen} ${circumference - dashLen}`);
+        circle.setAttribute("stroke-dashoffset", `${-offset * circumference}`);
+        svg.appendChild(circle);
+        offset += fraction;
+    });
+
+    const container = document.createElement("div");
+    container.className = "vram-donut-container";
+    container.appendChild(svg);
+
+    const label = document.createElement("div");
+    label.className = "vram-donut-label";
+    const val = document.createElement("div");
+    val.className = "used-value";
+    val.textContent = centerText;
+    const cap = document.createElement("div");
+    cap.className = "used-caption";
+    cap.textContent = "used";
+    label.append(val, cap);
+    container.appendChild(label);
+
+    return container;
+};
+
+const renderVramUsage = (vramData, detectorDetails) => {
+    const container = document.getElementById("vram-usage");
+    container.innerHTML = "";
+
+    if (vramData.error) {
+        const msg = document.createElement("div");
+        msg.className = "empty-state";
+        msg.textContent = vramData.error;
+        container.appendChild(msg);
+        return;
+    }
+
+    const gpus = vramData.gpus || [];
+    const detectors = vramData.detectors || [];
+
+    if (gpus.length === 0) {
+        const msg = document.createElement("div");
+        msg.className = "empty-state";
+        msg.textContent = "No GPU data available.";
+        container.appendChild(msg);
+        return;
+    }
+
+    // Build a lookup from detector_id -> name (from the existing metrics data)
+    const detNameMap = {};
+    if (detectorDetails) {
+        const parsed = parseIfJson(detectorDetails) || {};
+        Object.entries(parsed).forEach(([id, info]) => {
+            detNameMap[id] = info.detector_name || id;
+        });
+    }
+
+    gpus.forEach((gpu, gpuIdx) => {
+        const card = document.createElement("div");
+        card.className = "vram-gpu-card";
+
+        const title = document.createElement("div");
+        title.className = "vram-gpu-title";
+        title.textContent = `GPU ${gpu.index}: ${gpu.name} (${formatBytes(gpu.total_bytes)})`;
+        card.appendChild(title);
+
+        // For multi-GPU: filter detectors to those on this GPU.
+        // With the exec approach, we don't track per-detector GPU assignment yet,
+        // so for now show all detectors under every GPU if there is only one GPU.
+        // TODO: refine once per-detector GPU assignment is tracked.
+        const relevantDetectors = detectors;
+
+        const totalBytes = gpu.total_bytes;
+        const slices = [];
+        const legendItems = [];
+        let accountedBytes = 0;
+
+        relevantDetectors.forEach((det, i) => {
+            const color = VRAM_COLORS[i % VRAM_COLORS.length];
+            const bytes = det.total_vram_bytes || 0;
+            accountedBytes += bytes;
+            slices.push({ fraction: bytes / totalBytes, color });
+            const name = detNameMap[det.detector_id] || det.detector_id;
+            legendItems.push({ color, label: name, value: formatBytes(bytes) });
+        });
+
+        const freeBytes = Math.max(0, totalBytes - gpu.used_bytes);
+        slices.push({ fraction: freeBytes / totalBytes, color: VRAM_FREE_COLOR });
+        legendItems.push({ color: VRAM_FREE_COLOR, label: "Free", value: formatBytes(freeBytes) });
+
+        // If GPU used_bytes exceeds what detectors account for, show "Other"
+        const otherBytes = Math.max(0, gpu.used_bytes - accountedBytes);
+        if (otherBytes > 0) {
+            const otherColor = "#B0B0B0";
+            // Insert "Other" before "Free"
+            slices.splice(slices.length - 1, 0, { fraction: otherBytes / totalBytes, color: otherColor });
+            legendItems.splice(legendItems.length - 1, 0, { color: otherColor, label: "Other", value: formatBytes(otherBytes) });
+        }
+
+        const row = document.createElement("div");
+        row.className = "vram-chart-row";
+
+        const usedPct = ((gpu.used_bytes / totalBytes) * 100).toFixed(0);
+        row.appendChild(createDonutChart(slices, `${usedPct}%`));
+
+        const legend = document.createElement("div");
+        legend.className = "vram-legend";
+        legendItems.forEach(({ color, label, value }) => {
+            const item = document.createElement("div");
+            item.className = "vram-legend-item";
+            const swatch = document.createElement("div");
+            swatch.className = "vram-legend-swatch";
+            swatch.style.backgroundColor = color;
+            const labelEl = document.createElement("span");
+            labelEl.className = "vram-legend-label";
+            labelEl.textContent = label;
+            const valueEl = document.createElement("span");
+            valueEl.className = "vram-legend-value";
+            valueEl.textContent = value;
+            item.append(swatch, labelEl, valueEl);
+            legend.appendChild(item);
+        });
+        row.appendChild(legend);
+
+        card.appendChild(row);
+        container.appendChild(card);
+    });
+};
+
+let cachedDetectorDetails = null;
+
+const fetchVram = () => {
+    fetch("/status/vram.json")
+        .then((r) => r.ok ? r.json() : Promise.reject(r.statusText))
+        .then((data) => renderVramUsage(data, cachedDetectorDetails))
+        .catch((err) => console.error("Error fetching VRAM data:", err));
+};
+
+const fetchAll = (showLoading = false) => {
+    // Fetch metrics first so cachedDetectorDetails is populated before VRAM renders
     const detectorDetailsContainer = document.getElementById("detector-details");
     if (showLoading) {
         detectorDetailsContainer.classList.add("skeleton");
@@ -202,20 +378,17 @@ const fetchMetrics = (showLoading = false) => {
 
     fetch("/status/metrics.json")
         .then((response) => {
-            if (!response.ok) {
-                throw new Error("Network response was not ok");
-            }
+            if (!response.ok) throw new Error("Network response was not ok");
             return response.json();
         })
         .then((data) => {
             document.getElementById("device-info").textContent = JSON.stringify(parseSection(data.device_info), null, 2);
             document.getElementById("activity-metrics").textContent = JSON.stringify(
-                parseSection(data.activity_metrics),
-                null,
-                2,
+                parseSection(data.activity_metrics), null, 2,
             );
             document.getElementById("k3s-stats").textContent = JSON.stringify(parseSection(data.k3s_stats), null, 2);
 
+            cachedDetectorDetails = data.detector_details;
             renderDetectorDetails(data.detector_details);
             document.getElementById("loading").style.display = "none";
             document.getElementById("error").style.display = "none";
@@ -227,6 +400,9 @@ const fetchMetrics = (showLoading = false) => {
             }
             document.getElementById("error").style.display = "block";
             console.error("Error fetching metrics:", error);
+        })
+        .finally(() => {
+            fetchVram();
         });
 };
 
@@ -236,7 +412,7 @@ const startAutoRefresh = () => {
     if (refreshIntervalId !== null) {
         return;
     }
-    refreshIntervalId = setInterval(() => fetchMetrics(false), 10000);
+    refreshIntervalId = setInterval(() => fetchAll(false), 10000);
 };
 
 const stopAutoRefresh = () => {
@@ -251,13 +427,13 @@ document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
         stopAutoRefresh();
     } else {
-        fetchMetrics(false);
+        fetchAll(false);
         startAutoRefresh();
     }
 });
 
 document.addEventListener("DOMContentLoaded", () => {
-    fetchMetrics(true);
+    fetchAll(true);
     startAutoRefresh();
 });
 
