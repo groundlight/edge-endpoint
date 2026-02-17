@@ -129,15 +129,17 @@ class TestMetricsSummary:
         assert summary["last_failed_time"] is None
 
     def test_counts_and_breakdown(self):
-        """Totals and per-exception breakdowns should reflect all recorded failures."""
+        """Totals, per-exception breakdowns, and last_failed_time should reflect all recorded failures."""
         now = datetime.now(timezone.utc)
-        self._write_record("ValueError", now - timedelta(minutes=10))
+        newest = now - timedelta(minutes=10)
+        self._write_record("ValueError", newest)
         self._write_record("ValueError", now - timedelta(minutes=20))
         self._write_record("FileNotFoundError", now - timedelta(minutes=30))
 
         summary = metrics_summary()
         assert summary["failed_lifetime_total"] == 3
         assert summary["failed_last_hour_total"] == 3
+        assert summary["last_failed_time"] == newest.isoformat()
         lifetime = json.loads(summary["failed_lifetime_by_exception"])
         assert lifetime == {"FileNotFoundError": 1, "ValueError": 2}
 
