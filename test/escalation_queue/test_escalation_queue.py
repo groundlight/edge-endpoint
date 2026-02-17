@@ -499,46 +499,66 @@ class TestConsumeQueuedEscalation:
 
     def test_skips_duplicate_request(self, test_request_id, test_request_cache: RequestCache):
         """When the request ID of an escalation is already in the cache, we should skip the escalation."""
-        # Create two escalation infos with a shared request ID, indicating they stem from the same request
-        escalation_info_1 = generate_test_escalation_info(request_id=test_request_id)
-        escalation_info_2 = generate_test_escalation_info(request_id=test_request_id)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Use temp copies so the reader's finally block doesn't delete the real test asset.
+            temp_image_1 = Path(temp_dir) / "image1.jpeg"
+            temp_image_2 = Path(temp_dir) / "image2.jpeg"
+            shutil.copy("test/assets/cat.jpeg", temp_image_1)
+            shutil.copy("test/assets/cat.jpeg", temp_image_2)
 
-        escalation_str_1 = convert_escalation_info_to_str(escalation_info_1)
-        escalation_str_2 = convert_escalation_info_to_str(escalation_info_2)
+            escalation_info_1 = generate_test_escalation_info(
+                request_id=test_request_id, image_path=str(temp_image_1)
+            )
+            escalation_info_2 = generate_test_escalation_info(
+                request_id=test_request_id, image_path=str(temp_image_2)
+            )
 
-        dummy_iq = Mock(id="test-iq-id")
-        with (
-            patch.object(QueueReader, "__iter__", return_value=iter([escalation_str_1, escalation_str_2])),
-            patch("app.escalation_queue.manage_reader._escalate_once", return_value=dummy_iq) as mock_escalate,
-        ):
-            read_from_escalation_queue(generate_queue_reader(str(test_request_cache.cache_dir)), test_request_cache)
+            escalation_str_1 = convert_escalation_info_to_str(escalation_info_1)
+            escalation_str_2 = convert_escalation_info_to_str(escalation_info_2)
 
-        # Only the first should be escalated; the second should be skipped due to RequestCache.
-        assert mock_escalate.call_count == 1
+            dummy_iq = Mock(id="test-iq-id")
+            with (
+                patch.object(QueueReader, "__iter__", return_value=iter([escalation_str_1, escalation_str_2])),
+                patch("app.escalation_queue.manage_reader._escalate_once", return_value=dummy_iq) as mock_escalate,
+            ):
+                read_from_escalation_queue(
+                    generate_queue_reader(str(test_request_cache.cache_dir)), test_request_cache
+                )
+
+            # Only the first should be escalated; the second should be skipped due to RequestCache.
+            assert mock_escalate.call_count == 1
 
 
 class TestReadFromEscalationQueue:
-    def test_consume_from_reader(self, test_reader: QueueReader, escalation_str: str):
+    def test_consume_from_reader(self, test_reader: QueueReader):
         """Verifies that read_from_escalation_queue consumes from the reader correctly."""
         num_escalations = 3
-        escalation_strs = [escalation_str] * num_escalations
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Use temp copies so the reader's finally block doesn't delete the real test asset.
+            escalation_strs = []
+            for i in range(num_escalations):
+                temp_image = Path(temp_dir) / f"image{i}.jpeg"
+                shutil.copy("test/assets/cat.jpeg", temp_image)
+                info = generate_test_escalation_info(
+                    request_id=generate_request_id(), image_path=str(temp_image)
+                )
+                escalation_strs.append(convert_escalation_info_to_str(info))
 
-        mock_request_cache = Mock()
-        mock_request_cache.contains.return_value = False
-        mock_request_cache.add = Mock()
+            mock_request_cache = Mock()
+            mock_request_cache.contains.return_value = False
+            mock_request_cache.add = Mock()
 
-        # Patch the reader object to iterate over items and then stop
-        with (
-            patch(
-                "app.escalation_queue.manage_reader.consume_queued_escalation",
-            ) as mock_consume_escalation,
-            patch.object(QueueReader, "__iter__", return_value=iter(escalation_strs)),
-        ):
-            dummy_iq = Mock(id="test-iq-id")
-            mock_consume_escalation.return_value = dummy_iq
-            read_from_escalation_queue(test_reader, mock_request_cache)
+            with (
+                patch(
+                    "app.escalation_queue.manage_reader.consume_queued_escalation",
+                ) as mock_consume_escalation,
+                patch.object(QueueReader, "__iter__", return_value=iter(escalation_strs)),
+            ):
+                dummy_iq = Mock(id="test-iq-id")
+                mock_consume_escalation.return_value = dummy_iq
+                read_from_escalation_queue(test_reader, mock_request_cache)
 
-        assert mock_consume_escalation.call_count == num_escalations
+            assert mock_consume_escalation.call_count == num_escalations
 
     def test_continues_after_corrupted_line(self, test_reader: QueueReader, test_request_cache: RequestCache):
         """Verifies that read_from_escalation_queue continues processing after a corrupted line."""
