@@ -8,8 +8,8 @@ import pytest
 
 from app.metrics.iq_activity import (
     ActivityRetriever,
+    ConfidenceHistogramConfig,
     FilesystemActivityTrackingHelper,
-    _confidence_to_bucket,
     clear_old_activity_files,
     record_activity_for_metrics,
     record_confidence_for_metrics,
@@ -243,8 +243,8 @@ def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_t
         Path(tmp_base_dir, "detectors", "det_123", "escalations_102394_2025-04-03_11").write_text("2")
         Path(tmp_base_dir, "detectors", "det_123", "audits_102394_2025-04-03_11").write_text("1")
         Path(tmp_base_dir, "detectors", "det_123", "below_threshold_iqs_102394_2025-04-03_11").write_text("3")
-        Path(tmp_base_dir, "detectors", "det_123", "confidence_70-75_102394_2025-04-03_11").write_text("15")
-        Path(tmp_base_dir, "detectors", "det_123", "confidence_95-100_102394_2025-04-03_11").write_text("10")
+        Path(tmp_base_dir, "detectors", "det_123", "confidence_v1_70-75_102394_2025-04-03_11").write_text("15")
+        Path(tmp_base_dir, "detectors", "det_123", "confidence_v1_95-100_102394_2025-04-03_11").write_text("10")
         Path(tmp_base_dir, "detectors", "det_123", "last_iqs").touch()
         Path(tmp_base_dir, "detectors", "det_123", "last_escalations").touch()
         Path(tmp_base_dir, "detectors", "det_123", "last_audits").touch()
@@ -305,21 +305,22 @@ def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_t
 
 def test_confidence_to_bucket():
     """Test the confidence to bucket conversion."""
+    to_bucket = ConfidenceHistogramConfig.confidence_to_bucket
     # Test standard buckets
-    assert _confidence_to_bucket(0.0) == "0-5"
-    assert _confidence_to_bucket(0.01) == "0-5"
-    assert _confidence_to_bucket(0.04) == "0-5"
-    assert _confidence_to_bucket(0.05) == "5-10"
-    assert _confidence_to_bucket(0.10) == "10-15"
-    assert _confidence_to_bucket(0.49) == "45-50"
-    assert _confidence_to_bucket(0.50) == "50-55"
-    assert _confidence_to_bucket(0.73) == "70-75"
-    assert _confidence_to_bucket(0.95) == "95-100"
-    assert _confidence_to_bucket(0.99) == "95-100"
+    assert to_bucket(0.0) == "0-5"
+    assert to_bucket(0.01) == "0-5"
+    assert to_bucket(0.04) == "0-5"
+    assert to_bucket(0.05) == "5-10"
+    assert to_bucket(0.10) == "10-15"
+    assert to_bucket(0.49) == "45-50"
+    assert to_bucket(0.50) == "50-55"
+    assert to_bucket(0.73) == "70-75"
+    assert to_bucket(0.95) == "95-100"
+    assert to_bucket(0.99) == "95-100"
 
     # Test edge cases
-    assert _confidence_to_bucket(0) == "0-5"
-    assert _confidence_to_bucket(1) == "95-100"
+    assert to_bucket(0) == "0-5"
+    assert to_bucket(1) == "95-100"
 
 
 def test_record_confidence_for_metrics(monkeypatch, tmp_base_dir, _test_tracker):
@@ -332,33 +333,47 @@ def test_record_confidence_for_metrics(monkeypatch, tmp_base_dir, _test_tracker)
 
         # Record some confidence values
         record_confidence_for_metrics("det_confidence_test", 0.73)
-        assert Path(tmp_base_dir, "detectors", "det_confidence_test", "confidence_70-75_11111_2025-04-03_14").exists()
+        assert Path(
+            tmp_base_dir, "detectors", "det_confidence_test", "confidence_v1_70-75_11111_2025-04-03_14"
+        ).exists()
         assert (
-            Path(tmp_base_dir, "detectors", "det_confidence_test", "confidence_70-75_11111_2025-04-03_14").read_text()
+            Path(
+                tmp_base_dir, "detectors", "det_confidence_test", "confidence_v1_70-75_11111_2025-04-03_14"
+            ).read_text()
             == "1"
         )
 
         # Record another value in the same bucket
         record_confidence_for_metrics("det_confidence_test", 0.71)
         assert (
-            Path(tmp_base_dir, "detectors", "det_confidence_test", "confidence_70-75_11111_2025-04-03_14").read_text()
+            Path(
+                tmp_base_dir, "detectors", "det_confidence_test", "confidence_v1_70-75_11111_2025-04-03_14"
+            ).read_text()
             == "2"
         )
 
         # Record in a different bucket
         record_confidence_for_metrics("det_confidence_test", 0.95)
-        assert Path(tmp_base_dir, "detectors", "det_confidence_test", "confidence_95-100_11111_2025-04-03_14").exists()
+        assert Path(
+            tmp_base_dir, "detectors", "det_confidence_test", "confidence_v1_95-100_11111_2025-04-03_14"
+        ).exists()
         assert (
-            Path(tmp_base_dir, "detectors", "det_confidence_test", "confidence_95-100_11111_2025-04-03_14").read_text()
+            Path(
+                tmp_base_dir, "detectors", "det_confidence_test", "confidence_v1_95-100_11111_2025-04-03_14"
+            ).read_text()
             == "1"
         )
 
         # Record from a different PID
         monkeypatch.setattr(os, "getpid", lambda: 22222)
         record_confidence_for_metrics("det_confidence_test", 0.72)
-        assert Path(tmp_base_dir, "detectors", "det_confidence_test", "confidence_70-75_22222_2025-04-03_14").exists()
+        assert Path(
+            tmp_base_dir, "detectors", "det_confidence_test", "confidence_v1_70-75_22222_2025-04-03_14"
+        ).exists()
         assert (
-            Path(tmp_base_dir, "detectors", "det_confidence_test", "confidence_70-75_22222_2025-04-03_14").read_text()
+            Path(
+                tmp_base_dir, "detectors", "det_confidence_test", "confidence_v1_70-75_22222_2025-04-03_14"
+            ).read_text()
             == "1"
         )
 
@@ -373,12 +388,18 @@ def test_get_detector_confidence_histogram(monkeypatch, tmp_base_dir, _test_trac
 
         # Set up confidence histogram files for the previous hour (14:00)
         os.makedirs(Path(tmp_base_dir, "detectors", "det_histogram_test"), exist_ok=True)
-        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_70-75_11111_2025-04-03_14").write_text("10")
-        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_70-75_22222_2025-04-03_14").write_text("5")
-        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_95-100_11111_2025-04-03_14").write_text("20")
-        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_0-5_33333_2025-04-03_14").write_text("2")
+        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_v1_70-75_11111_2025-04-03_14").write_text(
+            "10"
+        )
+        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_v1_70-75_22222_2025-04-03_14").write_text("5")
+        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_v1_95-100_11111_2025-04-03_14").write_text(
+            "20"
+        )
+        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_v1_0-5_33333_2025-04-03_14").write_text("2")
         # This file is for a different hour and should not be included
-        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_50-55_11111_2025-04-03_13").write_text("100")
+        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_v1_50-55_11111_2025-04-03_13").write_text(
+            "100"
+        )
 
         histogram = retriever.get_detector_confidence_histogram("det_histogram_test")
 
@@ -404,8 +425,8 @@ def test_detector_activity_metrics_includes_histogram(monkeypatch, tmp_base_dir,
         # Set up activity files for the previous hour (15:00)
         os.makedirs(Path(tmp_base_dir, "detectors", "det_full_metrics"), exist_ok=True)
         Path(tmp_base_dir, "detectors", "det_full_metrics", "iqs_11111_2025-04-03_15").write_text("50")
-        Path(tmp_base_dir, "detectors", "det_full_metrics", "confidence_80-85_11111_2025-04-03_15").write_text("30")
-        Path(tmp_base_dir, "detectors", "det_full_metrics", "confidence_90-95_11111_2025-04-03_15").write_text("20")
+        Path(tmp_base_dir, "detectors", "det_full_metrics", "confidence_v1_80-85_11111_2025-04-03_15").write_text("30")
+        Path(tmp_base_dir, "detectors", "det_full_metrics", "confidence_v1_90-95_11111_2025-04-03_15").write_text("20")
         Path(tmp_base_dir, "detectors", "det_full_metrics", "last_iqs").touch()
 
         metrics = retriever.get_detector_activity_metrics("det_full_metrics")

@@ -40,7 +40,7 @@ iqs_<pid>_YYYY-MM-DD_HH               # hourly counter files (per process)
 escalations_<pid>_YYYY-MM-DD_HH
 audits_<pid>_YYYY-MM-DD_HH
 below_threshold_iqs_<pid>_YYYY-MM-DD_HH
-confidence_<bucket>_<pid>_YYYY-MM-DD_HH  # confidence histogram (e.g., confidence_70-75_12345_2025-04-03_12)
+confidence_v<version>_<bucket>_<pid>_YYYY-MM-DD_HH  # confidence histogram (e.g., confidence_v1_70-75_12345_2025-04-03_12)
 ```
 
 Hourly files older than 2 hours are automatically cleaned up.
