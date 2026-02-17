@@ -68,20 +68,6 @@ class ConfidenceHistogramConfig:
         return index
 
     @staticmethod
-    def best_effort_index(bucket: str) -> int:
-        """Best-effort map of an old-version bucket name into the current scheme.
-        Raises ValueError if the name can't be parsed or the index is out of bounds."""
-        try:
-            bucket_start = int(bucket.split("-")[0])
-        except (ValueError, IndexError):
-            raise ValueError(f"Malformed confidence bucket name: {bucket}")
-
-        index = bucket_start // ConfidenceHistogramConfig.BUCKET_WIDTH
-        if not (0 <= index < ConfidenceHistogramConfig.NUM_BUCKETS):
-            raise ValueError(f"Confidence bucket index out of range: {bucket}")
-        return index
-
-    @staticmethod
     def empty_counts() -> list[int]:
         return [0] * ConfidenceHistogramConfig.NUM_BUCKETS
 
@@ -226,10 +212,9 @@ class ActivityRetriever:
 
         Globs for all versioned confidence files (``confidence_v*_…``).  Files
         matching the current version are mapped exactly; files from an older
-        version (left on disk during a rollout) are merged best-effort by
-        clamping their bucket into the current scheme. The slightly mismatched
-        best-effort mapping will only affect data from a single hour during a
-        version switch.
+        version (left on disk during a rollout) are mapped into the current
+        scheme via ``bucket_name_to_index``.  Files whose bucket name cannot
+        be parsed are logged and skipped.
 
         Returns:
             A versioned, self-describing envelope:
@@ -255,12 +240,13 @@ class ActivityRetriever:
             version_tag = parts[1]
             bucket = parts[2]
 
-            if version_tag == current_version_tag:
+            try:
                 index = cfg.bucket_name_to_index(bucket)
-            else:
-                # Old-version file left on disk during a rollout. Map its bucket into the
-                # current scheme on a best-effort basis (the bucket width may have changed).
-                index = cfg.best_effort_index(bucket)
+            except ValueError:
+                logger.error(f"Skipping confidence file with invalid bucket: {f.name}")
+                continue
+
+            if version_tag != current_version_tag:
                 logger.info(f"Merging old-version confidence file {f.name} into bucket index {index}")
 
             count = _tracker().get_activity_from_file(f)

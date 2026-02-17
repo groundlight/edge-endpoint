@@ -323,47 +323,47 @@ def test_confidence_to_bucket():
     assert to_bucket(1) == "95-100"
 
 
-def test_best_effort_index():
-    """Test best_effort_index maps old-version bucket names into the current scheme."""
-    best = ConfidenceHistogramConfig.best_effort_index
+def test_bucket_name_to_index():
+    """Test bucket_name_to_index maps bucket names (including old-version widths) into the current scheme."""
+    to_index = ConfidenceHistogramConfig.bucket_name_to_index
 
     # Current-width buckets (width=5) map exactly
-    assert best("0-5") == 0
-    assert best("50-55") == 10
-    assert best("70-75") == 14
-    assert best("95-100") == 19
+    assert to_index("0-5") == 0
+    assert to_index("50-55") == 10
+    assert to_index("70-75") == 14
+    assert to_index("95-100") == 19
 
     # Higher-resolution old version (width=2): bucket_start maps into the current 5-wide grid
     # 70 // 5 = 14, 72 // 5 = 14, 74 // 5 = 14  — all land in the same current bucket
-    assert best("70-72") == 14
-    assert best("72-74") == 14
-    assert best("74-76") == 14
+    assert to_index("70-72") == 14
+    assert to_index("72-74") == 14
+    assert to_index("74-76") == 14
     # 50 // 5 = 10, 52 // 5 = 10
-    assert best("50-52") == 10
-    assert best("52-54") == 10
+    assert to_index("50-52") == 10
+    assert to_index("52-54") == 10
     # 0 // 5 = 0, 2 // 5 = 0
-    assert best("0-2") == 0
-    assert best("2-4") == 0
+    assert to_index("0-2") == 0
+    assert to_index("2-4") == 0
 
     # Lower-resolution old version (width=10): bucket_start will be mapped to the lowest accurate bucket index
-    assert best("70-80") == 14
-    assert best("60-70") == 12
-    assert best("0-10") == 0
-    assert best("90-100") == 18
+    assert to_index("70-80") == 14
+    assert to_index("60-70") == 12
+    assert to_index("0-10") == 0
+    assert to_index("90-100") == 18
 
     # Out-of-range bucket_start raises ValueError
     with pytest.raises(ValueError):
-        best("110-120")
+        to_index("110-120")
     with pytest.raises(ValueError):
-        best("100-105")
+        to_index("100-105")
 
     # Unparseable names raise ValueError
     with pytest.raises(ValueError):
-        best("garbage")
+        to_index("garbage")
     with pytest.raises(ValueError):
-        best("")
+        to_index("")
     with pytest.raises(ValueError):
-        best("abc-def")
+        to_index("abc-def")
 
 
 def test_record_confidence_for_metrics(monkeypatch, tmp_base_dir, _test_tracker):
