@@ -67,15 +67,18 @@ class ConfidenceHistogramConfig:
         return index
 
     @staticmethod
-    def best_effort_index(bucket: str) -> int | None:
+    def best_effort_index(bucket: str) -> int:
         """Best-effort map of an old-version bucket name into the current scheme.
-        Returns None if the name can't be parsed at all."""
+        Raises ValueError if the name can't be parsed or the index is out of bounds."""
         try:
             bucket_start = int(bucket.split("-")[0])
         except (ValueError, IndexError):
-            return None
+            raise ValueError(f"Malformed confidence bucket name: {bucket}")
+
         index = bucket_start // ConfidenceHistogramConfig.BUCKET_WIDTH
-        return max(0, min(index, ConfidenceHistogramConfig.NUM_BUCKETS - 1))
+        if not (0 <= index < ConfidenceHistogramConfig.NUM_BUCKETS):
+            raise ValueError(f"Confidence bucket index out of range: {bucket}")
+        return index
 
     @staticmethod
     def empty_counts() -> list[int]:
@@ -255,11 +258,8 @@ class ActivityRetriever:
                 index = cfg.bucket_name_to_index(bucket)
             else:
                 # Old-version file left on disk during a rollout. Map its bucket into the
-                # current scheme on a best-effort basis (the bucket width may have changed),
-                # clamping to valid bounds. Skip entirely if the name is unparseable.
+                # current scheme on a best-effort basis (the bucket width may have changed).
                 index = cfg.best_effort_index(bucket)
-                if index is None:
-                    continue
                 logger.info(f"Merging old-version confidence file {f.name} into bucket index {index}")
 
             count = _tracker().get_activity_from_file(f)
