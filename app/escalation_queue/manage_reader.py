@@ -39,8 +39,9 @@ def _escalate_once(escalation_info: EscalationInfo, submit_iq_request_timeout_s:
 
     Args:
         escalation_info (EscalationInfo): Information required to perform the escalation.
-        submit_iq_request_timeout_s (int | tuple[int, int]): Request timeout for the image query submission request.
-            This will be passed to submit_image_query as request_timeout.
+        submit_iq_request_timeout_s (int | tuple[int, int]): Request timeout for the image query submission request,
+            passed to submit_image_query as request_timeout. If a tuple, the first element is the connect timeout
+            and the second is the read timeout.
 
     Returns:
         ImageQuery: The escalated ImageQuery result.
@@ -69,7 +70,7 @@ def _escalate_once(escalation_info: EscalationInfo, submit_iq_request_timeout_s:
     )
 
 
-def is_retryable_exception(exc: BaseException) -> bool:
+def is_retryable_exception(exc: Exception) -> bool:
     """Returns True if an escalation should be retried for the given exception."""
     # Transient client/network failures. These typically resolve after connectivity is restored.
     if isinstance(exc, (GroundlightClientError, MaxRetryError, ReadTimeoutError)):
@@ -122,9 +123,6 @@ def read_from_escalation_queue(reader: QueueReader, request_cache: RequestCache)
             escalation_info = EscalationInfo(**json.loads(escalation.strip()))
             if not request_cache.contains(escalation_info.request_id):
                 result = consume_queued_escalation(escalation_info)
-
-                # Cache the request ID so that we don't repeat duplicate requests
-                request_cache.add(escalation_info.request_id)
                 logger.info(f"Escalation succeeded for escalation with ID {result.id}.")
             else:
                 logger.debug("Duplicate request ID received: %s. Skipping", escalation_info.request_id)
@@ -135,8 +133,10 @@ def read_from_escalation_queue(reader: QueueReader, request_cache: RequestCache)
             # removing this and just relying on the error log instead.
             record_failed_escalation(escalation, e)
         finally:
-            # Delete the image
             if escalation_info is not None:
+                # Cache the request ID so that we don't repeat duplicate requests
+                request_cache.add(escalation_info.request_id)
+                # Delete the image
                 Path(escalation_info.image_path_str).unlink(missing_ok=True)
 
 

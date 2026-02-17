@@ -457,7 +457,7 @@ class TestConsumeQueuedEscalation:
         assert actual_waits == expected_waits
 
     def test_deletes_image_on_completion(self, test_request_cache: RequestCache, test_escalation_info: EscalationInfo):
-        """The image for the escalation should be deleted by the reader (not consume_queued_escalation)."""
+        """The image for the escalation should be deleted by read_from_escalation_queue."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_image_path = Path(temp_dir) / "temp_image.jpeg"
             shutil.copy(test_escalation_info.image_path_str, temp_image_path)
@@ -474,6 +474,27 @@ class TestConsumeQueuedEscalation:
                 read_from_escalation_queue(generate_queue_reader(temp_dir), test_request_cache)
 
             mock_escalate.assert_called_once()
+            assert not temp_image_path.exists()
+
+    def test_deletes_image_on_failure(self, test_request_cache: RequestCache, test_escalation_info: EscalationInfo):
+        """The image should be deleted even if the escalation fails."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_image_path = Path(temp_dir) / "temp_image.jpeg"
+            shutil.copy(test_escalation_info.image_path_str, temp_image_path)
+
+            test_escalation_info.image_path_str = str(temp_image_path)
+
+            escalation_str = convert_escalation_info_to_str(test_escalation_info)
+
+            with (
+                patch.object(QueueReader, "__iter__", return_value=iter([escalation_str])),
+                patch(
+                    "app.escalation_queue.manage_reader._escalate_once",
+                    side_effect=RuntimeError("permanent failure"),
+                ),
+            ):
+                read_from_escalation_queue(generate_queue_reader(temp_dir), test_request_cache)
+
             assert not temp_image_path.exists()
 
     def test_skips_duplicate_request(self, test_request_id, test_request_cache: RequestCache):
@@ -494,9 +515,6 @@ class TestConsumeQueuedEscalation:
 
         # Only the first should be escalated; the second should be skipped due to RequestCache.
         assert mock_escalate.call_count == 1
-
-    # Skipping malformed queue lines is now handled by the queue reader loop (which records them as failures),
-    # not by consume_queued_escalation.
 
 
 class TestReadFromEscalationQueue:

@@ -83,13 +83,13 @@ class MetricsReporter:
         detector_details = SafeMetricsDict()
         detector_details.add("detector_details", lambda: system_metrics.get_detector_details())
 
-        dropped_escalation_metrics = SafeMetricsDict()
-        dropped_escalation_metrics.add("dropped_escalations", lambda: failed_escalations.metrics_summary())
+        failed_escalation_metrics = SafeMetricsDict()
+        failed_escalation_metrics.add("failed_escalations", lambda: failed_escalations.metrics_summary())
 
         return {
             "device_info": device_info.as_dict(),
             "activity_metrics": activity_metrics.as_dict(),
-            "dropped_escalations": dropped_escalation_metrics.as_dict().get("dropped_escalations"),
+            "failed_escalations": failed_escalation_metrics.as_dict().get("failed_escalations"),
             "detector_details": detector_details.as_dict().get("detector_details"),
             "k3s_stats": k3s_stats.as_dict(),
         }

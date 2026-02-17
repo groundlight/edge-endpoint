@@ -214,8 +214,8 @@ const fetchMetrics = (showLoading = false) => {
                 null,
                 2,
             );
-            document.getElementById("dropped-escalations").textContent = JSON.stringify(
-                parseSection(data.dropped_escalations),
+            document.getElementById("failed-escalations").textContent = JSON.stringify(
+                parseSection(data.failed_escalations),
                 null,
                 2,
             );

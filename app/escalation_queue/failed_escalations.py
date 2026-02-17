@@ -18,7 +18,7 @@ MAX_TRACEBACK_CHARS = 4000  # Caps exception tracebacks in failure records
 MAX_ESCALATION_CHARS = 4000  # Caps raw (malformed) escalation payloads in failure records
 
 
-def _ensure_dir() -> None:
+def _ensure_dir_exists() -> None:
     """Ensure the failed-escalations directory exists."""
     FAILED_ESCALATIONS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -34,10 +34,10 @@ def _truncate(text: str | None, max_chars: int) -> str | None:
     return text[:max_chars] + "\n...[truncated]...\n"
 
 
-def _format_traceback(exc: BaseException, max_chars: int) -> str | None:
+def _format_traceback(exc: Exception, max_chars: int) -> str | None:
     """Format an exception traceback and truncate it to a maximum length."""
     try:
-        tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+        tb = "".join(traceback.format_exception(exc))
     except Exception:
         return None
     return _truncate(tb, max_chars)
@@ -56,14 +56,14 @@ def _parse_escalation(value: str | None, max_chars: int) -> tuple[str, Any]:
         return "raw", _truncate(value, max_chars)
 
 
-def record_failed_escalation(escalation_line: str | None, exc: BaseException) -> None:
+def record_failed_escalation(escalation_line: str | None, exc: Exception) -> None:
     """
     Records an escalation that permanently failed or was skipped due to an exception.
 
     The record is written as a single JSON file under the local failed-escalations directory.
     """
     try:
-        _ensure_dir()
+        _ensure_dir_exists()
 
         now = datetime.now(timezone.utc)
         record_id = str(ksuid.KsuidMs())
@@ -93,9 +93,7 @@ def record_failed_escalation(escalation_line: str | None, exc: BaseException) ->
 
 def prune_failed_escalations() -> None:
     """Apply retention limits and cleanup for failed-escalation record files."""
-    _ensure_dir()
-    if MAX_RECORDS <= 0:
-        return
+    _ensure_dir_exists()
 
     # Best-effort cleanup for crash leftovers from atomic record writes (write to `*.json.tmp`, then rename).
     for path in FAILED_ESCALATIONS_DIR.glob("*.json.tmp"):
@@ -115,15 +113,15 @@ def metrics_summary() -> dict[str, Any]:
 
     Reads from the local record files; keeps the payload small (counts + timestamps + exception breakdown).
     """
-    _ensure_dir()
+    _ensure_dir_exists()
     files = list(FAILED_ESCALATIONS_DIR.glob("*.json"))
     now = datetime.now(timezone.utc)
     last_hour_cutoff = now - timedelta(hours=1)
 
     last_failed_time: str | None = None
-    dropped_last_hour_total = 0
-    dropped_last_hour_by_exception: dict[str, int] = {}
-    dropped_lifetime_by_exception: dict[str, int] = {}
+    failed_last_hour_total = 0
+    failed_last_hour_by_exception: dict[str, int] = {}
+    failed_lifetime_by_exception: dict[str, int] = {}
 
     def _as_dt(value: Any) -> datetime | None:
         if not isinstance(value, str) or not value:
@@ -145,7 +143,7 @@ def metrics_summary() -> dict[str, Any]:
 
         exc_type = data.get("exception_type")
         if isinstance(exc_type, str) and exc_type:
-            dropped_lifetime_by_exception[exc_type] = dropped_lifetime_by_exception.get(exc_type, 0) + 1
+            failed_lifetime_by_exception[exc_type] = failed_lifetime_by_exception.get(exc_type, 0) + 1
 
         recorded_at = _as_dt(data.get("recorded_at"))
         if recorded_at is None:
@@ -155,19 +153,19 @@ def metrics_summary() -> dict[str, Any]:
             newest_dt = recorded_at
 
         if recorded_at >= last_hour_cutoff and isinstance(exc_type, str) and exc_type:
-            dropped_last_hour_total += 1
-            dropped_last_hour_by_exception[exc_type] = dropped_last_hour_by_exception.get(exc_type, 0) + 1
+            failed_last_hour_total += 1
+            failed_last_hour_by_exception[exc_type] = failed_last_hour_by_exception.get(exc_type, 0) + 1
 
     if newest_dt is not None:
         last_failed_time = newest_dt.isoformat()
 
     return {
         "activity_hour": last_hour_cutoff.strftime("%Y-%m-%d_%H"),
-        "last_dropped_time": last_failed_time,
-        "dropped_last_hour_total": dropped_last_hour_total,
+        "last_failed_time": last_failed_time,
+        "failed_last_hour_total": failed_last_hour_total,
         # Stringify to avoid dynamic keys being indexed in OpenSearch.
-        "dropped_last_hour_by_exception": json.dumps(dropped_last_hour_by_exception, sort_keys=True),
-        "dropped_lifetime_total": len(files),
+        "failed_last_hour_by_exception": json.dumps(failed_last_hour_by_exception, sort_keys=True),
+        "failed_lifetime_total": sum(failed_lifetime_by_exception.values()),
         # Stringify to avoid dynamic keys being indexed in OpenSearch.
-        "dropped_lifetime_by_exception": json.dumps(dropped_lifetime_by_exception, sort_keys=True),
+        "failed_lifetime_by_exception": json.dumps(failed_lifetime_by_exception, sort_keys=True),
     }
