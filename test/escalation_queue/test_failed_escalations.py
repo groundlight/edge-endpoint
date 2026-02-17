@@ -176,6 +176,7 @@ class TestFailureRecordingIntegration:
                 patience_time=None,
                 confidence_threshold=0.9,
                 human_review=None,
+                metadata=None,
                 image_query_id="iq_test",
             ),
         )
