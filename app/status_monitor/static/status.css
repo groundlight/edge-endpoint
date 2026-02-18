@@ -217,3 +217,29 @@ pre {
     font-size: 0.8em;
     color: var(--groundlight-muted);
 }
+
+.status-info-icon {
+    position: relative;
+    cursor: help;
+    font-size: 0.85em;
+    opacity: 0.7;
+}
+
+.status-info-icon:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    transform: translateX(-50%);
+    margin-top: 6px;
+    background-color: var(--dark);
+    color: var(--groundlight-white);
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 400;
+    white-space: pre-line;
+    width: 300px;
+    z-index: 10;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}

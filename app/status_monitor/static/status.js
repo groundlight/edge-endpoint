@@ -152,9 +152,24 @@ const renderDetectorDetails = (rawDetails) => {
     const thead = document.createElement("thead");
     const headerRow = document.createElement("tr");
 
+    const STATUS_TOOLTIP =
+        "Ready: Model is loaded and serving inference requests.\n" +
+        "Updating: New model version deploying. Previous version still serving.\n" +
+        "Initializing: Model is loading for the first time. Not yet available.\n" +
+        "Error: Model failed to start.";
+
     ["Detector", "Status", "Pipeline", "Edge Config", "Last Updated"].forEach((heading) => {
         const th = document.createElement("th");
-        th.textContent = heading;
+        if (heading === "Status") {
+            th.textContent = heading + " ";
+            const icon = document.createElement("span");
+            icon.className = "status-info-icon";
+            icon.textContent = "\u24D8";
+            icon.setAttribute("data-tooltip", STATUS_TOOLTIP);
+            th.appendChild(icon);
+        } else {
+            th.textContent = heading;
+        }
         headerRow.appendChild(th);
     });
 
