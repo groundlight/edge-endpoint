@@ -260,6 +260,11 @@ const fetchMetrics = (showLoading = false) => {
                 null,
                 2,
             );
+            document.getElementById("failed-escalations").textContent = JSON.stringify(
+                parseSection(data.failed_escalations),
+                null,
+                2,
+            );
             document.getElementById("k3s-stats").textContent = JSON.stringify(parseSection(data.k3s_stats), null, 2);
 
             renderDetectorDetails(data.detector_details);
