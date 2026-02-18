@@ -121,7 +121,6 @@ def metrics_summary() -> dict[str, Any]:
     last_failed_time: str | None = None
     failed_last_hour_total = 0
     failed_last_hour_by_exception: dict[str, int] = {}
-    failed_lifetime_by_exception: dict[str, int] = {}
 
     def _as_dt(value: Any) -> datetime | None:
         if not isinstance(value, str) or not value:
@@ -141,10 +140,6 @@ def metrics_summary() -> dict[str, Any]:
         except Exception:
             continue
 
-        exc_type = data.get("exception_type")
-        if isinstance(exc_type, str) and exc_type:
-            failed_lifetime_by_exception[exc_type] = failed_lifetime_by_exception.get(exc_type, 0) + 1
-
         recorded_at = _as_dt(data.get("recorded_at"))
         if recorded_at is None:
             continue
@@ -152,6 +147,7 @@ def metrics_summary() -> dict[str, Any]:
         if newest_dt is None or recorded_at > newest_dt:
             newest_dt = recorded_at
 
+        exc_type = data.get("exception_type")
         if recorded_at >= last_hour_cutoff and isinstance(exc_type, str) and exc_type:
             failed_last_hour_total += 1
             failed_last_hour_by_exception[exc_type] = failed_last_hour_by_exception.get(exc_type, 0) + 1
@@ -165,7 +161,4 @@ def metrics_summary() -> dict[str, Any]:
         "failed_last_hour_total": failed_last_hour_total,
         # Stringify to avoid dynamic keys being indexed in OpenSearch.
         "failed_last_hour_by_exception": json.dumps(failed_last_hour_by_exception, sort_keys=True),
-        "failed_lifetime_total": sum(failed_lifetime_by_exception.values()),
-        # Stringify to avoid dynamic keys being indexed in OpenSearch.
-        "failed_lifetime_by_exception": json.dumps(failed_lifetime_by_exception, sort_keys=True),
     }

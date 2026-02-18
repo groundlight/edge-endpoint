@@ -125,7 +125,6 @@ class TestMetricsSummary:
     def test_empty_directory(self):
         """An empty directory should return zero counts and no last-failed timestamp."""
         summary = metrics_summary()
-        assert summary["failed_lifetime_total"] == 0
         assert summary["failed_last_hour_total"] == 0
         assert summary["last_failed_time"] is None
 
@@ -138,20 +137,18 @@ class TestMetricsSummary:
         self._write_record("FileNotFoundError", now - timedelta(minutes=30))
 
         summary = metrics_summary()
-        assert summary["failed_lifetime_total"] == 3
         assert summary["failed_last_hour_total"] == 3
         assert summary["last_failed_time"] == newest.isoformat()
-        lifetime = json.loads(summary["failed_lifetime_by_exception"])
-        assert lifetime == {"FileNotFoundError": 1, "ValueError": 2}
+        last_hour = json.loads(summary["failed_last_hour_by_exception"])
+        assert last_hour == {"FileNotFoundError": 1, "ValueError": 2}
 
     def test_old_records_excluded_from_last_hour(self):
-        """Records older than one hour should appear in lifetime counts but not last-hour counts."""
+        """Records older than one hour should not appear in last-hour counts."""
         now = datetime.now(timezone.utc)
         self._write_record("ValueError", now - timedelta(minutes=30))
         self._write_record("TypeError", now - timedelta(hours=2))
 
         summary = metrics_summary()
-        assert summary["failed_lifetime_total"] == 2
         assert summary["failed_last_hour_total"] == 1
         last_hour = json.loads(summary["failed_last_hour_by_exception"])
         assert last_hour == {"ValueError": 1}
@@ -160,7 +157,6 @@ class TestMetricsSummary:
         """Exception breakdown fields should be serialized as JSON strings, not dicts."""
         summary = metrics_summary()
         assert isinstance(summary["failed_last_hour_by_exception"], str)
-        assert isinstance(summary["failed_lifetime_by_exception"], str)
 
 
 class TestFailureRecordingIntegration:
