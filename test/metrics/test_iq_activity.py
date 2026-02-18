@@ -8,8 +8,8 @@ import pytest
 
 from app.metrics.iq_activity import (
     ActivityRetriever,
+    ConfidenceHistogramConfig,
     FilesystemActivityTrackingHelper,
-    _confidence_to_bucket,
     clear_old_activity_files,
     record_activity_for_metrics,
     record_confidence_for_metrics,
@@ -243,8 +243,8 @@ def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_t
         Path(tmp_base_dir, "detectors", "det_123", "escalations_102394_2025-04-03_11").write_text("2")
         Path(tmp_base_dir, "detectors", "det_123", "audits_102394_2025-04-03_11").write_text("1")
         Path(tmp_base_dir, "detectors", "det_123", "below_threshold_iqs_102394_2025-04-03_11").write_text("3")
-        Path(tmp_base_dir, "detectors", "det_123", "confidence_70-75_102394_2025-04-03_11").write_text("15")
-        Path(tmp_base_dir, "detectors", "det_123", "confidence_95-100_102394_2025-04-03_11").write_text("10")
+        Path(tmp_base_dir, "detectors", "det_123", "confidence_v1_70-75_102394_2025-04-03_11").write_text("15")
+        Path(tmp_base_dir, "detectors", "det_123", "confidence_v1_95-100_102394_2025-04-03_11").write_text("10")
         Path(tmp_base_dir, "detectors", "det_123", "last_iqs").touch()
         Path(tmp_base_dir, "detectors", "det_123", "last_escalations").touch()
         Path(tmp_base_dir, "detectors", "det_123", "last_audits").touch()
@@ -269,7 +269,12 @@ def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_t
         assert all_detector_activity["det_123"]["last_escalation"] is not None
         assert all_detector_activity["det_123"]["last_audit"] is not None
         assert all_detector_activity["det_123"]["last_below_threshold_iq"] is not None
-        assert all_detector_activity["det_123"]["confidence_histogram"] == {"70-75": 15, "95-100": 10}
+        histogram = all_detector_activity["det_123"]["confidence_histogram"]
+        assert histogram["version"] == 1
+        assert histogram["bucket_width"] == 5
+        assert len(histogram["counts"]) == 20
+        assert histogram["counts"][14] == 15  # 70-75 bucket
+        assert histogram["counts"][19] == 10  # 95-100 bucket
         assert all_detector_activity["det_456"]["hourly_total_iqs"] == 0
         assert all_detector_activity["det_456"]["hourly_total_escalations"] == 0
         assert all_detector_activity["det_456"]["hourly_total_audits"] == 0
@@ -290,26 +295,56 @@ def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_t
         assert active_detector_activity["det_123"]["last_escalation"] is not None
         assert active_detector_activity["det_123"]["last_audit"] is not None
         assert active_detector_activity["det_123"]["last_below_threshold_iq"] is not None
-        assert active_detector_activity["det_123"]["confidence_histogram"] == {"70-75": 15, "95-100": 10}
+        active_histogram = active_detector_activity["det_123"]["confidence_histogram"]
+        assert active_histogram["version"] == 1
+        assert active_histogram["bucket_width"] == 5
+        assert len(active_histogram["counts"]) == 20
+        assert active_histogram["counts"][14] == 15  # 70-75 bucket
+        assert active_histogram["counts"][19] == 10  # 95-100 bucket
 
 
 def test_confidence_to_bucket():
     """Test the confidence to bucket conversion."""
+    to_bucket = ConfidenceHistogramConfig.confidence_to_bucket
     # Test standard buckets
-    assert _confidence_to_bucket(0.0) == "0-5"
-    assert _confidence_to_bucket(0.01) == "0-5"
-    assert _confidence_to_bucket(0.04) == "0-5"
-    assert _confidence_to_bucket(0.05) == "5-10"
-    assert _confidence_to_bucket(0.10) == "10-15"
-    assert _confidence_to_bucket(0.49) == "45-50"
-    assert _confidence_to_bucket(0.50) == "50-55"
-    assert _confidence_to_bucket(0.73) == "70-75"
-    assert _confidence_to_bucket(0.95) == "95-100"
-    assert _confidence_to_bucket(0.99) == "95-100"
+    assert to_bucket(0.0) == "0-5"
+    assert to_bucket(0.01) == "0-5"
+    assert to_bucket(0.04) == "0-5"
+    assert to_bucket(0.05) == "5-10"
+    assert to_bucket(0.10) == "10-15"
+    assert to_bucket(0.49) == "45-50"
+    assert to_bucket(0.50) == "50-55"
+    assert to_bucket(0.73) == "70-75"
+    assert to_bucket(0.95) == "95-100"
+    assert to_bucket(0.99) == "95-100"
 
     # Test edge cases
-    assert _confidence_to_bucket(0) == "0-5"
-    assert _confidence_to_bucket(1) == "95-100"
+    assert to_bucket(0) == "0-5"
+    assert to_bucket(1) == "95-100"
+
+
+def test_bucket_name_to_index():
+    """Test bucket_name_to_index converts bucket name strings to array indices."""
+    to_index = ConfidenceHistogramConfig.bucket_name_to_index
+
+    assert to_index("0-5") == 0
+    assert to_index("50-55") == 10
+    assert to_index("70-75") == 14
+    assert to_index("95-100") == 19
+
+    # Out-of-range bucket_start raises ValueError
+    with pytest.raises(ValueError):
+        to_index("110-120")
+    with pytest.raises(ValueError):
+        to_index("100-105")
+
+    # Unparseable names raise ValueError
+    with pytest.raises(ValueError):
+        to_index("garbage")
+    with pytest.raises(ValueError):
+        to_index("")
+    with pytest.raises(ValueError):
+        to_index("abc-def")
 
 
 def test_record_confidence_for_metrics(monkeypatch, tmp_base_dir, _test_tracker):
@@ -322,33 +357,47 @@ def test_record_confidence_for_metrics(monkeypatch, tmp_base_dir, _test_tracker)
 
         # Record some confidence values
         record_confidence_for_metrics("det_confidence_test", 0.73)
-        assert Path(tmp_base_dir, "detectors", "det_confidence_test", "confidence_70-75_11111_2025-04-03_14").exists()
+        assert Path(
+            tmp_base_dir, "detectors", "det_confidence_test", "confidence_v1_70-75_11111_2025-04-03_14"
+        ).exists()
         assert (
-            Path(tmp_base_dir, "detectors", "det_confidence_test", "confidence_70-75_11111_2025-04-03_14").read_text()
+            Path(
+                tmp_base_dir, "detectors", "det_confidence_test", "confidence_v1_70-75_11111_2025-04-03_14"
+            ).read_text()
             == "1"
         )
 
         # Record another value in the same bucket
         record_confidence_for_metrics("det_confidence_test", 0.71)
         assert (
-            Path(tmp_base_dir, "detectors", "det_confidence_test", "confidence_70-75_11111_2025-04-03_14").read_text()
+            Path(
+                tmp_base_dir, "detectors", "det_confidence_test", "confidence_v1_70-75_11111_2025-04-03_14"
+            ).read_text()
             == "2"
         )
 
         # Record in a different bucket
         record_confidence_for_metrics("det_confidence_test", 0.95)
-        assert Path(tmp_base_dir, "detectors", "det_confidence_test", "confidence_95-100_11111_2025-04-03_14").exists()
+        assert Path(
+            tmp_base_dir, "detectors", "det_confidence_test", "confidence_v1_95-100_11111_2025-04-03_14"
+        ).exists()
         assert (
-            Path(tmp_base_dir, "detectors", "det_confidence_test", "confidence_95-100_11111_2025-04-03_14").read_text()
+            Path(
+                tmp_base_dir, "detectors", "det_confidence_test", "confidence_v1_95-100_11111_2025-04-03_14"
+            ).read_text()
             == "1"
         )
 
         # Record from a different PID
         monkeypatch.setattr(os, "getpid", lambda: 22222)
         record_confidence_for_metrics("det_confidence_test", 0.72)
-        assert Path(tmp_base_dir, "detectors", "det_confidence_test", "confidence_70-75_22222_2025-04-03_14").exists()
+        assert Path(
+            tmp_base_dir, "detectors", "det_confidence_test", "confidence_v1_70-75_22222_2025-04-03_14"
+        ).exists()
         assert (
-            Path(tmp_base_dir, "detectors", "det_confidence_test", "confidence_70-75_22222_2025-04-03_14").read_text()
+            Path(
+                tmp_base_dir, "detectors", "det_confidence_test", "confidence_v1_70-75_22222_2025-04-03_14"
+            ).read_text()
             == "1"
         )
 
@@ -363,21 +412,125 @@ def test_get_detector_confidence_histogram(monkeypatch, tmp_base_dir, _test_trac
 
         # Set up confidence histogram files for the previous hour (14:00)
         os.makedirs(Path(tmp_base_dir, "detectors", "det_histogram_test"), exist_ok=True)
-        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_70-75_11111_2025-04-03_14").write_text("10")
-        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_70-75_22222_2025-04-03_14").write_text("5")
-        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_95-100_11111_2025-04-03_14").write_text("20")
-        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_0-5_33333_2025-04-03_14").write_text("2")
+        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_v1_70-75_11111_2025-04-03_14").write_text(
+            "10"
+        )
+        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_v1_70-75_22222_2025-04-03_14").write_text("5")
+        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_v1_95-100_11111_2025-04-03_14").write_text(
+            "20"
+        )
+        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_v1_0-5_33333_2025-04-03_14").write_text("2")
         # This file is for a different hour and should not be included
-        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_50-55_11111_2025-04-03_13").write_text("100")
+        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_v1_50-55_11111_2025-04-03_13").write_text(
+            "100"
+        )
 
         histogram = retriever.get_detector_confidence_histogram("det_histogram_test")
 
+        assert histogram["version"] == 1
+        assert histogram["bucket_width"] == 5
+        assert len(histogram["counts"]) == 20
         # Should aggregate across PIDs
-        assert histogram["70-75"] == 15  # 10 + 5
-        assert histogram["95-100"] == 20
-        assert histogram["0-5"] == 2
+        assert histogram["counts"][14] == 15  # 70-75: 10 + 5
+        assert histogram["counts"][19] == 20  # 95-100
+        assert histogram["counts"][0] == 2  # 0-5
         # Should not include the different hour
-        assert "50-55" not in histogram
+        assert histogram["counts"][10] == 0  # 50-55 (from different hour)
+
+
+def test_get_detector_confidence_histogram_empty(monkeypatch, tmp_base_dir, _test_tracker):
+    """Test that a detector with no confidence files returns an all-zero envelope."""
+    monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
+
+    with patch("app.metrics.iq_activity.datetime") as mock_datetime:
+        mock_datetime.now.return_value = datetime(2025, 4, 3, 21, 0, 0)
+        retriever = ActivityRetriever()
+
+        det = "det_no_confidence"
+        os.makedirs(Path(tmp_base_dir, "detectors", det), exist_ok=True)
+
+        histogram = retriever.get_detector_confidence_histogram(det)
+
+        assert histogram["version"] == 1
+        assert histogram["bucket_width"] == 5
+        assert len(histogram["counts"]) == 20
+        assert all(c == 0 for c in histogram["counts"])
+
+
+def test_get_detector_confidence_histogram_lower_resolution_old_version(monkeypatch, tmp_base_dir, _test_tracker):
+    """Test that old-version files with lower resolution (wider buckets) are skipped."""
+    monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
+
+    with patch("app.metrics.iq_activity.datetime") as mock_datetime:
+        mock_datetime.now.return_value = datetime(2025, 4, 3, 18, 0, 0)
+        retriever = ActivityRetriever()
+
+        det = "det_lower_res"
+        det_dir = Path(tmp_base_dir, "detectors", det)
+        os.makedirs(det_dir, exist_ok=True)
+        hour = "2025-04-03_17"
+
+        # Current v1 files (width=5)
+        Path(det_dir, f"confidence_v1_70-75_11111_{hour}").write_text("10")
+        Path(det_dir, f"confidence_v1_0-5_11111_{hour}").write_text("4")
+
+        # Old v0 files — simulate a lower-resolution scheme (width=10).
+        # These should be ignored (present on disk but skipped).
+        Path(det_dir, f"confidence_v0_60-70_22222_{hour}").write_text("7")
+        Path(det_dir, f"confidence_v0_70-80_22222_{hour}").write_text("6")
+        Path(det_dir, f"confidence_v0_90-100_22222_{hour}").write_text("3")
+
+        histogram = retriever.get_detector_confidence_histogram(det)
+
+        assert histogram["version"] == 1
+        assert histogram["bucket_width"] == 5
+        assert len(histogram["counts"]) == 20
+
+        # Only v1 data should appear
+        assert histogram["counts"][0] == 4  # v1 0-5
+        assert histogram["counts"][14] == 10  # v1 70-75 only
+        # v0 buckets should NOT contribute
+        assert histogram["counts"][12] == 0  # v0 60-70 ignored
+        assert histogram["counts"][18] == 0  # v0 90-100 ignored
+        assert sum(histogram["counts"]) == 4 + 10
+
+
+def test_get_detector_confidence_histogram_higher_resolution_old_version(monkeypatch, tmp_base_dir, _test_tracker):
+    """Test that old-version files with higher resolution (narrower buckets) are skipped."""
+    monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
+
+    with patch("app.metrics.iq_activity.datetime") as mock_datetime:
+        mock_datetime.now.return_value = datetime(2025, 4, 3, 19, 0, 0)
+        retriever = ActivityRetriever()
+
+        det = "det_higher_res"
+        det_dir = Path(tmp_base_dir, "detectors", det)
+        os.makedirs(det_dir, exist_ok=True)
+        hour = "2025-04-03_18"
+
+        # Current v1 files (width=5)
+        Path(det_dir, f"confidence_v1_70-75_11111_{hour}").write_text("10")
+        Path(det_dir, f"confidence_v1_0-5_11111_{hour}").write_text("4")
+
+        # Old v0 files — simulate a higher-resolution scheme (width=2).
+        # These should be ignored (present on disk but skipped).
+        Path(det_dir, f"confidence_v0_0-2_33333_{hour}").write_text("3")
+        Path(det_dir, f"confidence_v0_70-72_33333_{hour}").write_text("2")
+        Path(det_dir, f"confidence_v0_72-74_33333_{hour}").write_text("1")
+        Path(det_dir, f"confidence_v0_50-52_33333_{hour}").write_text("5")
+
+        histogram = retriever.get_detector_confidence_histogram(det)
+
+        assert histogram["version"] == 1
+        assert histogram["bucket_width"] == 5
+        assert len(histogram["counts"]) == 20
+
+        # Only v1 data should appear
+        assert histogram["counts"][0] == 4  # v1 0-5 only
+        assert histogram["counts"][14] == 10  # v1 70-75 only
+        # v0 buckets should NOT contribute
+        assert histogram["counts"][10] == 0  # v0 50-52 ignored
+        assert sum(histogram["counts"]) == 4 + 10
 
 
 def test_detector_activity_metrics_includes_histogram(monkeypatch, tmp_base_dir, _test_tracker):
@@ -391,13 +544,17 @@ def test_detector_activity_metrics_includes_histogram(monkeypatch, tmp_base_dir,
         # Set up activity files for the previous hour (15:00)
         os.makedirs(Path(tmp_base_dir, "detectors", "det_full_metrics"), exist_ok=True)
         Path(tmp_base_dir, "detectors", "det_full_metrics", "iqs_11111_2025-04-03_15").write_text("50")
-        Path(tmp_base_dir, "detectors", "det_full_metrics", "confidence_80-85_11111_2025-04-03_15").write_text("30")
-        Path(tmp_base_dir, "detectors", "det_full_metrics", "confidence_90-95_11111_2025-04-03_15").write_text("20")
+        Path(tmp_base_dir, "detectors", "det_full_metrics", "confidence_v1_80-85_11111_2025-04-03_15").write_text("30")
+        Path(tmp_base_dir, "detectors", "det_full_metrics", "confidence_v1_90-95_11111_2025-04-03_15").write_text("20")
         Path(tmp_base_dir, "detectors", "det_full_metrics", "last_iqs").touch()
 
         metrics = retriever.get_detector_activity_metrics("det_full_metrics")
 
         assert metrics["hourly_total_iqs"] == 50
         assert "confidence_histogram" in metrics
-        assert metrics["confidence_histogram"]["80-85"] == 30
-        assert metrics["confidence_histogram"]["90-95"] == 20
+        histogram = metrics["confidence_histogram"]
+        assert histogram["version"] == 1
+        assert histogram["bucket_width"] == 5
+        assert len(histogram["counts"]) == 20
+        assert histogram["counts"][16] == 30  # 80-85 bucket
+        assert histogram["counts"][18] == 20  # 90-95 bucket
