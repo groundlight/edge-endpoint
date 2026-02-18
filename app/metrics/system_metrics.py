@@ -151,11 +151,11 @@ def _pod_is_ready(pod: client.V1Pod) -> bool:
     return False
 
 
-def _get_container_started_at(pod: client.V1Pod) -> datetime | None:
-    for cs in pod.status.container_statuses or []:
-        if cs.name == "inference-server" and cs.state and cs.state.running and cs.state.running.started_at:
-            return cs.state.running.started_at
-
+def _get_ready_since(pod: client.V1Pod) -> datetime | None:
+    """Return the time when the pod last became ready (passed readiness probes)."""
+    for c in pod.status.conditions or []:
+        if c.type == "Ready" and c.status == "True":
+            return c.last_transition_time
     return None
 
 
@@ -191,11 +191,18 @@ def _get_pod_error_reason(pod: client.V1Pod) -> str | None:
     return None
 
 
-def _has_progress_deadline_exceeded(deployment: client.V1Deployment) -> bool:
-    for c in deployment.status.conditions or []:
-        if c.type == "Progressing" and c.status == "False" and c.reason == "ProgressDeadlineExceeded":
-            return True
-    return False
+def _newest_pod_error(pods: list[client.V1Pod]) -> str | None:
+    """Return the error reason from the most recently created pod, or None."""
+    sorted_pods = sorted(
+        pods,
+        key=lambda p: p.metadata.creation_timestamp or datetime.min,
+        reverse=True,
+    )
+    for pod in sorted_pods:
+        reason = _get_pod_error_reason(pod)
+        if reason:
+            return reason
+    return None
 
 
 def _derive_detector_status(
@@ -206,30 +213,22 @@ def _derive_detector_status(
 
     Returns (status, status_detail) where status is one of:
       "ready", "updating", "initializing", "error"
-    and status_detail is an optional reason string (used for errors).
+    and status_detail is an optional reason string (only set for "error").
     """
     desired = deployment.spec.replicas or 1
     available = deployment.status.available_replicas or 0
     updated = deployment.status.updated_replicas or 0
     total = deployment.status.replicas or 0
 
-    # Check for stuck rollout
-    if _has_progress_deadline_exceeded(deployment):
-        return "error", "ProgressDeadlineExceeded"
+    if available >= 1:
+        if total <= desired and updated >= desired:
+            return "ready", None
+        return "updating", None
 
-    # Check pod-level errors when nothing is available
-    if available == 0:
-        for pod in pods:
-            reason = _get_pod_error_reason(pod)
-            if reason:
-                return "error", reason
-        return "initializing", None
-
-    # At least one pod is available
-    if available >= desired and updated >= desired and total <= desired:
-        return "ready", None
-
-    return "updating", None
+    error = _newest_pod_error(pods)
+    if error:
+        return "error", error
+    return "initializing", None
 
 
 def _enrich_detector_details(
@@ -274,7 +273,7 @@ def _enrich_detector_details(
     details["pipeline_config"] = pipeline_config_str
 
     if ready_pod is not None:
-        started = _get_container_started_at(ready_pod)
+        started = _get_ready_since(ready_pod)
         details["last_updated_time"] = started.isoformat() if started else None
 
 
@@ -315,12 +314,9 @@ def get_detector_details() -> str:
         if status_detail:
             details["status_detail"] = status_detail
 
-        # Find a ready pod if one exists (for last_updated_time)
-        ready_pod = None
-        for pod in det_pods:
-            if _pod_is_ready(pod):
-                ready_pod = pod
-                break
+        # Find the newest ready pod (by creation time) for last_updated_time
+        ready_pods = [p for p in det_pods if _pod_is_ready(p)]
+        ready_pod = max(ready_pods, key=lambda p: p.metadata.creation_timestamp or datetime.min, default=None)
 
         # Prefer model version from a ready pod; fall back to the deployment template
         model_version_str = None

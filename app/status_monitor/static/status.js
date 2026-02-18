@@ -122,7 +122,7 @@ const renderStatusBadge = (status, statusDetail) => {
     badge.textContent = display.label;
     wrapper.appendChild(badge);
 
-    if (statusDetail) {
+    if (status === "error" && statusDetail) {
         const detail = document.createElement("div");
         detail.className = "status-detail";
         detail.textContent = statusDetail;
