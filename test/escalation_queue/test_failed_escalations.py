@@ -1,4 +1,5 @@
 import json
+import shutil
 import tempfile
 import time
 from datetime import datetime, timedelta, timezone
@@ -166,11 +167,13 @@ class TestFailureRecordingIntegration:
     """Tests that read_from_escalation_queue calls record_failed_escalation correctly."""
 
     @pytest.fixture
-    def escalation_str(self) -> str:
+    def escalation_str(self, tmp_path: Path) -> str:
+        temp_image = tmp_path / "temp_image.jpeg"
+        shutil.copy("test/assets/cat.jpeg", temp_image)
         info = EscalationInfo(
             timestamp=get_formatted_timestamp_str(),
             detector_id="det_test",
-            image_path_str="test/assets/cat.jpeg",
+            image_path_str=str(temp_image),
             request_id=generate_request_id(),
             submit_iq_params=SubmitImageQueryParams(
                 patience_time=None,
