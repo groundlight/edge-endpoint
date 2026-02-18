@@ -1,12 +1,10 @@
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
-import pytest
 from kubernetes import client
 
 from app.metrics.system_metrics import (
     _derive_detector_status,
-    _get_pod_error_reason,
     _pod_is_progressing,
     _pod_is_ready,
 )
@@ -77,29 +75,6 @@ class TestPodIsReady:
 
     def test_none_pod(self):
         assert _pod_is_ready(None) is False
-
-
-class TestGetPodErrorReason:
-    @pytest.mark.parametrize(
-        "reason",
-        [
-            "CrashLoopBackOff",
-            "ImagePullBackOff",
-            "ErrImagePull",
-            "CreateContainerConfigError",
-        ],
-    )
-    def test_error_reasons(self, reason):
-        pod = _make_pod(waiting_reason=reason)
-        assert _get_pod_error_reason(pod) == reason
-
-    def test_no_error(self):
-        pod = _make_pod()
-        assert _get_pod_error_reason(pod) is None
-
-    def test_non_error_waiting_reason(self):
-        pod = _make_pod(waiting_reason="ContainerCreating")
-        assert _get_pod_error_reason(pod) is None
 
 
 class TestPodIsProgressing:

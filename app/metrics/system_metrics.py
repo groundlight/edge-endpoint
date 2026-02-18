@@ -170,39 +170,6 @@ def _get_template_annotation(deployment: client.V1Deployment, key: str) -> str |
     return (tpl_meta.annotations or {}).get(key)
 
 
-# Waiting-state reasons that indicate a pod error (as opposed to normal startup)
-_POD_ERROR_REASONS = (
-    "CrashLoopBackOff",
-    "ImagePullBackOff",
-    "ErrImagePull",
-    "CreateContainerConfigError",
-    "InvalidImageName",
-    "RunContainerError",
-)
-
-
-def _get_pod_error_reason(pod: client.V1Pod) -> str | None:
-    """Return the first error waiting-reason found on any container in this pod, or None."""
-    for cs in pod.status.container_statuses or []:
-        if cs.state and cs.state.waiting and cs.state.waiting.reason in _POD_ERROR_REASONS:
-            return cs.state.waiting.reason
-    return None
-
-
-def _newest_pod_error(pods: list[client.V1Pod]) -> str | None:
-    """Return the error reason from the most recently created pod, or None."""
-    sorted_pods = sorted(
-        pods,
-        key=lambda p: p.metadata.creation_timestamp or datetime.min,
-        reverse=True,
-    )
-    for pod in sorted_pods:
-        reason = _get_pod_error_reason(pod)
-        if reason:
-            return reason
-    return None
-
-
 _PROGRESSING_WAIT_REASONS = ("ContainerCreating", "PodInitializing")
 
 
@@ -215,6 +182,20 @@ def _pod_is_progressing(pod: client.V1Pod) -> bool:
             return True
     # No container statuses yet -- pod is freshly created / being scheduled
     return pod.status.phase == "Pending"
+
+
+def _get_waiting_reason(pod: client.V1Pod) -> str | None:
+    """Return the waiting reason from the first container that has one, or None."""
+    for cs in pod.status.container_statuses or []:
+        if cs.state and cs.state.waiting and cs.state.waiting.reason:
+            return cs.state.waiting.reason
+    return None
+
+
+def _newest_pod(pods: list[client.V1Pod]) -> client.V1Pod | None:
+    if not pods:
+        return None
+    return max(pods, key=lambda p: p.metadata.creation_timestamp or datetime.min)
 
 
 def _derive_detector_status(
@@ -240,10 +221,10 @@ def _derive_detector_status(
             return "updating", None
         return "ready", None
 
-    error = _newest_pod_error(pods)
-    if error:
-        return "error", error
-    return "initializing", None
+    newest = _newest_pod(pods)
+    if newest is None or _pod_is_progressing(newest):
+        return "initializing", None
+    return "error", _get_waiting_reason(newest)
 
 
 def _enrich_detector_details(
