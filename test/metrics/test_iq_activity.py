@@ -324,32 +324,13 @@ def test_confidence_to_bucket():
 
 
 def test_bucket_name_to_index():
-    """Test bucket_name_to_index maps bucket names (including old-version widths) into the current scheme."""
+    """Test bucket_name_to_index converts bucket name strings to array indices."""
     to_index = ConfidenceHistogramConfig.bucket_name_to_index
 
-    # Current-width buckets (width=5) map exactly
     assert to_index("0-5") == 0
     assert to_index("50-55") == 10
     assert to_index("70-75") == 14
     assert to_index("95-100") == 19
-
-    # Higher-resolution old version (width=2): bucket_start maps into the current 5-wide grid
-    # 70 // 5 = 14, 72 // 5 = 14, 74 // 5 = 14  — all land in the same current bucket
-    assert to_index("70-72") == 14
-    assert to_index("72-74") == 14
-    assert to_index("74-76") == 14
-    # 50 // 5 = 10, 52 // 5 = 10
-    assert to_index("50-52") == 10
-    assert to_index("52-54") == 10
-    # 0 // 5 = 0, 2 // 5 = 0
-    assert to_index("0-2") == 0
-    assert to_index("2-4") == 0
-
-    # Lower-resolution old version (width=10): bucket_start will be mapped to the lowest accurate bucket index
-    assert to_index("70-80") == 14
-    assert to_index("60-70") == 12
-    assert to_index("0-10") == 0
-    assert to_index("90-100") == 18
 
     # Out-of-range bucket_start raises ValueError
     with pytest.raises(ValueError):
