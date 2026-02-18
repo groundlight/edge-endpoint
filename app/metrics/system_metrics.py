@@ -171,15 +171,13 @@ def _get_template_annotation(deployment: client.V1Deployment, key: str) -> str |
 
 
 # Waiting-state reasons that indicate a pod error (as opposed to normal startup)
-_POD_ERROR_REASONS = frozenset(
-    {
-        "CrashLoopBackOff",
-        "ImagePullBackOff",
-        "ErrImagePull",
-        "CreateContainerConfigError",
-        "InvalidImageName",
-        "RunContainerError",
-    }
+_POD_ERROR_REASONS = (
+    "CrashLoopBackOff",
+    "ImagePullBackOff",
+    "ErrImagePull",
+    "CreateContainerConfigError",
+    "InvalidImageName",
+    "RunContainerError",
 )
 
 
@@ -205,6 +203,20 @@ def _newest_pod_error(pods: list[client.V1Pod]) -> str | None:
     return None
 
 
+_PROGRESSING_WAIT_REASONS = ("ContainerCreating", "PodInitializing")
+
+
+def _pod_is_progressing(pod: client.V1Pod) -> bool:
+    """True if the pod appears to be making forward progress toward becoming ready."""
+    for cs in pod.status.container_statuses or []:
+        if cs.state and cs.state.waiting:
+            return cs.state.waiting.reason in _PROGRESSING_WAIT_REASONS
+        if cs.state and cs.state.running and not cs.ready:
+            return True
+    # No container statuses yet -- pod is freshly created / being scheduled
+    return pod.status.phase == "Pending"
+
+
 def _derive_detector_status(
     deployment: client.V1Deployment,
     pods: list[client.V1Pod],
@@ -223,7 +235,10 @@ def _derive_detector_status(
     if available >= 1:
         if total <= desired and updated >= desired:
             return "ready", None
-        return "updating", None
+        non_ready_pods = [p for p in pods if not _pod_is_ready(p)]
+        if any(_pod_is_progressing(p) for p in non_ready_pods):
+            return "updating", None
+        return "ready", None
 
     error = _newest_pod_error(pods)
     if error:
