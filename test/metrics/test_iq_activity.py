@@ -458,7 +458,7 @@ def test_get_detector_confidence_histogram(monkeypatch, tmp_base_dir, _test_trac
 
 
 def test_get_detector_confidence_histogram_lower_resolution_old_version(monkeypatch, tmp_base_dir, _test_tracker):
-    """Test that old-version files with lower resolution (wider buckets) are merged with current files."""
+    """Test that old-version files with lower resolution (wider buckets) are skipped."""
     monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
 
     with patch("app.metrics.iq_activity.datetime") as mock_datetime:
@@ -475,11 +475,9 @@ def test_get_detector_confidence_histogram_lower_resolution_old_version(monkeypa
         Path(det_dir, f"confidence_v1_0-5_11111_{hour}").write_text("4")
 
         # Old v0 files — simulate a lower-resolution scheme (width=10).
-        # Bucket "60-70": bucket_start=60, 60//5=12 → index 12
+        # These should be ignored (present on disk but skipped).
         Path(det_dir, f"confidence_v0_60-70_22222_{hour}").write_text("7")
-        # Bucket "70-80": bucket_start=70, 70//5=14 → index 14 (overlaps v1 70-75)
         Path(det_dir, f"confidence_v0_70-80_22222_{hour}").write_text("6")
-        # Bucket "90-100": bucket_start=90, 90//5=18 → index 18
         Path(det_dir, f"confidence_v0_90-100_22222_{hour}").write_text("3")
 
         histogram = retriever.get_detector_confidence_histogram(det)
@@ -488,19 +486,17 @@ def test_get_detector_confidence_histogram_lower_resolution_old_version(monkeypa
         assert histogram["bucket_width"] == 5
         assert len(histogram["counts"]) == 20
 
-        # index 0: v1 0-5 = 4
-        assert histogram["counts"][0] == 4
-        # index 12: v0 60-70 = 7
-        assert histogram["counts"][12] == 7
-        # index 14: v1 70-75 (10) + v0 70-80 (6) = 16
-        assert histogram["counts"][14] == 16
-        # index 18: v0 90-100 = 3
-        assert histogram["counts"][18] == 3
-        assert sum(histogram["counts"]) == 4 + 7 + 16 + 3
+        # Only v1 data should appear
+        assert histogram["counts"][0] == 4  # v1 0-5
+        assert histogram["counts"][14] == 10  # v1 70-75 only
+        # v0 buckets should NOT contribute
+        assert histogram["counts"][12] == 0  # v0 60-70 ignored
+        assert histogram["counts"][18] == 0  # v0 90-100 ignored
+        assert sum(histogram["counts"]) == 4 + 10
 
 
 def test_get_detector_confidence_histogram_higher_resolution_old_version(monkeypatch, tmp_base_dir, _test_tracker):
-    """Test that old-version files with higher resolution (narrower buckets) are merged with current files."""
+    """Test that old-version files with higher resolution (narrower buckets) are skipped."""
     monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
 
     with patch("app.metrics.iq_activity.datetime") as mock_datetime:
@@ -517,13 +513,10 @@ def test_get_detector_confidence_histogram_higher_resolution_old_version(monkeyp
         Path(det_dir, f"confidence_v1_0-5_11111_{hour}").write_text("4")
 
         # Old v0 files — simulate a higher-resolution scheme (width=2).
-        # Bucket "0-2": bucket_start=0, 0//5=0 → index 0 (overlaps v1 0-5)
+        # These should be ignored (present on disk but skipped).
         Path(det_dir, f"confidence_v0_0-2_33333_{hour}").write_text("3")
-        # Bucket "70-72": bucket_start=70, 70//5=14 → index 14 (overlaps v1 70-75)
         Path(det_dir, f"confidence_v0_70-72_33333_{hour}").write_text("2")
-        # Bucket "72-74": bucket_start=72, 72//5=14 → index 14
         Path(det_dir, f"confidence_v0_72-74_33333_{hour}").write_text("1")
-        # Bucket "50-52": bucket_start=50, 50//5=10 → index 10
         Path(det_dir, f"confidence_v0_50-52_33333_{hour}").write_text("5")
 
         histogram = retriever.get_detector_confidence_histogram(det)
@@ -532,13 +525,12 @@ def test_get_detector_confidence_histogram_higher_resolution_old_version(monkeyp
         assert histogram["bucket_width"] == 5
         assert len(histogram["counts"]) == 20
 
-        # index 0: v1 0-5 (4) + v0 0-2 (3) = 7
-        assert histogram["counts"][0] == 7
-        # index 10: v0 50-52 = 5
-        assert histogram["counts"][10] == 5
-        # index 14: v1 70-75 (10) + v0 70-72 (2) + v0 72-74 (1) = 13
-        assert histogram["counts"][14] == 13
-        assert sum(histogram["counts"]) == 7 + 5 + 13
+        # Only v1 data should appear
+        assert histogram["counts"][0] == 4  # v1 0-5 only
+        assert histogram["counts"][14] == 10  # v1 70-75 only
+        # v0 buckets should NOT contribute
+        assert histogram["counts"][10] == 0  # v0 50-52 ignored
+        assert sum(histogram["counts"]) == 4 + 10
 
 
 def test_detector_activity_metrics_includes_histogram(monkeypatch, tmp_base_dir, _test_tracker):

@@ -210,10 +210,10 @@ class ActivityRetriever:
     def get_detector_confidence_histogram(self, detector_id: str) -> dict:
         """Get the confidence histogram for a detector for the previous hour.
 
-        Globs for all versioned confidence files (``confidence_v*_…``).  Files
-        matching the current version are mapped exactly; files from an older
-        version (left on disk during a rollout) are mapped into the current
-        scheme via ``bucket_name_to_index``.  Files whose bucket name cannot
+        Globs for all versioned confidence files (``confidence_v*_…``).  Only
+        files matching the current version are included; files from an older
+        version (left on disk during a rollout) are skipped to avoid lossy
+        rebucketing when bucket widths differ.  Files whose bucket name cannot
         be parsed are logged and skipped.
 
         Returns:
@@ -240,14 +240,15 @@ class ActivityRetriever:
             version_tag = parts[1]
             bucket = parts[2]
 
+            if version_tag != current_version_tag:
+                logger.debug(f"Skipping old-version confidence file {f.name} (expected {current_version_tag})")
+                continue
+
             try:
                 index = cfg.bucket_name_to_index(bucket)
             except ValueError:
                 logger.error(f"Skipping confidence file with invalid bucket: {f.name}")
                 continue
-
-            if version_tag != current_version_tag:
-                logger.info(f"Merging old-version confidence file {f.name} into bucket index {index}")
 
             count = _tracker().get_activity_from_file(f)
             counts[index] += count
