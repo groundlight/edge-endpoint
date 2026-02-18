@@ -405,11 +405,7 @@ class EdgeInferenceManager:
             logger.debug(f"No new models available for {detector_id}")
             return False
 
-        logger.info(
-            f"New model available for {detector_id}: "
-            f"primary={update_primary_model} (current_version={primary_version}), "
-            f"oodd={update_oodd_model}. Saving to repository."
-        )
+        logger.info(f"At least one new model is available for {detector_id}, saving models to repository.")
         save_models_to_repository(
             detector_id=detector_id,
             edge_model_buffer=get_model_buffer(edge_model_info) if update_primary_model else None,

@@ -58,58 +58,69 @@ def _make_pod(
 
 class TestPodIsReady:
     def test_ready_pod(self):
+        """Running pod with Ready condition and ready container."""
         pod = _make_pod()
         assert _pod_is_ready(pod) is True
 
     def test_not_running_phase(self):
+        """Pending pod is not ready."""
         pod = _make_pod(phase="Pending")
         assert _pod_is_ready(pod) is False
 
     def test_no_ready_condition(self):
+        """Running pod without Ready=True condition is not ready."""
         pod = _make_pod(ready_condition=False)
         assert _pod_is_ready(pod) is False
 
     def test_container_not_ready(self):
+        """Running pod whose inference-server container is not ready."""
         pod = _make_pod(container_ready=False)
         assert _pod_is_ready(pod) is False
 
     def test_none_pod(self):
+        """None input returns False."""
         assert _pod_is_ready(None) is False
 
 
 class TestPodIsProgressing:
     def test_container_creating(self):
+        """ContainerCreating waiting reason indicates progress."""
         pod = _make_pod(waiting_reason="ContainerCreating", ready_condition=False, container_ready=False)
         assert _pod_is_progressing(pod) is True
 
     def test_pod_initializing(self):
+        """PodInitializing waiting reason indicates progress."""
         pod = _make_pod(waiting_reason="PodInitializing", ready_condition=False, container_ready=False)
         assert _pod_is_progressing(pod) is True
 
     def test_running_not_ready(self):
+        """Running container that hasn't passed readiness probes is progressing."""
         pod = _make_pod(phase="Running", ready_condition=False, container_ready=False)
         pod.status.container_statuses[0].state.waiting = None
         assert _pod_is_progressing(pod) is True
 
     def test_pending_no_container_statuses(self):
-        """Freshly created pod with no container statuses yet."""
+        """Freshly created pod with no container statuses yet is progressing."""
         pod = _make_pod(phase="Pending", ready_condition=False, container_ready=False)
         pod.status.container_statuses = []
         assert _pod_is_progressing(pod) is True
 
     def test_image_pull_backoff_is_not_progressing(self):
+        """ImagePullBackOff is not in the progressing whitelist."""
         pod = _make_pod(
             phase="Pending", waiting_reason="ImagePullBackOff", ready_condition=False, container_ready=False
         )
         assert _pod_is_progressing(pod) is False
 
     def test_crash_loop_is_not_progressing(self):
+        """CrashLoopBackOff is not in the progressing whitelist."""
         pod = _make_pod(waiting_reason="CrashLoopBackOff", ready_condition=False, container_ready=False)
         assert _pod_is_progressing(pod) is False
 
 
 class TestDeriveDetectorStatus:
     def test_ready(self):
+        """Steady state: one available, updated pod."""
         dep = _make_deployment(
             replicas=1, status_replicas=1, ready_replicas=1, updated_replicas=1, available_replicas=1
         )
@@ -118,7 +129,7 @@ class TestDeriveDetectorStatus:
         assert detail is None
 
     def test_updating_new_pod_creating_container(self):
-        """Rolling update: new pod is actively creating its container."""
+        """New pod in ContainerCreating while old pod is available."""
         dep = _make_deployment(
             replicas=1, status_replicas=2, ready_replicas=1, updated_replicas=1, available_replicas=1
         )
@@ -128,7 +139,7 @@ class TestDeriveDetectorStatus:
         assert detail is None
 
     def test_updating_new_pod_running_not_ready(self):
-        """Rolling update: new pod is running but hasn't passed readiness probes yet."""
+        """New pod running but not yet passing readiness probes."""
         dep = _make_deployment(
             replicas=1, status_replicas=2, ready_replicas=1, updated_replicas=1, available_replicas=1
         )
@@ -139,7 +150,7 @@ class TestDeriveDetectorStatus:
         assert detail is None
 
     def test_updating_new_pod_pending(self):
-        """Rolling update: new pod is pending with no container statuses yet."""
+        """New pod pending with no container statuses (being scheduled)."""
         dep = _make_deployment(
             replicas=1, status_replicas=2, ready_replicas=1, updated_replicas=1, available_replicas=1
         )
@@ -150,7 +161,7 @@ class TestDeriveDetectorStatus:
         assert detail is None
 
     def test_ready_when_new_pod_is_failing(self):
-        """Old pod still serving, new pod stuck in error -- report ready, not updating."""
+        """Old pod still serving, new pod in CrashLoopBackOff -- still ready."""
         dep = _make_deployment(
             replicas=1, status_replicas=2, ready_replicas=1, updated_replicas=0, available_replicas=1
         )
@@ -160,7 +171,7 @@ class TestDeriveDetectorStatus:
         assert detail is None
 
     def test_ready_when_new_pod_has_image_pull_error(self):
-        """Old pod still serving, new pod stuck in ErrImagePull -- report ready."""
+        """Old pod still serving, new pod in ErrImagePull -- still ready."""
         dep = _make_deployment(
             replicas=1, status_replicas=2, ready_replicas=1, updated_replicas=0, available_replicas=1
         )
@@ -170,6 +181,7 @@ class TestDeriveDetectorStatus:
         assert detail is None
 
     def test_initializing_pod_starting(self):
+        """No available pods, but newest pod is progressing."""
         dep = _make_deployment(
             replicas=1, status_replicas=1, ready_replicas=0, updated_replicas=1, available_replicas=0
         )
@@ -180,6 +192,7 @@ class TestDeriveDetectorStatus:
         assert detail is None
 
     def test_initializing_no_pods_at_all(self):
+        """No available pods and no pods exist yet."""
         dep = _make_deployment(
             replicas=1, status_replicas=0, ready_replicas=0, updated_replicas=0, available_replicas=0
         )
@@ -188,6 +201,7 @@ class TestDeriveDetectorStatus:
         assert detail is None
 
     def test_error_crash_loop(self):
+        """No available pods, newest pod in CrashLoopBackOff."""
         dep = _make_deployment(
             replicas=1, status_replicas=1, ready_replicas=0, updated_replicas=1, available_replicas=0
         )
@@ -197,6 +211,7 @@ class TestDeriveDetectorStatus:
         assert detail == "CrashLoopBackOff"
 
     def test_error_image_pull(self):
+        """No available pods, newest pod in ImagePullBackOff."""
         dep = _make_deployment(
             replicas=1, status_replicas=1, ready_replicas=0, updated_replicas=1, available_replicas=0
         )
@@ -206,7 +221,7 @@ class TestDeriveDetectorStatus:
         assert detail == "ImagePullBackOff"
 
     def test_error_uses_newest_pod(self):
-        """When multiple pods are failing, use the error from the newest one."""
+        """Multiple failing pods: error detail comes from the newest one."""
         dep = _make_deployment(
             replicas=1, status_replicas=2, ready_replicas=0, updated_replicas=0, available_replicas=0
         )

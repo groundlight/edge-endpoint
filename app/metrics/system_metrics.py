@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def _edge_config_to_dict(config: EdgeInferenceConfig | None) -> dict | None:
+    """Convert an EdgeInferenceConfig to a plain dict for JSON serialization."""
     if config is None:
         return None
     return {
@@ -69,6 +70,7 @@ def get_namespace() -> str:
 
 
 def get_deployments() -> str:
+    """Return a string listing all deployment names in the edge namespace."""
     config.load_incluster_config()
     v1_apps = client.AppsV1Api()
 
@@ -82,6 +84,7 @@ def get_deployments() -> str:
 
 
 def get_pods() -> str:
+    """Return a JSON string of pod names to phases for non-stale pods."""
     config.load_incluster_config()
     v1_core = client.CoreV1Api()
     namespace = get_namespace()
@@ -120,6 +123,7 @@ def should_record_pod(pod: client.V1Pod) -> bool:
 
 
 def get_container_images() -> str:
+    """Return a JSON string mapping pod names to their container image IDs."""
     config.load_incluster_config()
     v1_core = client.CoreV1Api()
     namespace = get_namespace()
@@ -138,6 +142,7 @@ def get_container_images() -> str:
 
 
 def _pod_is_ready(pod: client.V1Pod) -> bool:
+    """True if the pod is Running, has Ready=True condition, and inference-server container is ready."""
     if not pod or not pod.status or pod.status.phase != "Running":
         return False
 
@@ -160,10 +165,12 @@ def _get_ready_since(pod: client.V1Pod) -> datetime | None:
 
 
 def _get_annotation(pod: client.V1Pod, key: str) -> str | None:
+    """Get an annotation value from a pod's metadata."""
     return (pod.metadata.annotations or {}).get(key)
 
 
 def _get_template_annotation(deployment: client.V1Deployment, key: str) -> str | None:
+    """Get an annotation value from a deployment's pod template metadata."""
     tpl_meta = deployment.spec.template.metadata
     if tpl_meta is None:
         return None
@@ -193,6 +200,7 @@ def _get_waiting_reason(pod: client.V1Pod) -> str | None:
 
 
 def _newest_pod(pods: list[client.V1Pod]) -> client.V1Pod | None:
+    """Return the most recently created pod, or None if the list is empty."""
     if not pods:
         return None
     return max(pods, key=lambda p: p.metadata.creation_timestamp or datetime.min)
