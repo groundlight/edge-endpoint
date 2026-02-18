@@ -506,12 +506,8 @@ class TestConsumeQueuedEscalation:
             shutil.copy("test/assets/cat.jpeg", temp_image_1)
             shutil.copy("test/assets/cat.jpeg", temp_image_2)
 
-            escalation_info_1 = generate_test_escalation_info(
-                request_id=test_request_id, image_path=str(temp_image_1)
-            )
-            escalation_info_2 = generate_test_escalation_info(
-                request_id=test_request_id, image_path=str(temp_image_2)
-            )
+            escalation_info_1 = generate_test_escalation_info(request_id=test_request_id, image_path=str(temp_image_1))
+            escalation_info_2 = generate_test_escalation_info(request_id=test_request_id, image_path=str(temp_image_2))
 
             escalation_str_1 = convert_escalation_info_to_str(escalation_info_1)
             escalation_str_2 = convert_escalation_info_to_str(escalation_info_2)
@@ -521,9 +517,7 @@ class TestConsumeQueuedEscalation:
                 patch.object(QueueReader, "__iter__", return_value=iter([escalation_str_1, escalation_str_2])),
                 patch("app.escalation_queue.manage_reader._escalate_once", return_value=dummy_iq) as mock_escalate,
             ):
-                read_from_escalation_queue(
-                    generate_queue_reader(str(test_request_cache.cache_dir)), test_request_cache
-                )
+                read_from_escalation_queue(generate_queue_reader(str(test_request_cache.cache_dir)), test_request_cache)
 
             # Only the first should be escalated; the second should be skipped due to RequestCache.
             assert mock_escalate.call_count == 1
@@ -539,9 +533,7 @@ class TestReadFromEscalationQueue:
             for i in range(num_escalations):
                 temp_image = Path(temp_dir) / f"image{i}.jpeg"
                 shutil.copy("test/assets/cat.jpeg", temp_image)
-                info = generate_test_escalation_info(
-                    request_id=generate_request_id(), image_path=str(temp_image)
-                )
+                info = generate_test_escalation_info(request_id=generate_request_id(), image_path=str(temp_image))
                 escalation_strs.append(convert_escalation_info_to_str(info))
 
             mock_request_cache = Mock()
