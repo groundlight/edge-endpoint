@@ -438,6 +438,25 @@ def test_get_detector_confidence_histogram(monkeypatch, tmp_base_dir, _test_trac
         assert histogram["counts"][10] == 0  # 50-55 (from different hour)
 
 
+def test_get_detector_confidence_histogram_empty(monkeypatch, tmp_base_dir, _test_tracker):
+    """Test that a detector with no confidence files returns an all-zero envelope."""
+    monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
+
+    with patch("app.metrics.iq_activity.datetime") as mock_datetime:
+        mock_datetime.now.return_value = datetime(2025, 4, 3, 21, 0, 0)
+        retriever = ActivityRetriever()
+
+        det = "det_no_confidence"
+        os.makedirs(Path(tmp_base_dir, "detectors", det), exist_ok=True)
+
+        histogram = retriever.get_detector_confidence_histogram(det)
+
+        assert histogram["version"] == 1
+        assert histogram["bucket_width"] == 5
+        assert len(histogram["counts"]) == 20
+        assert all(c == 0 for c in histogram["counts"])
+
+
 def test_get_detector_confidence_histogram_lower_resolution_old_version(monkeypatch, tmp_base_dir, _test_tracker):
     """Test that old-version files with lower resolution (wider buckets) are skipped."""
     monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)

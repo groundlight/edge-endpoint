@@ -35,7 +35,12 @@ logger = logging.getLogger(__name__)
 
 
 class ConfidenceHistogramConfig:
-    """Confidence histogram parameters and logic."""
+    """Confidence histogram parameters and logic.
+
+    If BUCKET_WIDTH is changed, VERSION must be bumped so the read path
+    can distinguish old-width files on disk and skip them.  BUCKET_WIDTH
+    should evenly divide 100.
+    """
 
     VERSION = 1
     BUCKET_WIDTH = 5
