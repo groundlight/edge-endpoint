@@ -98,7 +98,9 @@ class TestPodIsProgressing:
         assert _pod_is_progressing(pod) is True
 
     def test_image_pull_backoff_is_not_progressing(self):
-        pod = _make_pod(phase="Pending", waiting_reason="ImagePullBackOff", ready_condition=False, container_ready=False)
+        pod = _make_pod(
+            phase="Pending", waiting_reason="ImagePullBackOff", ready_condition=False, container_ready=False
+        )
         assert _pod_is_progressing(pod) is False
 
     def test_crash_loop_is_not_progressing(self):
