@@ -461,7 +461,7 @@ const startAutoRefresh = () => {
     if (refreshIntervalId !== null) {
         return;
     }
-    refreshIntervalId = setInterval(() => fetchAll(false), 10000);
+    refreshIntervalId = setInterval(() => fetchAll(false), 1000);
 };
 
 const stopAutoRefresh = () => {

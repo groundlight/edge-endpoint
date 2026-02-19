@@ -1,7 +1,6 @@
 """Collects per-detector VRAM usage by querying each inference pod's /vram-usage HTTP endpoint."""
 
 import logging
-import time
 
 import requests
 from kubernetes import client, config
@@ -18,22 +17,7 @@ HTTP_TIMEOUT_SEC = 2
 class VramMetricsCollector:
     """Collects VRAM usage per inference pod via HTTP to each pod's /vram-usage endpoint."""
 
-    def __init__(self, cache_ttl_sec: float = 30.0):
-        self._cache_ttl_sec = cache_ttl_sec
-        self._cached_result: dict | None = None
-        self._cache_time: float = 0
-
     def collect(self) -> dict:
-        now = time.monotonic()
-        if self._cached_result is not None and (now - self._cache_time) < self._cache_ttl_sec:
-            return self._cached_result
-
-        result = self._collect_fresh()
-        self._cached_result = result
-        self._cache_time = now
-        return result
-
-    def _collect_fresh(self) -> dict:
         try:
             config.load_incluster_config()
         except config.ConfigException:
@@ -48,13 +32,13 @@ class VramMetricsCollector:
         if not inference_pods:
             return {"gpus": [], "detectors": [], "loading_vram_bytes": 0}
 
-        selected = _select_one_pod_per_role(inference_pods)
+        active_pods = _pick_active_pods(inference_pods)
 
         gpus: dict[str, dict] = {}
         detectors: dict[str, dict] = {}
         loading_vram_bytes = 0
 
-        for pod, det_id, is_oodd, is_ready in selected:
+        for pod, det_id, is_oodd, _is_ready in inference_pods:
             vram_data = _query_pod_vram(pod)
             if vram_data is None:
                 continue
@@ -64,7 +48,7 @@ class VramMetricsCollector:
             if gpu_info and gpu_info.get("uuid"):
                 gpus[gpu_info["uuid"]] = gpu_info
 
-            if not is_ready:
+            if pod.metadata.name not in active_pods:
                 loading_vram_bytes += process_vram
                 continue
 
@@ -110,26 +94,25 @@ def _find_inference_pods(pod_list) -> list[tuple]:
     return results
 
 
-def _select_one_pod_per_role(pods: list[tuple]) -> list[tuple]:
-    """For each (detector_id, is_oodd) group, pick the newest ready pod.
+def _pick_active_pods(pods: list[tuple]) -> set[str]:
+    """Return pod names that should be attributed to their detector.
 
-    If no pod in the group is ready, pick the newest pod (so we can attempt to
-    query it and report its VRAM as "loading").
+    For each (detector_id, is_oodd) group, the newest ready pod is "active".
+    If no pod in the group is ready, none are active (all go to loading).
+    Every other pod's VRAM will be counted as "loading".
     """
     groups: dict[tuple[str, bool], list[tuple]] = {}
     for entry in pods:
         _, det_id, is_oodd, _ = entry
         groups.setdefault((det_id, is_oodd), []).append(entry)
 
-    selected = []
+    active: set[str] = set()
     for group in groups.values():
         ready = [e for e in group if e[3]]
         if ready:
             best = max(ready, key=lambda e: e[0].metadata.creation_timestamp or "")
-        else:
-            best = max(group, key=lambda e: e[0].metadata.creation_timestamp or "")
-        selected.append(best)
-    return selected
+            active.add(best[0].metadata.name)
+    return active
 
 
 def _query_pod_vram(pod) -> dict | None:
