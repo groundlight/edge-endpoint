@@ -323,7 +323,11 @@ def get_detector_details() -> str:
 
         # Find the newest ready pod (by creation time) for last_updated_time
         ready_pods = [p for p in det_pods if _pod_is_ready(p)]
-        ready_pod = max(ready_pods, key=lambda p: p.metadata.creation_timestamp or datetime.min.replace(tzinfo=timezone.utc), default=None)
+        ready_pod = max(
+            ready_pods,
+            key=lambda p: p.metadata.creation_timestamp or datetime.min.replace(tzinfo=timezone.utc),
+            default=None,
+        )
 
         # Prefer model version from a ready pod; fall back to the deployment template
         model_version_str = None
