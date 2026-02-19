@@ -18,8 +18,8 @@ Filesystem structure:
             escalations_<pid2>_YYYY-MM-DD_HH
             audits_<pid1>_YYYY-MM-DD_HH
             below_threshold_iqs_<pid1>_YYYY-MM-DD_HH
-            confidence_0-5_<pid1>_YYYY-MM-DD_HH    <-- confidence histogram buckets (5% intervals)
-            confidence_95-100_<pid1>_YYYY-MM-DD_HH
+            confidence_v1_0-5_<pid1>_YYYY-MM-DD_HH    <-- confidence histogram buckets (5% intervals, version-prefixed)
+            confidence_v1_95-100_<pid1>_YYYY-MM-DD_HH
         <detector_id2>/
             repeat of above detector
 """
@@ -32,6 +32,57 @@ from functools import lru_cache
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+
+class ConfidenceHistogramConfig:
+    """Confidence histogram parameters and logic.
+
+    If BUCKET_WIDTH is changed, VERSION must be bumped so the read path
+    can distinguish old-width files on disk and skip them.  BUCKET_WIDTH
+    should evenly divide 100.
+    """
+
+    VERSION = 1
+    BUCKET_WIDTH = 5
+    NUM_BUCKETS = 100 // BUCKET_WIDTH
+
+    @staticmethod
+    def filename_prefix() -> str:
+        """Prefix for current-version confidence files on disk."""
+        return f"confidence_v{ConfidenceHistogramConfig.VERSION}"
+
+    @staticmethod
+    def confidence_to_bucket(confidence: float) -> str:
+        """Convert confidence (0.0-1.0) to bucket name like '70-75'."""
+        w = ConfidenceHistogramConfig.BUCKET_WIDTH
+        if confidence == 1.0:
+            return f"{100 - w}-100"
+        bucket_start = int(confidence * 100) // w * w
+        return f"{bucket_start}-{bucket_start + w}"
+
+    @staticmethod
+    def bucket_name_to_index(bucket: str) -> int:
+        """Convert bucket name like '70-75' to array index. Raises ValueError if invalid."""
+        try:
+            bucket_start = int(bucket.split("-")[0])
+        except (ValueError, IndexError):
+            raise ValueError(f"Malformed confidence bucket name: {bucket}")
+        index = bucket_start // ConfidenceHistogramConfig.BUCKET_WIDTH
+        if not (0 <= index < ConfidenceHistogramConfig.NUM_BUCKETS):
+            raise ValueError(f"Confidence bucket index out of range: {bucket}")
+        return index
+
+    @staticmethod
+    def empty_counts() -> list[int]:
+        return [0] * ConfidenceHistogramConfig.NUM_BUCKETS
+
+    @staticmethod
+    def to_envelope(counts: list[int]) -> dict:
+        return {
+            "version": ConfidenceHistogramConfig.VERSION,
+            "bucket_width": ConfidenceHistogramConfig.BUCKET_WIDTH,
+            "counts": counts,
+        }
 
 
 class FilesystemActivityTrackingHelper:
@@ -164,25 +215,50 @@ class ActivityRetriever:
     def get_detector_confidence_histogram(self, detector_id: str) -> dict:
         """Get the confidence histogram for a detector for the previous hour.
 
+        Globs for all versioned confidence files (``confidence_v*_…``).  Only
+        files matching the current version are included; files from an older
+        version (left on disk during a rollout) are skipped to avoid lossy
+        rebucketing when bucket widths differ.  Files whose bucket name cannot
+        be parsed are logged and skipped.
+
         Returns:
-            A dictionary mapping bucket names to counts, e.g. {"70-75": 45, "95-100": 38}.
-            Only non-zero buckets are included.
+            A versioned, self-describing envelope:
+            {
+                "version": 1,
+                "bucket_width": 5,
+                "counts": [10, 25, ...]  # 20 elements, one per 5% bucket
+            }
+            The i-th element of counts is the count for [i*bucket_width, (i+1)*bucket_width).
         """
+        cfg = ConfidenceHistogramConfig
         time = (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
         detector_folder = _tracker().detector_folder(detector_id)
-        activity_files = list(detector_folder.glob(f"confidence_*_{time}"))
+        activity_files = list(detector_folder.glob(f"confidence_v*_*_{time}"))
 
-        histogram = {}
+        counts = cfg.empty_counts()
+        current_version_tag = f"v{cfg.VERSION}"
         for f in activity_files:
-            # Extract bucket from filename like "confidence_70-75_12345_2025-04-03_12"
+            # Filename format: "confidence_v<version>_<bucket>_<pid>_YYYY-MM-DD_HH"
             parts = f.name.split("_")
-            if len(parts) >= 2 and parts[0] == "confidence":
-                bucket = parts[1]
-                count = _tracker().get_activity_from_file(f)
-                if count > 0:
-                    histogram[bucket] = histogram.get(bucket, 0) + count
+            if len(parts) < 3 or parts[0] != "confidence":
+                continue
+            version_tag = parts[1]
+            bucket = parts[2]
 
-        return histogram
+            if version_tag != current_version_tag:
+                logger.debug(f"Skipping old-version confidence file {f.name} (expected {current_version_tag})")
+                continue
+
+            try:
+                index = cfg.bucket_name_to_index(bucket)
+            except ValueError:
+                logger.error(f"Skipping confidence file with invalid bucket: {f.name}")
+                continue
+
+            count = _tracker().get_activity_from_file(f)
+            counts[index] += count
+
+        return cfg.to_envelope(counts)
 
     def get_detector_activity_metrics(self, detector_id: str) -> dict:
         """Get the activity on a detector for the previous hour."""
@@ -243,18 +319,6 @@ def record_activity_for_metrics(detector_id: str, activity_type: str):
     f.touch()
 
 
-def _confidence_to_bucket(confidence: float) -> str:
-    """Convert confidence (0.0-1.0) to bucket name like '70-75'.
-
-    Buckets are 5 percentage points each, inclusive at the bottom: [0-5), [5-10), ..., [95-100].
-    """
-    if confidence == 1.0:
-        return "95-100"
-    bucket_start = int(confidence * 100) // 5 * 5
-    bucket_end = bucket_start + 5
-    return f"{bucket_start}-{bucket_end}"
-
-
 def record_confidence_for_metrics(detector_id: str, confidence: float):
     """Records a confidence value from an image query for histogram tracking.
 
@@ -262,8 +326,8 @@ def record_confidence_for_metrics(detector_id: str, confidence: float):
         detector_id: The detector that processed the image query.
         confidence: The confidence value (0.0-1.0) from the inference result.
     """
-    bucket = _confidence_to_bucket(confidence)
-    activity_type = f"confidence_{bucket}"
+    bucket = ConfidenceHistogramConfig.confidence_to_bucket(confidence)
+    activity_type = f"{ConfidenceHistogramConfig.filename_prefix()}_{bucket}"
 
     logger.debug(f"Recording confidence {confidence} (bucket {bucket}) on detector {detector_id}")
 

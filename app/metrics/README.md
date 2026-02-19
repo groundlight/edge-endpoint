@@ -25,7 +25,7 @@ Tracked per detector in `iq_activity.py`:
 Reported fields per detector:
 - `hourly_total_<metric>` - count for the previous hour
 - `last_<metric>` - timestamp of most recent occurrence (singular form, e.g., `last_iq`)
-- `confidence_histogram` - dict mapping bucket names to counts (e.g., `{"70-75": 45, "95-100": 38}`)
+- `confidence_histogram` - versioned envelope: `{"version": 1, "bucket_width": 5, "counts": [c0, c1, ..., c19]}` where `counts[i]` is the count for bucket `[i*bucket_width, (i+1)*bucket_width)`. Version is bumped on any schema change (including bucket width changes).
 
 ### Filesystem Storage
 
@@ -40,7 +40,7 @@ iqs_<pid>_YYYY-MM-DD_HH               # hourly counter files (per process)
 escalations_<pid>_YYYY-MM-DD_HH
 audits_<pid>_YYYY-MM-DD_HH
 below_threshold_iqs_<pid>_YYYY-MM-DD_HH
-confidence_<bucket>_<pid>_YYYY-MM-DD_HH  # confidence histogram (e.g., confidence_70-75_12345_2025-04-03_12)
+confidence_v<version>_<bucket>_<pid>_YYYY-MM-DD_HH  # confidence histogram (e.g., confidence_v1_70-75_12345_2025-04-03_12)
 ```
 
 Hourly files older than 2 hours are automatically cleaned up.
