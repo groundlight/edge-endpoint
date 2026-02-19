@@ -109,6 +109,7 @@ const createEdgeConfigTable = (config) => {
 const STATUS_DISPLAY = {
     ready: { label: "Ready", className: "status-ready" },
     updating: { label: "Updating", className: "status-updating" },
+    update_failed: { label: "Update Failed", className: "status-update-failed" },
     initializing: { label: "Initializing", className: "status-initializing" },
     error: { label: "Error", className: "status-error" },
 };
@@ -122,7 +123,7 @@ const renderStatusBadge = (status, statusDetail) => {
     badge.textContent = display.label;
     wrapper.appendChild(badge);
 
-    if (status === "error" && statusDetail) {
+    if ((status === "error" || status === "update_failed") && statusDetail) {
         const detail = document.createElement("div");
         detail.className = "status-detail";
         detail.textContent = statusDetail;
@@ -155,6 +156,7 @@ const renderDetectorDetails = (rawDetails) => {
     const STATUS_TOOLTIP =
         "Ready: Model is loaded and serving inference requests.\n" +
         "Updating: New model version deploying. Previous version still serving.\n" +
+        "Update Failed: New version failed to start. Previous version still serving.\n" +
         "Initializing: Model is loading for the first time. Not yet available.\n" +
         "Error: Model failed to start.";
 

@@ -160,25 +160,25 @@ class TestDeriveDetectorStatus:
         assert status == "updating"
         assert detail is None
 
-    def test_ready_when_new_pod_is_failing(self):
-        """Old pod still serving, new pod in CrashLoopBackOff -- still ready."""
+    def test_update_failed_when_new_pod_is_failing(self):
+        """Old pod still serving, new pod in CrashLoopBackOff -- update_failed."""
         dep = _make_deployment(
             replicas=1, status_replicas=2, ready_replicas=1, updated_replicas=0, available_replicas=1
         )
         failing_pod = _make_pod(waiting_reason="CrashLoopBackOff", ready_condition=False, container_ready=False)
         status, detail = _derive_detector_status(dep, [failing_pod])
-        assert status == "ready"
-        assert detail is None
+        assert status == "update_failed"
+        assert detail == "CrashLoopBackOff"
 
-    def test_ready_when_new_pod_has_image_pull_error(self):
-        """Old pod still serving, new pod in ErrImagePull -- still ready."""
+    def test_update_failed_when_new_pod_has_image_pull_error(self):
+        """Old pod still serving, new pod in ErrImagePull -- update_failed."""
         dep = _make_deployment(
             replicas=1, status_replicas=2, ready_replicas=1, updated_replicas=0, available_replicas=1
         )
         failing_pod = _make_pod(waiting_reason="ErrImagePull", ready_condition=False, container_ready=False)
         status, detail = _derive_detector_status(dep, [failing_pod])
-        assert status == "ready"
-        assert detail is None
+        assert status == "update_failed"
+        assert detail == "ErrImagePull"
 
     def test_initializing_pod_starting(self):
         """No available pods, but newest pod is progressing."""

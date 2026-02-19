@@ -207,6 +207,11 @@ pre {
     color: #856404;
 }
 
+.status-update-failed {
+    background-color: #ffe0b2;
+    color: #e65100;
+}
+
 .status-error {
     background-color: #f8d7da;
     color: #721c24;

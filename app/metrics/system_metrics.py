@@ -213,8 +213,8 @@ def _derive_detector_status(
     """Derive a human-readable status from a deployment and its pods.
 
     Returns (status, status_detail) where status is one of:
-      "ready", "updating", "initializing", "error"
-    and status_detail is an optional reason string (only set for "error").
+      "ready", "updating", "update_failed", "initializing", "error"
+    and status_detail is an optional reason string (set for "error" and "update_failed").
     """
     desired = deployment.spec.replicas or 1
     available = deployment.status.available_replicas or 0
@@ -227,6 +227,9 @@ def _derive_detector_status(
         non_ready_pods = [p for p in pods if not _pod_is_ready(p)]
         if any(_pod_is_progressing(p) for p in non_ready_pods):
             return "updating", None
+        if non_ready_pods:
+            newest_failing = _newest_pod(non_ready_pods)
+            return "update_failed", _get_waiting_reason(newest_failing) if newest_failing else None
         return "ready", None
 
     newest = _newest_pod(pods)
