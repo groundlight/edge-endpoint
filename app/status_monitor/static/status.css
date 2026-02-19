@@ -235,7 +235,7 @@ pre {
     position: absolute;
     left: 50%;
     top: 100%;
-    transform: translateX(-50%);
+    /* transform: translateX(-50%); */
     margin-top: 6px;
     background-color: var(--dark);
     color: var(--groundlight-white);
@@ -243,8 +243,9 @@ pre {
     border-radius: 6px;
     font-size: 0.85rem;
     font-weight: 400;
-    white-space: pre-line;
-    width: 300px;
+    white-space: pre;
+    width: max-content;
+    line-height: 2.0;
     z-index: 10;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }

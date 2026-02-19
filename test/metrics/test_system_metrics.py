@@ -180,6 +180,27 @@ class TestDeriveDetectorStatus:
         assert status == "update_failed"
         assert detail == "ErrImagePull"
 
+    def test_update_failed_uses_newest_pod(self):
+        """Multiple failing pods while old pod serves: detail comes from the newest."""
+        dep = _make_deployment(
+            replicas=1, status_replicas=3, ready_replicas=1, updated_replicas=0, available_replicas=1
+        )
+        old_failing = _make_pod(
+            waiting_reason="ImagePullBackOff",
+            ready_condition=False,
+            container_ready=False,
+            creation_timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        new_failing = _make_pod(
+            waiting_reason="CrashLoopBackOff",
+            ready_condition=False,
+            container_ready=False,
+            creation_timestamp=datetime(2026, 2, 1, tzinfo=timezone.utc),
+        )
+        status, detail = _derive_detector_status(dep, [old_failing, new_failing])
+        assert status == "update_failed"
+        assert detail == "CrashLoopBackOff"
+
     def test_initializing_pod_starting(self):
         """No available pods, but newest pod is progressing."""
         dep = _make_deployment(

@@ -177,6 +177,7 @@ def _get_template_annotation(deployment: client.V1Deployment, key: str) -> str |
     return (tpl_meta.annotations or {}).get(key)
 
 
+_DATETIME_MIN_UTC = datetime.min.replace(tzinfo=timezone.utc)
 _PROGRESSING_WAIT_REASONS = ("ContainerCreating", "PodInitializing")
 
 
@@ -203,7 +204,7 @@ def _newest_pod(pods: list[client.V1Pod]) -> client.V1Pod | None:
     """Return the most recently created pod, or None if the list is empty."""
     if not pods:
         return None
-    return max(pods, key=lambda p: p.metadata.creation_timestamp or datetime.min.replace(tzinfo=timezone.utc))
+    return max(pods, key=lambda p: p.metadata.creation_timestamp or _DATETIME_MIN_UTC)
 
 
 def _derive_detector_status(
@@ -228,8 +229,7 @@ def _derive_detector_status(
         if any(_pod_is_progressing(p) for p in non_ready_pods):
             return "updating", None
         if non_ready_pods:
-            newest_failing = _newest_pod(non_ready_pods)
-            return "update_failed", _get_waiting_reason(newest_failing) if newest_failing else None
+            return "update_failed", _get_waiting_reason(_newest_pod(non_ready_pods))
         return "ready", None
 
     newest = _newest_pod(pods)
@@ -325,7 +325,7 @@ def get_detector_details() -> str:
         ready_pods = [p for p in det_pods if _pod_is_ready(p)]
         ready_pod = max(
             ready_pods,
-            key=lambda p: p.metadata.creation_timestamp or datetime.min.replace(tzinfo=timezone.utc),
+            key=lambda p: p.metadata.creation_timestamp or _DATETIME_MIN_UTC,
             default=None,
         )
 
