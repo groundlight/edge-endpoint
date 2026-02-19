@@ -226,7 +226,7 @@ class InferenceDeploymentManager:
 
         This method retrieves the deployment associated with the specified detector ID and compares
         the desired number of replicas with the updated and available replicas. If all these values
-        match, it indicates that the deployment rollout is complete.
+        match, AND there are no leftover terminating pods, the rollout is considered complete.
 
         Args:
             deployment_name (str): The name of the deployment whose rollout status needs to be
@@ -249,11 +249,24 @@ class InferenceDeploymentManager:
 
         replica_str = f"(replicas: total={total}, desired={desired}, updated={updated}, available={available})"
 
-        # Check that we have exactly as many available and updated pods as the spec defines
-        # If there are more or less, then a rollout is in progress
-        if desired == updated == available == total:
-            logger.info(f"Inference deployment rollout for {deployment_name} is complete. {replica_str}")
-            return True
-        else:
+        if desired != updated or desired != available or desired != total:
             logger.debug(f"Inference deployment rollout for {deployment_name} is not yet complete. {replica_str}")
             return False
+
+        # deployment.status.replicas excludes terminating pods, but they still
+        # hold GPU memory until their process fully exits. List actual pods to
+        # ensure none are lingering.
+        selector = deployment.spec.selector.match_labels or {}
+        label_str = ",".join(f"{k}={v}" for k, v in selector.items())
+        pod_list = self._core_kube_client.list_namespaced_pod(
+            namespace=self._target_namespace, label_selector=label_str
+        )
+        if len(pod_list.items) > desired:
+            logger.debug(
+                f"Rollout for {deployment_name} has correct replica counts {replica_str} "
+                f"but {len(pod_list.items)} pod(s) still exist (expected {desired})"
+            )
+            return False
+
+        logger.info(f"Inference deployment rollout for {deployment_name} is complete. {replica_str}")
+        return True
