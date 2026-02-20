@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.metrics.gpu_metrics import GpuMetricsCollector
 from app.metrics.iq_activity import clear_old_activity_files
 from app.metrics.metric_reporting import MetricsReporter
 
@@ -18,6 +19,7 @@ app = FastAPI(title="status-monitor")
 app.mount("/status/static", StaticFiles(directory=STATIC_DIR), name="status-static")
 scheduler = AsyncIOScheduler()
 reporter = MetricsReporter()
+gpu_collector = GpuMetricsCollector()
 
 
 @app.on_event("startup")
@@ -41,6 +43,12 @@ async def startup_event():
 async def get_metrics():
     """Return system metrics as JSON."""
     return reporter.metrics_payload()
+
+
+@app.get("/status/gpu.json")
+def get_gpu():
+    """Return per-detector GPU usage as JSON."""
+    return gpu_collector.collect()
 
 
 @app.get("/status")
