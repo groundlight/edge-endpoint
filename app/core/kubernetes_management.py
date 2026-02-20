@@ -268,5 +268,4 @@ class InferenceDeploymentManager:
             )
             return False
 
-        logger.info(f"Inference deployment rollout for {deployment_name} is complete. {replica_str}")
         return True

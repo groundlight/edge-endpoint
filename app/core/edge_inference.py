@@ -377,7 +377,7 @@ class EdgeInferenceManager:
 
         Returns True if a new model was downloaded and saved, False otherwise.
         """
-        logger.info(f"Checking if there are new models available for {detector_id}")
+        logger.debug(f"Checking if there are new models available for {detector_id}")
 
         api_token = (
             self.detector_inference_configs[detector_id].api_token
@@ -571,8 +571,8 @@ def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[i
     if isinstance(model_info, ModelInfoWithBinary):
         edge_binary_ksuid = get_current_model_ksuid(model_dir, version)
         if edge_binary_ksuid and model_info.model_binary_id == edge_binary_ksuid:
-            logger.info(
-                f"The edge binary in {model_dir} is the same as the cloud binary ({model_info.model_binary_id}), so we don't need to update the model."
+            logger.debug(
+                f"The edge binary in {model_dir} is the same as the cloud binary ({model_info.model_binary_id}), no update needed."
             )
             return False
         else:
@@ -583,8 +583,8 @@ def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[i
     else:
         current_pipeline_config = get_current_pipeline_config(model_dir, version)
         if current_pipeline_config and current_pipeline_config == yaml.safe_load(model_info.pipeline_config):
-            logger.info(
-                f"The current pipeline_config in {model_dir} is the same as the received pipeline_config and we have no model binary, so we don't need to update the model."
+            logger.debug(
+                f"The pipeline_config in {model_dir} matches the cloud pipeline_config, no update needed."
             )
             return False
         else:
