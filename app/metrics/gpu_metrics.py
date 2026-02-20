@@ -1,4 +1,4 @@
-"""Collects per-detector VRAM usage by querying each inference pod's /vram-usage HTTP endpoint."""
+"""Collects per-detector GPU usage by querying each inference pod's /gpu-usage HTTP endpoint."""
 
 import logging
 
@@ -9,19 +9,19 @@ from app.metrics.system_metrics import _pod_is_ready, get_namespace
 
 logger = logging.getLogger(__name__)
 
-VRAM_ENDPOINT_PORT = 8000
-VRAM_ENDPOINT_PATH = "/vram-usage"
+GPU_ENDPOINT_PORT = 8000
+GPU_ENDPOINT_PATH = "/gpu-usage"
 HTTP_TIMEOUT_SEC = 2
 
 
-class VramMetricsCollector:
-    """Collects VRAM usage per inference pod via HTTP to each pod's /vram-usage endpoint."""
+class GpuMetricsCollector:
+    """Collects GPU usage per inference pod via HTTP to each pod's /gpu-usage endpoint."""
 
     def collect(self) -> dict:
         try:
             config.load_incluster_config()
         except config.ConfigException:
-            logger.warning("Not running in cluster, cannot collect VRAM metrics")
+            logger.warning("Not running in cluster, cannot collect GPU metrics")
             return {"error": "Not running in a Kubernetes cluster"}
 
         v1 = client.CoreV1Api()
@@ -39,12 +39,12 @@ class VramMetricsCollector:
         loading_vram_bytes = 0
 
         for pod, det_id, is_oodd, _is_ready in inference_pods:
-            vram_data = _query_pod_vram(pod)
-            if vram_data is None:
+            gpu_data = _query_pod_gpu(pod)
+            if gpu_data is None:
                 continue
 
-            process_vram = vram_data.get("process_vram_bytes") or 0
-            gpu_info = vram_data.get("gpu")
+            process_vram = gpu_data.get("process_vram_bytes") or 0
+            gpu_info = gpu_data.get("gpu")
             if gpu_info and gpu_info.get("uuid"):
                 gpus[gpu_info["uuid"]] = gpu_info
 
@@ -115,13 +115,13 @@ def _pick_active_pods(pods: list[tuple]) -> set[str]:
     return active
 
 
-def _query_pod_vram(pod) -> dict | None:
-    """HTTP GET /vram-usage on a single inference pod. Returns parsed JSON or None."""
-    url = f"http://{pod.status.pod_ip}:{VRAM_ENDPOINT_PORT}{VRAM_ENDPOINT_PATH}"
+def _query_pod_gpu(pod) -> dict | None:
+    """HTTP GET /gpu-usage on a single inference pod. Returns parsed JSON or None."""
+    url = f"http://{pod.status.pod_ip}:{GPU_ENDPOINT_PORT}{GPU_ENDPOINT_PATH}"
     try:
         resp = requests.get(url, timeout=HTTP_TIMEOUT_SEC)
         resp.raise_for_status()
         return resp.json()
     except Exception:
-        logger.debug(f"Failed to query VRAM from pod {pod.metadata.name} at {url}")
+        logger.debug(f"Failed to query GPU usage from pod {pod.metadata.name} at {url}")
         return None

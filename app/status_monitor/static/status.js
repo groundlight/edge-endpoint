@@ -407,11 +407,11 @@ const renderVramUsage = (vramData, detectorDetails) => {
 
 let cachedDetectorDetails = null;
 
-const fetchVram = () => {
-    fetch("/status/vram.json")
+const fetchGpu = () => {
+    fetch("/status/gpu.json")
         .then((r) => r.ok ? r.json() : Promise.reject(r.statusText))
         .then((data) => renderVramUsage(data, cachedDetectorDetails))
-        .catch((err) => console.error("Error fetching VRAM data:", err));
+        .catch((err) => console.error("Error fetching GPU data:", err));
 };
 
 const fetchAll = (showLoading = false) => {
@@ -451,7 +451,7 @@ const fetchAll = (showLoading = false) => {
             console.error("Error fetching metrics:", error);
         })
         .finally(() => {
-            fetchVram();
+            fetchGpu();
         });
 };
 
