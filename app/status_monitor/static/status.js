@@ -106,6 +106,33 @@ const createEdgeConfigTable = (config) => {
     return table;
 };
 
+const STATUS_DISPLAY = {
+    ready: { label: "Ready", className: "status-ready" },
+    updating: { label: "Updating", className: "status-updating" },
+    update_failed: { label: "Update Failed", className: "status-update-failed" },
+    initializing: { label: "Initializing", className: "status-initializing" },
+    error: { label: "Error", className: "status-error" },
+};
+
+const renderStatusBadge = (status, statusDetail) => {
+    const wrapper = document.createElement("div");
+    const display = STATUS_DISPLAY[status] || { label: status || "Unknown", className: "status-initializing" };
+
+    const badge = document.createElement("span");
+    badge.className = `status-badge ${display.className}`;
+    badge.textContent = display.label;
+    wrapper.appendChild(badge);
+
+    if ((status === "error" || status === "update_failed") && statusDetail) {
+        const detail = document.createElement("div");
+        detail.className = "status-detail";
+        detail.textContent = statusDetail;
+        wrapper.appendChild(detail);
+    }
+
+    return wrapper;
+};
+
 const renderDetectorDetails = (rawDetails) => {
     const container = document.getElementById("detector-details");
     container.innerHTML = "";
@@ -117,7 +144,7 @@ const renderDetectorDetails = (rawDetails) => {
     if (detectorIds.length === 0) {
         const emptyState = document.createElement("div");
         emptyState.className = "empty-state";
-        emptyState.textContent = "No detectors are currently running on edge.";
+        emptyState.textContent = "No detectors are currently deployed on edge.";
         container.appendChild(emptyState);
         return;
     }
@@ -126,9 +153,25 @@ const renderDetectorDetails = (rawDetails) => {
     const thead = document.createElement("thead");
     const headerRow = document.createElement("tr");
 
-    ["Detector", "Pipeline", "Edge Config", "Last Updated"].forEach((heading) => {
+    const STATUS_TOOLTIP =
+        "Ready: Model is loaded and serving inference requests.\n" +
+        "Updating: New model version deploying. Previous version still serving.\n" +
+        "Update Failed: New version failed to start. Previous version still serving.\n" +
+        "Initializing: Model is loading for the first time. Not yet available.\n" +
+        "Error: Model failed to start.";
+
+    ["Detector", "Status", "Pipeline", "Edge Config", "Last Updated"].forEach((heading) => {
         const th = document.createElement("th");
-        th.textContent = heading;
+        if (heading === "Status") {
+            th.textContent = heading + " ";
+            const icon = document.createElement("span");
+            icon.className = "status-info-icon";
+            icon.textContent = "\u24D8";
+            icon.setAttribute("data-tooltip", STATUS_TOOLTIP);
+            th.appendChild(icon);
+        } else {
+            th.textContent = heading;
+        }
         headerRow.appendChild(th);
     });
 
@@ -155,6 +198,11 @@ const renderDetectorDetails = (rawDetails) => {
         modeLine.className = "detector-mode";
         detectorCell.append(idLine, nameLine, queryLine, modeLine);
         row.appendChild(detectorCell);
+
+        const statusCell = document.createElement("td");
+        statusCell.className = "status-column";
+        statusCell.appendChild(renderStatusBadge(info.status, info.status_detail));
+        row.appendChild(statusCell);
 
         const pipelineCell = document.createElement("td");
         pipelineCell.appendChild(renderPipeline(info.pipeline_config));
