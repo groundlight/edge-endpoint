@@ -60,4 +60,3 @@ class TestIsInferenceDeploymentRolloutComplete:
         mgr.get_inference_deployment = MagicMock(return_value=_make_deployment())
         mgr._core_kube_client.list_namespaced_pod.return_value = _make_pod_list(2)
         assert mgr.is_inference_deployment_rollout_complete("test-dep") is False
-
