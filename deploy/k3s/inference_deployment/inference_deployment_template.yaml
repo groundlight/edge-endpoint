@@ -90,13 +90,8 @@ spec:
           value: /opt/models/pinamod
         - name: LOAD_ALL_PIPELINES  # Load only the pipelines that are needed for edge inference.
           value: "false"
-        command:
-          [
-            "poetry", "run", "python3", "-m", "uvicorn", "serving.edge_inference_server.fastapi_server:app",
-            "--host", "0.0.0.0",
-            "--port", "8000",
-            "--workers", "1"
-          ]
+        - name: WORKERS  # Number of uvicorn workers for the inference server
+          value: "1"
         volumeMounts:
         - name: edge-endpoint-persistent-volume
           mountPath: *modelRepository
