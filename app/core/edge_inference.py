@@ -583,9 +583,7 @@ def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[i
     else:
         current_pipeline_config = get_current_pipeline_config(model_dir, version)
         if current_pipeline_config and current_pipeline_config == yaml.safe_load(model_info.pipeline_config):
-            logger.debug(
-                f"The pipeline_config in {model_dir} matches the cloud pipeline_config, no update needed."
-            )
+            logger.debug(f"The pipeline_config in {model_dir} matches the cloud pipeline_config, no update needed.")
             return False
         else:
             logger.info(f"The model in {model_dir} needs to be updated: no binary, pipeline config differs")
