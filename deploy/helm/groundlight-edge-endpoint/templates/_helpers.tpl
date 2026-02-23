@@ -124,3 +124,15 @@ Never
 {{- end }}
 {{- end }}
 
+{{/*
+  Validate that edge-config.yaml is parseable YAML at template-render time.
+  Structural/semantic validation is handled by the Pydantic models at app startup.
+*/}}
+{{- define "validate.edgeConfig" -}}
+{{- $raw := include "groundlight-edge-endpoint.edgeConfig" . -}}
+{{- $config := fromYaml $raw -}}
+{{- if $config.Error -}}
+  {{- fail (printf "edge-config.yaml contains invalid YAML:\n%s" $config.Error) -}}
+{{- end -}}
+{{- end -}}
+
