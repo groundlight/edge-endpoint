@@ -130,9 +130,9 @@ Never
 */}}
 {{- define "validate.edgeConfig" -}}
 {{- $raw := include "groundlight-edge-endpoint.edgeConfig" . -}}
-{{- $config := fromYaml $raw -}}
-{{- if $config.Error -}}
-  {{- fail (printf "edge-config.yaml contains invalid YAML:\n%s" $config.Error) -}}
+{{- $parsed := fromYaml $raw -}}
+{{- if and (kindIs "map" $parsed) (hasKey $parsed "Error") (eq (len $parsed) 1) (hasPrefix "error converting YAML to JSON:" (toString (index $parsed "Error"))) -}}
+  {{- fail (printf "edge-config.yaml contains invalid YAML:\n%s" (index $parsed "Error")) -}}
 {{- end -}}
 {{- end -}}
 
