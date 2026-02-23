@@ -1,4 +1,13 @@
 DEFAULT_EDGE_CONFIG_PATH = "/etc/groundlight/edge-config/edge-config.yaml"
+
+# Runtime config written by the POST /edge/configure API. Stored on the shared PVC
+# (edge-endpoint-pvc) which is mounted at different paths in different containers.
+# We check all known mount points so any container can find it.
+_RUNTIME_CONFIG_FILENAME = "runtime-edge-config.yaml"
+RUNTIME_EDGE_CONFIG_PATHS = [
+    f"/opt/groundlight/edge/sqlite/{_RUNTIME_CONFIG_FILENAME}",
+    f"/opt/groundlight/edge/serving/model-repo/{_RUNTIME_CONFIG_FILENAME}",
+]
 INFERENCE_DEPLOYMENT_TEMPLATE_PATH = "/etc/groundlight/inference-deployment/inference_deployment_template.yaml"
 
 # A file with the namespace to be operating within
