@@ -215,9 +215,7 @@ async def post_edge_config(
 
     if replace:
         removed_ids = old_detector_ids - set(new_config.detectors.keys())
-        background_tasks.add_task(
-            _replace_config_background, app_state, removed_ids, new_detector_ids, api_token
-        )
+        background_tasks.add_task(_replace_config_background, app_state, removed_ids, new_detector_ids, api_token)
         logger.info(
             f"Applied replace config. removing={removed_ids}, adding={new_detector_ids}. "
             "Deletion running in background."

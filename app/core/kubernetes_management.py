@@ -226,9 +226,7 @@ class InferenceDeploymentManager:
         service_name = get_edge_inference_service_name(detector_id, is_oodd)
 
         try:
-            self._app_kube_client.delete_namespaced_deployment(
-                name=deployment_name, namespace=self._target_namespace
-            )
+            self._app_kube_client.delete_namespaced_deployment(name=deployment_name, namespace=self._target_namespace)
             logger.info(f"Deleted deployment {deployment_name}")
         except kube_client.rest.ApiException as e:
             if e.status == 404:
@@ -237,9 +235,7 @@ class InferenceDeploymentManager:
                 raise
 
         try:
-            self._core_kube_client.delete_namespaced_service(
-                name=service_name, namespace=self._target_namespace
-            )
+            self._core_kube_client.delete_namespaced_service(name=service_name, namespace=self._target_namespace)
             logger.info(f"Deleted service {service_name}")
         except kube_client.rest.ApiException as e:
             if e.status == 404:
