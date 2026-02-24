@@ -1,3 +1,5 @@
+{{ include "validate.edgeConfig" . }}
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
