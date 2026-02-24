@@ -130,6 +130,10 @@ spec:
           subPath: dummy-nginx.conf
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/sqlite
+        - name: kubernetes-namespace
+          mountPath: /etc/groundlight/kubernetes-namespace
+        - name: inference-deployment-template-volume
+          mountPath: /etc/groundlight/inference-deployment
         - name: device-info-volume
           mountPath: /opt/groundlight/device
         - name: escalation-queue-volume
