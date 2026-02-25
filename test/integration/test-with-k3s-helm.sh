@@ -49,7 +49,7 @@ fi
 
 export HELM_RELEASE_NAME="$DEPLOYMENT_NAMESPACE"
 
-export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
+export IMAGE_TAG=${IMAGE_TAG:-$(./deploy/bin/git-tag-name.sh)}
 echo "Using ECR edge-endpoint image tag: $IMAGE_TAG"
 
 # Run the helm chart
