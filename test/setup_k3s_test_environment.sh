@@ -37,7 +37,7 @@ fi
 # Build the Docker image and import it into k3s
 echo "Building the Docker image..."
 ./deploy/bin/build-push-edge-endpoint-image.sh dev
-export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
+export IMAGE_TAG=${IMAGE_TAG:-$(./deploy/bin/git-tag-name.sh)}
 
 export INFERENCE_FLAVOR="CPU"
 ./deploy/bin/setup-ee.sh

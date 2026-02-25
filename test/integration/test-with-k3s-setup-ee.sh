@@ -39,7 +39,7 @@ export REFRESH_RATE=60 # not actually different than the default, but we may wan
 # Compute the image tag name before we muck with the config file so we get
 # the tag that will correspond to the current commit so it can match the image
 # that was built and pushed to ECR
-export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
+export IMAGE_TAG=${IMAGE_TAG:-$(./deploy/bin/git-tag-name.sh)}
 
 # update the config for this detector, such that we always take edge answers
 # but first, save the template to a temporary file
