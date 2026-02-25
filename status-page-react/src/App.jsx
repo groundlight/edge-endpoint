@@ -1,0 +1,171 @@
+import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  Container,
+  Title,
+  Text,
+  Loader,
+  Alert,
+  Group,
+  Stack,
+} from "@mantine/core";
+import { CodeHighlight } from "@mantine/code-highlight";
+import DetectorDetails from "./components/DetectorDetails";
+import VramUsage from "./components/VramUsage";
+
+const REFRESH_MS = 10_000;
+
+const parseIfJson = (value) => {
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }
+  return value;
+};
+
+const parseSection = (section) => {
+  if (!section) return section;
+  const parsed = { ...section };
+  for (const [key, value] of Object.entries(parsed)) {
+    parsed[key] = parseIfJson(value);
+  }
+  return parsed;
+};
+
+function JsonSection({ title, data }) {
+  const code = data ? JSON.stringify(parseSection(data), null, 2) : "";
+  return (
+    <Stack gap="xs">
+      <Title order={4} c="dark.7">
+        {title}
+      </Title>
+      <CodeHighlight
+        code={code}
+        language="json"
+        copyLabel="Copy"
+        copiedLabel="Copied"
+        radius="sm"
+        withBorder
+      />
+    </Stack>
+  );
+}
+
+export default function App() {
+  const [metrics, setMetrics] = useState(null);
+  const [gpu, setGpu] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const intervalRef = useRef(null);
+
+  const fetchAll = useCallback(async (showLoading = false) => {
+    if (showLoading) {
+      setLoading(true);
+      setError(false);
+    }
+    try {
+      const res = await fetch("/status/metrics.json");
+      if (!res.ok) throw new Error("Network response was not ok");
+      setMetrics(await res.json());
+      setLoading(false);
+      setError(false);
+    } catch {
+      if (showLoading) setLoading(false);
+      setError(true);
+    }
+
+    try {
+      const res = await fetch("/status/gpu.json");
+      if (res.ok) setGpu(await res.json());
+    } catch {
+      // GPU data is optional
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAll(true);
+
+    const start = () => {
+      if (intervalRef.current) return;
+      intervalRef.current = setInterval(() => fetchAll(false), REFRESH_MS);
+    };
+    const stop = () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+    const onVisibility = () => {
+      if (document.hidden) {
+        stop();
+      } else {
+        fetchAll(false);
+        start();
+      }
+    };
+
+    start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [fetchAll]);
+
+  const detectorDetails = metrics ? parseIfJson(metrics.detector_details) : null;
+
+  return (
+    <>
+      <header className="app-header">
+        <Group gap="sm">
+          <img
+            src="/status/static/icon_gold_dark.svg"
+            alt="Groundlight logo"
+            className="header-logo"
+          />
+          <Title order={2} fw={400} c="var(--yellow)">
+            Groundlight Edge Endpoint Status
+          </Title>
+        </Group>
+      </header>
+
+      <Container size="lg" py="xl">
+        {loading && (
+          <Group justify="center" py="lg">
+            <Loader color="yellow" />
+            <Text>Loading status...</Text>
+          </Group>
+        )}
+        {error && (
+          <Alert color="red" variant="light" mb="lg">
+            Failed to load metrics data.
+          </Alert>
+        )}
+
+        <Stack gap="xl">
+          <JsonSection title="Device Information" data={metrics?.device_info} />
+
+          <Stack gap="xs">
+            <Title order={4} c="dark.7">
+              Detector Details
+            </Title>
+            <DetectorDetails details={detectorDetails} loading={loading} />
+          </Stack>
+
+          <Stack gap="xs">
+            <Title order={4} c="dark.7">
+              VRAM Usage
+            </Title>
+            <VramUsage gpuData={gpu} detectorDetails={detectorDetails} />
+          </Stack>
+
+          <JsonSection title="Activity Metrics" data={metrics?.activity_metrics} />
+          <JsonSection title="Kubernetes Stats" data={metrics?.k3s_stats} />
+          <JsonSection title="Failed Escalations" data={metrics?.failed_escalations} />
+        </Stack>
+      </Container>
+    </>
+  );
+}
