@@ -5,6 +5,11 @@ const EDGE_ENDPOINT = process.env.EDGE_ENDPOINT_URL || "http://localhost:30101";
 
 export default defineConfig({
   plugins: [react()],
+  base: "/status/",
+  build: {
+    outDir: "dist",
+    emptyOutDir: true,
+  },
   server: {
     port: 3000,
     proxy: {

@@ -6,3 +6,5 @@
 Dockerfile
 test_coverage_reports/
 deploy/balena-k3s/build
+status-page-react/node_modules
+status-page-react/.vite

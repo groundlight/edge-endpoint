@@ -11,21 +11,21 @@ import {
   UnstyledButton,
   Group,
 } from "@mantine/core";
+import { CodeHighlight } from "@mantine/code-highlight";
 
-const STATUS_CONFIG = {
-  ready: { label: "Ready", color: "green" },
-  updating: { label: "Updating", color: "blue" },
-  update_failed: { label: "Update Failed", color: "orange" },
-  initializing: { label: "Initializing", color: "yellow" },
-  error: { label: "Error", color: "red" },
+const TH_STYLE = {
+  backgroundColor: "#3a383c",
+  color: "#fff",
+  whiteSpace: "nowrap",
 };
 
-const STATUS_TOOLTIP =
-  "Ready: Model is loaded and serving inference requests.\n" +
-  "Updating: New model version deploying. Previous version still serving.\n" +
-  "Update Failed: New version failed to start. Previous version still serving.\n" +
-  "Initializing: Model is loading for the first time. Not yet available.\n" +
-  "Error: Model failed to start.";
+const STATUS_CONFIG = {
+  ready: { label: "Ready", color: "green", tooltip: "Model is loaded and serving inference requests." },
+  updating: { label: "Updating", color: "blue", tooltip: "New model version deploying. Previous version still serving." },
+  update_failed: { label: "Update Failed", color: "orange", tooltip: "New version failed to start. Previous version still serving." },
+  initializing: { label: "Initializing", color: "yellow", tooltip: "Model is loading for the first time. Not yet available." },
+  error: { label: "Error", color: "red", tooltip: "Model failed to start." },
+};
 
 function formatTimestamp(isoString) {
   if (!isoString) return null;
@@ -71,20 +71,79 @@ function StatusBadge({ status, statusDetail }) {
   const cfg = STATUS_CONFIG[status] || { label: status || "Unknown", color: "gray" };
   return (
     <Stack gap={4} align="center">
-      <Badge
-        variant="light"
-        color={cfg.color}
-        size="lg"
-        style={{ minWidth: "fit-content", whiteSpace: "nowrap" }}
-      >
-        {cfg.label}
-      </Badge>
+      <Tooltip label={cfg.tooltip || status} withArrow position="bottom">
+        <Badge
+          variant="light"
+          color={cfg.color}
+          size="sm"
+          style={{ whiteSpace: "nowrap", cursor: "default" }}
+        >
+          {cfg.label}
+        </Badge>
+      </Tooltip>
       {(status === "error" || status === "update_failed") && statusDetail && (
         <Text size="xs" c="dimmed">
           {statusDetail}
         </Text>
       )}
     </Stack>
+  );
+}
+
+const YAML_COLLAPSED_HEIGHT = 80;
+
+function PipelineCell({ yaml }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!yaml) return <Text c="dimmed">--</Text>;
+  return (
+    <div style={{ position: "relative" }}>
+      <div
+        style={{
+          maxHeight: expanded ? "none" : YAML_COLLAPSED_HEIGHT,
+          overflow: "hidden",
+        }}
+      >
+        <CodeHighlight
+          code={yaml}
+          language="yaml"
+          copyLabel="Copy"
+          copiedLabel="Copied"
+          radius="sm"
+          withBorder
+          styles={{ code: { fontSize: "0.8em" } }}
+        />
+      </div>
+      {!expanded && yaml.split("\n").length > 4 && (
+        <UnstyledButton
+          onClick={() => setExpanded(true)}
+          style={{
+            display: "block",
+            width: "100%",
+            textAlign: "center",
+            fontSize: "0.75em",
+            color: "#165a8a",
+            paddingTop: 4,
+          }}
+        >
+          Show more
+        </UnstyledButton>
+      )}
+      {expanded && (
+        <UnstyledButton
+          onClick={() => setExpanded(false)}
+          style={{
+            display: "block",
+            width: "100%",
+            textAlign: "center",
+            fontSize: "0.75em",
+            color: "#165a8a",
+            paddingTop: 4,
+          }}
+        >
+          Show less
+        </UnstyledButton>
+      )}
+    </div>
   );
 }
 
@@ -134,7 +193,7 @@ function getTimestamp(info) {
 }
 
 export default function DetectorDetails({ details, loading }) {
-  // null = default alphabetical sort by detector ID
+  // null = default sort by deployment creation time (oldest first)
   const [sortDir, setSortDir] = useState(null);
 
   const toggleSort = () => {
@@ -148,7 +207,10 @@ export default function DetectorDetails({ details, loading }) {
   const sortedIds = useMemo(() => {
     if (!details) return [];
     const ids = Object.keys(details);
-    if (sortDir === null) return ids.sort();
+    if (sortDir === null) return ids.sort((a, b) => {
+      const timeCmp = (details[a].deploy_time || "").localeCompare(details[b].deploy_time || "");
+      return timeCmp !== 0 ? timeCmp : a.localeCompare(b);
+    });
     return ids.sort((a, b) => {
       const diff = getTimestamp(details[a]) - getTimestamp(details[b]);
       return sortDir === "asc" ? diff : -diff;
@@ -178,30 +240,16 @@ export default function DetectorDetails({ details, loading }) {
   }
 
   return (
-    <Paper shadow="xs" radius="sm" style={{ overflow: "hidden" }}>
+    <Paper shadow="xs" radius="sm" style={{ overflowX: "auto" }}>
       <Table striped highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
         <Table.Thead>
           <Table.Tr>
-            <Table.Th>Detector</Table.Th>
-            <Table.Th style={{ textAlign: "center", whiteSpace: "nowrap" }}>
-              Status{" "}
-              <Tooltip
-                label={STATUS_TOOLTIP}
-                multiline
-                w={380}
-                withArrow
-                position="bottom"
-                styles={{ tooltip: { whiteSpace: "pre-line" } }}
-              >
-                <Text component="span" size="xs" c="dimmed" style={{ cursor: "help" }}>
-                  &#9432;
-                </Text>
-              </Tooltip>
-            </Table.Th>
-            <Table.Th>Pipeline</Table.Th>
-            <Table.Th>Edge Config</Table.Th>
-            <Table.Th>
-              <UnstyledButton onClick={toggleSort} className="sortable-header">
+            <Table.Th style={TH_STYLE}>Detector</Table.Th>
+            <Table.Th style={{ ...TH_STYLE, textAlign: "center" }}>Status</Table.Th>
+            <Table.Th style={TH_STYLE}>Pipeline</Table.Th>
+            <Table.Th style={TH_STYLE}>Edge Config</Table.Th>
+            <Table.Th style={TH_STYLE}>
+              <UnstyledButton onClick={toggleSort} className="sortable-header" style={{ color: "inherit" }}>
                 <Group gap={4} wrap="nowrap">
                   <span>Last Updated</span>
                   <SortIcon direction={sortDir} />
@@ -215,7 +263,7 @@ export default function DetectorDetails({ details, loading }) {
             const info = details[id] || {};
             return (
               <Table.Tr key={id}>
-                <Table.Td>
+                <Table.Td style={{ verticalAlign: "top" }}>
                   <Stack gap={4}>
                     <Anchor
                       href={`https://dashboard.groundlight.ai/reef/detectors/${id}`}
@@ -234,20 +282,16 @@ export default function DetectorDetails({ details, loading }) {
                     </Text>
                   </Stack>
                 </Table.Td>
-                <Table.Td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                <Table.Td style={{ textAlign: "center", whiteSpace: "nowrap", verticalAlign: "top" }}>
                   <StatusBadge status={info.status} statusDetail={info.status_detail} />
                 </Table.Td>
-                <Table.Td>
-                  {info.pipeline_config ? (
-                    <Text size="sm">{info.pipeline_config}</Text>
-                  ) : (
-                    <Text size="sm" c="dimmed">--</Text>
-                  )}
+                <Table.Td style={{ verticalAlign: "top" }}>
+                  <PipelineCell yaml={info.pipeline_config} />
                 </Table.Td>
-                <Table.Td>
+                <Table.Td style={{ verticalAlign: "top" }}>
                   <EdgeConfigTable config={info.edge_inference_config} />
                 </Table.Td>
-                <Table.Td style={{ whiteSpace: "nowrap" }}>
+                <Table.Td style={{ whiteSpace: "nowrap", verticalAlign: "top" }}>
                   <TimestampCell isoString={info.last_updated_time} />
                 </Table.Td>
               </Table.Tr>

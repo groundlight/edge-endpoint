@@ -7,6 +7,8 @@ import {
 } from "@mantine/code-highlight";
 import hljs from "highlight.js/lib/core";
 import json from "highlight.js/lib/languages/json";
+import yaml from "highlight.js/lib/languages/yaml";
+import plaintext from "highlight.js/lib/languages/plaintext";
 import "@mantine/core/styles.css";
 import "@mantine/code-highlight/styles.css";
 import "highlight.js/styles/github.css";
@@ -14,6 +16,8 @@ import App from "./App";
 import "./App.css";
 
 hljs.registerLanguage("json", json);
+hljs.registerLanguage("yaml", yaml);
+hljs.registerLanguage("plaintext", plaintext);
 const highlightJsAdapter = createHighlightJsAdapter(hljs);
 
 const theme = createTheme({

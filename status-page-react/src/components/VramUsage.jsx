@@ -38,8 +38,45 @@ function LegendItem({ color, label, value }) {
   );
 }
 
-function GpuCard({ gpu, detectors, loadingVramBytes, detNameMap }) {
-  const totalBytes = gpu.total_bytes;
+export default function VramUsage({ gpuData, detectorDetails }) {
+  if (!gpuData) return null;
+
+  if (gpuData.error) {
+    return (
+      <Paper shadow="xs" p="md" radius="sm">
+        <Text c="dimmed" fs="italic">
+          {gpuData.error}
+        </Text>
+      </Paper>
+    );
+  }
+
+  const totalBytes = gpuData.total_vram_bytes || 0;
+  if (totalBytes === 0) {
+    return (
+      <Paper shadow="xs" p="md" radius="sm">
+        <Text c="dimmed" fs="italic">
+          No GPU data available.
+        </Text>
+      </Paper>
+    );
+  }
+
+  const detNameMap = {};
+  const detDeployTime = {};
+  if (detectorDetails) {
+    for (const [id, info] of Object.entries(detectorDetails)) {
+      detNameMap[id] = info.detector_name || id;
+      detDeployTime[id] = info.deploy_time || "";
+    }
+  }
+
+  const detectors = (gpuData.detectors || []).slice().sort((a, b) => {
+    const timeCmp = (detDeployTime[a.detector_id] || "").localeCompare(detDeployTime[b.detector_id] || "");
+    return timeCmp !== 0 ? timeCmp : a.detector_id.localeCompare(b.detector_id);
+  });
+  const usedBytes = gpuData.used_vram_bytes || 0;
+  const loadingVramBytes = gpuData.loading_vram_bytes || 0;
   const slices = [];
   const legend = [];
   let accountedBytes = 0;
@@ -58,23 +95,20 @@ function GpuCard({ gpu, detectors, loadingVramBytes, detNameMap }) {
     legend.push({ color: LOADING_COLOR, label: "Loading Detector Models", value: formatBytes(loadingVramBytes) });
   }
 
-  const otherBytes = Math.max(0, gpu.used_bytes - accountedBytes);
+  const otherBytes = Math.max(0, usedBytes - accountedBytes);
   if (otherBytes > 0) {
     slices.push({ bytes: otherBytes, color: OTHER_COLOR, label: "Other" });
     legend.push({ color: OTHER_COLOR, label: "Other", value: formatBytes(otherBytes) });
   }
 
-  const freeBytes = Math.max(0, totalBytes - gpu.used_bytes);
+  const freeBytes = Math.max(0, totalBytes - usedBytes);
   slices.push({ bytes: freeBytes, color: FREE_COLOR, label: "Free" });
   legend.push({ color: FREE_COLOR, label: "Free", value: formatBytes(freeBytes) });
 
-  const usedPct = `${((gpu.used_bytes / totalBytes) * 100).toFixed(0)}%`;
+  const usedPct = `${((usedBytes / totalBytes) * 100).toFixed(0)}%`;
 
   return (
     <Paper shadow="xs" p="lg" radius="sm">
-      <Text fw={500} mb="md">
-        GPU {gpu.index}: {gpu.name} ({formatBytes(gpu.total_bytes)})
-      </Text>
       <Group gap="xl" align="center">
         <DonutChart slices={slices} centerText={usedPct} />
         <Stack gap="xs">
@@ -84,53 +118,5 @@ function GpuCard({ gpu, detectors, loadingVramBytes, detNameMap }) {
         </Stack>
       </Group>
     </Paper>
-  );
-}
-
-export default function VramUsage({ gpuData, detectorDetails }) {
-  if (!gpuData) return null;
-
-  if (gpuData.error) {
-    return (
-      <Paper shadow="xs" p="md" radius="sm">
-        <Text c="dimmed" fs="italic">
-          {gpuData.error}
-        </Text>
-      </Paper>
-    );
-  }
-
-  const gpus = gpuData.gpus || [];
-  const detectors = gpuData.detectors || [];
-
-  if (gpus.length === 0) {
-    return (
-      <Paper shadow="xs" p="md" radius="sm">
-        <Text c="dimmed" fs="italic">
-          No GPU data available.
-        </Text>
-      </Paper>
-    );
-  }
-
-  const detNameMap = {};
-  if (detectorDetails) {
-    for (const [id, info] of Object.entries(detectorDetails)) {
-      detNameMap[id] = info.detector_name || id;
-    }
-  }
-
-  return (
-    <Stack gap="sm">
-      {gpus.map((gpu, i) => (
-        <GpuCard
-          key={gpu.uuid || i}
-          gpu={gpu}
-          detectors={detectors}
-          loadingVramBytes={gpuData.loading_vram_bytes || 0}
-          detNameMap={detNameMap}
-        />
-      ))}
-    </Stack>
   );
 }

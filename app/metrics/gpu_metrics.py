@@ -24,29 +24,32 @@ class GpuMetricsCollector:
             logger.warning("Not running in cluster, cannot collect GPU metrics")
             return {"error": "Not running in a Kubernetes cluster"}
 
-        v1 = client.CoreV1Api()
         namespace = get_namespace()
+        v1 = client.CoreV1Api()
         pods = v1.list_namespaced_pod(namespace=namespace)
 
         inference_pods = _find_inference_pods(pods)
         if not inference_pods:
-            return {"gpus": [], "detectors": [], "loading_vram_bytes": 0}
+            return {"total_vram_bytes": 0, "used_vram_bytes": 0, "detectors": [], "loading_vram_bytes": 0}
 
         active_pods = _pick_active_pods(inference_pods)
 
-        gpus: dict[str, dict] = {}
         detectors: dict[str, dict] = {}
         loading_vram_bytes = 0
+        all_gpus_total = 0
+        all_gpus_used = 0
 
         for pod, det_id, is_oodd, _is_ready in inference_pods:
             gpu_data = _query_pod_gpu(pod)
             if gpu_data is None:
                 continue
 
+            all_gpus = gpu_data.get("all_gpus")
+            if all_gpus:
+                all_gpus_total = max(all_gpus_total, all_gpus.get("total_bytes", 0))
+                all_gpus_used = max(all_gpus_used, all_gpus.get("used_bytes", 0))
+
             process_vram = gpu_data.get("process_vram_bytes") or 0
-            gpu_info = gpu_data.get("gpu")
-            if gpu_info and gpu_info.get("uuid"):
-                gpus[gpu_info["uuid"]] = gpu_info
 
             if pod.metadata.name not in active_pods:
                 loading_vram_bytes += process_vram
@@ -66,11 +69,10 @@ class GpuMetricsCollector:
                 det["primary_vram_bytes"] = (det["primary_vram_bytes"] or 0) + process_vram
             det["total_vram_bytes"] = (det["primary_vram_bytes"] or 0) + (det["oodd_vram_bytes"] or 0)
 
-        gpu_list = sorted(gpus.values(), key=lambda g: g.get("index", 0))
-
         return {
-            "gpus": gpu_list,
-            "detectors": sorted(detectors.values(), key=lambda d: d["detector_id"]),
+            "total_vram_bytes": all_gpus_total,
+            "used_vram_bytes": all_gpus_used,
+            "detectors": list(detectors.values()),
             "loading_vram_bytes": loading_vram_bytes,
         }
 

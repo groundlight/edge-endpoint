@@ -34,13 +34,13 @@ const parseSection = (section) => {
   return parsed;
 };
 
+const SECTION_TITLE_STYLE = { fontSize: "1.25em", fontWeight: 500, color: "#1F1D23" };
+
 function JsonSection({ title, data }) {
   const code = data ? JSON.stringify(parseSection(data), null, 2) : "";
   return (
     <Stack gap="xs">
-      <Title order={4} c="dark.7">
-        {title}
-      </Title>
+      <Text style={SECTION_TITLE_STYLE}>{title}</Text>
       <CodeHighlight
         code={code}
         language="json"
@@ -148,16 +148,12 @@ export default function App() {
           <JsonSection title="Device Information" data={metrics?.device_info} />
 
           <Stack gap="xs">
-            <Title order={4} c="dark.7">
-              Detector Details
-            </Title>
+            <Text style={SECTION_TITLE_STYLE}>Detector Details</Text>
             <DetectorDetails details={detectorDetails} loading={loading} />
           </Stack>
 
           <Stack gap="xs">
-            <Title order={4} c="dark.7">
-              VRAM Usage
-            </Title>
+            <Text style={SECTION_TITLE_STYLE}>VRAM Usage by Detector</Text>
             <VramUsage gpuData={gpu} detectorDetails={detectorDetails} />
           </Stack>
 
