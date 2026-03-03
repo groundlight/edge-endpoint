@@ -7,6 +7,8 @@ import {
   Alert,
   Group,
   Stack,
+  Paper,
+  Skeleton,
 } from "@mantine/core";
 import { CodeHighlight } from "@mantine/code-highlight";
 import DetectorDetails from "./components/DetectorDetails";
@@ -36,19 +38,35 @@ const parseSection = (section) => {
 
 const SECTION_TITLE_STYLE = { fontSize: "1.25em", fontWeight: 500, color: "#1F1D23" };
 
-function JsonSection({ title, data }) {
+function GenericSectionSkeleton() {
+  return (
+    <Paper shadow="xs" p="md" radius="sm">
+      <Stack gap="sm">
+        <Skeleton height={20} />
+        <Skeleton height={20} />
+        <Skeleton height={20} />
+      </Stack>
+    </Paper>
+  );
+}
+
+function JsonSection({ title, data, loading }) {
   const code = data ? JSON.stringify(parseSection(data), null, 2) : "";
   return (
     <Stack gap="xs">
       <Text style={SECTION_TITLE_STYLE}>{title}</Text>
-      <CodeHighlight
-        code={code}
-        language="json"
-        copyLabel="Copy"
-        copiedLabel="Copied"
-        radius="sm"
-        withBorder
-      />
+      {loading ? (
+        <GenericSectionSkeleton />
+      ) : (
+        <CodeHighlight
+          code={code}
+          language="json"
+          copyLabel="Copy"
+          copiedLabel="Copied"
+          radius="sm"
+          withBorder
+        />
+      )}
     </Stack>
   );
 }
@@ -145,7 +163,7 @@ export default function App() {
         )}
 
         <Stack gap="xl">
-          <JsonSection title="Device Information" data={metrics?.device_info} />
+          <JsonSection title="Device Information" data={metrics?.device_info} loading={loading} />
 
           <Stack gap="xs">
             <Text style={SECTION_TITLE_STYLE}>Detector Details</Text>
@@ -154,12 +172,12 @@ export default function App() {
 
           <Stack gap="xs">
             <Text style={SECTION_TITLE_STYLE}>VRAM Usage by Detector</Text>
-            <VramUsage gpuData={gpu} detectorDetails={detectorDetails} />
+            <VramUsage gpuData={gpu} detectorDetails={detectorDetails} loading={loading} />
           </Stack>
 
-          <JsonSection title="Activity Metrics" data={metrics?.activity_metrics} />
-          <JsonSection title="Kubernetes Stats" data={metrics?.k3s_stats} />
-          <JsonSection title="Failed Escalations" data={metrics?.failed_escalations} />
+          <JsonSection title="Activity Metrics" data={metrics?.activity_metrics} loading={loading} />
+          <JsonSection title="Kubernetes Stats" data={metrics?.k3s_stats} loading={loading} />
+          <JsonSection title="Failed Escalations" data={metrics?.failed_escalations} loading={loading} />
         </Stack>
       </Container>
     </>

@@ -65,8 +65,8 @@ body {
   padding: 6px 10px;
   font-size: 0.85em;
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  gap: 2px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
@@ -75,4 +75,9 @@ body {
   height: 10px;
   border-radius: 2px;
   flex-shrink: 0;
+}
+
+.donut-tooltip-line {
+  white-space: nowrap;
+  line-height: 1.2;
 }

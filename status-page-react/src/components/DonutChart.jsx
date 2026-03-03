@@ -1,5 +1,9 @@
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Sector } from "recharts";
 import { Text, Stack } from "@mantine/core";
+
+export const DONUT_SIZE = 400;
+export const DONUT_INNER_RADIUS = 110;
+export const DONUT_OUTER_RADIUS = 170;
 
 function formatBytes(bytes) {
   if (bytes == null) return "--";
@@ -10,22 +14,49 @@ function formatBytes(bytes) {
 
 function CustomTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;
-  const { name, value, fill } = payload[0];
+  const { payload: item, value } = payload[0];
   return (
     <div className="donut-tooltip">
-      <span className="donut-tooltip-swatch" style={{ backgroundColor: fill }} />
-      <span>{name}: {formatBytes(value)}</span>
+      <Text className="donut-tooltip-line">
+        {item.type === "detector" ? item.detectorId : item.label}
+      </Text>
+      {item.type === "detector" && item.name && item.name !== item.detectorId && (
+        <Text className="donut-tooltip-line">{item.name}</Text>
+      )}
+      <Text className="donut-tooltip-line">
+        VRAM Usage: {formatBytes(value)} ({item.pct.toFixed(1)}%)
+      </Text>
     </div>
   );
 }
 
-export default function DonutChart({ slices, centerText }) {
-  const data = slices
-    .filter((s) => s.bytes > 0)
-    .map((s) => ({ name: s.label, value: s.bytes, fill: s.color }));
+function ActiveSlice(props) {
+  return (
+    <Sector
+      {...props}
+      outerRadius={(props.outerRadius || DONUT_OUTER_RADIUS) + 24}
+    />
+  );
+}
+
+export default function DonutChart({
+  slices,
+  centerText,
+  activeSliceKey,
+  onSliceHover,
+}) {
+  const data = slices.map((s) => ({ ...s, name: s.label, value: s.bytes, fill: s.color }));
+
+  const renderSlice = (props) => {
+    const isActive = props?.payload?.sliceKey === activeSliceKey;
+    if (isActive) {
+      return <ActiveSlice {...props} />;
+    }
+    return <Sector {...props} />;
+  };
 
   return (
-    <div style={{ position: "relative", width: 200, height: 200, flexShrink: 0 }}>
+    <div style={{ position: "relative", width: DONUT_SIZE, height: DONUT_SIZE, flexShrink: 0 }}>
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
@@ -33,17 +64,24 @@ export default function DonutChart({ slices, centerText }) {
             dataKey="value"
             cx="50%"
             cy="50%"
-            innerRadius={55}
-            outerRadius={85}
+            innerRadius={DONUT_INNER_RADIUS}
+            outerRadius={DONUT_OUTER_RADIUS}
+            startAngle={90}
+            endAngle={-270}
             paddingAngle={1}
             strokeWidth={0}
-            animationDuration={600}
+            isAnimationActive
+            animationDuration={900}
+            animationEasing="ease-in-out"
+            shape={renderSlice}
+            onMouseEnter={(_, index) => onSliceHover?.(data[index]?.sliceKey ?? null)}
+            onMouseLeave={() => onSliceHover?.(null)}
           >
             {data.map((entry, i) => (
-              <Cell key={i} fill={entry.fill} />
+              <Cell key={entry.sliceKey} fill={entry.fill} />
             ))}
           </Pie>
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={<CustomTooltip />} isAnimationActive={false} />
         </PieChart>
       </ResponsiveContainer>
       <Stack

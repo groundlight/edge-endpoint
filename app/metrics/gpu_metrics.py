@@ -30,7 +30,13 @@ class GpuMetricsCollector:
 
         inference_pods = _find_inference_pods(pods)
         if not inference_pods:
-            return {"total_vram_bytes": 0, "used_vram_bytes": 0, "detectors": [], "loading_vram_bytes": 0}
+            return {
+                "total_vram_bytes": 0,
+                "used_vram_bytes": 0,
+                "detectors": [],
+                "loading_vram_bytes": 0,
+                "observed_gpus": [],
+            }
 
         active_pods = _pick_active_pods(inference_pods)
 
@@ -38,6 +44,7 @@ class GpuMetricsCollector:
         loading_vram_bytes = 0
         all_gpus_total = 0
         all_gpus_used = 0
+        observed_gpus: dict[str, dict] = {}
 
         for pod, det_id, is_oodd, _is_ready in inference_pods:
             gpu_data = _query_pod_gpu(pod)
@@ -48,6 +55,21 @@ class GpuMetricsCollector:
             if all_gpus:
                 all_gpus_total = max(all_gpus_total, all_gpus.get("total_bytes", 0))
                 all_gpus_used = max(all_gpus_used, all_gpus.get("used_bytes", 0))
+
+            gpu_info = gpu_data.get("gpu") or {}
+            gpu_name = gpu_info.get("name")
+            gpu_total = gpu_info.get("total_bytes", 0)
+            gpu_uuid = gpu_info.get("uuid")
+            gpu_index = gpu_info.get("index")
+            if gpu_name:
+                key = str(gpu_uuid or f"{gpu_name}:{gpu_index}")
+                existing = observed_gpus.get(key)
+                if existing is None or gpu_total > existing.get("total_bytes", 0):
+                    observed_gpus[key] = {
+                        "name": gpu_name,
+                        "total_bytes": gpu_total,
+                        "index": gpu_index,
+                    }
 
             process_vram = gpu_data.get("process_vram_bytes") or 0
 
@@ -74,6 +96,13 @@ class GpuMetricsCollector:
             "used_vram_bytes": all_gpus_used,
             "detectors": list(detectors.values()),
             "loading_vram_bytes": loading_vram_bytes,
+            "observed_gpus": sorted(
+                observed_gpus.values(),
+                key=lambda g: (
+                    g.get("index") if isinstance(g.get("index"), int) else 1_000_000,
+                    g.get("name") or "",
+                ),
+            ),
         }
 
 

@@ -20,10 +20,10 @@ const TH_STYLE = {
 };
 
 const STATUS_CONFIG = {
-  ready: { label: "Ready", color: "green", tooltip: "Model is loaded and serving inference requests." },
-  updating: { label: "Updating", color: "blue", tooltip: "New model version deploying. Previous version still serving." },
-  update_failed: { label: "Update Failed", color: "orange", tooltip: "New version failed to start. Previous version still serving." },
-  initializing: { label: "Initializing", color: "yellow", tooltip: "Model is loading for the first time. Not yet available." },
+  ready: { label: "Ready", color: "green", tooltip: "Model is loaded and ready to serve inference requests." },
+  updating: { label: "Updating", color: "blue", tooltip: "New model version deploying. Previous version still ready to serve." },
+  update_failed: { label: "Update Failed", color: "orange", tooltip: "New version failed to start. Previous version still ready to serve." },
+  initializing: { label: "Initializing", color: "yellow", tooltip: "Model is loading for the first time. Not yet ready to serve inference requests." },
   error: { label: "Error", color: "red", tooltip: "Model failed to start." },
 };
 
@@ -90,32 +90,51 @@ function StatusBadge({ status, statusDetail }) {
   );
 }
 
-const YAML_COLLAPSED_HEIGHT = 80;
+const YAML_COLLAPSED_HEIGHT = 160;
 
 function PipelineCell({ yaml }) {
   const [expanded, setExpanded] = useState(false);
   if (!yaml) return <Text c="dimmed">--</Text>;
+  const needsCollapse = yaml.split("\n").length > 4;
   return (
-    <div style={{ position: "relative" }}>
-      <div
-        style={{
-          maxHeight: expanded ? "none" : YAML_COLLAPSED_HEIGHT,
-          overflow: "hidden",
-        }}
-      >
-        <CodeHighlight
-          code={yaml}
-          language="yaml"
-          copyLabel="Copy"
-          copiedLabel="Copied"
-          radius="sm"
-          withBorder
-          styles={{ code: { fontSize: "0.8em" } }}
-        />
+    <div>
+      <div style={{ position: "relative" }}>
+        <div
+          style={{
+            maxHeight: expanded || !needsCollapse ? "none" : YAML_COLLAPSED_HEIGHT,
+            overflow: "hidden",
+          }}
+        >
+          <CodeHighlight
+            code={yaml}
+            language="yaml"
+            copyLabel="Copy"
+            copiedLabel="Copied"
+            radius="sm"
+            withBorder
+            styles={{
+              code: { fontSize: "0.8em", whiteSpace: "pre-wrap", wordBreak: "break-word" },
+              pre: { overflow: "hidden" },
+            }}
+          />
+        </div>
+        {!expanded && needsCollapse && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: 32,
+              background: "linear-gradient(transparent, rgba(255,255,255,0.95))",
+              pointerEvents: "none",
+            }}
+          />
+        )}
       </div>
-      {!expanded && yaml.split("\n").length > 4 && (
+      {needsCollapse && (
         <UnstyledButton
-          onClick={() => setExpanded(true)}
+          onClick={() => setExpanded((v) => !v)}
           style={{
             display: "block",
             width: "100%",
@@ -125,22 +144,7 @@ function PipelineCell({ yaml }) {
             paddingTop: 4,
           }}
         >
-          Show more
-        </UnstyledButton>
-      )}
-      {expanded && (
-        <UnstyledButton
-          onClick={() => setExpanded(false)}
-          style={{
-            display: "block",
-            width: "100%",
-            textAlign: "center",
-            fontSize: "0.75em",
-            color: "#165a8a",
-            paddingTop: 4,
-          }}
-        >
-          Show less
+          {expanded ? "Show less" : "Show more"}
         </UnstyledButton>
       )}
     </div>
@@ -187,9 +191,9 @@ function SortIcon({ direction }) {
 }
 
 function getTimestamp(info) {
-  if (!info?.last_updated_time) return 0;
+  if (!info?.last_updated_time) return Date.now();
   const t = new Date(info.last_updated_time).getTime();
-  return Number.isNaN(t) ? 0 : t;
+  return Number.isNaN(t) ? Date.now() : t;
 }
 
 export default function DetectorDetails({ details, loading }) {
@@ -240,8 +244,15 @@ export default function DetectorDetails({ details, loading }) {
   }
 
   return (
-    <Paper shadow="xs" radius="sm" style={{ overflowX: "auto" }}>
-      <Table striped highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
+    <Paper shadow="xs" radius="sm" style={{ overflow: "hidden" }}>
+      <Table striped highlightOnHover verticalSpacing="sm" horizontalSpacing="md" style={{ tableLayout: "fixed" }}>
+        <colgroup>
+          <col style={{ width: 280 }} />
+          <col style={{ width: 120 }} />
+          <col />
+          <col style={{ width: 220 }} />
+          <col style={{ width: 165 }} />
+        </colgroup>
         <Table.Thead>
           <Table.Tr>
             <Table.Th style={TH_STYLE}>Detector</Table.Th>
@@ -263,13 +274,14 @@ export default function DetectorDetails({ details, loading }) {
             const info = details[id] || {};
             return (
               <Table.Tr key={id}>
-                <Table.Td style={{ verticalAlign: "top" }}>
+                <Table.Td style={{ verticalAlign: "top", overflow: "hidden" }}>
                   <Stack gap={4}>
                     <Anchor
                       href={`https://dashboard.groundlight.ai/reef/detectors/${id}`}
                       target="_blank"
                       size="sm"
                       underline="always"
+                      style={{ whiteSpace: "nowrap" }}
                     >
                       {id}
                     </Anchor>
@@ -282,13 +294,13 @@ export default function DetectorDetails({ details, loading }) {
                     </Text>
                   </Stack>
                 </Table.Td>
-                <Table.Td style={{ textAlign: "center", whiteSpace: "nowrap", verticalAlign: "top" }}>
+                <Table.Td style={{ textAlign: "center", verticalAlign: "top" }}>
                   <StatusBadge status={info.status} statusDetail={info.status_detail} />
                 </Table.Td>
-                <Table.Td style={{ verticalAlign: "top" }}>
+                <Table.Td style={{ verticalAlign: "top", overflow: "hidden" }}>
                   <PipelineCell yaml={info.pipeline_config} />
                 </Table.Td>
-                <Table.Td style={{ verticalAlign: "top" }}>
+                <Table.Td style={{ verticalAlign: "top", overflow: "hidden" }}>
                   <EdgeConfigTable config={info.edge_inference_config} />
                 </Table.Td>
                 <Table.Td style={{ whiteSpace: "nowrap", verticalAlign: "top" }}>
