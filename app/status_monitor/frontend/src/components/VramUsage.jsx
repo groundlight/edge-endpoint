@@ -33,25 +33,41 @@ function formatPct(bytes, totalBytes) {
   return `${((bytes / totalBytes) * 100).toFixed(1)}%`;
 }
 
+/** Formats bytes as an integer percentage for compact summaries. */
+function formatPctInt(bytes, totalBytes) {
+  if (!totalBytes) return "0%";
+  return `${Math.round((bytes / totalBytes) * 100)}%`;
+}
+
 /** Renders GPU model and capacity text above the chart. */
-function GpuCapacitySummary({ observedGpus, totalBytes }) {
+function GpuCapacitySummary({ observedGpus, totalBytes, usedBytes }) {
   const gpus = (observedGpus || []).filter((g) => g?.name);
+  const getTotal = (gpu) => gpu?.total_vram_bytes ?? gpu?.total_bytes ?? 0;
+  const getUsed = (gpu) => gpu?.used_vram_bytes ?? gpu?.used_bytes ?? 0;
+
   if (gpus.length === 1) {
+    const gpu = gpus[0];
+    const gpuTotal = getTotal(gpu);
+    const gpuUsed = getUsed(gpu);
     return (
       <Text size="sm" fw={500}>
-        {gpus[0].name} ({formatBytes(gpus[0].total_bytes)})
+        {gpu.name} ({formatBytes(gpuUsed)} / {formatBytes(gpuTotal)} used, {formatPctInt(gpuUsed, gpuTotal)})
       </Text>
     );
   }
   if (gpus.length > 1) {
+    const totalGpuBytes = gpus.reduce((sum, gpu) => sum + getTotal(gpu), 0);
+    const usedGpuBytes = gpus.reduce((sum, gpu) => sum + getUsed(gpu), 0);
     return (
       <Stack gap={2}>
         <Text size="sm" fw={500}>
-          Total GPU Capacity: {formatBytes(totalBytes)}
+          Total GPU Usage: {formatBytes(usedGpuBytes)} / {formatBytes(totalGpuBytes)} used,{" "}
+          {formatPctInt(usedGpuBytes, totalGpuBytes)}
         </Text>
         {gpus.map((gpu, i) => (
           <Text key={`${gpu.name}-${i}`} size="xs" c="dimmed">
-            {gpu.name} ({formatBytes(gpu.total_bytes)})
+            GPU {gpu.index ?? i}: {gpu.name} ({formatBytes(getUsed(gpu))} / {formatBytes(getTotal(gpu))} used,{" "}
+            {formatPctInt(getUsed(gpu), getTotal(gpu))})
           </Text>
         ))}
       </Stack>
@@ -59,7 +75,7 @@ function GpuCapacitySummary({ observedGpus, totalBytes }) {
   }
   return (
     <Text size="sm" fw={500}>
-      Total GPU Capacity: {formatBytes(totalBytes)}
+      Total GPU Usage: {formatBytes(usedBytes)} / {formatBytes(totalBytes)} used, {formatPctInt(usedBytes, totalBytes)}
     </Text>
   );
 }
@@ -299,7 +315,7 @@ export default function VramUsage({ gpuData, detectorDetails, loading }) {
     <Paper shadow="xs" p="lg" radius="sm">
       <Group gap="xl" align="flex-start">
         <Stack gap="xs">
-          <GpuCapacitySummary observedGpus={observedGpus} totalBytes={totalBytes} />
+          <GpuCapacitySummary observedGpus={observedGpus} totalBytes={totalBytes} usedBytes={usedBytes} />
           <DonutChart
             slices={slices}
             centerText={usedPct}

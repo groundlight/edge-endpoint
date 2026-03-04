@@ -51,27 +51,36 @@ class GpuMetricsCollector:
             if gpu_data is None:
                 continue
 
-            all_gpus = gpu_data.get("all_gpus")
-            if all_gpus:
-                all_gpus_total = max(all_gpus_total, all_gpus.get("total_bytes", 0))
-                all_gpus_used = max(all_gpus_used, all_gpus.get("used_bytes", 0))
-
-            gpu_info = gpu_data.get("gpu") or {}
-            gpu_name = gpu_info.get("name")
-            gpu_total = gpu_info.get("total_bytes", 0)
-            gpu_uuid = gpu_info.get("uuid")
-            gpu_index = gpu_info.get("index")
-            if gpu_name:
+            gpu_devices = gpu_data.get("gpus") or []
+            pod_total = 0
+            pod_used = 0
+            for device in gpu_devices:
+                gpu_name = device.get("name")
+                gpu_total = device.get("total_bytes", 0)
+                gpu_used = device.get("used_bytes", 0)
+                gpu_uuid = device.get("uuid")
+                gpu_index = device.get("index")
+                pod_total += gpu_total
+                pod_used += gpu_used
+                if not gpu_name:
+                    continue
                 key = str(gpu_uuid or f"{gpu_name}:{gpu_index}")
                 existing = observed_gpus.get(key)
-                if existing is None or gpu_total > existing.get("total_bytes", 0):
+                if existing is None or gpu_total > existing.get("total_vram_bytes", 0):
                     observed_gpus[key] = {
                         "name": gpu_name,
-                        "total_bytes": gpu_total,
+                        "total_vram_bytes": gpu_total,
+                        "used_vram_bytes": gpu_used,
                         "index": gpu_index,
                     }
+                elif gpu_used > existing.get("used_vram_bytes", 0):
+                    existing["used_vram_bytes"] = gpu_used
 
-            process_vram = gpu_data.get("process_vram_bytes") or 0
+            all_gpus_total = max(all_gpus_total, pod_total)
+            all_gpus_used = max(all_gpus_used, pod_used)
+
+            pod_info = gpu_data.get("pod") or {}
+            process_vram = pod_info.get("vram_bytes") or 0
 
             if pod.metadata.name not in active_pods:
                 loading_vram_bytes += process_vram

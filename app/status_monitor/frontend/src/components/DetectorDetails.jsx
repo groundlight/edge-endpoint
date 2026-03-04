@@ -260,8 +260,13 @@ export default function DetectorDetails({ details, loading }) {
             <Table.Th style={TH_STYLE}>Pipeline</Table.Th>
             <Table.Th style={TH_STYLE}>Edge Config</Table.Th>
             <Table.Th style={TH_STYLE}>
-              <UnstyledButton onClick={toggleSort} className="sortable-header" style={{ color: "inherit" }}>
-                <Group gap={4} wrap="nowrap">
+              <UnstyledButton
+                onClick={toggleSort}
+                className="sortable-header"
+                style={{ color: "inherit" }}
+                aria-label="Sort by last updated"
+              >
+                <Group gap={6} wrap="nowrap">
                   <span>Last Updated</span>
                   <SortIcon direction={sortDir} />
                 </Group>

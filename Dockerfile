@@ -13,9 +13,9 @@ ARG POETRY_VERSION=1.5.1
 ######################
 FROM node:20-slim AS react-build-stage
 WORKDIR /react-app
-COPY status-page-react/package.json status-page-react/package-lock.json ./
+COPY app/status_monitor/frontend/package.json app/status_monitor/frontend/package-lock.json ./
 RUN npm ci
-COPY status-page-react/ ./
+COPY app/status_monitor/frontend/ ./
 RUN npm run build
 
 #############
