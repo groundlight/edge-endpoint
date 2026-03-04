@@ -86,8 +86,6 @@ function LegendItem({
         border: active ? "1px solid #7aa7e0" : "1px solid transparent",
         cursor: clickable ? "pointer" : "default",
       }}
-      onMouseEnter={() => onHoverStart?.()}
-      onMouseLeave={() => onHoverEnd?.()}
       onPointerEnter={() => onHoverStart?.()}
       onPointerLeave={() => onHoverEnd?.()}
       onClick={onClick}
