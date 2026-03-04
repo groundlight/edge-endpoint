@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Paper, Text, Group, Stack, Skeleton, UnstyledButton } from "@mantine/core";
 import DonutChart, { DONUT_SIZE } from "./DonutChart";
 
+/** Builds a deterministic detector color palette with high adjacent contrast. */
 function buildDetectorPalette(size = 30) {
   const step = 11; // coprime with 30; keeps adjacent colors far apart
   const saturation = 65;
@@ -18,6 +19,7 @@ const LOADING_COLOR = "#555555";
 const OTHER_COLOR = "#B0B0B0";
 const MAX_VISIBLE_LEGEND_ITEMS = 8;
 
+/** Formats bytes as GB/MB text for legend and summaries. */
 function formatBytes(bytes) {
   if (bytes == null) return "--";
   const gb = bytes / 1024 ** 3;
@@ -25,11 +27,13 @@ function formatBytes(bytes) {
   return `${Math.round(bytes / 1024 ** 2)} MB`;
 }
 
+/** Formats bytes as a percentage of total capacity. */
 function formatPct(bytes, totalBytes) {
   if (!totalBytes) return "0.0%";
   return `${((bytes / totalBytes) * 100).toFixed(1)}%`;
 }
 
+/** Renders GPU model and capacity text above the chart. */
 function GpuCapacitySummary({ observedGpus, totalBytes }) {
   const gpus = (observedGpus || []).filter((g) => g?.name);
   if (gpus.length === 1) {
@@ -60,6 +64,7 @@ function GpuCapacitySummary({ observedGpus, totalBytes }) {
   );
 }
 
+/** Renders one row in the detector/system legend. */
 function LegendItem({
   color,
   label,
@@ -69,7 +74,9 @@ function LegendItem({
   active = false,
   onHoverStart,
   onHoverEnd,
+  onClick,
 }) {
+  const clickable = Boolean(onClick);
   return (
     <div
       style={{
@@ -77,12 +84,13 @@ function LegendItem({
         borderRadius: 4,
         backgroundColor: active ? "#e9f2ff" : striped ? "#f7f8fa" : "transparent",
         border: active ? "1px solid #7aa7e0" : "1px solid transparent",
-        cursor: "default",
+        cursor: clickable ? "pointer" : "default",
       }}
       onMouseEnter={() => onHoverStart?.()}
       onMouseLeave={() => onHoverEnd?.()}
       onPointerEnter={() => onHoverStart?.()}
       onPointerLeave={() => onHoverEnd?.()}
+      onClick={onClick}
     >
       <Group gap="xs" wrap="nowrap">
         <div
@@ -108,6 +116,7 @@ function LegendItem({
   );
 }
 
+/** Renders a loading skeleton matching the donut layout. */
 function VramUsageSkeleton() {
   return (
     <Paper shadow="xs" p="lg" radius="sm">
@@ -125,9 +134,40 @@ function VramUsageSkeleton() {
   );
 }
 
+/** Renders detector VRAM donut, legends, and copy interactions. */
 export default function VramUsage({ gpuData, detectorDetails, loading }) {
   const [showAllLegendItems, setShowAllLegendItems] = useState(false);
   const [hoveredSliceKey, setHoveredSliceKey] = useState(null);
+  const [snackbarText, setSnackbarText] = useState(null);
+
+  useEffect(() => {
+    if (!snackbarText) return undefined;
+    const timer = setTimeout(() => setSnackbarText(null), 2200);
+    return () => clearTimeout(timer);
+  }, [snackbarText]);
+
+  const copyDetectorId = async (detectorId) => {
+    if (!detectorId) return;
+    try {
+      await navigator.clipboard.writeText(detectorId);
+      setSnackbarText(`Detector ID copied (${detectorId})`);
+    } catch {
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = detectorId;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "absolute";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(textarea);
+        setSnackbarText(ok ? `Detector ID copied (${detectorId})` : "Failed to copy detector ID");
+      } catch {
+        setSnackbarText("Failed to copy detector ID");
+      }
+    }
+  };
 
   if (loading && !gpuData) return <VramUsageSkeleton />;
   if (!gpuData) return null;
@@ -190,6 +230,7 @@ export default function VramUsage({ gpuData, detectorDetails, loading }) {
     });
     detectorLegend.push({
       sliceKey: `det:${det.detector_id}`,
+      detectorId: det.detector_id,
       color,
       label,
       value: formatBytes(bytes),
@@ -266,6 +307,10 @@ export default function VramUsage({ gpuData, detectorDetails, loading }) {
             centerText={usedPct}
             activeSliceKey={activeSliceKey}
             onSliceHover={(key) => setHoveredSliceKey(key)}
+            onSliceClick={(slice) => {
+              if (slice?.type !== "detector") return;
+              copyDetectorId(slice.detectorId);
+            }}
           />
         </Stack>
         <Stack gap="xs" style={{ flex: 1 }}>
@@ -280,6 +325,7 @@ export default function VramUsage({ gpuData, detectorDetails, loading }) {
               active={activeSliceKey === item.sliceKey}
               onHoverStart={() => setHoveredSliceKey(item.sliceKey)}
               onHoverEnd={() => setHoveredSliceKey((prev) => (prev === item.sliceKey ? null : prev))}
+              onClick={() => copyDetectorId(item.detectorId)}
             />
           ))}
           {detectorLegend.length > MAX_VISIBLE_LEGEND_ITEMS && (
@@ -306,6 +352,25 @@ export default function VramUsage({ gpuData, detectorDetails, loading }) {
           </Stack>
         </Stack>
       </Group>
+      {snackbarText && (
+        <Paper
+          shadow="md"
+          radius="sm"
+          p="sm"
+          style={{
+            position: "fixed",
+            bottom: 20,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 1000,
+            backgroundColor: "#1f1d23",
+          }}
+        >
+          <Text size="sm" c="white">
+            {snackbarText}
+          </Text>
+        </Paper>
+      )}
     </Paper>
   );
 }

@@ -5,6 +5,7 @@ export const DONUT_SIZE = 400;
 export const DONUT_INNER_RADIUS = 110;
 export const DONUT_OUTER_RADIUS = 170;
 
+/** Formats bytes as GB/MB for tooltip display. */
 function formatBytes(bytes) {
   if (bytes == null) return "--";
   const gb = bytes / 1024 ** 3;
@@ -12,38 +13,42 @@ function formatBytes(bytes) {
   return `${Math.round(bytes / 1024 ** 2)} MB`;
 }
 
+/** Renders the hover tooltip content for a pie slice. */
 function CustomTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;
   const { payload: item, value } = payload[0];
   return (
     <div className="donut-tooltip">
-      <Text className="donut-tooltip-line">
-        {item.type === "detector" ? item.detectorId : item.label}
+      <Text className="donut-tooltip-line" fw={600}>
+        {item.label}
       </Text>
-      {item.type === "detector" && item.name && item.name !== item.detectorId && (
-        <Text className="donut-tooltip-line">{item.name}</Text>
-      )}
       <Text className="donut-tooltip-line">
         VRAM Usage: {formatBytes(value)} ({item.pct.toFixed(1)}%)
       </Text>
+      {item.type === "detector" && item.detectorId && (
+        <Text className="donut-tooltip-line">{item.detectorId}</Text>
+      )}
     </div>
   );
 }
 
+/** Renders an enlarged sector for the active slice. */
 function ActiveSlice(props) {
   return (
     <Sector
       {...props}
-      outerRadius={(props.outerRadius || DONUT_OUTER_RADIUS) + 24}
+      outerRadius={(props.outerRadius ?? DONUT_OUTER_RADIUS) * 1.08}
     />
   );
 }
 
+/** Renders an interactive donut chart with hover callbacks. */
 export default function DonutChart({
   slices,
   centerText,
   activeSliceKey,
   onSliceHover,
+  onSliceClick,
 }) {
   const data = slices.map((s) => ({ ...s, name: s.label, value: s.bytes, fill: s.color }));
 
@@ -76,6 +81,7 @@ export default function DonutChart({
             shape={renderSlice}
             onMouseEnter={(_, index) => onSliceHover?.(data[index]?.sliceKey ?? null)}
             onMouseLeave={() => onSliceHover?.(null)}
+            onClick={(_, index) => onSliceClick?.(data[index] ?? null)}
           >
             {data.map((entry, i) => (
               <Cell key={entry.sliceKey} fill={entry.fill} />

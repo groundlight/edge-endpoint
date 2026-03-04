@@ -81,3 +81,10 @@ body {
   white-space: nowrap;
   line-height: 1.2;
 }
+
+.recharts-sector:focus,
+.recharts-sector:focus-visible,
+.recharts-pie-sector:focus,
+.recharts-pie-sector:focus-visible {
+  outline: none;
+}
