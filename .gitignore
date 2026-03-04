@@ -156,3 +156,4 @@ load-testing/load_tests/
 
 # React status page build output (built during Docker image build)
 app/status_monitor/react-build/
+status-page-react/node_modules/
