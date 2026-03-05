@@ -107,7 +107,7 @@ spec:
             port: 8000
           initialDelaySeconds: 10
           periodSeconds: 10
-          failureThreshold: 60  # Wait for up to 10 min
+          failureThreshold: 120  # Wait for up to 20 min
         readinessProbe:
           httpGet:
             path: /health/ready  # Checks if the server is ready to serve requests
