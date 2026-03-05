@@ -6,3 +6,5 @@
 Dockerfile
 test_coverage_reports/
 deploy/balena-k3s/build
+app/status_monitor/frontend/node_modules
+app/status_monitor/frontend/.vite

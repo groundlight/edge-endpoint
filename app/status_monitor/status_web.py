@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.metrics.gpu_metrics import GpuMetricsCollector
 from app.metrics.iq_activity import clear_old_activity_files
 from app.metrics.metric_reporting import MetricsReporter
 
@@ -14,10 +15,12 @@ ONE_HOUR_IN_SECONDS = 3600
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
 STATIC_DIR = Path(__file__).parent / "static"
+REACT_BUILD_DIR = Path(__file__).parent / "react-build"
+
 app = FastAPI(title="status-monitor")
-app.mount("/status/static", StaticFiles(directory=STATIC_DIR), name="status-static")
 scheduler = AsyncIOScheduler()
 reporter = MetricsReporter()
+gpu_collector = GpuMetricsCollector()
 
 
 @app.on_event("startup")
@@ -43,10 +46,22 @@ async def get_metrics():
     return reporter.metrics_payload()
 
 
+@app.get("/status/gpu.json")
+def get_gpu():
+    """Return per-detector GPU usage as JSON."""
+    return gpu_collector.collect()
+
+
 @app.get("/status")
 async def get_status():
-    """Serve the status monitoring HTML page."""
-    html_path = Path(__file__).parent / "static" / "status.html"
+    """Serve the React status page."""
+    html_path = REACT_BUILD_DIR / "index.html"
     with open(html_path, "r") as f:
         html_content = f.read()
     return HTMLResponse(content=html_content)
+
+
+# Favicon and logo served from the original static dir
+app.mount("/status/static", StaticFiles(directory=STATIC_DIR), name="status-static")
+# Vite-built React assets (JS, CSS bundles)
+app.mount("/status", StaticFiles(directory=REACT_BUILD_DIR), name="status-react")

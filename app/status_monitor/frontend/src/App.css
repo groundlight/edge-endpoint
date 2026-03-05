@@ -1,0 +1,94 @@
+@import url("https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;700&display=swap");
+
+:root {
+  --yellow: #fec62e;
+  --dark: #141217;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #f2f5f6;
+}
+
+.app-header {
+  background-color: var(--dark);
+  padding: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.app-header .header-logo {
+  height: 34px;
+  width: auto;
+}
+
+/* Sortable column header */
+.sortable-header {
+  display: inline-flex;
+  align-items: center;
+  color: inherit;
+  font-weight: inherit;
+  font-size: inherit;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border-radius: 4px;
+}
+
+.sortable-header:hover .sort-icon {
+  opacity: 1;
+}
+
+.sort-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  font-size: 0.95em;
+  line-height: 1;
+  opacity: 0.5;
+  transition: opacity 150ms;
+}
+
+/* Edge config sub-table */
+.edge-config-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.edge-config-table td {
+  border: 1px solid #e5e5e5;
+  padding: 4px 6px;
+  font-size: 0.8em;
+}
+
+/* Recharts donut tooltip -- z-index ensures it renders above the center label */
+.recharts-tooltip-wrapper {
+  z-index: 10 !important;
+}
+
+.donut-tooltip {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.85em;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.donut-tooltip-line {
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.recharts-sector:focus,
+.recharts-sector:focus-visible,
+.recharts-pie-sector:focus,
+.recharts-pie-sector:focus-visible {
+  outline: none;
+}

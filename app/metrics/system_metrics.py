@@ -318,6 +318,8 @@ def get_detector_details() -> str:
         status, status_detail = _derive_detector_status(dep, det_pods)
 
         details: dict = {"status": status}
+        if dep.metadata.creation_timestamp:
+            details["deploy_time"] = dep.metadata.creation_timestamp.isoformat()
         if status_detail:
             details["status_detail"] = status_detail
 

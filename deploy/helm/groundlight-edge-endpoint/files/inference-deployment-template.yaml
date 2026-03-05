@@ -33,6 +33,7 @@ spec:
         app: inference-server
         instance: placeholder-inference-instance-name
     spec:
+      hostPID: true  # Allows pynvml to match this process's PID against nvidia-smi PIDs for accurate per-pod VRAM reporting
 {{ if eq .Values.inferenceFlavor "gpu" }}
       runtimeClassName: nvidia  # Required for GPU use in k3s
 {{- end }}

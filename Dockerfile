@@ -8,6 +8,16 @@ ARG APP_ROOT="/groundlight-edge"
 ARG POETRY_HOME="/opt/poetry"
 ARG POETRY_VERSION=1.5.1
 
+######################
+# React Build Stage
+######################
+FROM node:20-slim AS react-build-stage
+WORKDIR /react-app
+COPY app/status_monitor/frontend/package.json app/status_monitor/frontend/package-lock.json ./
+RUN npm ci
+COPY app/status_monitor/frontend/ ./
+RUN npm run build
+
 #############
 # Build Stage
 #############
@@ -100,6 +110,9 @@ WORKDIR ${APP_ROOT}
 
 # Copy the remaining files
 COPY /app ${APP_ROOT}/app/
+
+# Copy built React status page assets
+COPY --from=react-build-stage /react-app/dist ${APP_ROOT}/app/status_monitor/react-build
 COPY /deploy ${APP_ROOT}/deploy/
 COPY /licenses ${APP_ROOT}/licenses/
 COPY /README.md ${APP_ROOT}/README.md
