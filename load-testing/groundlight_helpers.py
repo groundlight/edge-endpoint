@@ -2,10 +2,10 @@ from groundlight import ExperimentalApi, Detector, ApiException, ImageQuery
 
 from groundlight_openapi_client.exceptions import ApiTypeError
 
+import hashlib
 import os
 import requests
 import json
-import yaml
 import time
 from tqdm import trange
 
@@ -18,6 +18,11 @@ CLOUD_ENDPOINT_PROD = 'https://api.groundlight.ai/device-api'
 # unless an inference pod doesn't exist for the detector, in which case we have no choice but to escalate
 IQ_KWARGS_FOR_NO_ESCALATION = {'wait': 0.0, 'human_review': 'NEVER', 'confidence_threshold': 0.0}
 IQ_KWARGS_NON_HUMAN_CLOUD_ESCALATION = {'wait': 0.0, 'human_review': 'NEVER', 'confidence_threshold': 1.0}
+
+
+def hash_pipeline_config(pipeline_config: str) -> str:
+    """Return a short deterministic hash of the pipeline config string."""
+    return hashlib.sha256(pipeline_config.encode()).hexdigest()[:12]
 
 
 class APIError(Exception):
@@ -149,7 +154,8 @@ def get_or_create_count_detector(
     class_name: str,
     max_count: int, 
     group_name: str,
-    ) -> list[Detector]:
+    pipeline_config: str | None = None,
+    ) -> Detector:
     """Create a counting detector or return an existing one with the same name if it already exists."""
 
     query_text = f"Count all the {class_name}s"
@@ -160,6 +166,7 @@ def get_or_create_count_detector(
             class_name,
             max_count=max_count,
             group_name=group_name,
+            pipeline_config=pipeline_config,
         )
     except ApiException as e:
         if e.status != 400 or "unique_undeleted_name_per_set" not in getattr(e, "body", ""):
@@ -205,12 +212,9 @@ def wait_for_ready_inference_pod(
     detector: Detector,
     image_width: int, 
     image_height: int,
-    pipeline_config: str,
     timeout_sec: float,
     ) -> None:
-    """
-    Waits until an inference pod is ready and using the correct pipeline_config.
-    """
+    """Waits until an inference pod is ready and returning edge answers."""
 
     # Submit an image query to trigger pod creation
     image, _, _ = imgh.generate_random_image(gl, detector, image_width, image_height)
@@ -219,34 +223,23 @@ def wait_for_ready_inference_pod(
         image, 
         **IQ_KWARGS_FOR_NO_ESCALATION) 
 
-    # Poll until correct pipeline_config is used
     poll_start = time.time()
     while True:
         elapsed_time = time.time() - poll_start
         if elapsed_time > timeout_sec:
             raise RuntimeError(
-                f"Failed to roll out inference pod for {detector.id} with pipeline_config='{pipeline_config}' after {timeout_sec:.2f} seconds."
+                f"Inference pod for {detector.id} not ready after {timeout_sec:.2f} seconds."
             )
 
-        # Check if correct pipeline is used
-        detector_edge_metrics = get_detector_edge_metrics(gl, detector.id)
-        if detector_edge_metrics is not None:
-            edge_pipeline_config = detector_edge_metrics.get('pipeline_config')
+        image, _, _ = imgh.generate_random_image(gl, detector, image_width, image_height)
+        iq = gl.submit_image_query(
+            detector, 
+            image, 
+            **IQ_KWARGS_FOR_NO_ESCALATION) 
 
-            if yaml.safe_load(pipeline_config or "") == yaml.safe_load(edge_pipeline_config or ""):
+        if iq.result.from_edge:
+            return
 
-                # Correct pipeline is used and the pod is ready
-                # Double check that the pod is returning edge answers
-                image, _, _ = imgh.generate_random_image(gl, detector, image_width, image_height)
-                iq = gl.submit_image_query(
-                    detector, 
-                    image, 
-                    **IQ_KWARGS_FOR_NO_ESCALATION) 
-
-                if iq.result.from_edge:
-                    return # We got an edge answer and the pipeline_config is correct
-
-        # Inference pod is not yet ready. Wait and retry
         time.sleep(5)
 
 def detector_is_sufficiently_trained(
