@@ -220,6 +220,45 @@ class InferenceDeploymentManager:
         )
         return True
 
+    def delete_inference_deployment(self, detector_id: str, is_oodd: bool = False) -> None:
+        """Delete the K8s Deployment and Service for a detector's inference pod."""
+        deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd)
+        service_name = get_edge_inference_service_name(detector_id, is_oodd)
+
+        try:
+            self._app_kube_client.delete_namespaced_deployment(name=deployment_name, namespace=self._target_namespace)
+            logger.info(f"Deleted deployment {deployment_name}")
+        except kube_client.rest.ApiException as e:
+            if e.status == 404:
+                logger.debug(f"Deployment {deployment_name} not found, skipping deletion")
+            else:
+                raise
+
+        try:
+            self._core_kube_client.delete_namespaced_service(name=service_name, namespace=self._target_namespace)
+            logger.info(f"Deleted service {service_name}")
+        except kube_client.rest.ApiException as e:
+            if e.status == 404:
+                logger.debug(f"Service {service_name} not found, skipping deletion")
+            else:
+                raise
+
+    def is_detector_fully_removed(self, detector_id: str, is_oodd: bool = False) -> bool:
+        """Check that no pods remain for the given detector deployment (including Terminating)."""
+        deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd)
+        deployment = self.get_inference_deployment(deployment_name)
+        if deployment is not None:
+            return False
+
+        label_str = f"app={deployment_name}"
+        pod_list = self._core_kube_client.list_namespaced_pod(
+            namespace=self._target_namespace, label_selector=label_str
+        )
+        if pod_list.items:
+            logger.debug(f"{len(pod_list.items)} pod(s) still exist for {deployment_name}")
+            return False
+        return True
+
     def is_inference_deployment_rollout_complete(self, deployment_name: str) -> bool:
         """
         Checks if the rollout of the inference deployment for a given deployment name is complete.

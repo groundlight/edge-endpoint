@@ -118,6 +118,16 @@ class DatabaseManager:
             query_results = session.execute(query)
             return query_results.scalars().all()
 
+    def delete_inference_deployment_record(self, model_name: str) -> None:
+        """Delete a single inference deployment record by model_name."""
+        with self.session_maker() as session:
+            query = select(InferenceDeployment).filter_by(model_name=model_name)
+            record = session.execute(query).scalar_one_or_none()
+            if record is not None:
+                session.delete(record)
+                session.commit()
+                logger.info(f"Deleted inference deployment record for {model_name}")
+
     def create_tables(self) -> None:
         """Create the database tables, if they don't already exist."""
         with self._engine.begin() as connection:

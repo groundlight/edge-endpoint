@@ -16,6 +16,8 @@ from .edge_config_loader import get_detector_inference_configs, load_edge_config
 from .edge_inference import EdgeInferenceManager
 from .utils import TimestampedCache, safe_call_sdk
 
+DEPLOY_DETECTOR_LEVEL_INFERENCE = bool(int(os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", 0)))
+
 logger = logging.getLogger(__name__)
 
 MAX_SDK_INSTANCES_CACHE_SIZE = 1000
@@ -108,6 +110,12 @@ class AppState:
         self.db_manager = DatabaseManager()
         self.is_ready = False
         self.queue_writer = QueueWriter()
+
+        self.deployment_manager = None
+        if DEPLOY_DETECTOR_LEVEL_INFERENCE:
+            from .kubernetes_management import InferenceDeploymentManager
+
+            self.deployment_manager = InferenceDeploymentManager()
 
 
 def get_app_state(request: Request) -> AppState:
