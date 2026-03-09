@@ -40,6 +40,7 @@ RUN apt-get update && \
     bash \
     curl \
     nginx \
+    openssl \
     less \
     unzip \
     sqlite3 && \

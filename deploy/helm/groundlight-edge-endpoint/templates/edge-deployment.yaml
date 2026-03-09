@@ -20,11 +20,17 @@ metadata:
 spec:
   selector:
     app: edge-logic-server
-  ports:
+    ports:
   - protocol: TCP
     # Service port for NGINX
     port: 30101
+    name: http
     nodePort: {{ .Values.edgeEndpointPort }}
+  - protocol: TCP
+    # HTTPS port for NGINX
+    port: 443
+    name: https
+    nodePort: {{ .Values.edgeEndpointHttpsPort }}
   type: NodePort
 ---
 apiVersion: apps/v1
@@ -51,6 +57,12 @@ spec:
       # from within the pod. See templates/service_account.yaml for more details
       serviceAccountName: edge-endpoint-service-account
       initContainers:
+      - name: generate-tls-cert
+        image: *edgeEndpointImage
+        volumeMounts:
+        - name: nginx-certs
+          mountPath: /etc/nginx/certs
+        command: ["/bin/bash", "/groundlight-edge/app/bin/generate-tls-cert.sh"]
       - name: database-prep
         image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
@@ -71,10 +83,15 @@ spec:
         command: ["/bin/bash", "-c", "./app/bin/launch-nginx.sh"]
         ports:
         - containerPort: 30101
+          name: http
+        - containerPort: 443
+          name: https
         volumeMounts:
         - name: nginx-config-volume
           mountPath: /opt/nginx/nginx.conf
           subPath: nginx.conf
+        - name: nginx-certs
+          mountPath: /etc/nginx/certs
         startupProbe:
           httpGet:
             path: /health/live  # Checks if the server is up
@@ -244,6 +261,8 @@ spec:
       - name: registry-credentials
 
       volumes:
+      - name: nginx-certs
+        emptyDir: {}
       - name: edge-config-volume
         configMap:
           name: edge-config
