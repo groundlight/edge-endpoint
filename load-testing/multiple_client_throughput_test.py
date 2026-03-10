@@ -62,17 +62,27 @@ def _create_runtime_directory() -> tuple[str, str]:
 
 
 def _provision_detector(
-    gl: ExperimentalApi, gl_cloud: ExperimentalApi, detector_mode: str, image_width: int, image_height: int
+    gl: ExperimentalApi,
+    gl_cloud: ExperimentalApi,
+    detector_mode: str,
+    image_width: int,
+    image_height: int,
+    pipeline_config: str | None = None,
 ):
     TRAINING_TIMEOUT_SEC = 60 * 20
     INFERENCE_POD_READY_TIMEOUT_SEC = 60 * 10
 
     detector_name = f"Throughput Test {image_width} x {image_height} - {detector_mode}"
+    if pipeline_config is not None:
+        config_hash = glh.hash_pipeline_config(pipeline_config)
+        detector_name += f" - {config_hash}"
+
     if detector_mode == "BINARY":
         detector = gl.get_or_create_detector(
             name=detector_name,
             query="Is the image background black?",
             group_name=DETECTOR_GROUP_NAME,
+            pipeline_config=pipeline_config,
         )
         generate_image = imgh.generate_random_binary_image
         generate_image_kwargs = {
@@ -89,6 +99,7 @@ def _provision_detector(
             class_name=class_name,
             max_count=max_count,
             group_name=DETECTOR_GROUP_NAME,
+            pipeline_config=pipeline_config,
         )
         generate_image = imgh.generate_random_count_image
         generate_image_kwargs = {
@@ -101,8 +112,8 @@ def _provision_detector(
     else:
         raise ValueError(f"Detector mode {detector_mode} not recognized.")
 
-    pipeline_configs = glh.get_detector_pipeline_configs(gl, detector.id)
-    latest_edge_pipeline_config_in_cloud = pipeline_configs.get("pipeline_config")
+    if pipeline_config is not None:
+        glh.assert_cloud_pipeline_matches_provided(gl, detector.id, pipeline_config)
 
     stats = glh.get_detector_evaluation(gl, detector.id)
     if not glh.detector_is_sufficiently_trained(stats, 0.6, 30):
@@ -111,7 +122,9 @@ def _provision_detector(
 
     print(f'Waiting for inference pod to be ready for {detector.id}...')
     glh.wait_for_ready_inference_pod(
-        gl, detector, image_width, image_height, latest_edge_pipeline_config_in_cloud, timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC
+        gl, detector, image_width, image_height,
+        timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC,
+        pipeline_config=pipeline_config,
     )
     print(f'Inference pod ready for {detector.id}.')
 
@@ -252,12 +265,13 @@ def incremental_client_ramp_up(  # noqa: PLR0913
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Load test an endpoint by submitting generated images.")
     parser.add_argument("detector_mode", choices=SUPPORTED_DETECTOR_MODES, help="Detector mode to test.")
-    parser.add_argument("--max-clients", type=int, default=10, help="Number of processes to ramp up to.")
+    parser.add_argument("--max-clients", type=int, default=20, help="Number of processes to ramp up to.")
     parser.add_argument("--step-size", type=int, default=1, help="Number of clients to add at each step.")
-    parser.add_argument("--time-between-ramp", type=int, default=30, help="Seconds to run each ramp step.")
-    parser.add_argument("--requests-per-second", type=int, default=10, help="Per-client request rate.")
+    parser.add_argument("--time-between-ramp", type=int, default=10, help="Seconds to run each ramp step.")
+    parser.add_argument("--requests-per-second", type=int, default=5, help="Per-client request rate.")
     parser.add_argument("--image-width", type=int, default=640)
     parser.add_argument("--image-height", type=int, default=480)
+    parser.add_argument("--pipeline-config", type=str, default=None, help="Pipeline configuration name.")
     args = parser.parse_args()
 
     gl = ExperimentalApi()
@@ -265,7 +279,7 @@ if __name__ == "__main__":
     gl_cloud = ExperimentalApi(endpoint=glh.CLOUD_ENDPOINT_PROD)
 
     detector, generate_image, generate_image_kwargs = _provision_detector(
-        gl, gl_cloud, args.detector_mode, args.image_width, args.image_height
+        gl, gl_cloud, args.detector_mode, args.image_width, args.image_height, pipeline_config=args.pipeline_config
     )
 
     runtime_dir, log_file = _create_runtime_directory()

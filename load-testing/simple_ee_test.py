@@ -5,6 +5,7 @@ ask_async, etc.
 
 Used for testing robustness to network changes.
 """
+import argparse
 from groundlight import ExperimentalApi
 
 import groundlight_helpers as glh
@@ -23,21 +24,27 @@ TRAINING_TIMEOUT_SEC = 10 * 60
 
 INFERENCE_POD_READY_TIMEOUT_SEC = 60 * 10
 
-def main() -> None:
+def main(pipeline_config: str | None = None) -> None:
     gl = ExperimentalApi()
     glh.error_if_endpoint_is_cloud(gl)
 
+    detector_name = "Simple EE Test - Count"
+    if pipeline_config is not None:
+        detector_name += f" - {glh.hash_pipeline_config(pipeline_config)}"
     detector = glh.get_or_create_count_detector(
         gl,
-        name="Simple EE Test - Count",
+        name=detector_name,
         class_name=CLASS_NAME,
         max_count=MAX_COUNT,
         group_name=DETECTOR_GROUP_NAME,
+        pipeline_config=pipeline_config,
     )
 
-    pipeline_configs = glh.get_detector_pipeline_configs(gl, detector.id)
-    latest_edge_pipeline_config_in_cloud = pipeline_configs.get('pipeline_config')
-    print(f"Found the following pipeline config as the most recently trained Edge pipeline config in the cloud. We will use this for testing: {latest_edge_pipeline_config_in_cloud}")
+    cloud_pipeline_config = glh.get_detector_pipeline_configs(gl, detector.id).get('pipeline_config')
+    print(f"Cloud pipeline config for {detector.id}: {cloud_pipeline_config}")
+
+    if pipeline_config is not None:
+        glh.assert_cloud_pipeline_matches_provided(gl, detector.id, pipeline_config)
 
     # Check if the detector has trained. If not, prime it with some labels
     stats = glh.get_detector_evaluation(gl, detector.id)
@@ -60,8 +67,12 @@ def main() -> None:
         print(f'{detector.id} is now sufficiently trained. Evaluation results: {stats}')
 
     # Wait for the inference pod to become available
-    print(f"Waiting up to {INFERENCE_POD_READY_TIMEOUT_SEC} seconds for inference pod to be ready for {detector.id} with pipeline_config='{latest_edge_pipeline_config_in_cloud}'...")
-    glh.wait_for_ready_inference_pod(gl, detector, IMAGE_WIDTH, IMAGE_HEIGHT, latest_edge_pipeline_config_in_cloud, timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC)
+    print(f"Waiting up to {INFERENCE_POD_READY_TIMEOUT_SEC} seconds for inference pod to be ready for {detector.id}...")
+    glh.wait_for_ready_inference_pod(
+        gl, detector, IMAGE_WIDTH, IMAGE_HEIGHT,
+        timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC,
+        pipeline_config=pipeline_config,
+    )
     edge_pipeline_config = glh.get_detector_edge_metrics(gl, detector.id).get('pipeline_config')
     print(f"Inference pod is ready for {detector.id} with pipeline_config='{edge_pipeline_config}'")
 
@@ -86,6 +97,9 @@ def main() -> None:
     print("Completed simple Edge Endpoint test successfully.")
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Simple Edge Endpoint test.")
+    parser.add_argument("--pipeline-config", type=str, default=None, help="Pipeline configuration name.")
+    args = parser.parse_args()
+    main(pipeline_config=args.pipeline_config)
 
 
