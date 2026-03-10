@@ -90,6 +90,12 @@ jobs:
             groundlight-edge)
           echo "container_id=$container_id" >> $GITHUB_OUTPUT
 
+      - name: Verify HTTPS endpoint
+        run: |
+          # Wait a few seconds for nginx to start and generate certs
+          sleep 5
+          curl -vk https://localhost:30143/health/live
+
       - name: Run Unit Tests (that do require docker)
         run: |
           GROUNDLIGHT_ENDPOINT=http://localhost:30101
@@ -145,6 +151,12 @@ jobs:
             -d -p 30101:30101 -p 30143:443 \
             groundlight-edge)
           echo "container_id=$container_id" >> $GITHUB_OUTPUT
+
+      - name: Verify HTTPS endpoint
+        run: |
+          # Wait a few seconds for nginx to start and generate certs
+          sleep 5
+          curl -vk https://localhost:30143/health/live
 
       - name: Install poetry
         uses: snok/install-poetry@v1
@@ -457,6 +469,11 @@ jobs:
           export GROUNDLIGHT_ENDPOINT=http://${EEUT_IP}:30101
           uv run groundlight whoami
           uv run groundlight list-detectors
+
+      - name: Verify HTTPS through EE
+        run: |
+          EEUT_IP=$(uv run pulumi stack output eeut_private_ip)
+          curl -vk https://${EEUT_IP}:30143/health/live
 
       - name: Thank the worker and shut down
         # if: always()

@@ -26,7 +26,7 @@ Any application written with the [Groundlight SDK](https://pypi.org/project/grou
 The Edge Endpoint supports both unencrypted HTTP and encrypted HTTPS:
 
 *   **HTTP (Recommended for dev)**: `http://localhost:30101`
-*   **HTTPS (Self-signed)**: `https://localhost:30143` (Requires `export DISABLE_TLS_VARIABLE_NAME=1`)
+*   **HTTPS (Self-signed)**: `https://localhost:30143` (Requires `export DISABLE_TLS_VERIFY=1`)
 
 To find the correct port, run `kubectl get services`:
 ```

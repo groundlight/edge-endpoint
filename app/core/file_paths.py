@@ -9,7 +9,7 @@ KUBERNETES_NAMESPACE_PATH = "/etc/groundlight/kubernetes-namespace/namespace"
 
 # Path to the database file.
 # This must also match the path used in the PersistentVolumeClaim definition for the database.
-DATABASE_FILEPATH = os.environ.get("EDGE_DATABASE_FILEPATH", "/opt/groundlight/edge/sqlite/sqlite.db")
+DATABASE_FILEPATH = "/opt/groundlight/edge/sqlite/sqlite.db"
 
 # Path to the model repository.
 MODEL_REPOSITORY_PATH = "/opt/groundlight/edge/serving/model-repo"

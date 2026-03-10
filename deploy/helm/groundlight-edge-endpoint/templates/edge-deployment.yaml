@@ -20,17 +20,17 @@ metadata:
 spec:
   selector:
     app: edge-logic-server
-    ports:
-  - protocol: TCP
-    # Service port for NGINX
-    port: 30101
-    name: http
-    nodePort: {{ .Values.edgeEndpointPort }}
-  - protocol: TCP
-    # HTTPS port for NGINX
-    port: 443
-    name: https
-    nodePort: {{ .Values.edgeEndpointHttpsPort }}
+  ports:
+    - protocol: TCP
+      # Service port for NGINX
+      port: 30101
+      name: http
+      nodePort: {{ .Values.edgeEndpointPort }}
+    - protocol: TCP
+      # HTTPS port for NGINX
+      port: 443
+      name: https
+      nodePort: {{ .Values.edgeEndpointHttpsPort }}
   type: NodePort
 ---
 apiVersion: apps/v1
@@ -58,13 +58,13 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       initContainers:
       - name: generate-tls-cert
-        image: *edgeEndpointImage
+        image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
         volumeMounts:
         - name: nginx-certs
           mountPath: /etc/nginx/certs
         command: ["/bin/bash", "/groundlight-edge/app/bin/generate-tls-cert.sh"]
       - name: database-prep
-        image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
+        image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
         volumeMounts:
         - name: edge-endpoint-persistent-volume
