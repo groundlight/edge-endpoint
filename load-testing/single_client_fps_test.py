@@ -36,10 +36,11 @@ def parse_arguments():
         type=int,
         default=480,
     )
+    parser.add_argument("--pipeline-config", type=str, default=None, help="Pipeline configuration name.")
 
     return parser.parse_args()
 
-def main(detector_mode: str, image_width: int, image_height: int) -> None:
+def main(detector_mode: str, image_width: int, image_height: int, pipeline_config: str | None = None) -> None:
     TRAINING_TIMEOUT_SEC = 60 * 20
     INFERENCE_POD_READY_TIMEOUT_SEC = 60 * 10
 
@@ -58,11 +59,14 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
     gl_cloud = ExperimentalApi(endpoint=glh.CLOUD_ENDPOINT_PROD)
 
     detector_name = f'Single Client FPS Test {image_width} x {image_height} - {detector_mode}'
+    if pipeline_config is not None:
+        detector_name += f" - {glh.hash_pipeline_config(pipeline_config)}"
     if detector_mode == "BINARY":
         detector = gl.get_or_create_detector(
             name=detector_name,
             query='Is the image background black?',
-            group_name=DETECTOR_GROUP_NAME
+            group_name=DETECTOR_GROUP_NAME,
+            pipeline_config=pipeline_config,
         )
         generate_image = imgh.generate_random_binary_image
         generate_image_kwargs = {
@@ -78,7 +82,8 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
             name=detector_name,
             class_name=class_name,
             max_count=max_count,
-            group_name=DETECTOR_GROUP_NAME
+            group_name=DETECTOR_GROUP_NAME,
+            pipeline_config=pipeline_config,
         )
         generate_image = imgh.generate_random_count_image
         generate_image_kwargs = {
@@ -91,11 +96,11 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
     else:
         raise ValueError(f'Detector mode {detector_mode} not recognized.')
 
-    # Get the pipeline config and log it
-    pipeline_configs = glh.get_detector_pipeline_configs(gl, detector.id)
-    latest_edge_pipeline_config_in_cloud = pipeline_configs.get('pipeline_config')
+    cloud_pipeline_config = glh.get_detector_pipeline_configs(gl, detector.id).get('pipeline_config')
+    print(f"Cloud pipeline config for {detector.id}: {cloud_pipeline_config}")
 
-    print(f"Found the following pipeline config as the most recently trained Edge pipeline config in the cloud. We will use this for testing: {latest_edge_pipeline_config_in_cloud}")
+    if pipeline_config is not None:
+        glh.assert_cloud_pipeline_matches_provided(gl, detector.id, pipeline_config)
     
     # Check if the detector has trained. If not, prime it with some labels
     stats = glh.get_detector_evaluation(gl, detector.id)
@@ -119,7 +124,11 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
 
     # Wait for the inference pod to become available
     print(f"Waiting up to {INFERENCE_POD_READY_TIMEOUT_SEC} seconds for inference pod to be ready for {detector.id}...")
-    glh.wait_for_ready_inference_pod(gl, detector, image_width, image_height, timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC)
+    glh.wait_for_ready_inference_pod(
+        gl, detector, image_width, image_height,
+        timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC,
+        pipeline_config=pipeline_config,
+    )
     edge_pipeline_config = glh.get_detector_edge_metrics(gl, detector.id).get('pipeline_config')
     print(f"Inference pod is ready for {detector.id} with pipeline_config='{edge_pipeline_config}'")
 
@@ -187,4 +196,4 @@ def main(detector_mode: str, image_width: int, image_height: int) -> None:
 
 if __name__ == "__main__":
     args = parse_arguments()
-    main(args.detector_mode, args.image_width, args.image_height)
+    main(args.detector_mode, args.image_width, args.image_height, pipeline_config=args.pipeline_config)

@@ -113,15 +113,7 @@ def _provision_detector(
         raise ValueError(f"Detector mode {detector_mode} not recognized.")
 
     if pipeline_config is not None:
-        cloud_configs = glh.get_detector_pipeline_configs(gl, detector.id)
-        cloud_pipeline_config = cloud_configs.get("pipeline_config")
-        if pipeline_config != cloud_pipeline_config:
-            raise RuntimeError(
-                f"The pipeline_config provided does not match the pipeline_config in the cloud for detector {detector.id}. "
-                f"This can happen if someone changed the detector's pipeline_config via Django admin after it was created.\n"
-                f"  Provided: {pipeline_config!r}\n"
-                f"  Cloud:    {cloud_pipeline_config!r}"
-            )
+        glh.assert_cloud_pipeline_matches_provided(gl, detector.id, pipeline_config)
 
     stats = glh.get_detector_evaluation(gl, detector.id)
     if not glh.detector_is_sufficiently_trained(stats, 0.6, 30):
@@ -130,7 +122,9 @@ def _provision_detector(
 
     print(f'Waiting for inference pod to be ready for {detector.id}...')
     glh.wait_for_ready_inference_pod(
-        gl, detector, image_width, image_height, timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC
+        gl, detector, image_width, image_height,
+        timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC,
+        pipeline_config=pipeline_config,
     )
     print(f'Inference pod ready for {detector.id}.')
 
@@ -271,10 +265,10 @@ def incremental_client_ramp_up(  # noqa: PLR0913
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Load test an endpoint by submitting generated images.")
     parser.add_argument("detector_mode", choices=SUPPORTED_DETECTOR_MODES, help="Detector mode to test.")
-    parser.add_argument("--max-clients", type=int, default=10, help="Number of processes to ramp up to.")
+    parser.add_argument("--max-clients", type=int, default=20, help="Number of processes to ramp up to.")
     parser.add_argument("--step-size", type=int, default=1, help="Number of clients to add at each step.")
-    parser.add_argument("--time-between-ramp", type=int, default=30, help="Seconds to run each ramp step.")
-    parser.add_argument("--requests-per-second", type=int, default=10, help="Per-client request rate.")
+    parser.add_argument("--time-between-ramp", type=int, default=10, help="Seconds to run each ramp step.")
+    parser.add_argument("--requests-per-second", type=int, default=5, help="Per-client request rate.")
     parser.add_argument("--image-width", type=int, default=640)
     parser.add_argument("--image-height", type=int, default=480)
     parser.add_argument("--pipeline-config", type=str, default=None, help="Pipeline configuration name.")
