@@ -25,7 +25,9 @@ def convert_escalation_info_to_str(escalation_info: EscalationInfo) -> str:
 class QueueWriter:
     """Handles writing escalation data and associated images to a file-based queue system."""
 
-    def __init__(self, base_dir: str = DEFAULT_QUEUE_BASE_DIR):
+    def __init__(self, base_dir: str | None = None):
+        if base_dir is None:
+            base_dir = os.environ.get("EDGE_QUEUE_BASE_DIR", DEFAULT_QUEUE_BASE_DIR)
         self.base_writing_dir = Path(base_dir, WRITING_DIR_SUFFIX)
         os.makedirs(self.base_writing_dir, exist_ok=True)  # Ensure base_writing_dir exists
         self.base_image_dir = Path(base_dir, IMAGE_DIR_SUFFIX)

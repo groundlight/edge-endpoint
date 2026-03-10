@@ -86,7 +86,7 @@ jobs:
           container_id=$(docker run \
             -e LOG_LEVEL=DEBUG \
             -e EDGE_CONFIG \
-            -d -p 30101:30101 \
+            -d -p 30101:30101 -p 30143:443 \
             groundlight-edge)
           echo "container_id=$container_id" >> $GITHUB_OUTPUT
 
@@ -142,7 +142,7 @@ jobs:
           container_id=$(docker run \
             -e LOG_LEVEL=DEBUG \
             -e EDGE_CONFIG \
-            -d -p 30101:30101 \
+            -d -p 30101:30101 -p 30143:443 \
             groundlight-edge)
           echo "container_id=$container_id" >> $GITHUB_OUTPUT
 

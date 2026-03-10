@@ -13,7 +13,7 @@
 # > docker run --name groundlight-edge \
 #      -e LOG_LEVEL=DEBUG \
 #      -e EDGE_CONFIG \
-#      --rm -it -p 30101:30101 edge-endpoint
+#      --rm -it -p 30101:30101 -p 30143:443 edge-endpoint
 
 # Then in another terminal, run the tests:
 # > make test-with-docker
@@ -38,5 +38,12 @@ detectors:
     edge_inference_config: 'disabled'
 EOM
 )
+
+# Use a temporary directory for the queue and database to avoid PermissionError during tests
+export EDGE_QUEUE_BASE_DIR="/tmp/groundlight/queue"
+export EDGE_DATABASE_FILEPATH="/tmp/groundlight/edge/sqlite/sqlite.db"
+export GROUNDLIGHT_API_TOKEN="api_dummy_token"
+mkdir -p "$EDGE_QUEUE_BASE_DIR"
+mkdir -p "$(dirname "$EDGE_DATABASE_FILEPATH")"
 
 export EDGE_CONFIG
