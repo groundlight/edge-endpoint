@@ -40,6 +40,7 @@ RUN apt-get update && \
     bash \
     curl \
     nginx \
+    openssl \
     less \
     unzip \
     sqlite3 && \
@@ -129,4 +130,4 @@ RUN ln -sf /dev/stdout /var/log/nginx/access.log && \
 CMD ["/bin/bash", "-c", "./app/bin/launch-edge-logic-server.sh"]
 
 # Document the exposed port, which is configured in nginx.conf
-EXPOSE ${NGINX_PORT} ${NGINX_PORT_OLD}
+EXPOSE ${NGINX_PORT} ${NGINX_PORT_OLD} 443

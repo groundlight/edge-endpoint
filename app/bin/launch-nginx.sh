@@ -9,4 +9,11 @@ echo "Using nameserver: $NAME_SERVER"
 
 sed "s/__NAME_SERVER__/$NAME_SERVER/" /opt/nginx/nginx.conf > /etc/nginx/nginx.conf
 
+# Note: In production Kubernetes, certificate generation is handled by an initContainer.
+# This check is here to support standalone Docker environments and CI.
+if [ ! -f /etc/nginx/certs/certificate.crt ]; then
+    echo "Generating self-signed TLS certificate..."
+    ./app/bin/generate-tls-cert.sh
+fi
+
 exec nginx -g "daemon off;"

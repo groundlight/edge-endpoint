@@ -82,6 +82,7 @@ cd "$(dirname "$0")"/../..
 
 export PERSISTENT_VOLUME_NAME=${PERSISTENT_VOLUME_NAME:-"edge-endpoint-pv"}
 export EDGE_ENDPOINT_PORT=${EDGE_ENDPOINT_PORT:-30101}
+export EDGE_ENDPOINT_HTTPS_PORT=${EDGE_ENDPOINT_HTTPS_PORT:-30143}
 
 # Wait for k3s to be fully ready
 echo "Waiting for k3s to be ready..."

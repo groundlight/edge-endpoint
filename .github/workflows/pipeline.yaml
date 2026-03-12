@@ -86,9 +86,15 @@ jobs:
           container_id=$(docker run \
             -e LOG_LEVEL=DEBUG \
             -e EDGE_CONFIG \
-            -d -p 30101:30101 \
+            -d -p 30101:30101 -p 30143:443 \
             groundlight-edge)
           echo "container_id=$container_id" >> $GITHUB_OUTPUT
+
+      - name: Verify HTTPS endpoint
+        run: |
+          # Wait a few seconds for nginx to start and generate certs
+          sleep 5
+          curl -vk https://localhost:30143/health/live
 
       - name: Run Unit Tests (that do require docker)
         run: |
@@ -142,9 +148,15 @@ jobs:
           container_id=$(docker run \
             -e LOG_LEVEL=DEBUG \
             -e EDGE_CONFIG \
-            -d -p 30101:30101 \
+            -d -p 30101:30101 -p 30143:443 \
             groundlight-edge)
           echo "container_id=$container_id" >> $GITHUB_OUTPUT
+
+      - name: Verify HTTPS endpoint
+        run: |
+          # Wait a few seconds for nginx to start and generate certs
+          sleep 5
+          curl -vk https://localhost:30143/health/live
 
       - name: Install poetry
         uses: snok/install-poetry@v1

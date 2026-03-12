@@ -33,7 +33,7 @@ There may be additional network requirements based on the deployment methods, pl
 
 <img src="images/network-requirement-self-managed-separate-machine.excalidraw.png" alt="Self-Managed edge endpoint with separate client" width="800"/>
 
-For self managed edge servers where the client is not in the same machine as the edge endpoint, inbound port `30101` to the server is the default port for our SDK to communicate with the edge server.
+For self managed edge servers where the client is not in the same machine as the edge endpoint, inbound port `30101` (HTTP) and `30143` (HTTPS) to the server are the default ports for our SDK to communicate with the edge server.
 
 <img src="images/network-requirement-self-managed-all-in-one.excalidraw.png" alt="Self-Managed edge endpoint with client in the same machine" width="800"/>
 
