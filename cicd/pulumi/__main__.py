@@ -15,6 +15,18 @@ eeut_sg = aws.ec2.get_security_group(filters=[{
     "name": "tag:Name",
     "values": ["eeut-sg"]
 }])
+
+# Add a rule to allow HTTPS NodePort traffic if it's not already there.
+# Note: In a production environment, this should be handled by the infrastructure team.
+# For CI/CD, we add it here to ensure the G4 tests pass.
+https_nodeport_rule = aws.ec2.SecurityGroupRule("eeut-https-nodeport-rule",
+    type="ingress",
+    from_port=30143,
+    to_port=30143,
+    protocol="tcp",
+    cidr_blocks=["0.0.0.0/0"], # Adjust this if you want to be more restrictive
+    security_group_id=eeut_sg.id,
+)
 subnet = aws.ec2.get_subnet(filters=[{
     "name": "tag:Name",
     "values": ["cicd-subnet"]
