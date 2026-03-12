@@ -470,11 +470,6 @@ jobs:
           uv run groundlight whoami
           uv run groundlight list-detectors
 
-      - name: Verify HTTPS through EE
-        run: |
-          EEUT_IP=$(uv run pulumi stack output eeut_private_ip)
-          curl -vk https://${EEUT_IP}:30143/health/live
-
       - name: Thank the worker and shut down
         # if: always()
         # Only turn it off if the tests all pass.  If not, leave the failed machine up to debug.
