@@ -14,6 +14,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       "/status/metrics.json": EDGE_ENDPOINT,
+      "/status/resources.json": EDGE_ENDPOINT,
       "/status/gpu.json": EDGE_ENDPOINT,
       "/status/static/icon_gold_dark.svg": EDGE_ENDPOINT,
       "/status/static/favicon.ico": EDGE_ENDPOINT,
