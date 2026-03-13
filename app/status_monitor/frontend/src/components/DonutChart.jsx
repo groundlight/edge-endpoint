@@ -17,13 +17,14 @@ function formatBytes(bytes) {
 function CustomTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;
   const { payload: item, value } = payload[0];
+  const resourceLabel = item.resourceLabel || "VRAM";
   return (
     <div className="donut-tooltip">
       <Text className="donut-tooltip-line" fw={600}>
         {item.label}
       </Text>
       <Text className="donut-tooltip-line">
-        VRAM Usage: {formatBytes(value)} ({item.pct.toFixed(1)}%)
+        {resourceLabel}: {formatBytes(value)} ({item.pct.toFixed(1)}%)
       </Text>
       {item.type === "detector" && item.detectorId && (
         <Text className="donut-tooltip-line">{item.detectorId}</Text>

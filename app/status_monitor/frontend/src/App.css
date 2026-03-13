@@ -86,6 +86,15 @@ body {
   line-height: 1.2;
 }
 
+/* Side-by-side donut charts, wrapping to vertical on narrow viewports */
+.resource-donuts-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  justify-content: center;
+  align-items: flex-start;
+}
+
 .recharts-sector:focus,
 .recharts-sector:focus-visible,
 .recharts-pie-sector:focus,
