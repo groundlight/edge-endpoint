@@ -37,9 +37,46 @@ fi
 # Build the Docker image and import it into k3s
 echo "Building the Docker image..."
 ./deploy/bin/build-push-edge-endpoint-image.sh dev
-export IMAGE_TAG=${IMAGE_TAG:-$(./deploy/bin/git-tag-name.sh)}
+export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
 
 export INFERENCE_FLAVOR="CPU"
+
+EDGE_CONFIG=$(cat <<- EOM
+global_config:
+  refresh_rate: 60
+
+edge_inference_configs:
+  default:
+    enabled: true
+    always_return_edge_prediction: false
+    disable_cloud_escalation: false
+
+  edge_answers_with_escalation:
+    enabled: true
+    always_return_edge_prediction: true
+    disable_cloud_escalation: false
+    min_time_between_escalations: 2.0
+
+  no_cloud:
+    enabled: true
+    always_return_edge_prediction: true
+    disable_cloud_escalation: true
+
+  disabled:
+    enabled: false
+
+detectors:
+    - detector_id: "det_2raefZ74V0ojgbmM2UJzQCpFKyF"
+      edge_inference_config: "default"
+    - detector_id: "det_2rdUY6SJOBJtuW5oqD3ExL1DjFn"
+      edge_inference_config: "edge_answers_with_escalation"
+    - detector_id: "det_2rdUb0jljHCosfKGuTugVoo4eiY"
+      edge_inference_config: "no_cloud"
+    - detector_id: "det_2rdVBErF53NWjVjhVdIrb6QJbRT"
+      edge_inference_config: "disabled"
+EOM
+)
+export EDGE_CONFIG
 
 ./deploy/bin/setup-ee.sh
 
