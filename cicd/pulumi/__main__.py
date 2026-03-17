@@ -15,6 +15,7 @@ eeut_sg = aws.ec2.get_security_group(filters=[{
     "name": "tag:Name",
     "values": ["eeut-sg"]
 }])
+
 subnet = aws.ec2.get_subnet(filters=[{
     "name": "tag:Name",
     "values": ["cicd-subnet"]

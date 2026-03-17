@@ -17,7 +17,13 @@ spec:
     - protocol: TCP
       # Service port for NGINX
       port: 30101
+      name: http
       nodePort: ${EDGE_ENDPOINT_PORT}
+    - protocol: TCP
+      # HTTPS port for NGINX
+      port: 443
+      name: https
+      nodePort: ${EDGE_ENDPOINT_HTTPS_PORT}
   type: NodePort
 ---
 apiVersion: apps/v1
@@ -40,8 +46,14 @@ spec:
       # from within the pod. See deploy/k3s/service_account.yaml for more details
       serviceAccountName: edge-endpoint-service-account
       initContainers:
-        - name: database-prep
+        - name: generate-tls-cert
           image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${IMAGE_TAG}
+          volumeMounts:
+            - name: nginx-certs
+              mountPath: /etc/nginx/certs
+          command: ["/bin/bash", "/groundlight-edge/app/bin/generate-tls-cert.sh"]
+        - name: database-prep
+          image: *edgeEndpointImage
           imagePullPolicy: Always
           volumeMounts:
             - name: edge-endpoint-persistent-volume
@@ -56,6 +68,7 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 30101
+            - containerPort: 443
           env:
             - name: LOG_LEVEL
               value: "INFO"
@@ -69,6 +82,8 @@ spec:
             - name: DEPLOY_DETECTOR_LEVEL_INFERENCE
               value: "1"
           volumeMounts:
+            - name: nginx-certs
+              mountPath: /etc/nginx/certs
             - name: edge-config-volume
               mountPath: /etc/groundlight/edge-config
             - name: edge-endpoint-persistent-volume
@@ -184,6 +199,8 @@ spec:
         - name: registry-credentials
 
       volumes:
+        - name: nginx-certs
+          emptyDir: {}
         - name: edge-config-volume
           configMap:
             name: edge-config
