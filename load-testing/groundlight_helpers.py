@@ -162,7 +162,7 @@ def get_or_create_count_detector(
     class_name: str,
     max_count: int, 
     group_name: str,
-    pipeline_config: str | None = None,
+    edge_pipeline_config: str | None = None,
     ) -> Detector:
     """Create a counting detector or return an existing one with the same name if it already exists."""
 
@@ -174,7 +174,7 @@ def get_or_create_count_detector(
             class_name,
             max_count=max_count,
             group_name=group_name,
-            pipeline_config=pipeline_config,
+            edge_pipeline_config=edge_pipeline_config,
         )
     except ApiException as e:
         if e.status != 400 or "unique_undeleted_name_per_set" not in getattr(e, "body", ""):
@@ -297,12 +297,12 @@ def wait_for_ready_inference_pod(
     image_width: int,
     image_height: int,
     timeout_sec: float,
-    pipeline_config: str | None = None,
+    edge_pipeline_config: str | None = None,
 ) -> None:
     """Waits for an edge answer, then ensures the loaded pipeline matches (provided or cloud)."""
     wait_for_edge_answer(gl, detector, image_width, image_height, timeout_sec)
-    if pipeline_config is not None:
-        assert_loaded_pipeline_matches_provided(gl, detector.id, pipeline_config)
+    if edge_pipeline_config is not None:
+        assert_loaded_pipeline_matches_provided(gl, detector.id, edge_pipeline_config)
     else:
         wait_for_loaded_pipeline_to_match_cloud(gl, detector.id, timeout_sec=PIPELINE_LOADED_TIMEOUT_SEC)
 

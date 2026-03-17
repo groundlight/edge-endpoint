@@ -24,27 +24,27 @@ TRAINING_TIMEOUT_SEC = 10 * 60
 
 INFERENCE_POD_READY_TIMEOUT_SEC = 60 * 10
 
-def main(pipeline_config: str | None = None) -> None:
+def main(edge_pipeline_config: str | None = None) -> None:
     gl = ExperimentalApi()
     glh.error_if_endpoint_is_cloud(gl)
 
     detector_name = "Simple EE Test - Count"
-    if pipeline_config is not None:
-        detector_name += f" - {glh.hash_pipeline_config(pipeline_config)}"
+    if edge_pipeline_config is not None:
+        detector_name += f" - {glh.hash_pipeline_config(edge_pipeline_config)}"
     detector = glh.get_or_create_count_detector(
         gl,
         name=detector_name,
         class_name=CLASS_NAME,
         max_count=MAX_COUNT,
         group_name=DETECTOR_GROUP_NAME,
-        pipeline_config=pipeline_config,
+        edge_pipeline_config=edge_pipeline_config,
     )
 
     cloud_pipeline_config = glh.get_detector_pipeline_configs(gl, detector.id).get('pipeline_config')
     print(f"Cloud pipeline config for {detector.id}: {cloud_pipeline_config}")
 
-    if pipeline_config is not None:
-        glh.assert_cloud_pipeline_matches_provided(gl, detector.id, pipeline_config)
+    if edge_pipeline_config is not None:
+        glh.assert_cloud_pipeline_matches_provided(gl, detector.id, edge_pipeline_config)
 
     # Check if the detector has trained. If not, prime it with some labels
     stats = glh.get_detector_evaluation(gl, detector.id)
@@ -71,7 +71,7 @@ def main(pipeline_config: str | None = None) -> None:
     glh.wait_for_ready_inference_pod(
         gl, detector, IMAGE_WIDTH, IMAGE_HEIGHT,
         timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC,
-        pipeline_config=pipeline_config,
+        edge_pipeline_config=edge_pipeline_config,
     )
     edge_pipeline_config = glh.get_detector_edge_metrics(gl, detector.id).get('pipeline_config')
     print(f"Inference pod is ready for {detector.id} with pipeline_config='{edge_pipeline_config}'")
@@ -98,8 +98,8 @@ def main(pipeline_config: str | None = None) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Simple Edge Endpoint test.")
-    parser.add_argument("--pipeline-config", type=str, default=None, help="Pipeline configuration name.")
+    parser.add_argument("--edge-pipeline-config", type=str, default=None, help="Edge pipeline configuration name.")
     args = parser.parse_args()
-    main(pipeline_config=args.pipeline_config)
+    main(edge_pipeline_config=args.edge_pipeline_config)
 
 
