@@ -16,16 +16,10 @@ def load_edge_config() -> EdgeEndpointConfig:
     """
     yaml_config = os.environ.get("EDGE_CONFIG", "").strip()
     if yaml_config:
-        return EdgeEndpointConfig.from_yaml(yaml_config)
+        return EdgeEndpointConfig.from_yaml(yaml_str=yaml_config)
 
-    logger.warning("EDGE_CONFIG environment variable not set. Checking default locations.")
-
-    if os.path.exists(DEFAULT_EDGE_CONFIG_PATH):
-        logger.info(f"Loading edge config from {DEFAULT_EDGE_CONFIG_PATH}")
-        with open(DEFAULT_EDGE_CONFIG_PATH, "r") as f:
-            return EdgeEndpointConfig.from_yaml(f)
-
-    raise FileNotFoundError(f"Could not find edge config file in default location: {DEFAULT_EDGE_CONFIG_PATH}")
+    logger.info(f"EDGE_CONFIG environment variable not set. Checking default Edge Config path: {DEFAULT_EDGE_CONFIG_PATH}.")
+    return EdgeEndpointConfig.from_yaml(filename=DEFAULT_EDGE_CONFIG_PATH)
 
 
 def get_detector_inference_configs(
