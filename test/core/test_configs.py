@@ -2,7 +2,6 @@ import pytest
 from groundlight.edge import InferenceConfig
 
 
-
 def test_edge_inference_config_validation():
     InferenceConfig(
         name="test",
