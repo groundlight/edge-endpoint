@@ -170,11 +170,12 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             detector_id=detector_id, image_bytes=image_bytes, content_type=content_type, mode=detector_metadata.mode
         )
         ml_confidence = results["confidence"]
-        record_confidence_for_metrics(detector_id, ml_confidence)
+        class_index = results["label"]
+        record_confidence_for_metrics(detector_id, ml_confidence, class_index=class_index)
 
         is_confident_enough = ml_confidence >= confidence_threshold
         if not is_confident_enough:
-            record_activity_for_metrics(detector_id, activity_type="below_threshold_iqs")
+            record_activity_for_metrics(detector_id, activity_type="below_threshold_iqs", class_index=class_index)
 
         if return_edge_prediction or is_confident_enough:  # Return the edge prediction
             if return_edge_prediction:
@@ -236,7 +237,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                     logger.debug(
                         f"Escalating to cloud due to low confidence: {ml_confidence} < thresh={confidence_threshold}"
                     )
-                    record_activity_for_metrics(detector_id, activity_type="escalations")
+                    record_activity_for_metrics(detector_id, activity_type="escalations", class_index=class_index)
                     submit_iq_params = SubmitImageQueryParams(
                         patience_time=patience_time,
                         confidence_threshold=confidence_threshold,

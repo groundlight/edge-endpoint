@@ -22,10 +22,26 @@ Tracked per detector in `iq_activity.py`:
 | `below_threshold_iqs` | Queries where edge confidence was below the threshold (includes both escalated iqs and iqs that were candidates for escalation but were rate-limited) |
 | `confidence_histogram` | Distribution of confidence values across 5% buckets: [0-5), [5-10), ..., [95-100] |
 
+Per-class breakdowns are tracked for `escalations`, `below_threshold_iqs`, and `confidence_histogram`, keyed by the class index from the prediction (`results["label"]`).
+
 Reported fields per detector:
 - `hourly_total_<metric>` - count for the previous hour
 - `last_<metric>` - timestamp of most recent occurrence (singular form, e.g., `last_iq`)
-- `confidence_histogram` - versioned envelope: `{"version": 1, "bucket_width": 5, "counts": [c0, c1, ..., c19]}` where `counts[i]` is the count for bucket `[i*bucket_width, (i+1)*bucket_width)`. Version is bumped on any schema change (including bucket width changes).
+- `escalations_by_class` - dict mapping class index to escalation count
+- `below_threshold_iqs_by_class` - dict mapping class index to below-threshold count
+- `confidence_histogram` - versioned envelope with aggregate and per-class data:
+  ```json
+  {
+    "version": 2,
+    "bucket_width": 5,
+    "aggregate": {"counts": [c0, c1, ..., c19]},
+    "by_class": {
+      "0": {"counts": [c0, c1, ..., c19]},
+      "1": {"counts": [c0, c1, ..., c19]}
+    }
+  }
+  ```
+  `counts[i]` is the count for bucket `[i*bucket_width, (i+1)*bucket_width)`. Version is bumped on any schema change (including bucket width changes).
 
 ### Filesystem Storage
 
@@ -40,7 +56,10 @@ iqs_<pid>_YYYY-MM-DD_HH               # hourly counter files (per process)
 escalations_<pid>_YYYY-MM-DD_HH
 audits_<pid>_YYYY-MM-DD_HH
 below_threshold_iqs_<pid>_YYYY-MM-DD_HH
-confidence_v<version>_<bucket>_<pid>_YYYY-MM-DD_HH  # confidence histogram (e.g., confidence_v1_70-75_12345_2025-04-03_12)
+confidence_v<version>_<bucket>_<pid>_YYYY-MM-DD_HH
+confidence_v<version>_class_<index>_<bucket>_<pid>_YYYY-MM-DD_HH  # per-class counter files
+escalations_v<version>_class_<index>_<pid>_YYYY-MM-DD_HH
+below_threshold_iqs_v<version>_class_<index>_<pid>_YYYY-MM-DD_HH
 ```
 
 Hourly files older than 2 hours are automatically cleaned up.
