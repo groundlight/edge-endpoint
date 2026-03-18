@@ -18,28 +18,17 @@ From the root of `edge-endpoint`, run:
 ./deploy_balena.sh <my-fleet> cpu
 ```
 
-This will build and push two services to the edge devices in your chosen fleet:
-1. A `server` service running a [k3s server](https://docs.k3s.io/architecture) that acts as the k3s cluster node
-2. A `bastion` service that provides access to the k3s cluster via kubectl commands and contains a copy of this repo at `/app/edge-endpoint`
-
-Now, we have our k3s single-node cluster built and running, but we have not started our edge deployment. To do this,
-see the [Configuration](#Configuration) section below (specifically, you will need to set the `RUN_EDGE_ENDPOINT` variable).
-
 ### Deploying to an x86 device with an NVIDIA GPU
 Tested using an HP Victus Laptop with Intel Core i5 processor and NVIDIA GeForce RTX 3050 Laptop GPU.
 
 From the root of `edge-endpoint`, run:
 ```bash
-./deploy_balena.sh <my-fleet> gpu
+./deploy_balena.sh <my-fleet> gpu [balena_os_version]
 ```
 
-This will build and push three services to the edge devices in your chosen fleet:
-1. A `gpu` service that loads the compiled NVIDIA driver kernel module into the host OS, enabling GPU access for other services
-2. A `server` service running a [k3s server](https://docs.k3s.io/architecture) that acts as the k3s cluster node and installs the NVIDIA GPU operator for Kubernetes GPU support
-3. A `bastion` service that provides access to the k3s cluster via kubectl commands and contains a copy of this repo at `/app/edge-endpoint`
-
-Now, we have our k3s single-node cluster built and running, but we have not started our edge deployment. To do this,
-see the [Configuration](#Configuration) section below (specifically, you will need to set the `RUN_EDGE_ENDPOINT` variable).
+The optional `balena_os_version` argument must match the balenaOS version running on the device
+(defaults to `6.0.24%2Brev1`). This is needed to compile NVIDIA kernel modules against the correct
+kernel headers.
 
 ### Deploying to a Jetson Orin device
 From the root of `edge-endpoint`, run:
@@ -47,27 +36,26 @@ From the root of `edge-endpoint`, run:
 ./deploy_balena.sh <my-fleet> jetson-orin
 ```
 
-This will build and push three services to the edge devices in your chosen fleet:
-1. A `server-jetson` service running a [k3s server](https://docs.k3s.io/architecture) that acts as the k3s cluster node and installs the NVIDIA GPU operator for Kubernetes GPU support
-2. A `bastion` service that provides access to the k3s cluster via kubectl commands and contains a copy of this repo at `/app/edge-endpoint`
+### What gets deployed
 
-Now, we have our k3s single-node cluster built and running, but we have not started our edge deployment. To do this,
-see the [Configuration](#Configuration) section below (specifically, you will need to set the `RUN_EDGE_ENDPOINT` variable).
+All flavors deploy two services:
+1. A `server` service running a [k3s server](https://docs.k3s.io/architecture) as the cluster node
+2. A `bastion` service that installs the edge-endpoint via Helm and provides kubectl/helm access
+
+For GPU builds, NVIDIA kernel modules are compiled as part of the server image (multi-stage Docker
+build) and loaded at runtime before k3s starts. No separate GPU container is needed.
 
 ### Configuration
 Configure the following variables via the `<fleet>/Variables` or `<device>/Device Variables` interfaces on the BalenaCloud dashboard:
 ```
-GROUNDLIGHT_API_TOKEN - so that we can authorize the fetching of edge model binaries
-AWS_ACCESS_KEY_ID - so we can pull the edge-endpoint and gl-edge-inference images from ECR
-AWS_SECRET_ACCESS_KEY - needed along with AWS_ACCESS_KEY_ID
-RUN_EDGE_ENDPOINT - Set this to anything (such as "1") to start the pods (added for glhub integration)
-INFERENCE_FLAVOR - Set this to `GPU` or `CPU` if you are running on a device that does not support GPU inferencing, defaults to "GPU" if not set
+GROUNDLIGHT_API_TOKEN - Required. The Groundlight API token for authorization.
+RUN_EDGE_ENDPOINT    - Set to "1" to deploy the edge-endpoint pods via Helm.
+EDGE_CONFIG          - Optional. YAML contents for edge-config.
+GROUNDLIGHT_ENDPOINT - Optional. Override the upstream Groundlight API endpoint.
+EDGE_ENDPOINT_VALUES - Optional. Comma-separated key=value pairs passed as helm --set flags.
 ```
 
-## Extras:
-Dockerfile will automatically run the following command as `bastion` launches so no need to run this anymore but leaving this command as a reference if we need to start the clusters manually.
-
-```bash
-cd /app/edge-endpoint
-INFERENCE_FLAVOR="CPU" DEPLOYMENT_NAMESPACE="default" ./deploy/bin/setup-ee.sh
-```
+The bastion automatically detects the inference flavor (cpu/gpu/jetson) from the server container
+and configures the Helm deployment accordingly. AWS credentials are handled by the Helm chart's
+ECR credential jobs, so `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` no longer need to be set
+as fleet variables.

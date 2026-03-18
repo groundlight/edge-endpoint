@@ -213,49 +213,6 @@ jobs:
       AWS_GL_PUBLIC_ACCESS_KEY_ID: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
       AWS_GL_PUBLIC_SECRET_ACCESS_KEY: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
 
-  validate-setup-ee:
-    runs-on: ubuntu-latest-4-cores
-    # We need more disk space than the default (2 core) runners have.
-    # They have 73GB total, 21GB available.  4-cores has 145GB raw, 93 GB available.
-    needs:
-      - call-build-push-ee-image
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-
-      - name: Install k3s
-        run: |
-          ./deploy/bin/install-k3s.sh cpu
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-
-      - name: Install poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          installer-parallel: true
-
-      - name: Install edge-endpoint's python dependencies
-        run: |
-          poetry install --no-interaction --no-root
-
-      - name: Validate setup edge endpoint
-        run: |
-          export IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
-          make validate-setup-ee
-
-      - name: Diagnose failure
-        if: failure()
-        run: |
-          NAMESPACE=validate-setup-ee ./deploy/bin/diagnose-k8-failure.sh
-
   validate-setup-helm:
     runs-on: ubuntu-latest-4-cores
     needs:
@@ -306,57 +263,6 @@ jobs:
         if: failure()
         run: |
           NAMESPACE=validate-setup-helm ./deploy/bin/diagnose-k8-failure.sh
-
-  # we run this separately from validate-setup-ee since we run out of disk space doing
-  # both of them on the same runner and they can be slow so its best to do them in parallel
-  test-with-k3s-setup-ee:
-    runs-on: ubuntu-latest-4-cores
-    needs:
-      - call-build-push-ee-image
-    env:
-      # associated with roxanne+test_edge account since for some reason it was failing with
-      # prod biggies
-      GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-
-      - name: Install k3s
-        run: |
-          ./deploy/bin/install-k3s.sh cpu
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-
-      - name: Install poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          installer-parallel: true
-
-      - name: Install edge-endpoint's python dependencies
-        run: |
-          poetry install --no-interaction --no-root
-
-      - name: Clear Poetry cache
-        run: |
-          poetry cache clear pypi --all
-          poetry cache clear virtualenvs --all
-
-      - name: Run tests with k3s
-        run: |
-          make test-with-k3s-setup-ee
-
-      - name: Diagnose failure
-        if: failure()
-        run: |
-          NAMESPACE=test-with-k3s ./deploy/bin/diagnose-k8-failure.sh
 
   call-test-with-k3s-helm:
     needs:
@@ -493,9 +399,7 @@ jobs:
     needs:
       - test-general-edge-endpoint
       - test-sdk
-      - test-with-k3s-setup-ee
       - call-test-with-k3s-helm
-      - validate-setup-ee
       - validate-setup-helm
       - G4-end-to-end
     steps:
