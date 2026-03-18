@@ -94,9 +94,7 @@ class ConfidenceHistogramConfig:
             "version": cfg.VERSION,
             "bucket_width": cfg.BUCKET_WIDTH,
             "aggregate": {"counts": aggregate_counts},
-            "by_class": {
-                class_idx: {"counts": counts} for class_idx, counts in (by_class_counts or {}).items()
-            },
+            "by_class": {class_idx: {"counts": counts} for class_idx, counts in (by_class_counts or {}).items()},
         }
         return envelope
 
@@ -365,11 +363,7 @@ class ActivityRetriever:
 
         for activity_type in ["iqs", "escalations", "audits", "below_threshold_iqs"]:
             # Get aggregate files (exclude per-class files which contain "_class_")
-            files = [
-                f
-                for f in activity_files
-                if f.name.startswith(activity_type) and "_class_" not in f.name
-            ]
+            files = [f for f in activity_files if f.name.startswith(activity_type) and "_class_" not in f.name]
             total_activity = sum([_tracker().get_activity_from_file(f) for f in files])
             f = _tracker().last_activity_file(activity_type, detector_id)
             last_activity = _tracker().get_last_file_modification_time(f)
@@ -464,7 +458,9 @@ def record_confidence_for_metrics(detector_id: str, confidence: float, class_ind
         per_class_prefix = f"{ConfidenceHistogramConfig.filename_prefix(class_index)}_{bucket}"
         f = _tracker().hourly_activity_file(per_class_prefix, current_hour, detector_id)
         _tracker().increment_counter_file(f)
-        logger.debug(f"Recording confidence {confidence} (bucket {bucket}, class {class_index}) on detector {detector_id}")
+        logger.debug(
+            f"Recording confidence {confidence} (bucket {bucket}, class {class_index}) on detector {detector_id}"
+        )
     else:
         logger.debug(f"Recording confidence {confidence} (bucket {bucket}) on detector {detector_id}")
 

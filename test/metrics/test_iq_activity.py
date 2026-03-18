@@ -576,13 +576,9 @@ def test_record_confidence_with_class_index(monkeypatch, tmp_base_dir, _test_tra
         record_confidence_for_metrics("det_per_class_conf", 0.75, class_index=0)
 
         # Check aggregate file exists
-        assert Path(
-            tmp_base_dir, "detectors", "det_per_class_conf", "confidence_v2_75-80_33333_2025-04-03_22"
-        ).exists()
+        assert Path(tmp_base_dir, "detectors", "det_per_class_conf", "confidence_v2_75-80_33333_2025-04-03_22").exists()
         assert (
-            Path(
-                tmp_base_dir, "detectors", "det_per_class_conf", "confidence_v2_75-80_33333_2025-04-03_22"
-            ).read_text()
+            Path(tmp_base_dir, "detectors", "det_per_class_conf", "confidence_v2_75-80_33333_2025-04-03_22").read_text()
             == "1"
         )
 
@@ -626,9 +622,7 @@ def test_record_activity_with_class_index(monkeypatch, tmp_base_dir, _test_track
         record_activity_for_metrics("det_per_class_act", "below_threshold_iqs", class_index=0)
 
         # Check aggregate file exists
-        assert Path(
-            tmp_base_dir, "detectors", "det_per_class_act", "below_threshold_iqs_44444_2025-04-03_23"
-        ).exists()
+        assert Path(tmp_base_dir, "detectors", "det_per_class_act", "below_threshold_iqs_44444_2025-04-03_23").exists()
 
         # Check per-class file exists
         assert Path(
@@ -645,9 +639,7 @@ def test_record_activity_with_class_index(monkeypatch, tmp_base_dir, _test_track
         record_activity_for_metrics("det_per_class_act", "iqs", class_index=0)
         assert Path(tmp_base_dir, "detectors", "det_per_class_act", "iqs_44444_2025-04-03_23").exists()
         # No per-class file for iqs
-        assert not Path(
-            tmp_base_dir, "detectors", "det_per_class_act", "iqs_v2_class_0_44444_2025-04-03_23"
-        ).exists()
+        assert not Path(tmp_base_dir, "detectors", "det_per_class_act", "iqs_v2_class_0_44444_2025-04-03_23").exists()
 
 
 def test_get_confidence_histogram_with_per_class(monkeypatch, tmp_base_dir, _test_tracker):
