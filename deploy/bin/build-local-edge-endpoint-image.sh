@@ -39,10 +39,15 @@ project_root="$(readlink -f "../../")"
 build_and_upload() {
     local name=$1
     local path=. # Edge endpoint is built from the root directory
+    local sdk_path="${project_root}/../python-sdk"
     echo "Building and uploading ${name}..."
+    if [ ! -d "${sdk_path}" ]; then
+        echo "Expected local python-sdk at ${sdk_path}, but it was not found."
+        exit 1
+    fi
     cd "${project_root}/${path}"
     local full_name=${ECR_URL}/${name}:${TAG}
-    docker build -t ${full_name} .
+    docker build --build-context python_sdk="${sdk_path}" -t ${full_name} .
     local id=$(docker image inspect ${full_name} | jq -r '.[0].Id')
     local on_server=$(sudo crictl images -q | grep $id)
     if [ -z "$on_server" ]; then

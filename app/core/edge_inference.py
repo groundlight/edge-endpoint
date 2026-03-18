@@ -277,7 +277,9 @@ class EdgeInferenceManager:
 
         """
         if detector_id not in self.detector_inference_configs.keys():
-            self.detector_inference_configs[detector_id] = EdgeInferenceConfig(enabled=True, api_token=api_token)
+            self.detector_inference_configs[detector_id] = EdgeInferenceConfig(
+                name="runtime_detector_config", enabled=True, api_token=api_token
+            )
             self.inference_client_urls[detector_id] = get_edge_inference_service_name(detector_id) + ":8000"
             if self.separate_oodd_inference:
                 logger.info(f"Performing separate OODD inference, updating OODD inference URL for {detector_id}")

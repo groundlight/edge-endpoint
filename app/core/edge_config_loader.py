@@ -31,20 +31,10 @@ def load_edge_config() -> RootEdgeConfig:
 
 def _load_config_from_yaml(yaml_config) -> RootEdgeConfig:
     """
-    Creates a `RootEdgeConfig` from the config yaml. Raises an error if there are duplicate detector ids.
+    Creates a `RootEdgeConfig` from YAML configuration data.
     """
     config = yaml.safe_load(yaml_config)
-
-    detectors = config.get("detectors", [])
-    detector_ids = [det["detector_id"] for det in detectors]
-
-    # Check for duplicate detector IDs
-    if len(detector_ids) != len(set(detector_ids)):
-        raise ValueError("Duplicate detector IDs found in the configuration. Each detector should only have one entry.")
-
-    config["detectors"] = {det["detector_id"]: det for det in detectors}
-
-    return RootEdgeConfig(**config)
+    return RootEdgeConfig.model_validate(config)
 
 
 def get_detector_inference_configs(
@@ -57,14 +47,13 @@ def get_detector_inference_configs(
     # Mapping of config names to EdgeInferenceConfig objects
     edge_inference_configs: dict[str, EdgeInferenceConfig] = root_edge_config.edge_inference_configs
 
-    # Filter out detectors whose ID's are empty strings
-    detectors = {det_id: detector for det_id, detector in root_edge_config.detectors.items() if det_id != ""}
+    # Filter out detectors whose IDs are empty strings.
+    detectors = [detector for detector in root_edge_config.detectors if detector.detector_id != ""]
 
     detector_to_inference_config: dict[str, EdgeInferenceConfig] | None = None
     if detectors:
         detector_to_inference_config = {
-            detector_id: edge_inference_configs[detector_config.edge_inference_config]
-            for detector_id, detector_config in detectors.items()
+            detector.detector_id: edge_inference_configs[detector.edge_inference_config] for detector in detectors
         }
 
     return detector_to_inference_config

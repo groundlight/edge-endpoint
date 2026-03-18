@@ -9,7 +9,8 @@ license = "MIT"
 APScheduler = "3.10.4"
 cachetools = "^5.3.1"
 fastapi = "^0.115.0"
-groundlight = ">=0.23.3, <0.24.0"
+# TODO(tim): switch back to a released groundlight SDK dependency after local edge-config migration testing.
+groundlight = {path = "../python-sdk"}
 httpx = "^0.27.2"
 jinja2 = "^3.1.6"
 kubernetes = "^27.2.0"

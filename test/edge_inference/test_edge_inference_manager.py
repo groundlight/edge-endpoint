@@ -100,7 +100,8 @@ def oodd_model_info_no_binary() -> ModelInfoNoBinary:
 
 @pytest.fixture
 def detector_inference_config():
-    return {"test_detector": EdgeInferenceConfig()}
+    """Build a detector inference config map for manager tests."""
+    return {"test_detector": EdgeInferenceConfig(name="test_config")}
 
 
 class TestEdgeInferenceManager:
