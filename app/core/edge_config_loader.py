@@ -18,7 +18,9 @@ def load_edge_config() -> EdgeEndpointConfig:
     if yaml_config:
         return EdgeEndpointConfig.from_yaml(yaml_str=yaml_config)
 
-    logger.info(f"EDGE_CONFIG environment variable not set. Checking default Edge Config path: {DEFAULT_EDGE_CONFIG_PATH}.")
+    logger.info(
+        f"EDGE_CONFIG environment variable not set. Checking default Edge Config path: {DEFAULT_EDGE_CONFIG_PATH}."
+    )
     return EdgeEndpointConfig.from_yaml(filename=DEFAULT_EDGE_CONFIG_PATH)
 
 
