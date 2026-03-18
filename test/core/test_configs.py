@@ -1,10 +1,10 @@
 import pytest
+from groundlight.edge import InferenceConfig
 
-from app.core.configs import EdgeInferenceConfig
 
 
 def test_edge_inference_config_validation():
-    EdgeInferenceConfig(
+    InferenceConfig(
         name="test",
         enabled=True,
         api_token="test_api_token",
@@ -13,19 +13,19 @@ def test_edge_inference_config_validation():
         min_time_between_escalations=2.0,
     )
 
-    EdgeInferenceConfig(
+    InferenceConfig(
         name="test",
         always_return_edge_prediction=True,
         disable_cloud_escalation=False,
     )
 
-    EdgeInferenceConfig(
+    InferenceConfig(
         name="test",
         always_return_edge_prediction=True,
         disable_cloud_escalation=True,
     )
 
-    EdgeInferenceConfig(
+    InferenceConfig(
         name="test",
         enabled=False,
         api_token="test_api_token",
@@ -34,7 +34,7 @@ def test_edge_inference_config_validation():
         min_time_between_escalations=10,
     )
 
-    EdgeInferenceConfig(
+    InferenceConfig(
         name="test",
         enabled=False,
         api_token="test_api_token",
@@ -43,7 +43,7 @@ def test_edge_inference_config_validation():
         min_time_between_escalations=0.5,
     )
 
-    EdgeInferenceConfig(
+    InferenceConfig(
         name="test",
         enabled=True,
         api_token="test_api_token",
@@ -54,7 +54,7 @@ def test_edge_inference_config_validation():
 
     # disable_cloud_escalation cannot be True if always_return_edge_prediction is False
     with pytest.raises(ValueError):
-        EdgeInferenceConfig(
+        InferenceConfig(
             name="test",
             enabled=True,
             api_token="test_api_token",
@@ -65,7 +65,7 @@ def test_edge_inference_config_validation():
 
     # min_time_between_escalations cannot be less than 0.0
     with pytest.raises(ValueError):
-        EdgeInferenceConfig(
+        InferenceConfig(
             name="test",
             enabled=True,
             api_token="test_api_token",

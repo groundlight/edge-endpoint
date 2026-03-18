@@ -2,15 +2,14 @@ import logging
 import os
 from typing import Dict
 
-import yaml
+from groundlight.edge import EdgeEndpointConfig, InferenceConfig
 
-from .configs import EdgeInferenceConfig, RootEdgeConfig
 from .file_paths import DEFAULT_EDGE_CONFIG_PATH
 
 logger = logging.getLogger(__name__)
 
 
-def load_edge_config() -> RootEdgeConfig:
+def load_edge_config() -> EdgeEndpointConfig:
     """
     Reads the edge config from the EDGE_CONFIG environment variable if it exists.
     If EDGE_CONFIG is not set, reads the default edge config file.
@@ -29,28 +28,27 @@ def load_edge_config() -> RootEdgeConfig:
     raise FileNotFoundError(f"Could not find edge config file in default location: {DEFAULT_EDGE_CONFIG_PATH}")
 
 
-def _load_config_from_yaml(yaml_config) -> RootEdgeConfig:
+def _load_config_from_yaml(yaml_config) -> EdgeEndpointConfig:
     """
-    Creates a `RootEdgeConfig` from YAML configuration data.
+    Creates an `EdgeEndpointConfig` from YAML configuration data.
     """
-    config = yaml.safe_load(yaml_config)
-    return RootEdgeConfig.model_validate(config)
+    return EdgeEndpointConfig.from_yaml(yaml_config)
 
 
 def get_detector_inference_configs(
-    root_edge_config: RootEdgeConfig,
-) -> dict[str, EdgeInferenceConfig] | None:
+    root_edge_config: EdgeEndpointConfig,
+) -> dict[str, InferenceConfig] | None:
     """
-    Produces a dict mapping detector IDs to their associated `EdgeInferenceConfig`.
+    Produces a dict mapping detector IDs to their associated `InferenceConfig`.
     Returns None if there are no detectors in the config file.
     """
-    # Mapping of config names to EdgeInferenceConfig objects
-    edge_inference_configs: dict[str, EdgeInferenceConfig] = root_edge_config.edge_inference_configs
+    # Mapping of config names to InferenceConfig objects
+    edge_inference_configs: dict[str, InferenceConfig] = root_edge_config.edge_inference_configs
 
     # Filter out detectors whose IDs are empty strings.
     detectors = [detector for detector in root_edge_config.detectors if detector.detector_id != ""]
 
-    detector_to_inference_config: dict[str, EdgeInferenceConfig] | None = None
+    detector_to_inference_config: dict[str, InferenceConfig] | None = None
     if detectors:
         detector_to_inference_config = {
             detector.detector_id: edge_inference_configs[detector.edge_inference_config] for detector in detectors
@@ -59,7 +57,7 @@ def get_detector_inference_configs(
     return detector_to_inference_config
 
 
-def get_detector_edge_configs_by_id() -> Dict[str, EdgeInferenceConfig]:
+def get_detector_edge_configs_by_id() -> Dict[str, InferenceConfig]:
     """
     Convenience helper that loads the edge config and returns detector-level inference configs,
     defaulting to an empty dict when none are defined.
