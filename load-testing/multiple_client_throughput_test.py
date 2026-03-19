@@ -133,7 +133,8 @@ def _provision_detector(
         timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC,
         edge_pipeline_config=edge_pipeline_config,
     )
-    print(f'Inference pod ready for {detector.id}.')
+    loaded_pipeline_config = (glh.get_detector_edge_metrics(gl, detector.id) or {}).get("pipeline_config")
+    print(f"Inference pod ready for {detector.id} with pipeline '{loaded_pipeline_config}'.")
 
     return detector, generate_image, generate_image_kwargs
 
@@ -180,21 +181,30 @@ def send_image_requests(  # noqa: PLR0913
     request_number = 1
 
     while time.time() - start_time < duration:
-        log_data = {
-            "asctime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "event": "request",
-            "worker_number": process_id,
-            "request_number": request_number,
-        }
         request_start_time = time.time()
 
         try:
             image, _, _ = generate_image(**generate_image_kwargs)
             iq = gl.submit_image_query(detector, image, **glh.IQ_KWARGS_FOR_NO_ESCALATION)
             glh.error_if_not_from_edge(iq)
-            log_data.update({"latency": round(time.time() - request_start_time, 4), "success": True})
+            success = True
+            error = None
         except Exception as e:
-            log_data.update({"latency": round(time.time() - request_start_time, 4), "success": False, "error": str(e)})
+            success = False
+            error = str(e)
+
+        request_end_time = time.time()
+        log_data = {
+            "asctime": datetime.fromtimestamp(request_end_time).strftime("%Y-%m-%d %H:%M:%S"),
+            "ts": request_end_time,
+            "event": "request",
+            "worker_number": process_id,
+            "request_number": request_number,
+            "latency": round(request_end_time - request_start_time, 4),
+            "success": success,
+        }
+        if error is not None:
+            log_data["error"] = error
 
         with open(log_file, "a") as log:
             log.write(json.dumps(log_data) + "\n")
@@ -238,8 +248,9 @@ def incremental_client_ramp_up(  # noqa: PLR0913
     with tqdm(total=total_duration, desc="Running with 0 clients", unit="s") as ramp_progress:
         elapsed_seconds = 0
         for step_idx, num_clients_ramping_to in enumerate(ramp_steps):
+            ramp_ts = time.time()
             with open(log_file, "a") as log:
-                log.write(f"RAMP {num_clients_ramping_to}\n")
+                log.write(f"RAMP {num_clients_ramping_to} ts={ramp_ts}\n")
             num_existing_clients = len(active_processes)
             for _ in range(num_clients_ramping_to - num_existing_clients):
                 process_id = len(active_processes)
