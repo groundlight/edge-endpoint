@@ -2,6 +2,7 @@ from groundlight import ExperimentalApi, Detector, ApiException, ImageQuery
 
 from groundlight_openapi_client.exceptions import ApiTypeError
 
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import os
 import requests
@@ -19,6 +20,7 @@ CLOUD_ENDPOINT_PROD = 'https://api.groundlight.ai/device-api'
 # unless an inference pod doesn't exist for the detector, in which case we have no choice but to escalate
 IQ_KWARGS_FOR_NO_ESCALATION = {'wait': 0.0, 'human_review': 'NEVER', 'confidence_threshold': 0.0}
 IQ_KWARGS_NON_HUMAN_CLOUD_ESCALATION = {'wait': 0.0, 'human_review': 'NEVER', 'confidence_threshold': 1.0}
+PRIMING_MAX_BATCH_SIZE = 10
 
 PIPELINE_LOADED_TIMEOUT_SEC = 60 * 3
 
@@ -206,14 +208,24 @@ def prime_detector(
     num_labels: int, 
     image_width: int, 
     image_height: int) -> None:
-    """
-    Submits a handful of labels to a detector so that the cloud can train a model. 
-    """
-    for _ in trange(num_labels, desc=f"Priming {detector.id} with {num_labels} labels.", unit="label"):
+    """Submit synthetic labels in bounded concurrent batches to trigger model training."""
+
+    def _prime_one() -> None:
+        """Generate one sample, submit it, and attach the synthetic label."""
         image, label, rois = imgh.generate_random_image(gl, detector, image_width, image_height)
-        # iq = gl.ask_async(detector, image, human_review="NEVER") # using ask_sync is causing a race condition on the server, commmenting it out until that is fixed
         iq = gl.submit_image_query(detector, image, **IQ_KWARGS_FOR_NO_ESCALATION)
         gl.add_label(iq, label, rois)
+
+    remaining = num_labels
+    with trange(num_labels, desc=f"Priming {detector.id} with {num_labels} labels.", unit="label") as progress:
+        while remaining > 0:
+            batch_size = min(PRIMING_MAX_BATCH_SIZE, remaining)
+            with ThreadPoolExecutor(max_workers=batch_size) as executor:
+                futures = [executor.submit(_prime_one) for _ in range(batch_size)]
+                for future in futures:
+                    future.result()
+                    progress.update(1)
+            remaining -= batch_size
 
 def wait_for_edge_answer(
     gl: ExperimentalApi,

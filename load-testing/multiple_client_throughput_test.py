@@ -13,6 +13,7 @@ from parse_load_test_logs import (
     summarize_throughput,
     write_load_test_results_to_file,
 )
+from tqdm import tqdm
 
 import groundlight_helpers as glh
 import image_helpers as imgh
@@ -117,7 +118,13 @@ def _provision_detector(
 
     stats = glh.get_detector_evaluation(gl, detector.id)
     if not glh.detector_is_sufficiently_trained(stats, 0.6, 30):
+        print(
+            f"{detector.id} is not sufficiently trained yet "
+            f"(projected_ml_accuracy={stats.get('projected_ml_accuracy')}, total_labels={stats.get('total_labels')}; "
+            "need projected_ml_accuracy>0.6 and total_labels>=30). Priming with 30 labels."
+        )
         glh.prime_detector(gl_cloud, detector, 30, image_width, image_height)
+        print(f"Waiting up to {TRAINING_TIMEOUT_SEC} seconds for training to complete for {detector.id}...")
         glh.wait_until_sufficiently_trained(gl, detector, 0.6, 30, timeout_sec=TRAINING_TIMEOUT_SEC)
 
     print(f'Waiting for inference pod to be ready for {detector.id}...')
@@ -228,35 +235,43 @@ def incremental_client_ramp_up(  # noqa: PLR0913
     start_time = time.time()
     num_detectors = len(detectors)
 
-    for num_clients_ramping_to in ramp_steps:
-        print(f"Ramping up to {num_clients_ramping_to} clients.")
-        with open(log_file, "a") as log:
-            log.write(f"RAMP {num_clients_ramping_to}\n")
-        num_existing_clients = len(active_processes)
-        for _ in range(num_clients_ramping_to - num_existing_clients):
-            process_id = len(active_processes)
-            remaining_time = total_duration - (time.time() - start_time)
-            detector_id = detectors[process_id % num_detectors]
+    with tqdm(total=total_duration, desc="Running with 0 clients", unit="s") as ramp_progress:
+        elapsed_seconds = 0
+        for step_idx, num_clients_ramping_to in enumerate(ramp_steps):
+            with open(log_file, "a") as log:
+                log.write(f"RAMP {num_clients_ramping_to}\n")
+            num_existing_clients = len(active_processes)
+            for _ in range(num_clients_ramping_to - num_existing_clients):
+                process_id = len(active_processes)
+                remaining_time = total_duration - (time.time() - start_time)
+                detector_id = detectors[process_id % num_detectors]
 
-            process = multiprocessing.Process(
-                target=send_image_requests,
-                args=(
-                    process_id,
-                    detector_id,
-                    detector_mode,
-                    image_width,
-                    image_height,
-                    requests_per_second,
-                    remaining_time,
-                    log_file,
-                ),
-            )
-            process.start()
-            active_processes.append(process)
+                process = multiprocessing.Process(
+                    target=send_image_requests,
+                    args=(
+                        process_id,
+                        detector_id,
+                        detector_mode,
+                        image_width,
+                        image_height,
+                        requests_per_second,
+                        remaining_time,
+                        log_file,
+                    ),
+                )
+                process.start()
+                active_processes.append(process)
 
-        print(f"Running with {len(active_processes)} clients...")
-        print(f"Sleeping for {time_between_ramp} seconds.")
-        time.sleep(time_between_ramp)
+            ramp_progress.set_description(f"Running with {len(active_processes)} clients")
+            seconds_this_step = min(time_between_ramp, max(0, total_duration - elapsed_seconds))
+            for second in range(seconds_this_step):
+                time.sleep(1)
+                elapsed_seconds += 1
+                ramp_progress.update(1)
+                seconds_remaining_this_step = seconds_this_step - (second + 1)
+                ramp_progress.set_postfix_str(
+                    f"step {step_idx + 1}/{len(ramp_steps)}, next ramp in {seconds_remaining_this_step}s"
+                )
 
     for process in active_processes:
         process.join()

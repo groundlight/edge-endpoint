@@ -188,7 +188,7 @@ sdist = { url = "https://files.pythonhosted.org/packages/ed/0e/5c61eedde9f6c8771
 
 [[package]]
 name = "groundlight"
-version = "0.23.2"
+version = "0.25.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
@@ -196,13 +196,14 @@ dependencies = [
     { name = "pillow" },
     { name = "pydantic" },
     { name = "python-dateutil" },
+    { name = "pyyaml" },
     { name = "requests" },
     { name = "typer" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/25/1f/9b39008261be88c089a18a9b7209e9fdbe952021ab543f50959eef038218/groundlight-0.23.2.tar.gz", hash = "sha256:422f90d8bff22d276f52e3bb72113029b5317a62e41dc4f9719f65e9fe99fc1c", size = 109365, upload-time = "2025-09-25T20:20:53.292Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/69/88/ed99ad809f51b77e7be0cd4d627acd35ecdab9549062f7add0a6978835b0/groundlight-0.25.0.tar.gz", hash = "sha256:98d1245d9a6d88871da6468c337a978b38b111b23d799ba0c019c87dc31f0570", size = 113211, upload-time = "2026-03-18T19:36:33.085Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/af/e6/6cb8b4974f959f27c7985ebbce5e20ebbaa1019e84ae8b36e08354c4d3dd/groundlight-0.23.2-py3-none-any.whl", hash = "sha256:90d417f52722e135eb8d6982f587f0c930726ea0a553ce59f506b3bbc7b58ad9", size = 322770, upload-time = "2025-09-25T20:20:51.851Z" },
+    { url = "https://files.pythonhosted.org/packages/75/be/22f4b7cd4fe2cf90af6d24d30e27120196bcf027fe7685bbf71460454b53/groundlight-0.25.0-py3-none-any.whl", hash = "sha256:1ee961c40f7ba7cfc6e2a0e7a282c9ee13bec404f02f321c9df98880eae2626d", size = 329794, upload-time = "2026-03-18T19:36:31.748Z" },
 ]
 
 [[package]]
@@ -292,7 +293,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "gputil", specifier = ">=1.4.0" },
-    { name = "groundlight", specifier = ">=0.23.2" },
+    { name = "groundlight", specifier = ">=0.25.0" },
     { name = "matplotlib", specifier = ">=3.10.6" },
     { name = "opencv-python", specifier = ">=4.12.0.88" },
     { name = "psutil", specifier = ">=7.1.0" },
