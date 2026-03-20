@@ -2,7 +2,8 @@ import logging
 import os
 import time
 
-from app.core.configs import RootEdgeConfig
+from groundlight.edge import EdgeEndpointConfig
+
 from app.core.database import DatabaseManager
 from app.core.edge_config_loader import get_detector_inference_configs, load_edge_config
 from app.core.edge_inference import (
@@ -234,7 +235,7 @@ def manage_update_models(
 if __name__ == "__main__":
     logger.info("Starting model updater.")
 
-    edge_config: RootEdgeConfig = load_edge_config()
+    edge_config: EdgeEndpointConfig = load_edge_config()
     logger.info(f"{edge_config=}")
 
     refresh_rate = edge_config.global_config.refresh_rate
