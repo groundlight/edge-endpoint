@@ -30,6 +30,14 @@ def hash_pipeline_config(pipeline_config: str) -> str:
     return hashlib.sha256(pipeline_config.encode()).hexdigest()[:12]
 
 
+def normalize_edge_pipeline_config(pipeline_config: str | None) -> str | None:
+    """Trim surrounding whitespace and normalize empty values to None."""
+    if pipeline_config is None:
+        return None
+    normalized = pipeline_config.strip()
+    return normalized or None
+
+
 def _pipeline_configs_equal(a: str | None, b: str | None) -> bool:
     """Return True if the two pipeline config strings are equivalent (YAML-normalized)."""
     return yaml.safe_load(a or "") == yaml.safe_load(b or "")
@@ -314,8 +322,16 @@ def wait_for_ready_inference_pod(
     """Waits for an edge answer, then ensures the loaded pipeline matches (provided or cloud)."""
     wait_for_edge_answer(gl, detector, image_width, image_height, timeout_sec)
     if edge_pipeline_config is not None:
+        # If a pipeline config was provided, we expect the loaded pipeline config to match right away.
+        # If it doesn't match, it likely means someone changed it in Admin, which would cause
+        # the test to run with a pipeline other than what the user expects. We fail loudly if that happens.
         assert_loaded_pipeline_matches_provided(gl, detector.id, edge_pipeline_config)
     else:
+        # When no pipeline config is provided, users are allowed to change the pipeline config in Admin; 
+        # this workflow supports custom yaml pipelines, which aren't currently supported in the Python SDK. 
+        # When a new pipeline is configured in Admin, it will take some time for the detector retrain,
+        # and for the new pipeline to make its way to the egde. Therefore, we will wait here for a bit
+        # to ensure that the edge pipeline configured in the cloud matches what was downloaded to the edge.
         wait_for_loaded_pipeline_to_match_cloud(gl, detector.id, timeout_sec=PIPELINE_LOADED_TIMEOUT_SEC)
 
 def detector_is_sufficiently_trained(

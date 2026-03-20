@@ -43,6 +43,7 @@ def parse_arguments():
 def main(detector_mode: str, image_width: int, image_height: int, edge_pipeline_config: str | None = None) -> None:
     TRAINING_TIMEOUT_SEC = 60 * 20
     INFERENCE_POD_READY_TIMEOUT_SEC = 60 * 10
+    edge_pipeline_config = glh.normalize_edge_pipeline_config(edge_pipeline_config)
 
     WARMUP_ITERATIONS = 300
     TESTING_ITERATIONS = 1000

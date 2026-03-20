@@ -299,13 +299,14 @@ if __name__ == "__main__":
     parser.add_argument("--image-height", type=int, default=480)
     parser.add_argument("--edge-pipeline-config", type=str, default=None, help="Edge pipeline configuration name.")
     args = parser.parse_args()
+    edge_pipeline_config = glh.normalize_edge_pipeline_config(args.edge_pipeline_config)
 
     gl = ExperimentalApi()
     glh.error_if_endpoint_is_cloud(gl)
     gl_cloud = ExperimentalApi(endpoint=glh.CLOUD_ENDPOINT_PROD)
 
     detector, generate_image, generate_image_kwargs = _provision_detector(
-        gl, gl_cloud, args.detector_mode, args.image_width, args.image_height, edge_pipeline_config=args.edge_pipeline_config
+        gl, gl_cloud, args.detector_mode, args.image_width, args.image_height, edge_pipeline_config=edge_pipeline_config
     )
 
     runtime_dir, log_file = _create_runtime_directory()

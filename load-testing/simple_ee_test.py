@@ -25,6 +25,7 @@ TRAINING_TIMEOUT_SEC = 10 * 60
 INFERENCE_POD_READY_TIMEOUT_SEC = 60 * 10
 
 def main(edge_pipeline_config: str | None = None) -> None:
+    edge_pipeline_config = glh.normalize_edge_pipeline_config(edge_pipeline_config)
     gl = ExperimentalApi()
     glh.error_if_endpoint_is_cloud(gl)
 
