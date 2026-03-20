@@ -11,7 +11,7 @@ import os
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 
-from app.api.api import api_router, health_router, ping_router
+from app.api.api import api_router, edge_config_router, health_router, ping_router
 from app.api.naming import API_BASE_PATH
 from app.core.app_state import AppState
 
@@ -29,6 +29,7 @@ app = FastAPI(title="edge-endpoint")
 app.include_router(router=api_router, prefix=API_BASE_PATH)
 app.include_router(router=ping_router)
 app.include_router(router=health_router)
+app.include_router(router=edge_config_router)
 
 scheduler = AsyncIOScheduler()
 

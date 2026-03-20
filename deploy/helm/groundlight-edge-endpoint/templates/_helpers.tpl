@@ -112,15 +112,16 @@ Never
 {{- end -}}
 
 {{/*
-  Get the edge-config.yaml file. If the user supplies one via `--set-file configFile=...yaml`
-  then use that. Otherwise, use the default version in the `files/` directory. We define this
-  as a function so that we can use it as a nonce to restart the pod when the config changes.
+  Get the edge config. If the user supplies one via `--set-file configFile=...yaml`,
+  use that. Otherwise, fall back to an empty config; the EdgeEndpointConfig pydantic
+  model in the python-sdk provides all defaults. This helper is also used as a nonce
+  to restart the pod when the config changes.
 */}}
 {{- define "groundlight-edge-endpoint.edgeConfig" -}}
 {{- if .Values.configFile }}
 {{- .Values.configFile }}
 {{- else }}
-{{- .Files.Get "files/default-edge-config.yaml" }}
+{}
 {{- end }}
 {{- end }}
 
