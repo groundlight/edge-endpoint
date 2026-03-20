@@ -59,6 +59,7 @@ spec:
       initContainers:
       - name: generate-tls-cert
         image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
+        imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
         volumeMounts:
         - name: nginx-certs
           mountPath: /etc/nginx/certs
