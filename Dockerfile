@@ -73,7 +73,6 @@ ENV PYTHONUNBUFFERED=1 \
 
 # Copy only required files first to leverage Docker caching
 COPY ./pyproject.toml ./poetry.lock ${APP_ROOT}/
-COPY --from=python_sdk . /python-sdk
 
 WORKDIR ${APP_ROOT}
 
