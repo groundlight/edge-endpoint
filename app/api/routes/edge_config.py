@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 
@@ -5,8 +6,9 @@ from fastapi import APIRouter, Body, Depends
 from groundlight.edge import EdgeEndpointConfig
 
 from app.core.app_state import AppState, get_app_state
-from app.core.edge_config_loader import get_detector_inference_configs
+from app.core.edge_config_loader import _load_helm_provided_config, get_detector_inference_configs
 from app.core.edge_inference import EdgeInferenceManager, get_edge_inference_model_name
+from app.core.file_paths import ACTIVE_EDGE_CONFIG_PATH, HELM_CONFIG_SNAPSHOT_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -44,20 +46,22 @@ async def set_edge_config(
     for detector_id in added:
         logger.info(f"Creating deployment record for new detector {detector_id}")
         for is_oodd in [False, True]:
-            model_name = get_edge_inference_model_name(detector_id, is_oodd=is_oodd)
             app_state.db_manager.create_or_update_inference_deployment_record(
                 deployment={
-                    "model_name": model_name,
+                    "model_name": get_edge_inference_model_name(detector_id, is_oodd=is_oodd),
                     "detector_id": detector_id,
                     "api_token": api_token,
                     "deployment_created": False,
                 }
             )
-            # Clear any stale pending_deletion flag from a previous config change
-            app_state.db_manager.update_inference_deployment_record(
-                model_name=model_name,
-                fields_to_update={"pending_deletion": False, "deployment_created": False},
-            )
+
+    # Persist to PVC so the config survives restarts and the model-updater can read it
+    with open(ACTIVE_EDGE_CONFIG_PATH, "w") as f:
+        json.dump(new_config.to_payload(), f)
+    # Snapshot the current helm config so startup can detect a subsequent helm upgrade
+    with open(HELM_CONFIG_SNAPSHOT_PATH, "w") as f:
+        json.dump(_load_helm_provided_config().to_payload(), f)
+    logger.info(f"Persisted new edge config to {ACTIVE_EDGE_CONFIG_PATH}")
 
     # Update in-memory state
     app_state.edge_config = new_config

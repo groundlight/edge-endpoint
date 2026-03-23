@@ -250,9 +250,7 @@ class InferenceDeploymentManager:
             namespace=self._target_namespace, label_selector=label_str
         )
         if len(pod_list.items) > 0:
-            logger.debug(
-                f"Deployment {deployment_name} is gone but {len(pod_list.items)} pod(s) still running"
-            )
+            logger.debug(f"Deployment {deployment_name} is gone but {len(pod_list.items)} pod(s) still running")
             return False
         return True
 
