@@ -169,9 +169,48 @@ def manage_update_models(
         return
 
     while True:
+        # --- Phase 1: Process pending deletions before any creation ---
+        pending_deletions = frozenset(db_manager.get_pending_deletions())
+        if pending_deletions:
+            logger.info(f"Processing deletion of {len(pending_deletions)} detector(s): {pending_deletions}")
+            for detector_id in pending_deletions:
+                deployment_manager.delete_inference_deployment(detector_id)
+                if separate_oodd_inference:
+                    deployment_manager.delete_inference_deployment(detector_id, is_oodd=True)
+
+            # Poll until all pods are fully terminated (RAM/VRAM freed)
+            poll_start = time.time()
+            while time.time() - poll_start < TEN_MINUTES:
+                all_gone = all(
+                    deployment_manager.is_inference_deployment_fully_deleted(did)
+                    and (
+                        not separate_oodd_inference
+                        or deployment_manager.is_inference_deployment_fully_deleted(did, is_oodd=True)
+                    )
+                    for did in pending_deletions
+                )
+                if all_gone:
+                    break
+                time.sleep(5)
+            else:
+                logger.error(f"Timed out waiting for detector pods to terminate: {pending_deletions}")
+
+            for detector_id in pending_deletions:
+                db_manager.delete_inference_deployment_records(detector_id)
+                edge_inference_manager.remove_detector(detector_id)
+            logger.info(f"Finished deleting {len(pending_deletions)} detector(s)")
+
+        # --- Phase 2: Pick up newly added detectors from DB ---
+        undeployed = db_manager.get_inference_deployment_records(deployment_created=False, pending_deletion=False)
+        if undeployed:
+            unique_new = {r.detector_id: r.api_token for r in undeployed}
+            for detector_id, api_token in unique_new.items():
+                edge_inference_manager.update_inference_config(detector_id=detector_id, api_token=api_token)
+
+        # --- Phase 3: Normal model update / deployment creation ---
         start = time.time()
         logger.debug("Starting model update check for existing inference deployments.")
-        for detector_id in edge_inference_manager.detector_inference_configs.keys():
+        for detector_id in list(edge_inference_manager.detector_inference_configs.keys()):
             try:
                 logger.debug(f"Checking new models and inference deployments for detector_id: {detector_id}")
                 _check_new_models_and_inference_deployments(
@@ -191,23 +230,6 @@ def manage_update_models(
             sleep_duration = refresh_rate - elapsed_s
             logger.debug(f"Sleeping for {sleep_duration:.2f} seconds before next update cycle.")
             time.sleep(sleep_duration)
-
-        # Fetch detector IDs that need to be deployed from the database and add them to the config
-        logger.debug("Fetching undeployed detector IDs from the database.")
-        undeployed_inference_deployments = db_manager.get_inference_deployment_records(deployment_created=False)
-        if undeployed_inference_deployments:
-            unique_detectors = {record.detector_id: record.api_token for record in undeployed_inference_deployments}
-            logger.info(
-                f"Found {len(undeployed_inference_deployments)} undeployed inference deployment(s) for {len(unique_detectors)} detector(s). Updating inference config."
-            )
-            for detector_id, api_token in unique_detectors.items():
-                logger.debug(f"Updating inference config for detector_id: {detector_id}")
-                edge_inference_manager.update_inference_config(
-                    detector_id=detector_id,
-                    api_token=api_token,
-                )
-        else:
-            logger.debug("No undeployed inference deployments found.")
 
         # Update the status of the inference deployments in the database
         deployment_records = db_manager.get_inference_deployment_records()

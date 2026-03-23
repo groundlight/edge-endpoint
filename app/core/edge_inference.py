@@ -287,6 +287,14 @@ class EdgeInferenceManager:
                 )
             logger.info(f"Set up edge inference for {detector_id}")
 
+    def remove_detector(self, detector_id: str) -> None:
+        """Remove a detector from all in-memory maps."""
+        self.detector_inference_configs.pop(detector_id, None)
+        self.inference_client_urls.pop(detector_id, None)
+        self.oodd_inference_client_urls.pop(detector_id, None)
+        self.last_escalation_times.pop(detector_id, None)
+        self.min_times_between_escalations.pop(detector_id, None)
+
     def detector_configured_for_edge_inference(self, detector_id: str) -> bool:
         """
         Checks if the detector is configured to run local inference.

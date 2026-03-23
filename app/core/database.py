@@ -118,6 +118,43 @@ class DatabaseManager:
             query_results = session.execute(query)
             return query_results.scalars().all()
 
+    def mark_detector_pending_deletion(self, detector_id: str, api_token: str) -> None:
+        """Mark all records for a detector as pending deletion. Creates records if none exist."""
+        from app.core.edge_inference import get_edge_inference_model_name
+
+        with self.session_maker() as session:
+            query = select(InferenceDeployment).filter_by(detector_id=detector_id)
+            existing = session.execute(query).scalars().all()
+            if existing:
+                for record in existing:
+                    record.pending_deletion = True
+                session.commit()
+            else:
+                for is_oodd in [False, True]:
+                    session.add(
+                        InferenceDeployment(
+                            model_name=get_edge_inference_model_name(detector_id, is_oodd=is_oodd),
+                            detector_id=detector_id,
+                            api_token=api_token,
+                            pending_deletion=True,
+                        )
+                    )
+                session.commit()
+
+    def get_pending_deletions(self) -> list[str]:
+        """Return distinct detector_ids that are pending deletion."""
+        with self.session_maker() as session:
+            query = select(InferenceDeployment.detector_id).filter_by(pending_deletion=True).distinct()
+            return list(session.execute(query).scalars().all())
+
+    def delete_inference_deployment_records(self, detector_id: str) -> None:
+        """Delete all records for a given detector_id."""
+        with self.session_maker() as session:
+            query = select(InferenceDeployment).filter_by(detector_id=detector_id)
+            for record in session.execute(query).scalars().all():
+                session.delete(record)
+            session.commit()
+
     def create_tables(self) -> None:
         """Create the database tables, if they don't already exist."""
         with self._engine.begin() as connection:
