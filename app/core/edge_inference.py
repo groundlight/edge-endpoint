@@ -10,10 +10,10 @@ import requests
 import yaml
 from cachetools import TTLCache, cached
 from fastapi import HTTPException, status
+from groundlight.edge import InferenceConfig
 from jinja2 import Template
 from model import ModeEnum
 
-from app.core.configs import EdgeInferenceConfig
 from app.core.file_paths import MODEL_REPOSITORY_PATH
 from app.core.speedmon import SpeedMonitor
 from app.core.utils import ModelInfoBase, ModelInfoWithBinary, parse_model_info
@@ -229,15 +229,14 @@ class EdgeInferenceManager:
 
     def __init__(
         self,
-        detector_inference_configs: dict[str, EdgeInferenceConfig] | None,
+        detector_inference_configs: dict[str, InferenceConfig] | None,
         verbose: bool = False,
         separate_oodd_inference: bool = True,
     ) -> None:
         """
         Initializes the edge inference manager.
         Args:
-            detector_inference_configs: Dictionary of detector IDs to EdgeInferenceConfig objects
-            edge_config: RootEdgeConfig object
+            detector_inference_configs: Dictionary of detector IDs to InferenceConfig objects
             verbose: Whether to print verbose logs from the inference server client
             separate_oodd_inference: Whether to run inference separately for the OODD model
         """
@@ -277,7 +276,9 @@ class EdgeInferenceManager:
 
         """
         if detector_id not in self.detector_inference_configs.keys():
-            self.detector_inference_configs[detector_id] = EdgeInferenceConfig(enabled=True, api_token=api_token)
+            self.detector_inference_configs[detector_id] = InferenceConfig(
+                name="runtime_detector_config", enabled=True, api_token=api_token
+            )
             self.inference_client_urls[detector_id] = get_edge_inference_service_name(detector_id) + ":8000"
             if self.separate_oodd_inference:
                 logger.info(f"Performing separate OODD inference, updating OODD inference URL for {detector_id}")
