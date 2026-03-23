@@ -4,49 +4,25 @@ from typing import Dict
 
 from groundlight.edge import EdgeEndpointConfig, InferenceConfig
 
-from .file_paths import ACTIVE_EDGE_CONFIG_PATH, DEFAULT_EDGE_CONFIG_PATH, HELM_CONFIG_SNAPSHOT_PATH
+from .file_paths import HELM_EDGE_CONFIG_PATH
 
 logger = logging.getLogger(__name__)
 
 
-def _load_helm_provided_config() -> EdgeEndpointConfig:
-    """Load the config provided via helm (env var or mounted ConfigMap file)."""
+def load_edge_config() -> EdgeEndpointConfig:
+    """Load edge config, falling back to Pydantic defaults.
+
+    Sources checked in order:
+    1. EDGE_CONFIG env var (used by Docker tests and non-Helm setups)
+    2. Helm-mounted ConfigMap file at HELM_EDGE_CONFIG_PATH
+    3. EdgeEndpointConfig() Pydantic defaults
+    """
     yaml_config = os.environ.get("EDGE_CONFIG", "").strip()
     if yaml_config:
         return EdgeEndpointConfig.from_yaml(yaml_str=yaml_config)
-    return EdgeEndpointConfig.from_yaml(filename=DEFAULT_EDGE_CONFIG_PATH)
-
-
-def load_edge_config() -> EdgeEndpointConfig:
-    """Load edge config. Helm-provided config wins if it changed since the last set_edge_config.
-
-    On startup, compares the current helm config against a snapshot saved when
-    set_edge_config was last called. If they differ, the helm config was updated
-    (e.g., helm upgrade) and the PVC runtime override is stale -- delete it.
-    If they match, the PVC override is still valid and takes priority.
-    """
-    helm_config = _load_helm_provided_config()
-
-    if not os.path.exists(ACTIVE_EDGE_CONFIG_PATH):
-        return helm_config
-
-    if not os.path.exists(HELM_CONFIG_SNAPSHOT_PATH):
-        # PVC file exists but no snapshot -- we can't tell if helm changed.
-        # Assume helm wins (fresh deployment over leftover PVC data).
-        logger.info("No helm config snapshot found. Deleting PVC runtime config.")
-        os.remove(ACTIVE_EDGE_CONFIG_PATH)
-        return helm_config
-
-    saved_helm = EdgeEndpointConfig.from_yaml(filename=HELM_CONFIG_SNAPSHOT_PATH)
-    if saved_helm.to_payload() != helm_config.to_payload():
-        logger.info("Helm-provided config changed since last set_edge_config. Using new helm config.")
-        os.remove(ACTIVE_EDGE_CONFIG_PATH)
-        os.remove(HELM_CONFIG_SNAPSHOT_PATH)
-        return helm_config
-
-    # Helm config unchanged -- the PVC override is valid.
-    logger.info(f"Loading runtime edge config from {ACTIVE_EDGE_CONFIG_PATH}")
-    return EdgeEndpointConfig.from_yaml(filename=ACTIVE_EDGE_CONFIG_PATH)
+    if os.path.exists(HELM_EDGE_CONFIG_PATH):
+        return EdgeEndpointConfig.from_yaml(filename=HELM_EDGE_CONFIG_PATH)
+    return EdgeEndpointConfig()
 
 
 def get_detector_inference_configs(
