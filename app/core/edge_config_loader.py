@@ -76,9 +76,7 @@ def apply_detector_changes(removed: set[str], added: set[str], db_manager: Datab
             )
 
 
-def compute_detector_diff(
-    current_detector_ids: set[str], new_config: EdgeEndpointConfig
-) -> tuple[set[str], set[str]]:
+def compute_detector_diff(current_detector_ids: set[str], new_config: EdgeEndpointConfig) -> tuple[set[str], set[str]]:
     """Compute which detectors to remove and add.
 
     Returns (removed_ids, added_ids).
@@ -89,7 +87,7 @@ def compute_detector_diff(
 
 def reconcile_config(new_config: EdgeEndpointConfig, db_manager: DatabaseManager) -> None:
     """
-    Compute the diff between a provided config and the DB state. Apply the new config. Write the new 
+    Compute the diff between a provided config and the DB state. Apply the new config. Write the new
     config to disk.
     """
     current = get_active_detector_ids(db_manager)
@@ -100,7 +98,7 @@ def reconcile_config(new_config: EdgeEndpointConfig, db_manager: DatabaseManager
     logger.info(
         f"Config reconciled: {len(removed)} detector(s) removed, {len(added)} detector(s) added. "
         f"Removed detectors: {removed} | Added detectors: {added}"
-        )
+    )
 
 
 def get_detector_inference_configs(
