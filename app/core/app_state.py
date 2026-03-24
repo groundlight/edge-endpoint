@@ -96,11 +96,14 @@ def get_detector_metadata(detector_id: str, gl: Groundlight) -> Detector:
 
 class AppState:
     def __init__(self):
-        self.edge_config = load_edge_config()
         # We only launch a separate OODD inference pod if we are not using the minimal image.
         # Pipelines used in the minimal image include OODD inference and confidence adjustment,
         # so they do not need to be adjusted separately.
         self.separate_oodd_inference = not USE_MINIMAL_IMAGE
+        # Startup snapshot of the config. Used for read-only lookups like
+        # confident_audit_rate. NOT used for diffing -- reconcile_config()
+        # diffs against the shared DB instead.
+        self.edge_config = load_edge_config()
         detector_inference_configs = get_detector_inference_configs(root_edge_config=self.edge_config)
         self.edge_inference_manager = EdgeInferenceManager(
             detector_inference_configs=detector_inference_configs, separate_oodd_inference=self.separate_oodd_inference
