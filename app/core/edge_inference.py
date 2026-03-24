@@ -342,7 +342,11 @@ class EdgeInferenceManager:
             True if edge inference for the specified detector is available, False otherwise
         """
         primary_url = get_edge_inference_service_name(detector_id) + ":8000"
-        oodd_url = get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000" if self.separate_oodd_inference else None
+        oodd_url = (
+            get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
+            if self.separate_oodd_inference
+            else None
+        )
 
         ready = is_edge_inference_ready(primary_url) and (
             not self.separate_oodd_inference or is_edge_inference_ready(oodd_url)
@@ -354,9 +358,7 @@ class EdgeInferenceManager:
             return False
 
         if not self.detector_configured_for_edge_inference(detector_id):
-            self._apply_detector_config(
-                detector_id, InferenceConfig(name="auto_discovered", enabled=True)
-            )
+            self._apply_detector_config(detector_id, InferenceConfig(name="auto_discovered", enabled=True))
             logger.info(f"Auto-discovered inference pod for {detector_id}")
         return True
 

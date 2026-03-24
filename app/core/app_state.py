@@ -6,12 +6,11 @@ from functools import lru_cache
 import cachetools
 from fastapi import Request
 from groundlight import Groundlight
+from groundlight.edge import GlobalConfig
 from model import Detector
 from urllib3.util.retry import Retry
 
 from app.escalation_queue.queue_writer import QueueWriter
-
-from groundlight.edge import GlobalConfig
 
 from .database import DatabaseManager
 from .edge_config_loader import get_detector_inference_configs, load_active_config, load_edge_config
