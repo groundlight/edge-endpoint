@@ -1,8 +1,7 @@
 import pytest
+from groundlight.edge import DetectorConfig, EdgeEndpointConfig
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-
-from groundlight.edge import EdgeEndpointConfig, DetectorConfig
 
 from app.core.database import DatabaseManager
 from app.core.edge_config_loader import apply_detector_changes, compute_detector_diff
