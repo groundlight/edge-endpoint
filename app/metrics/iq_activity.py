@@ -278,7 +278,7 @@ class ActivityRetriever:
             # Remainder is "<index>_<pid>_YYYY-MM-DD_HH"
             remainder = f.name[len(prefix) :]
             parts = remainder.split("_")
-            if len(parts) < 3:
+            if len(parts) < 4:
                 continue
 
             class_index = parts[0]
@@ -362,7 +362,7 @@ class ActivityRetriever:
                 count = _tracker().get_activity_from_file(f)
                 aggregate_counts[index] += count
 
-        return cfg.to_envelope(aggregate_counts, by_class_counts)
+        return cfg.to_envelope(aggregate_counts, dict(by_class_counts))
 
     def get_detector_activity_metrics(self, detector_id: str) -> dict:
         """Get the activity on a detector for the previous hour."""
