@@ -22,11 +22,7 @@ async def set_edge_config(
     body: dict = Body(...),
     app_state: AppState = Depends(get_app_state),
 ):
-    """Replace the active edge endpoint configuration.
-
-    Diffs against the DB (shared across all workers) rather than in-memory
-    state, so this is safe with multiple uvicorn workers.
-    """
+    """Replaces the active edge endpoint configuration with the provided configuration."""
     new_config = EdgeEndpointConfig.from_payload(body)
     reconcile_config(new_config, app_state.db_manager)
     return new_config.to_payload()

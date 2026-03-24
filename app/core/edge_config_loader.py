@@ -34,7 +34,7 @@ def load_edge_config() -> EdgeEndpointConfig:
 
 
 def save_active_config(config: EdgeEndpointConfig) -> None:
-    """Write the config to the shared PVC YAML file."""
+    """Write the active config to disk."""
     with open(ACTIVE_EDGE_CONFIG_PATH, "w") as f:
         yaml.dump(config.to_payload(), f, default_flow_style=False)
 
@@ -46,28 +46,17 @@ def load_active_config() -> EdgeEndpointConfig:
     return EdgeEndpointConfig()
 
 
-def reconcile_config(new_config: EdgeEndpointConfig, db_manager: DatabaseManager) -> tuple[set[str], set[str]]:
-    """Reconcile a new config against the DB and persist it to the PVC file.
-
-    Diffs the new config's detectors against what's currently in the DB
-    (excluding detectors already pending deletion), marks removed detectors
-    for deletion, creates records for newly added detectors, and writes
-    the config to the shared YAML file.
-
-    This is the single code path used by both startup and PUT /edge-config.
-
-    Returns (removed_ids, added_ids).
-    """
+def get_active_detector_ids(db_manager: DatabaseManager) -> set[str]:
+    """Return detector IDs from the DB that are not pending deletion."""
     all_records = db_manager.get_inference_deployment_records()
-    current_detector_ids = {r.detector_id for r in all_records if not r.pending_deletion}
-    new_detector_ids = {d.detector_id for d in new_config.detectors if d.detector_id}
+    return {r.detector_id for r in all_records if not r.pending_deletion}
 
-    removed = current_detector_ids - new_detector_ids
-    added = new_detector_ids - current_detector_ids
 
+def apply_detector_changes(removed: set[str], added: set[str], db_manager: DatabaseManager) -> None:
+    """Mark removed detectors for deletion and create DB records for added ones."""
     for detector_id in removed:
         logger.info(f"Marking detector {detector_id} for deletion")
-        db_manager.mark_detector_pending_deletion(detector_id, GROUNDLIGHT_API_TOKEN)
+        db_manager.mark_detector_pending_deletion(detector_id)
 
     for detector_id in added:
         logger.info(f"Creating deployment record for new detector {detector_id}")
@@ -86,9 +75,32 @@ def reconcile_config(new_config: EdgeEndpointConfig, db_manager: DatabaseManager
                 fields_to_update={"pending_deletion": False, "deployment_created": False},
             )
 
+
+def compute_detector_diff(
+    current_detector_ids: set[str], new_config: EdgeEndpointConfig
+) -> tuple[set[str], set[str]]:
+    """Compute which detectors to remove and add.
+
+    Returns (removed_ids, added_ids).
+    """
+    desired = {d.detector_id for d in new_config.detectors if d.detector_id}
+    return current_detector_ids - desired, desired - current_detector_ids
+
+
+def reconcile_config(new_config: EdgeEndpointConfig, db_manager: DatabaseManager) -> None:
+    """
+    Compute the diff between a provided config and the DB state. Apply the new config. Write the new 
+    config to disk.
+    """
+    current = get_active_detector_ids(db_manager)
+    removed, added = compute_detector_diff(current, new_config)
+
+    apply_detector_changes(removed, added, db_manager)
     save_active_config(new_config)
-    logger.info(f"Config reconciled: {len(removed)} detector(s) removed, {len(added)} detector(s) added")
-    return removed, added
+    logger.info(
+        f"Config reconciled: {len(removed)} detector(s) removed, {len(added)} detector(s) added. "
+        f"Removed detectors: {removed} | Added detectors: {added}"
+        )
 
 
 def get_detector_inference_configs(
@@ -98,7 +110,10 @@ def get_detector_inference_configs(
     Produces a dict mapping detector IDs to their associated `InferenceConfig`.
     Returns None if there are no detectors in the config file.
     """
+    # Mapping of config names to InferenceConfig objects
     edge_inference_configs: dict[str, InferenceConfig] = root_edge_config.edge_inference_configs
+
+    # Filter out detectors whose IDs are empty strings.
     detectors = [detector for detector in root_edge_config.detectors if detector.detector_id != ""]
 
     detector_to_inference_config: dict[str, InferenceConfig] | None = None

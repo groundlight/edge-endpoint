@@ -169,7 +169,7 @@ def manage_update_models(
         return
 
     while True:
-        # --- Phase 1: Process pending deletions before any creation ---
+        # Process pending deletions before any creation, freeing up resources before creating new pods
         pending_deletions = frozenset(db_manager.get_pending_deletions())
         if pending_deletions:
             logger.info(f"Processing deletion of {len(pending_deletions)} detector(s): {pending_deletions}")
@@ -178,7 +178,7 @@ def manage_update_models(
                 if separate_oodd_inference:
                     deployment_manager.delete_inference_deployment(detector_id, is_oodd=True)
 
-            # Poll until all pods are fully terminated (RAM/VRAM freed)
+            # Poll until all pods are fully terminated
             poll_start = time.time()
             while time.time() - poll_start < TEN_MINUTES:
                 all_gone = all(
@@ -200,14 +200,14 @@ def manage_update_models(
                 edge_inference_manager.remove_detector(detector_id)
             logger.info(f"Finished deleting {len(pending_deletions)} detector(s)")
 
-        # --- Phase 2: Pick up newly added detectors from DB ---
+        # Pick up newly added detectors from DB
         undeployed = db_manager.get_inference_deployment_records(deployment_created=False, pending_deletion=False)
         if undeployed:
             unique_new = {r.detector_id: r.api_token for r in undeployed}
             for detector_id, api_token in unique_new.items():
                 edge_inference_manager.update_inference_config(detector_id=detector_id, api_token=api_token)
 
-        # --- Phase 3: Normal model update / deployment creation ---
+        # Check for model updates and apply model updates
         start = time.time()
         logger.debug("Starting model update check for existing inference deployments.")
         for detector_id in list(edge_inference_manager.detector_inference_configs.keys()):
@@ -233,7 +233,6 @@ def manage_update_models(
 
         # Update the status of the inference deployments in the database
         deployment_records = db_manager.get_inference_deployment_records()
-        # using a set to only get unique detector_ids
         deployed_detector_ids = set(record.detector_id for record in deployment_records)
         for detector_id in deployed_detector_ids:
             primary_deployment_name = get_edge_inference_deployment_name(detector_id)

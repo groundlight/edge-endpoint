@@ -118,10 +118,8 @@ class DatabaseManager:
             query_results = session.execute(query)
             return query_results.scalars().all()
 
-    def mark_detector_pending_deletion(self, detector_id: str, api_token: str) -> None:
-        """Mark all records for a detector as pending deletion. Creates records if none exist."""
-        from app.core.edge_inference import get_edge_inference_model_name
-
+    def mark_detector_pending_deletion(self, detector_id: str) -> None:
+        """Mark all records for a detector as pending deletion."""
         with self.session_maker() as session:
             query = select(InferenceDeployment).filter_by(detector_id=detector_id)
             existing = session.execute(query).scalars().all()
@@ -130,16 +128,7 @@ class DatabaseManager:
                     record.pending_deletion = True
                 session.commit()
             else:
-                for is_oodd in [False, True]:
-                    session.add(
-                        InferenceDeployment(
-                            model_name=get_edge_inference_model_name(detector_id, is_oodd=is_oodd),
-                            detector_id=detector_id,
-                            api_token=api_token,
-                            pending_deletion=True,
-                        )
-                    )
-                session.commit()
+                logger.error(f"No DB records found for detector {detector_id} when marking for deletion.")
 
     def get_pending_deletions(self) -> list[str]:
         """Return distinct detector_ids that are pending deletion."""
