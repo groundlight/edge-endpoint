@@ -272,9 +272,9 @@ def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_t
         histogram = all_detector_activity["det_123"]["confidence_histogram"]
         assert histogram["version"] == 2
         assert histogram["bucket_width"] == 5
-        assert len(histogram["aggregate"]["counts"]) == 20
-        assert histogram["aggregate"]["counts"][14] == 15  # 70-75 bucket
-        assert histogram["aggregate"]["counts"][19] == 10  # 95-100 bucket
+        assert len(histogram["counts"]) == 20
+        assert histogram["counts"][14] == 15  # 70-75 bucket
+        assert histogram["counts"][19] == 10  # 95-100 bucket
         assert all_detector_activity["det_456"]["hourly_total_iqs"] == 0
         assert all_detector_activity["det_456"]["hourly_total_escalations"] == 0
         assert all_detector_activity["det_456"]["hourly_total_audits"] == 0
@@ -298,9 +298,9 @@ def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_t
         active_histogram = active_detector_activity["det_123"]["confidence_histogram"]
         assert active_histogram["version"] == 2
         assert active_histogram["bucket_width"] == 5
-        assert len(active_histogram["aggregate"]["counts"]) == 20
-        assert active_histogram["aggregate"]["counts"][14] == 15  # 70-75 bucket
-        assert active_histogram["aggregate"]["counts"][19] == 10  # 95-100 bucket
+        assert len(active_histogram["counts"]) == 20
+        assert active_histogram["counts"][14] == 15  # 70-75 bucket
+        assert active_histogram["counts"][19] == 10  # 95-100 bucket
 
 
 def test_confidence_to_bucket():
@@ -401,6 +401,11 @@ def test_record_confidence_for_metrics(monkeypatch, tmp_base_dir, _test_tracker)
             == "1"
         )
 
+        # Verify no per-class files were created when class_index was omitted
+        det_dir = Path(tmp_base_dir, "detectors", "det_confidence_test")
+        per_class_files = list(det_dir.glob("confidence_v2_class_*"))
+        assert per_class_files == [], f"Per-class files should not exist without class_index: {per_class_files}"
+
 
 def test_get_detector_confidence_histogram(monkeypatch, tmp_base_dir, _test_tracker):
     """Test retrieving the confidence histogram for a detector."""
@@ -429,13 +434,13 @@ def test_get_detector_confidence_histogram(monkeypatch, tmp_base_dir, _test_trac
 
         assert histogram["version"] == 2
         assert histogram["bucket_width"] == 5
-        assert len(histogram["aggregate"]["counts"]) == 20
+        assert len(histogram["counts"]) == 20
         # Should aggregate across PIDs
-        assert histogram["aggregate"]["counts"][14] == 15  # 70-75: 10 + 5
-        assert histogram["aggregate"]["counts"][19] == 20  # 95-100
-        assert histogram["aggregate"]["counts"][0] == 2  # 0-5
+        assert histogram["counts"][14] == 15  # 70-75: 10 + 5
+        assert histogram["counts"][19] == 20  # 95-100
+        assert histogram["counts"][0] == 2  # 0-5
         # Should not include the different hour
-        assert histogram["aggregate"]["counts"][10] == 0  # 50-55 (from different hour)
+        assert histogram["counts"][10] == 0  # 50-55 (from different hour)
 
 
 def test_get_detector_confidence_histogram_empty(monkeypatch, tmp_base_dir, _test_tracker):
@@ -453,8 +458,8 @@ def test_get_detector_confidence_histogram_empty(monkeypatch, tmp_base_dir, _tes
 
         assert histogram["version"] == 2
         assert histogram["bucket_width"] == 5
-        assert len(histogram["aggregate"]["counts"]) == 20
-        assert all(c == 0 for c in histogram["aggregate"]["counts"])
+        assert len(histogram["counts"]) == 20
+        assert all(c == 0 for c in histogram["counts"])
         assert histogram["by_class"] == {}
 
 
@@ -485,15 +490,15 @@ def test_get_detector_confidence_histogram_lower_resolution_old_version(monkeypa
 
         assert histogram["version"] == 2
         assert histogram["bucket_width"] == 5
-        assert len(histogram["aggregate"]["counts"]) == 20
+        assert len(histogram["counts"]) == 20
 
         # Only v2 data should appear
-        assert histogram["aggregate"]["counts"][0] == 4  # v2 0-5
-        assert histogram["aggregate"]["counts"][14] == 10  # v2 70-75 only
+        assert histogram["counts"][0] == 4  # v2 0-5
+        assert histogram["counts"][14] == 10  # v2 70-75 only
         # v1 buckets should NOT contribute
-        assert histogram["aggregate"]["counts"][12] == 0  # v1 60-70 ignored
-        assert histogram["aggregate"]["counts"][18] == 0  # v1 90-100 ignored
-        assert sum(histogram["aggregate"]["counts"]) == 4 + 10
+        assert histogram["counts"][12] == 0  # v1 60-70 ignored
+        assert histogram["counts"][18] == 0  # v1 90-100 ignored
+        assert sum(histogram["counts"]) == 4 + 10
 
 
 def test_get_detector_confidence_histogram_higher_resolution_old_version(monkeypatch, tmp_base_dir, _test_tracker):
@@ -524,14 +529,46 @@ def test_get_detector_confidence_histogram_higher_resolution_old_version(monkeyp
 
         assert histogram["version"] == 2
         assert histogram["bucket_width"] == 5
-        assert len(histogram["aggregate"]["counts"]) == 20
+        assert len(histogram["counts"]) == 20
 
         # Only v2 data should appear
-        assert histogram["aggregate"]["counts"][0] == 4  # v2 0-5 only
-        assert histogram["aggregate"]["counts"][14] == 10  # v2 70-75 only
+        assert histogram["counts"][0] == 4  # v2 0-5 only
+        assert histogram["counts"][14] == 10  # v2 70-75 only
         # v1 buckets should NOT contribute
-        assert histogram["aggregate"]["counts"][10] == 0  # v1 50-52 ignored
-        assert sum(histogram["aggregate"]["counts"]) == 4 + 10
+        assert histogram["counts"][10] == 0  # v1 50-52 ignored
+        assert sum(histogram["counts"]) == 4 + 10
+
+
+def test_get_detector_confidence_histogram_v1_same_width_included(monkeypatch, tmp_base_dir, _test_tracker):
+    """Test that v1 aggregate files with the same bucket width are included during a rolling deployment."""
+    monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
+
+    with patch("app.metrics.iq_activity.datetime") as mock_datetime:
+        mock_datetime.now.return_value = datetime(2025, 4, 3, 20, 0, 0)
+        retriever = ActivityRetriever()
+
+        det = "det_v1_same_width"
+        det_dir = Path(tmp_base_dir, "detectors", det)
+        os.makedirs(det_dir, exist_ok=True)
+        hour = "2025-04-03_19"
+
+        # v2 files (current version)
+        Path(det_dir, f"confidence_v2_70-75_11111_{hour}").write_text("10")
+        Path(det_dir, f"confidence_v2_0-5_11111_{hour}").write_text("4")
+
+        # v1 files with same bucket width=5 (from a worker that hasn't upgraded yet)
+        Path(det_dir, f"confidence_v1_70-75_22222_{hour}").write_text("5")
+        Path(det_dir, f"confidence_v1_95-100_22222_{hour}").write_text("3")
+
+        histogram = retriever.get_detector_confidence_histogram(det)
+
+        assert histogram["version"] == 2
+        assert histogram["bucket_width"] == 5
+        # v1 aggregate files with matching width should be included
+        assert histogram["counts"][0] == 4  # v2 only
+        assert histogram["counts"][14] == 15  # v2 10 + v1 5
+        assert histogram["counts"][19] == 3  # v1 only
+        assert sum(histogram["counts"]) == 4 + 10 + 5 + 3
 
 
 def test_detector_activity_metrics_includes_histogram(monkeypatch, tmp_base_dir, _test_tracker):
@@ -556,9 +593,9 @@ def test_detector_activity_metrics_includes_histogram(monkeypatch, tmp_base_dir,
         histogram = metrics["confidence_histogram"]
         assert histogram["version"] == 2
         assert histogram["bucket_width"] == 5
-        assert len(histogram["aggregate"]["counts"]) == 20
-        assert histogram["aggregate"]["counts"][16] == 30  # 80-85 bucket
-        assert histogram["aggregate"]["counts"][18] == 20  # 90-95 bucket
+        assert len(histogram["counts"]) == 20
+        assert histogram["counts"][16] == 30  # 80-85 bucket
+        assert histogram["counts"][18] == 20  # 90-95 bucket
 
 
 # ============== Per-Class Metrics Tests ==============
@@ -670,15 +707,15 @@ def test_get_confidence_histogram_with_per_class(monkeypatch, tmp_base_dir, _tes
         histogram = retriever.get_detector_confidence_histogram(det)
 
         assert histogram["version"] == 2
-        assert histogram["aggregate"]["counts"][14] == 15  # 70-75
-        assert histogram["aggregate"]["counts"][16] == 10  # 80-85
+        assert histogram["counts"][14] == 15  # 70-75
+        assert histogram["counts"][16] == 10  # 80-85
 
         assert "0" in histogram["by_class"]
         assert "1" in histogram["by_class"]
-        assert histogram["by_class"]["0"]["counts"][14] == 8
-        assert histogram["by_class"]["0"]["counts"][16] == 6
-        assert histogram["by_class"]["1"]["counts"][14] == 7
-        assert histogram["by_class"]["1"]["counts"][16] == 4
+        assert histogram["by_class"]["0"][14] == 8
+        assert histogram["by_class"]["0"][16] == 6
+        assert histogram["by_class"]["1"][14] == 7
+        assert histogram["by_class"]["1"][16] == 4
 
 
 def test_get_per_class_activity(monkeypatch, tmp_base_dir, _test_tracker):
@@ -761,6 +798,6 @@ def test_get_detector_activity_metrics_with_per_class(monkeypatch, tmp_base_dir,
 
         # Check histogram has per-class data
         histogram = metrics["confidence_histogram"]
-        assert histogram["aggregate"]["counts"][14] == 50
-        assert histogram["by_class"]["0"]["counts"][14] == 30
-        assert histogram["by_class"]["1"]["counts"][14] == 20
+        assert histogram["counts"][14] == 50
+        assert histogram["by_class"]["0"][14] == 30
+        assert histogram["by_class"]["1"][14] == 20

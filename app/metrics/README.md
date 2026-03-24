@@ -34,10 +34,10 @@ Reported fields per detector:
   {
     "version": 2,
     "bucket_width": 5,
-    "aggregate": {"counts": [c0, c1, ..., c19]},
+    "counts": [c0, c1, ..., c19],
     "by_class": {
-      "0": {"counts": [c0, c1, ..., c19]},
-      "1": {"counts": [c0, c1, ..., c19]}
+      "0": [c0, c1, ..., c19],
+      "1": [c0, c1, ..., c19]
     }
   }
   ```
