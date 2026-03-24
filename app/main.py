@@ -38,9 +38,7 @@ scheduler = AsyncIOScheduler()
 def update_inference_config(app_state: AppState) -> None:
     """Update the App's edge-inference config by querying the database for new detectors."""
     logging.debug("Querying database for updated inference deployment records...")
-    detectors = app_state.db_manager.get_inference_deployment_records(
-        deployment_created=True, pending_deletion=False
-    )
+    detectors = app_state.db_manager.get_inference_deployment_records(deployment_created=True, pending_deletion=False)
     if detectors:
         for detector_record in detectors:
             app_state.edge_inference_manager.update_inference_config(
