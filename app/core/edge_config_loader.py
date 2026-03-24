@@ -15,32 +15,31 @@ GROUNDLIGHT_API_TOKEN = os.environ.get("GROUNDLIGHT_API_TOKEN", "")
 
 
 def load_edge_config() -> EdgeEndpointConfig:
-    """Load edge config at startup, falling back to Pydantic defaults.
-
-    Sources checked in order:
-    1. EDGE_CONFIG env var (used by Docker tests and non-Helm setups)
-    2. Helm-mounted ConfigMap file at HELM_EDGE_CONFIG_PATH
-    3. EdgeEndpointConfig() Pydantic defaults
-
-    # TODO: discuss whether Helm config should always overwrite the active
-    # config file on restart, making set_edge_config changes ephemeral.
-    """
+    """Load edge config at startup."""
     yaml_config = os.environ.get("EDGE_CONFIG", "").strip()
     if yaml_config:
         return EdgeEndpointConfig.from_yaml(yaml_str=yaml_config)
     if os.path.exists(HELM_EDGE_CONFIG_PATH):
         return EdgeEndpointConfig.from_yaml(filename=HELM_EDGE_CONFIG_PATH)
+    if os.path.exists(ACTIVE_EDGE_CONFIG_PATH):
+        return EdgeEndpointConfig.from_yaml(filename=ACTIVE_EDGE_CONFIG_PATH)
     return EdgeEndpointConfig()
 
 
 def save_active_config(config: EdgeEndpointConfig) -> None:
     """Write the active config to disk."""
+    os.makedirs(os.path.dirname(ACTIVE_EDGE_CONFIG_PATH), exist_ok=True)
     with open(ACTIVE_EDGE_CONFIG_PATH, "w") as f:
         yaml.dump(config.to_payload(), f, default_flow_style=False)
 
 
+def get_refresh_rate() -> float:
+    """Return the current refresh_rate from the active config file."""
+    return load_active_config().global_config.refresh_rate
+
+
 def load_active_config() -> EdgeEndpointConfig:
-    """Read the active config from the PVC YAML file, falling back to Pydantic defaults."""
+    """Read the active config from disk, falling back to Pydantic defaults."""
     if os.path.exists(ACTIVE_EDGE_CONFIG_PATH):
         return EdgeEndpointConfig.from_yaml(filename=ACTIVE_EDGE_CONFIG_PATH)
     return EdgeEndpointConfig()
@@ -68,11 +67,8 @@ def apply_detector_changes(removed: set[str], added: set[str], db_manager: Datab
                     "detector_id": detector_id,
                     "api_token": GROUNDLIGHT_API_TOKEN,
                     "deployment_created": False,
+                    "pending_deletion": False,
                 }
-            )
-            db_manager.update_inference_deployment_record(
-                model_name=model_name,
-                fields_to_update={"pending_deletion": False, "deployment_created": False},
             )
 
 
@@ -102,17 +98,17 @@ def reconcile_config(new_config: EdgeEndpointConfig, db_manager: DatabaseManager
 
 
 def get_detector_inference_configs(
-    root_edge_config: EdgeEndpointConfig,
+    edge_endpoint_config: EdgeEndpointConfig,
 ) -> dict[str, InferenceConfig] | None:
     """
     Produces a dict mapping detector IDs to their associated `InferenceConfig`.
     Returns None if there are no detectors in the config file.
     """
     # Mapping of config names to InferenceConfig objects
-    edge_inference_configs: dict[str, InferenceConfig] = root_edge_config.edge_inference_configs
+    edge_inference_configs: dict[str, InferenceConfig] = edge_endpoint_config.edge_inference_configs
 
     # Filter out detectors whose IDs are empty strings.
-    detectors = [detector for detector in root_edge_config.detectors if detector.detector_id != ""]
+    detectors = [detector for detector in edge_endpoint_config.detectors if detector.detector_id != ""]
 
     detector_to_inference_config: dict[str, InferenceConfig] | None = None
     if detectors:
@@ -125,9 +121,9 @@ def get_detector_inference_configs(
 
 def get_detector_edge_configs_by_id() -> Dict[str, InferenceConfig]:
     """
-    Convenience helper that loads the edge config and returns detector-level inference configs,
+    Convenience helper that loads the active edge config and returns detector-level inference configs,
     defaulting to an empty dict when none are defined.
     """
-    root_config = load_edge_config()
-    detector_configs = get_detector_inference_configs(root_config)
+    active_config = load_active_config()
+    detector_configs = get_detector_inference_configs(active_config)
     return detector_configs or {}

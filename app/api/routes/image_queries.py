@@ -100,6 +100,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         HTTPException: If there are issues with the request parameters or processing.
     """
     await validate_query_params_for_edge(request)
+    app_state.edge_inference_manager.refresh_if_needed()
 
     # The request ID is automatically set on requests from the Groundlight SDK. If it doesn't exist (e.g., if this
     # request was sent directly and not through the SDK) we generate one in the same way that the SDK does.
@@ -201,7 +202,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 return image_query
 
             if is_confident_enough:  # Audit confident edge predictions at the specified rate
-                if random.random() < app_state.edge_config.global_config.confident_audit_rate:
+                if random.random() < app_state.global_config.confident_audit_rate:
                     logger.debug(
                         f"Auditing confident edge prediction with confidence {ml_confidence} for detector {detector_id=}."
                     )

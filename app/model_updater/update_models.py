@@ -5,7 +5,7 @@ import time
 from groundlight.edge import EdgeEndpointConfig
 
 from app.core.database import DatabaseManager
-from app.core.edge_config_loader import get_detector_inference_configs, load_edge_config
+from app.core.edge_config_loader import get_detector_inference_configs, get_refresh_rate, load_edge_config
 from app.core.edge_inference import (
     EdgeInferenceManager,
     delete_old_model_versions,
@@ -140,7 +140,6 @@ def manage_update_models(
     edge_inference_manager: EdgeInferenceManager,
     deployment_manager: InferenceDeploymentManager,
     db_manager: DatabaseManager,
-    refresh_rate: float,
     separate_oodd_inference: bool,
 ) -> None:
     """
@@ -154,13 +153,12 @@ def manage_update_models(
       found in the database. Found detectors will be added to the queue of detectors that need
       an inference deployment.
 
-    NOTE: The periodicity of this task is controlled by the refresh_rate parameter.
-    It is settable in the edge config file (defaults to 2 minutes).
+    NOTE: The periodicity of this task is controlled by refresh_rate in the active edge config
+    file. The value is re-read each cycle so it can be changed at runtime.
 
     :param edge_inference_manager: the edge inference manager object.
     :param deployment_manager: the inference deployment manager object.
     :param db_manager: the database manager object.
-    :param refresh_rate: the time interval (in seconds) between model update calls.
     :param separate_oodd_inference: whether to run inference separately for an OODD model.
     """
     deploy_detector_level_inference = bool(int(os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", 0)))
@@ -225,6 +223,7 @@ def manage_update_models(
                 logger.info(f"Failed to update model for detector_id: {detector_id}. Error: {e}", exc_info=True)
 
         elapsed_s = time.time() - start
+        refresh_rate = get_refresh_rate()
         logger.debug(f"Model update check completed in {elapsed_s:.2f} seconds.")
         if elapsed_s < refresh_rate:
             sleep_duration = refresh_rate - elapsed_s
@@ -259,8 +258,7 @@ if __name__ == "__main__":
     edge_config: EdgeEndpointConfig = load_edge_config()
     logger.info(f"{edge_config=}")
 
-    refresh_rate = edge_config.global_config.refresh_rate
-    detector_inference_configs = get_detector_inference_configs(root_edge_config=edge_config)
+    detector_inference_configs = get_detector_inference_configs(edge_config)
 
     logger.info("Creating edge inference manager, deployment manager, and database manager.")
     edge_inference_manager = EdgeInferenceManager(detector_inference_configs=detector_inference_configs, verbose=True)
@@ -274,6 +272,5 @@ if __name__ == "__main__":
         edge_inference_manager=edge_inference_manager,
         deployment_manager=deployment_manager,
         db_manager=db_manager,
-        refresh_rate=refresh_rate,
         separate_oodd_inference=not USE_MINIMAL_IMAGE,
     )

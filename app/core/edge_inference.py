@@ -14,7 +14,7 @@ from groundlight.edge import InferenceConfig
 from jinja2 import Template
 from model import ModeEnum
 
-from app.core.file_paths import MODEL_REPOSITORY_PATH
+from app.core.file_paths import ACTIVE_EDGE_CONFIG_PATH, MODEL_REPOSITORY_PATH
 from app.core.speedmon import SpeedMonitor
 from app.core.utils import ModelInfoBase, ModelInfoWithBinary, parse_model_info
 
@@ -29,7 +29,7 @@ ttl_cache = TTLCache(maxsize=128, ttl=5)
 def is_edge_inference_ready(inference_client_url: str) -> bool:
     model_ready_url = f"http://{inference_client_url}/health/ready"
     try:
-        response = requests.get(model_ready_url)
+        response = requests.get(model_ready_url, timeout=0.5)
         return response.status_code == status.HTTP_200_OK
     except requests.exceptions.RequestException as e:
         logger.warning(f"Failed to connect to {model_ready_url}: {e}")
@@ -241,57 +241,79 @@ class EdgeInferenceManager:
             separate_oodd_inference: Whether to run inference separately for the OODD model
         """
         self.verbose = verbose
-        self.detector_inference_configs, self.inference_client_urls, self.oodd_inference_client_urls = {}, {}, {}
+        self.detector_inference_configs: dict[str, InferenceConfig] = {}
         self.speedmon = SpeedMonitor()
         self.separate_oodd_inference = separate_oodd_inference
+        self.last_escalation_times: dict[str, float | None] = {}
+        self.min_times_between_escalations: dict[str, float] = {}
+
+        self._config_mtime: float = 0
 
         if detector_inference_configs:
             self.detector_inference_configs = detector_inference_configs
-            self.inference_client_urls = {
-                detector_id: get_edge_inference_service_name(detector_id) + ":8000"
-                for detector_id in self.detector_inference_configs.keys()
-                if self.detector_configured_for_edge_inference(detector_id)
+            self.last_escalation_times = {did: None for did in detector_inference_configs}
+            self.min_times_between_escalations = {
+                did: cfg.min_time_between_escalations for did, cfg in detector_inference_configs.items()
             }
-            if separate_oodd_inference:
-                self.oodd_inference_client_urls = {
-                    detector_id: get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
-                    for detector_id in self.detector_inference_configs.keys()
-                    if self.detector_configured_for_edge_inference(detector_id)
-                }
-        # Last time we escalated to cloud for each detector
-        self.last_escalation_times = {detector_id: None for detector_id in self.detector_inference_configs.keys()}
-        # Minimum time between escalations for each detector
-        self.min_times_between_escalations = {
-            detector_id: detector_inference_config.min_time_between_escalations
-            for detector_id, detector_inference_config in self.detector_inference_configs.items()
-        }
+
+    def _apply_detector_config(self, detector_id: str, config: InferenceConfig) -> None:
+        """Add or update a single detector's inference config and associated state."""
+        api_token = config.api_token or os.environ.get("GROUNDLIGHT_API_TOKEN", "")
+        if config.api_token is None:
+            config = config.model_copy(update={"api_token": api_token})
+        self.detector_inference_configs[detector_id] = config
+        self.min_times_between_escalations[detector_id] = config.min_time_between_escalations
+        if detector_id not in self.last_escalation_times:
+            self.last_escalation_times[detector_id] = None
+
+    def refresh_if_needed(self) -> None:
+        """Reload detector inference configs from the active config file if it has changed.
+
+        Called per-request. The os.stat check is ~2us and short-circuits when nothing changed.
+        """
+        from app.core.edge_config_loader import get_detector_inference_configs, load_active_config
+
+        try:
+            mtime = os.path.getmtime(ACTIVE_EDGE_CONFIG_PATH)
+        except FileNotFoundError:
+            return
+        if mtime == self._config_mtime:
+            return
+
+        self._config_mtime = mtime
+        active_config = load_active_config()
+        new_configs = get_detector_inference_configs(active_config) or {}
+
+        old_ids = set(self.detector_inference_configs.keys())
+        new_ids = set(new_configs.keys())
+
+        for detector_id in old_ids - new_ids:
+            self.remove_detector(detector_id)
+            logger.info(f"Removed edge inference config for {detector_id}")
+
+        for detector_id in new_ids - old_ids:
+            self._apply_detector_config(detector_id, new_configs[detector_id])
+            logger.info(f"Added edge inference config for {detector_id} -> '{new_configs[detector_id].name}'")
+
+        for detector_id in old_ids & new_ids:
+            if self.detector_inference_configs[detector_id] != new_configs[detector_id]:
+                self._apply_detector_config(detector_id, new_configs[detector_id])
+                logger.info(f"Updated edge inference config for {detector_id} -> '{new_configs[detector_id].name}'")
 
     def update_inference_config(self, detector_id: str, api_token: str) -> None:
-        """
-        Adds a new detector to the inference config at runtime. This is useful when new
-        detectors are added to the database and we want to create an inference deployment for them.
-        Args:
-            detector_id: ID of the detector on which to run local edge inference
-            api_token: API token required to fetch inference models
+        """Add a detector with a default InferenceConfig if not already present.
 
+        Used by the model-updater to register detectors discovered from the DB.
         """
-        if detector_id not in self.detector_inference_configs.keys():
-            self.detector_inference_configs[detector_id] = InferenceConfig(
-                name="runtime_detector_config", enabled=True, api_token=api_token
+        if detector_id not in self.detector_inference_configs:
+            self._apply_detector_config(
+                detector_id, InferenceConfig(name="runtime_default", enabled=True, api_token=api_token)
             )
-            self.inference_client_urls[detector_id] = get_edge_inference_service_name(detector_id) + ":8000"
-            if self.separate_oodd_inference:
-                logger.info(f"Performing separate OODD inference, updating OODD inference URL for {detector_id}")
-                self.oodd_inference_client_urls[detector_id] = (
-                    get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
-                )
             logger.info(f"Set up edge inference for {detector_id}")
 
     def remove_detector(self, detector_id: str) -> None:
         """Remove a detector from all in-memory maps."""
         self.detector_inference_configs.pop(detector_id, None)
-        self.inference_client_urls.pop(detector_id, None)
-        self.oodd_inference_client_urls.pop(detector_id, None)
         self.last_escalation_times.pop(detector_id, None)
         self.min_times_between_escalations.pop(detector_id, None)
 
@@ -319,25 +341,23 @@ class EdgeInferenceManager:
         Returns:
             True if edge inference for the specified detector is available, False otherwise
         """
-        try:
-            inference_client_url = self.inference_client_urls[detector_id]
-            oodd_inference_client_url = (
-                self.oodd_inference_client_urls[detector_id] if self.separate_oodd_inference else None
+        primary_url = get_edge_inference_service_name(detector_id) + ":8000"
+        oodd_url = get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000" if self.separate_oodd_inference else None
+
+        ready = is_edge_inference_ready(primary_url) and (
+            not self.separate_oodd_inference or is_edge_inference_ready(oodd_url)
+        )
+        if not ready:
+            logger.debug(
+                f"Edge inference server and/or OODD inference server is not ready. {primary_url=}, {oodd_url=}"
             )
-        except KeyError:
-            logger.info(f"Failed to look up inference clients for {detector_id}")
             return False
 
-        # primary inference client is ready, and if we're doing separate OODD inference, the OODD
-        # inference client is also ready
-        inference_clients_are_ready = is_edge_inference_ready(inference_client_url) and (
-            not self.separate_oodd_inference or is_edge_inference_ready(oodd_inference_client_url)
-        )
-        if not inference_clients_are_ready:
-            logger.debug(
-                f"Edge inference server and/or OODD inference server is not ready. {inference_client_url=}, {oodd_inference_client_url=}"
+        if not self.detector_configured_for_edge_inference(detector_id):
+            self._apply_detector_config(
+                detector_id, InferenceConfig(name="auto_discovered", enabled=True)
             )
-            return False
+            logger.info(f"Auto-discovered inference pod for {detector_id}")
         return True
 
     def run_inference(self, detector_id: str, image_bytes: bytes, content_type: str, mode: ModeEnum) -> dict:
@@ -357,9 +377,9 @@ class EdgeInferenceManager:
         logger.info(f"Submitting image to edge inference service. {detector_id=}")
         start_time = time.perf_counter()
 
-        primary_url = self.inference_client_urls[detector_id]
+        primary_url = get_edge_inference_service_name(detector_id) + ":8000"
         if self.separate_oodd_inference:
-            oodd_url = self.oodd_inference_client_urls[detector_id]
+            oodd_url = get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
             with ThreadPoolExecutor(max_workers=2) as executor:
                 f_primary = executor.submit(submit_image_for_inference, primary_url, image_bytes, content_type)
                 f_oodd = executor.submit(submit_image_for_inference, oodd_url, image_bytes, content_type)

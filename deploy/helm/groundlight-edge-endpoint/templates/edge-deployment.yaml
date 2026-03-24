@@ -148,6 +148,8 @@ spec:
           subPath: dummy-nginx.conf
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/sqlite
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/config
         - name: device-info-volume
           mountPath: /opt/groundlight/device
         - name: escalation-queue-volume
@@ -184,6 +186,8 @@ spec:
             mountPath: /opt/groundlight/device
           - name: edge-endpoint-persistent-volume
             mountPath: /opt/groundlight/edge/serving/model-repo
+          - name: edge-endpoint-persistent-volume
+            mountPath: /opt/groundlight/edge/config
           - name: escalation-queue-volume
             mountPath: /opt/groundlight/queue
       
