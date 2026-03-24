@@ -258,6 +258,8 @@ spec:
 
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/serving/model-repo
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/config
 
         - name: device-info-volume
           mountPath: /opt/groundlight/device
