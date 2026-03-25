@@ -668,9 +668,7 @@ def test_record_activity_with_class_index(monkeypatch, tmp_base_dir, _test_track
 
         # Record escalations with class_index
         record_activity_for_metrics("det_per_class_act", "escalations", class_index=1)
-        assert Path(
-            tmp_base_dir, "detectors", "det_per_class_act", "escalations_class_1_44444_2025-04-03_23"
-        ).exists()
+        assert Path(tmp_base_dir, "detectors", "det_per_class_act", "escalations_class_1_44444_2025-04-03_23").exists()
 
         # Record iqs with class_index (should NOT create per-class file - iqs doesn't support per-class)
         record_activity_for_metrics("det_per_class_act", "iqs", class_index=0)

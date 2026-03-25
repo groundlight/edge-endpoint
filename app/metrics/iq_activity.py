@@ -451,7 +451,9 @@ def record_confidence_for_metrics(detector_id: str, confidence: float, class_ind
             f"Recording confidence {confidence} (bucket {bucket}, class {class_index}) on detector {detector_id}"
         )
     else:
-        logger.debug(f"Recording confidence {confidence} (bucket {bucket}) on detector {detector_id}, no class index provided")
+        logger.debug(
+            f"Recording confidence {confidence} (bucket {bucket}) on detector {detector_id}, no class index provided"
+        )
 
 
 def clear_old_activity_files():
