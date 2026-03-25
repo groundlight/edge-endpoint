@@ -663,20 +663,20 @@ def test_record_activity_with_class_index(monkeypatch, tmp_base_dir, _test_track
 
         # Check per-class file exists
         assert Path(
-            tmp_base_dir, "detectors", "det_per_class_act", "below_threshold_iqs_v2_class_0_44444_2025-04-03_23"
+            tmp_base_dir, "detectors", "det_per_class_act", "below_threshold_iqs_class_0_44444_2025-04-03_23"
         ).exists()
 
         # Record escalations with class_index
         record_activity_for_metrics("det_per_class_act", "escalations", class_index=1)
         assert Path(
-            tmp_base_dir, "detectors", "det_per_class_act", "escalations_v2_class_1_44444_2025-04-03_23"
+            tmp_base_dir, "detectors", "det_per_class_act", "escalations_class_1_44444_2025-04-03_23"
         ).exists()
 
         # Record iqs with class_index (should NOT create per-class file - iqs doesn't support per-class)
         record_activity_for_metrics("det_per_class_act", "iqs", class_index=0)
         assert Path(tmp_base_dir, "detectors", "det_per_class_act", "iqs_44444_2025-04-03_23").exists()
         # No per-class file for iqs
-        assert not Path(tmp_base_dir, "detectors", "det_per_class_act", "iqs_v2_class_0_44444_2025-04-03_23").exists()
+        assert not Path(tmp_base_dir, "detectors", "det_per_class_act", "iqs_class_0_44444_2025-04-03_23").exists()
 
 
 def test_get_confidence_histogram_with_per_class(monkeypatch, tmp_base_dir, _test_tracker):
@@ -732,13 +732,13 @@ def test_get_per_class_activity(monkeypatch, tmp_base_dir, _test_tracker):
         hour = "2025-04-04_10"
 
         # Per-class escalations
-        Path(det_dir, f"escalations_v2_class_0_11111_{hour}").write_text("5")
-        Path(det_dir, f"escalations_v2_class_0_22222_{hour}").write_text("3")
-        Path(det_dir, f"escalations_v2_class_1_11111_{hour}").write_text("7")
+        Path(det_dir, f"escalations_class_0_11111_{hour}").write_text("5")
+        Path(det_dir, f"escalations_class_0_22222_{hour}").write_text("3")
+        Path(det_dir, f"escalations_class_1_11111_{hour}").write_text("7")
 
         # Per-class below_threshold_iqs
-        Path(det_dir, f"below_threshold_iqs_v2_class_0_11111_{hour}").write_text("10")
-        Path(det_dir, f"below_threshold_iqs_v2_class_1_11111_{hour}").write_text("15")
+        Path(det_dir, f"below_threshold_iqs_class_0_11111_{hour}").write_text("10")
+        Path(det_dir, f"below_threshold_iqs_class_1_11111_{hour}").write_text("15")
 
         escalations_by_class = retriever.get_per_class_activity(det, "escalations")
         assert escalations_by_class["0"] == 8  # 5 + 3
@@ -769,10 +769,10 @@ def test_get_detector_activity_metrics_with_per_class(monkeypatch, tmp_base_dir,
         Path(det_dir, f"confidence_v2_70-75_11111_{hour}").write_text("50")
 
         # Per-class files
-        Path(det_dir, f"escalations_v2_class_0_11111_{hour}").write_text("12")
-        Path(det_dir, f"escalations_v2_class_1_11111_{hour}").write_text("8")
-        Path(det_dir, f"below_threshold_iqs_v2_class_0_11111_{hour}").write_text("18")
-        Path(det_dir, f"below_threshold_iqs_v2_class_1_11111_{hour}").write_text("12")
+        Path(det_dir, f"escalations_class_0_11111_{hour}").write_text("12")
+        Path(det_dir, f"escalations_class_1_11111_{hour}").write_text("8")
+        Path(det_dir, f"below_threshold_iqs_class_0_11111_{hour}").write_text("18")
+        Path(det_dir, f"below_threshold_iqs_class_1_11111_{hour}").write_text("12")
         Path(det_dir, f"confidence_v2_class_0_70-75_11111_{hour}").write_text("30")
         Path(det_dir, f"confidence_v2_class_1_70-75_11111_{hour}").write_text("20")
 

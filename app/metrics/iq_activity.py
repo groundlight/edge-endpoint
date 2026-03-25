@@ -21,8 +21,8 @@ Filesystem structure:
             confidence_v2_0-5_<pid1>_YYYY-MM-DD_HH    <-- confidence histogram buckets (5% intervals, version-prefixed)
             confidence_v2_95-100_<pid1>_YYYY-MM-DD_HH
             confidence_v2_class_0_70-75_<pid1>_YYYY-MM-DD_HH    <-- per-class confidence histograms
-            escalations_v2_class_0_<pid1>_YYYY-MM-DD_HH          <-- per-class activity counters
-            below_threshold_iqs_v2_class_0_<pid1>_YYYY-MM-DD_HH
+            escalations_class_0_<pid1>_YYYY-MM-DD_HH          <-- per-class activity counters
+            below_threshold_iqs_class_0_<pid1>_YYYY-MM-DD_HH
         <detector_id2>/
             repeat of above detector
 """
@@ -30,7 +30,6 @@ Filesystem structure:
 import json
 import logging
 import os
-from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
@@ -251,37 +250,23 @@ class ActivityRetriever:
                          If None, globs the detector folder.
 
         Returns:
-            Dict mapping class indices to counts:
-            {
-                "0": 10,
-                "1": 5
-            }
+            Dict mapping class index strings to counts.
         """
-        version = ConfidenceHistogramConfig.VERSION
-        prefix = f"{activity_type}_v{version}_class_"
+        prefix = f"{activity_type}_class_"
 
         if hourly_files is not None:
             activity_files = [f for f in hourly_files if f.name.startswith(prefix)]
         else:
             time = self._previous_hour_local()
             detector_folder = _tracker().detector_folder(detector_id)
-            pattern = f"{activity_type}_v{version}_class_*_{time}"
-            activity_files = list(detector_folder.glob(pattern))
+            activity_files = list(detector_folder.glob(f"{prefix}*_{time}"))
 
         by_class: dict[str, int] = {}
 
         for f in activity_files:
-            # Extract the part after the prefix
-            if not f.name.startswith(prefix):
-                continue
-
             # Remainder is "<index>_<pid>_YYYY-MM-DD_HH"
             remainder = f.name[len(prefix) :]
-            parts = remainder.split("_")
-            if len(parts) < 4:
-                continue
-
-            class_index = parts[0]
+            class_index = remainder.split("_")[0]
             count = _tracker().get_activity_from_file(f)
             by_class[class_index] = by_class.get(class_index, 0) + count
 
@@ -291,11 +276,9 @@ class ActivityRetriever:
         """Get the confidence histogram for a detector for the previous hour.
 
         Globs for all versioned confidence files (``confidence_v*_…``).
-        Aggregate files from any version are accepted; bucket_name_to_index
-        validates the bucket width matches, so files from a version with a
-        different bucket width are safely skipped.  Per-class files are only
-        accepted from the current version (they did not exist before v2).
-        Files whose bucket name cannot be parsed are logged and skipped.
+        Files from any version are accepted; bucket_name_to_index validates
+        the bucket width matches, so files from a version with a different
+        bucket width are safely skipped.
 
         Returns:
             A versioned, self-describing envelope with aggregate and per-class data:
@@ -316,28 +299,17 @@ class ActivityRetriever:
         activity_files = list(detector_folder.glob(f"confidence_v*_*_{time}"))
 
         aggregate_counts = cfg.empty_counts()
-        by_class_counts: dict[str, list[int]] = defaultdict(cfg.empty_counts)
-        current_version_tag = f"v{cfg.VERSION}"
+        by_class_counts: dict[str, list[int]] = {}
 
         for f in activity_files:
             # Filename formats:
             # - Aggregate: "confidence_v<version>_<bucket>_<pid>_YYYY-MM-DD_HH"
             # - Per-class: "confidence_v<version>_class_<index>_<bucket>_<pid>_YYYY-MM-DD_HH"
             parts = f.name.split("_")
-            if len(parts) < 3 or parts[0] != "confidence":
-                continue
-            version_tag = parts[1]
 
             # Check if this is a per-class file
             if parts[2] == "class":
-                # Per-class files only exist in v2+; skip older versions
-                if version_tag != current_version_tag:
-                    logger.debug(f"Skipping old-version per-class confidence file {f.name}")
-                    continue
                 # Per-class file: confidence_v2_class_<index>_<bucket>_<pid>_YYYY-MM-DD_HH
-                if len(parts) < 6:
-                    logger.error(f"Skipping malformed per-class confidence file: {f.name}")
-                    continue
                 class_index = parts[3]
                 bucket = parts[4]
 
@@ -346,6 +318,9 @@ class ActivityRetriever:
                 except ValueError:
                     logger.error(f"Skipping confidence file with invalid bucket: {f.name}")
                     continue
+
+                if class_index not in by_class_counts:
+                    by_class_counts[class_index] = cfg.empty_counts()
 
                 count = _tracker().get_activity_from_file(f)
                 by_class_counts[class_index][index] += count
@@ -362,7 +337,7 @@ class ActivityRetriever:
                 count = _tracker().get_activity_from_file(f)
                 aggregate_counts[index] += count
 
-        return cfg.to_envelope(aggregate_counts, dict(by_class_counts))
+        return cfg.to_envelope(aggregate_counts, by_class_counts)
 
     def get_detector_activity_metrics(self, detector_id: str) -> dict:
         """Get the activity on a detector for the previous hour."""
@@ -392,7 +367,7 @@ class ActivityRetriever:
                 if by_class:
                     detector_metrics[f"{activity_type}_by_class"] = by_class
 
-        # Add confidence histogram (now includes per-class data)
+        # Add confidence histogram
         detector_metrics["confidence_histogram"] = self.get_detector_confidence_histogram(detector_id)
 
         return detector_metrics
@@ -408,9 +383,9 @@ def record_activity_for_metrics(detector_id: str, activity_type: str, class_inde
     """Records an activity from a detector.
 
     Supported activity types:
-    - iqs: Total image queries (no per-class support)
+    - iqs: Total image queries
     - escalations: Escalations to cloud (per-class supported)
-    - audits: Audit submissions (no per-class support)
+    - audits: Audit submissions
     - below_threshold_iqs: Below threshold queries (per-class supported)
 
     Args:
@@ -436,7 +411,7 @@ def record_activity_for_metrics(detector_id: str, activity_type: str, class_inde
 
     # Record per-class for supported activity types
     if class_index is not None and activity_type in per_class_activity_types:
-        per_class_prefix = f"{activity_type}_v{ConfidenceHistogramConfig.VERSION}_class_{class_index}"
+        per_class_prefix = f"{activity_type}_class_{class_index}"
         f = _tracker().hourly_activity_file(per_class_prefix, current_hour, detector_id)
         _tracker().increment_counter_file(f)
         logger.debug(f"Recording per-class {activity_type} for class {class_index} on detector {detector_id}")
@@ -462,7 +437,7 @@ def record_confidence_for_metrics(detector_id: str, confidence: float, class_ind
     bucket = ConfidenceHistogramConfig.confidence_to_bucket(confidence)
     current_hour = datetime.now()
 
-    # Record aggregate (always, for backwards compatibility)
+    # Record aggregate
     aggregate_prefix = f"{ConfidenceHistogramConfig.filename_prefix()}_{bucket}"
     f = _tracker().hourly_activity_file(aggregate_prefix, current_hour, detector_id)
     _tracker().increment_counter_file(f)
@@ -476,7 +451,7 @@ def record_confidence_for_metrics(detector_id: str, confidence: float, class_ind
             f"Recording confidence {confidence} (bucket {bucket}, class {class_index}) on detector {detector_id}"
         )
     else:
-        logger.debug(f"Recording confidence {confidence} (bucket {bucket}) on detector {detector_id}")
+        logger.debug(f"Recording confidence {confidence} (bucket {bucket}) on detector {detector_id}, no class index provided")
 
 
 def clear_old_activity_files():
