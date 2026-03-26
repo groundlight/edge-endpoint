@@ -13,6 +13,8 @@ from fastapi import HTTPException, status
 from jinja2 import Template
 from model import ModeEnum
 
+from groundlight.edge import EdgeEndpointConfig, InferenceConfig
+
 from app.core.edge_config_loader import EdgeConfigManager
 from app.core.file_paths import MODEL_REPOSITORY_PATH
 from app.core.naming import (
@@ -243,7 +245,6 @@ class EdgeInferenceManager:
         self.separate_oodd_inference = separate_oodd_inference
         self.last_escalation_times: dict[str, float | None] = {}
 
-
     def inference_is_available(self, detector_id: str) -> bool:
         """Check whether inference pods for this detector are ready to serve."""
         primary_url = get_edge_inference_service_name(detector_id) + ":8000"
@@ -345,20 +346,23 @@ class EdgeInferenceManager:
         )
         return True
 
-    def escalation_cooldown_complete(self, detector_id: str) -> bool:
+    def escalation_cooldown_complete(self, detector_id: str, edge_config: EdgeEndpointConfig) -> bool:
         """
         Check if the time since the last escalation is long enough ago that we should escalate again.
         The minimum time between escalations for a detector is set by the `min_time_between_escalations` field in the
-        detector's config. If the field is not set, we use a default of 2 seconds.
+        detector's config. If the field is not set, we use the default defined in EdgeEndpointConfig.
 
         Args:
             detector_id: ID of the detector to check
+            edge_config: The active edge endpoint configuration.
         Returns:
             True if there hasn't been an escalation on this detector in the last `min_time_between_escalations` seconds,
               False otherwise.
         """
-        det_config = EdgeConfigManager.detector_config(EdgeConfigManager.active(), detector_id)
-        min_time_between_escalations = det_config.min_time_between_escalations if det_config else 2
+        det_config = EdgeConfigManager.detector_config(edge_config, detector_id)
+        min_time_between_escalations = (
+            det_config.min_time_between_escalations if det_config else InferenceConfig().min_time_between_escalations
+        )
         last_escalation_time = self.last_escalation_times.get(detector_id)
 
         if last_escalation_time is None or (time.time() - last_escalation_time) > min_time_between_escalations:
@@ -660,7 +664,3 @@ def delete_model_version(model_dir: str, model_version: int) -> None:
     logger.info(f"Deleting model version {model_version} for {model_dir}")
     if os.path.exists(model_version_dir):
         shutil.rmtree(model_version_dir)
-
-
-
-
