@@ -10,11 +10,17 @@ import requests
 import yaml
 from cachetools import TTLCache, cached
 from fastapi import HTTPException, status
-from groundlight.edge import InferenceConfig
 from jinja2 import Template
 from model import ModeEnum
 
+from app.core.edge_config_loader import EdgeConfigManager
 from app.core.file_paths import MODEL_REPOSITORY_PATH
+from app.core.naming import (
+    get_detector_models_dir,
+    get_edge_inference_service_name,
+    get_oodd_model_dir,
+    get_primary_edge_model_dir,
+)
 from app.core.speedmon import SpeedMonitor
 from app.core.utils import ModelInfoBase, ModelInfoWithBinary, parse_model_info
 
@@ -237,19 +243,6 @@ class EdgeInferenceManager:
         self.separate_oodd_inference = separate_oodd_inference
         self.last_escalation_times: dict[str, float | None] = {}
 
-    def _get_detector_configs(self) -> dict[str, InferenceConfig]:
-        """Return detector inference configs from the active config file."""
-        from app.core.edge_config_loader import EdgeConfigManager, get_detector_inference_configs
-
-        return get_detector_inference_configs(EdgeConfigManager.active()) or {}
-
-    def _get_detector_config(self, detector_id: str) -> InferenceConfig | None:
-        """Return the InferenceConfig for a single detector, or None."""
-        return self._get_detector_configs().get(detector_id)
-
-    def detector_configured_for_edge_inference(self, detector_id: str) -> bool:
-        config = self._get_detector_config(detector_id)
-        return config is not None and config.enabled
 
     def inference_is_available(self, detector_id: str) -> bool:
         """Check whether inference pods for this detector are ready to serve."""
@@ -318,8 +311,8 @@ class EdgeInferenceManager:
         """
         logger.debug(f"Checking if there are new models available for {detector_id}")
 
-        config = self._get_detector_config(detector_id)
-        api_token = config.api_token if config and config.enabled else None
+        det_config = EdgeConfigManager.detector_config(EdgeConfigManager.active(), detector_id)
+        api_token = det_config.api_token if det_config and det_config.enabled else None
 
         # fallback to env var if we don't have a token in the config
         api_token = api_token or os.environ.get("GROUNDLIGHT_API_TOKEN", None)
@@ -364,8 +357,8 @@ class EdgeInferenceManager:
             True if there hasn't been an escalation on this detector in the last `min_time_between_escalations` seconds,
               False otherwise.
         """
-        config = self._get_detector_config(detector_id)
-        min_time_between_escalations = config.min_time_between_escalations if config else 2
+        det_config = EdgeConfigManager.detector_config(EdgeConfigManager.active(), detector_id)
+        min_time_between_escalations = det_config.min_time_between_escalations if det_config else 2
         last_escalation_time = self.last_escalation_times.get(detector_id)
 
         if last_escalation_time is None or (time.time() - last_escalation_time) > min_time_between_escalations:
@@ -669,31 +662,5 @@ def delete_model_version(model_dir: str, model_version: int) -> None:
         shutil.rmtree(model_version_dir)
 
 
-def get_edge_inference_service_name(detector_id: str, is_oodd: bool = False) -> str:
-    """
-    Kubernetes service/deployment names have a strict naming convention.
-    They have to be alphanumeric, lower cased, and can only contain dashes.
-    We just use `inferencemodel-{'oodd' or 'primary'}-<detector_id>` as the deployment name and
-    `inference-service-{'oodd' or 'primary'}-<detector_id>` as the service name.
-    """
-    return f"inference-service-{'oodd' if is_oodd else 'primary'}-{detector_id.replace('_', '-').lower()}"
 
 
-def get_edge_inference_deployment_name(detector_id: str, is_oodd: bool = False) -> str:
-    return f"inferencemodel-{'oodd' if is_oodd else 'primary'}-{detector_id.replace('_', '-').lower()}"
-
-
-def get_edge_inference_model_name(detector_id: str, is_oodd: bool = False) -> str:
-    return os.path.join(detector_id, "primary" if not is_oodd else "oodd")
-
-
-def get_detector_models_dir(repository_root: str, detector_id: str) -> str:
-    return os.path.join(repository_root, detector_id)
-
-
-def get_primary_edge_model_dir(repository_root: str, detector_id: str) -> str:
-    return os.path.join(get_detector_models_dir(repository_root, detector_id), "primary")
-
-
-def get_oodd_model_dir(repository_root: str, detector_id: str) -> str:
-    return os.path.join(get_detector_models_dir(repository_root, detector_id), "oodd")

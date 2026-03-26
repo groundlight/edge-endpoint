@@ -9,8 +9,9 @@ import yaml
 from groundlight.edge import InferenceConfig
 from kubernetes import client, config
 
-from app.core.edge_config_loader import get_detector_edge_configs_by_id
-from app.core.edge_inference import get_current_pipeline_config, get_predictor_metadata, get_primary_edge_model_dir
+from app.core.edge_config_loader import EdgeConfigManager
+from app.core.edge_inference import get_current_pipeline_config, get_predictor_metadata
+from app.core.naming import get_primary_edge_model_dir
 from app.core.file_paths import MODEL_REPOSITORY_PATH
 
 logger = logging.getLogger(__name__)
@@ -304,7 +305,7 @@ def get_detector_details() -> str:
         if det_id and _get_annotation(pod, "groundlight.dev/model-name") == f"{det_id}/primary":
             pods_by_detector.setdefault(det_id, []).append(pod)
 
-    detector_edge_configs = get_detector_edge_configs_by_id()
+    detector_edge_configs = EdgeConfigManager.detector_configs(EdgeConfigManager.active())
     detector_details: dict[str, dict] = {}
 
     for dep in deployments.items:

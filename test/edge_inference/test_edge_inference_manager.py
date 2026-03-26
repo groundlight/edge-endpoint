@@ -6,7 +6,8 @@ import pytest
 import yaml
 from model import ModeEnum
 
-from app.core.edge_inference import EdgeInferenceManager, get_edge_inference_service_name
+from app.core.edge_inference import EdgeInferenceManager
+from app.core.naming import get_edge_inference_service_name
 from app.core.utils import ModelInfoBase, ModelInfoNoBinary, ModelInfoWithBinary
 
 

@@ -1,13 +1,12 @@
 import logging
 import os
-from typing import Dict
 
 import yaml
 from groundlight.edge import EdgeEndpointConfig, InferenceConfig
 
 from .database import DatabaseManager
-from .edge_inference import get_edge_inference_model_name
 from .file_paths import ACTIVE_EDGE_CONFIG_PATH, HELM_EDGE_CONFIG_PATH
+from .naming import get_edge_inference_model_name
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +58,22 @@ class EdgeConfigManager:
             cls._cached_mtime = mtime
             cls._cached_config = EdgeEndpointConfig.from_yaml(filename=ACTIVE_EDGE_CONFIG_PATH)
         return cls._cached_config
+
+    @staticmethod
+    def detector_configs(config: EdgeEndpointConfig) -> dict[str, InferenceConfig]:
+        """Return a mapping of detector IDs to their InferenceConfig."""
+        detectors = [d for d in config.detectors if d.detector_id]
+        if not detectors:
+            return {}
+        return {d.detector_id: config.edge_inference_configs[d.edge_inference_config] for d in detectors}
+
+    @staticmethod
+    def detector_config(config: EdgeEndpointConfig, detector_id: str) -> InferenceConfig | None:
+        """Return the InferenceConfig for a single detector, or None."""
+        for d in config.detectors:
+            if d.detector_id == detector_id:
+                return config.edge_inference_configs[d.edge_inference_config]
+        return None
 
 
 def get_active_detector_ids(db_manager: DatabaseManager) -> set[str]:
@@ -112,32 +127,3 @@ def reconcile_config(new_config: EdgeEndpointConfig, db_manager: DatabaseManager
         f"Removed detectors: {removed} | Added detectors: {added}"
     )
 
-
-def get_detector_inference_configs(
-    edge_endpoint_config: EdgeEndpointConfig,
-) -> dict[str, InferenceConfig] | None:
-    """
-    Produces a dict mapping detector IDs to their associated `InferenceConfig`.
-    Returns None if there are no detectors in the config file.
-    """
-    # Mapping of config names to InferenceConfig objects
-    edge_inference_configs: dict[str, InferenceConfig] = edge_endpoint_config.edge_inference_configs
-
-    # Filter out detectors whose IDs are empty strings.
-    detectors = [detector for detector in edge_endpoint_config.detectors if detector.detector_id != ""]
-
-    detector_to_inference_config: dict[str, InferenceConfig] | None = None
-    if detectors:
-        detector_to_inference_config = {
-            detector.detector_id: edge_inference_configs[detector.edge_inference_config] for detector in detectors
-        }
-
-    return detector_to_inference_config
-
-
-def get_detector_edge_configs_by_id() -> Dict[str, InferenceConfig]:
-    """
-    Convenience helper that returns detector-level inference configs from the active config,
-    defaulting to an empty dict when none are defined.
-    """
-    return get_detector_inference_configs(EdgeConfigManager.active()) or {}

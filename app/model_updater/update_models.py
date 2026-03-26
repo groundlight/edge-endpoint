@@ -4,12 +4,8 @@ import time
 
 from app.core.database import DatabaseManager
 from app.core.edge_config_loader import EdgeConfigManager
-from app.core.edge_inference import (
-    EdgeInferenceManager,
-    delete_old_model_versions,
-    get_edge_inference_deployment_name,
-    get_edge_inference_model_name,
-)
+from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions
+from app.core.naming import get_edge_inference_deployment_name, get_edge_inference_model_name
 from app.core.kubernetes_management import InferenceDeploymentManager
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
