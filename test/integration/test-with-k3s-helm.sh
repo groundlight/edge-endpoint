@@ -36,9 +36,13 @@ export REFRESH_RATE=60 # not actually different than the default, but we may wan
 # but first, save the template to a temporary file
 EDGE_CONFIG_FILE="/tmp/edge-config.$$.yaml"
 
-cp deploy/helm/groundlight-edge-endpoint/files/default-edge-config.yaml $EDGE_CONFIG_FILE
-sed -i "s/detector_id: \"\"/detector_id: \"$DETECTOR_ID\"/" $EDGE_CONFIG_FILE
-sed -i "s/refresh_rate: 60/refresh_rate: $REFRESH_RATE/" $EDGE_CONFIG_FILE
+cat > $EDGE_CONFIG_FILE <<EOF
+global_config:
+  refresh_rate: $REFRESH_RATE
+detectors:
+  - detector_id: "$DETECTOR_ID"
+    edge_inference_config: default
+EOF
 
 trap 'rm -rf "$EDGE_CONFIG_FILE"' EXIT
 
