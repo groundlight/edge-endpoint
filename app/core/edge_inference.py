@@ -10,10 +10,9 @@ import requests
 import yaml
 from cachetools import TTLCache, cached
 from fastapi import HTTPException, status
+from groundlight.edge import EdgeEndpointConfig, InferenceConfig
 from jinja2 import Template
 from model import ModeEnum
-
-from groundlight.edge import EdgeEndpointConfig, InferenceConfig
 
 from app.core.edge_config_loader import EdgeConfigManager
 from app.core.file_paths import MODEL_REPOSITORY_PATH
