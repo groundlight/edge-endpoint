@@ -4,7 +4,7 @@ from fastapi import APIRouter, Body, Depends
 from groundlight.edge import EdgeEndpointConfig
 
 from app.core.app_state import AppState, get_app_state
-from app.core.edge_config_loader import load_active_config, reconcile_config
+from app.core.edge_config_loader import EdgeConfigManager, reconcile_config
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ router = APIRouter()
 @router.get("")
 async def get_edge_config():
     """Returns the currently active edge endpoint configuration."""
-    return load_active_config().to_payload()
+    return EdgeConfigManager.active().to_payload()
 
 
 @router.put("")

@@ -14,35 +14,51 @@ logger = logging.getLogger(__name__)
 GROUNDLIGHT_API_TOKEN = os.environ.get("GROUNDLIGHT_API_TOKEN", "")
 
 
-def load_edge_config() -> EdgeEndpointConfig:
-    """Load edge config at startup."""
-    yaml_config = os.environ.get("EDGE_CONFIG", "").strip()
-    if yaml_config:
-        return EdgeEndpointConfig.from_yaml(yaml_str=yaml_config)
-    if os.path.exists(HELM_EDGE_CONFIG_PATH):
-        return EdgeEndpointConfig.from_yaml(filename=HELM_EDGE_CONFIG_PATH)
-    if os.path.exists(ACTIVE_EDGE_CONFIG_PATH):
-        return EdgeEndpointConfig.from_yaml(filename=ACTIVE_EDGE_CONFIG_PATH)
-    return EdgeEndpointConfig()
+class EdgeConfigManager:
+    """Manages the lifecycle of the edge endpoint configuration: startup loading, saving, and
+    mtime-cached reading of the active config file on PVC."""
 
+    _cached_config: EdgeEndpointConfig = EdgeEndpointConfig()
+    _cached_mtime: float = 0.0
 
-def save_active_config(config: EdgeEndpointConfig) -> None:
-    """Write the active config to disk."""
-    os.makedirs(os.path.dirname(ACTIVE_EDGE_CONFIG_PATH), exist_ok=True)
-    with open(ACTIVE_EDGE_CONFIG_PATH, "w") as f:
-        yaml.dump(config.to_payload(), f, default_flow_style=False)
+    @classmethod
+    def load_startup_config(cls) -> EdgeEndpointConfig:
+        """Load edge config at startup.
 
+        Sources checked in order:
+        1. EDGE_CONFIG env var (Docker tests, non-Helm setups)
+        2. Helm-mounted ConfigMap (always wins when present)
+        3. Active config on PVC (previous set_edge_config survives restarts)
+        4. Pydantic defaults
+        """
+        yaml_config = os.environ.get("EDGE_CONFIG", "").strip()
+        if yaml_config:
+            return EdgeEndpointConfig.from_yaml(yaml_str=yaml_config)
+        if os.path.exists(HELM_EDGE_CONFIG_PATH):
+            return EdgeEndpointConfig.from_yaml(filename=HELM_EDGE_CONFIG_PATH)
+        if os.path.exists(ACTIVE_EDGE_CONFIG_PATH):
+            return EdgeEndpointConfig.from_yaml(filename=ACTIVE_EDGE_CONFIG_PATH)
+        return EdgeEndpointConfig()
 
-def get_refresh_rate() -> float:
-    """Return the current refresh_rate from the active config file."""
-    return load_active_config().global_config.refresh_rate
+    @classmethod
+    def save(cls, config: EdgeEndpointConfig) -> None:
+        """Write the active config to disk."""
+        os.makedirs(os.path.dirname(ACTIVE_EDGE_CONFIG_PATH), exist_ok=True)
+        with open(ACTIVE_EDGE_CONFIG_PATH, "w") as f:
+            yaml.dump(config.to_payload(), f, default_flow_style=False)
 
-
-def load_active_config() -> EdgeEndpointConfig:
-    """Read the active config from disk, falling back to Pydantic defaults."""
-    if os.path.exists(ACTIVE_EDGE_CONFIG_PATH):
-        return EdgeEndpointConfig.from_yaml(filename=ACTIVE_EDGE_CONFIG_PATH)
-    return EdgeEndpointConfig()
+    @classmethod
+    def active(cls) -> EdgeEndpointConfig:
+        """Return the current active config, re-reading from disk only when the file changes."""
+        try:
+            mtime = os.path.getmtime(ACTIVE_EDGE_CONFIG_PATH)
+        except FileNotFoundError:
+            logger.error("Active config file not found at %s", ACTIVE_EDGE_CONFIG_PATH, exc_info=True)
+            return cls._cached_config
+        if mtime != cls._cached_mtime:
+            cls._cached_mtime = mtime
+            cls._cached_config = EdgeEndpointConfig.from_yaml(filename=ACTIVE_EDGE_CONFIG_PATH)
+        return cls._cached_config
 
 
 def get_active_detector_ids(db_manager: DatabaseManager) -> set[str]:
@@ -90,7 +106,7 @@ def reconcile_config(new_config: EdgeEndpointConfig, db_manager: DatabaseManager
     removed, added = compute_detector_diff(current, new_config)
 
     apply_detector_changes(removed, added, db_manager)
-    save_active_config(new_config)
+    EdgeConfigManager.save(new_config)
     logger.info(
         f"Config reconciled: {len(removed)} detector(s) removed, {len(added)} detector(s) added. "
         f"Removed detectors: {removed} | Added detectors: {added}"
@@ -121,9 +137,7 @@ def get_detector_inference_configs(
 
 def get_detector_edge_configs_by_id() -> Dict[str, InferenceConfig]:
     """
-    Convenience helper that loads the active edge config and returns detector-level inference configs,
+    Convenience helper that returns detector-level inference configs from the active config,
     defaulting to an empty dict when none are defined.
     """
-    active_config = load_active_config()
-    detector_configs = get_detector_inference_configs(active_config)
-    return detector_configs or {}
+    return get_detector_inference_configs(EdgeConfigManager.active()) or {}

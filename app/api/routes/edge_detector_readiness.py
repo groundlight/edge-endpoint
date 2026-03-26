@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter
 
-from app.core.edge_config_loader import load_active_config
+from app.core.edge_config_loader import EdgeConfigManager
 from app.core.edge_inference import get_edge_inference_service_name, is_edge_inference_ready
 
 logger = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ async def get_edge_detector_readiness():
     Checks whether the inference pod (and OODD pod) for each detector
     is responding to health checks.
     """
-    config = load_active_config()
+    config = EdgeConfigManager.active()
     detector_ids = [d.detector_id for d in config.detectors if d.detector_id]
 
     result = {}

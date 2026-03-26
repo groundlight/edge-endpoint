@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from app.api.api import api_router, edge_config_router, edge_detector_readiness_router, health_router, ping_router
 from app.api.naming import API_BASE_PATH
 from app.core.app_state import AppState
-from app.core.edge_config_loader import load_edge_config, reconcile_config
+from app.core.edge_config_loader import EdgeConfigManager, reconcile_config
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
@@ -36,7 +36,7 @@ async def startup_event():
     app.state.app_state = AppState()
     app.state.app_state.db_manager.reset_database()
 
-    config = load_edge_config()
+    config = EdgeConfigManager.load_startup_config()
     reconcile_config(config, app.state.app_state.db_manager)
     logging.info(f"edge_config={config}")
 

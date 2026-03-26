@@ -6,16 +6,13 @@ from functools import lru_cache
 import cachetools
 from fastapi import Request
 from groundlight import Groundlight
-from groundlight.edge import GlobalConfig
 from model import Detector
 from urllib3.util.retry import Retry
 
 from app.escalation_queue.queue_writer import QueueWriter
 
 from .database import DatabaseManager
-from .edge_config_loader import get_detector_inference_configs, load_active_config, load_edge_config
 from .edge_inference import EdgeInferenceManager
-from .file_paths import ACTIVE_EDGE_CONFIG_PATH
 from .utils import TimestampedCache, safe_call_sdk
 
 logger = logging.getLogger(__name__)
@@ -98,32 +95,14 @@ def get_detector_metadata(detector_id: str, gl: Groundlight) -> Detector:
 
 class AppState:
     def __init__(self):
-        startup_config = load_edge_config()
         # We only launch a separate OODD inference pod if we are not using the minimal image.
         # Pipelines used in the minimal image include OODD inference and confidence adjustment,
         # so they do not need to be adjusted separately.
         self.separate_oodd_inference = not USE_MINIMAL_IMAGE
-        detector_inference_configs = get_detector_inference_configs(startup_config)
-        self.edge_inference_manager = EdgeInferenceManager(
-            detector_inference_configs=detector_inference_configs, separate_oodd_inference=self.separate_oodd_inference
-        )
+        self.edge_inference_manager = EdgeInferenceManager(separate_oodd_inference=self.separate_oodd_inference)
         self.db_manager = DatabaseManager()
         self.is_ready = False
         self.queue_writer = QueueWriter()
-        self._cached_global_config: GlobalConfig = startup_config.global_config
-        self._global_config_mtime: float = 0
-
-    @property
-    def global_config(self) -> GlobalConfig:
-        """Returns the current global config, re-reading from the PVC file if it changed."""
-        try:
-            mtime = os.path.getmtime(ACTIVE_EDGE_CONFIG_PATH)
-        except FileNotFoundError:
-            return self._cached_global_config
-        if mtime != self._global_config_mtime:
-            self._global_config_mtime = mtime
-            self._cached_global_config = load_active_config().global_config
-        return self._cached_global_config
 
 
 def get_app_state(request: Request) -> AppState:

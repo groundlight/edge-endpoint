@@ -14,7 +14,7 @@ from groundlight.edge import InferenceConfig
 from jinja2 import Template
 from model import ModeEnum
 
-from app.core.file_paths import ACTIVE_EDGE_CONFIG_PATH, MODEL_REPOSITORY_PATH
+from app.core.file_paths import MODEL_REPOSITORY_PATH
 from app.core.speedmon import SpeedMonitor
 from app.core.utils import ModelInfoBase, ModelInfoWithBinary, parse_model_info
 
@@ -229,118 +229,30 @@ class EdgeInferenceManager:
 
     def __init__(
         self,
-        detector_inference_configs: dict[str, InferenceConfig] | None,
         verbose: bool = False,
         separate_oodd_inference: bool = True,
     ) -> None:
-        """
-        Initializes the edge inference manager.
-        Args:
-            detector_inference_configs: Dictionary of detector IDs to InferenceConfig objects
-            verbose: Whether to print verbose logs from the inference server client
-            separate_oodd_inference: Whether to run inference separately for the OODD model
-        """
         self.verbose = verbose
-        self.detector_inference_configs: dict[str, InferenceConfig] = {}
         self.speedmon = SpeedMonitor()
         self.separate_oodd_inference = separate_oodd_inference
         self.last_escalation_times: dict[str, float | None] = {}
-        self.min_times_between_escalations: dict[str, float] = {}
 
-        self._config_mtime: float = 0
+    def _get_detector_configs(self) -> dict[str, InferenceConfig]:
+        """Return detector inference configs from the active config file."""
+        from app.core.edge_config_loader import EdgeConfigManager, get_detector_inference_configs
 
-        if detector_inference_configs:
-            self.detector_inference_configs = detector_inference_configs
-            self.last_escalation_times = {did: None for did in detector_inference_configs}
-            self.min_times_between_escalations = {
-                did: cfg.min_time_between_escalations for did, cfg in detector_inference_configs.items()
-            }
+        return get_detector_inference_configs(EdgeConfigManager.active()) or {}
 
-    def _apply_detector_config(self, detector_id: str, config: InferenceConfig) -> None:
-        """Add or update a single detector's inference config and associated state."""
-        api_token = config.api_token or os.environ.get("GROUNDLIGHT_API_TOKEN", "")
-        if config.api_token is None:
-            config = config.model_copy(update={"api_token": api_token})
-        self.detector_inference_configs[detector_id] = config
-        self.min_times_between_escalations[detector_id] = config.min_time_between_escalations
-        if detector_id not in self.last_escalation_times:
-            self.last_escalation_times[detector_id] = None
-
-    def refresh_if_needed(self) -> None:
-        """Reload detector inference configs from the active config file if it has changed.
-
-        Called per-request. The os.stat check is ~2us and short-circuits when nothing changed.
-        """
-        from app.core.edge_config_loader import get_detector_inference_configs, load_active_config
-
-        try:
-            mtime = os.path.getmtime(ACTIVE_EDGE_CONFIG_PATH)
-        except FileNotFoundError:
-            return
-        if mtime == self._config_mtime:
-            return
-
-        self._config_mtime = mtime
-        active_config = load_active_config()
-        new_configs = get_detector_inference_configs(active_config) or {}
-
-        old_ids = set(self.detector_inference_configs.keys())
-        new_ids = set(new_configs.keys())
-
-        for detector_id in old_ids - new_ids:
-            self.remove_detector(detector_id)
-            logger.info(f"Removed edge inference config for {detector_id}")
-
-        for detector_id in new_ids - old_ids:
-            self._apply_detector_config(detector_id, new_configs[detector_id])
-            logger.info(f"Added edge inference config for {detector_id} -> '{new_configs[detector_id].name}'")
-
-        for detector_id in old_ids & new_ids:
-            if self.detector_inference_configs[detector_id] != new_configs[detector_id]:
-                self._apply_detector_config(detector_id, new_configs[detector_id])
-                logger.info(f"Updated edge inference config for {detector_id} -> '{new_configs[detector_id].name}'")
-
-    def update_inference_config(self, detector_id: str, api_token: str) -> None:
-        """Add a detector with a default InferenceConfig if not already present.
-
-        Used by the model-updater to register detectors discovered from the DB.
-        """
-        if detector_id not in self.detector_inference_configs:
-            self._apply_detector_config(
-                detector_id, InferenceConfig(name="runtime_default", enabled=True, api_token=api_token)
-            )
-            logger.info(f"Set up edge inference for {detector_id}")
-
-    def remove_detector(self, detector_id: str) -> None:
-        """Remove a detector from all in-memory maps."""
-        self.detector_inference_configs.pop(detector_id, None)
-        self.last_escalation_times.pop(detector_id, None)
-        self.min_times_between_escalations.pop(detector_id, None)
+    def _get_detector_config(self, detector_id: str) -> InferenceConfig | None:
+        """Return the InferenceConfig for a single detector, or None."""
+        return self._get_detector_configs().get(detector_id)
 
     def detector_configured_for_edge_inference(self, detector_id: str) -> bool:
-        """
-        Checks if the detector is configured to run local inference.
-        Args:
-            detector_id: ID of the detector on which to run local edge inference
-        Returns:
-            True if the detector is configured to run local inference, False otherwise
-        """
-        if not self.detector_inference_configs:
-            return False
-
-        return (
-            detector_id in self.detector_inference_configs.keys()
-            and self.detector_inference_configs[detector_id].enabled
-        )
+        config = self._get_detector_config(detector_id)
+        return config is not None and config.enabled
 
     def inference_is_available(self, detector_id: str) -> bool:
-        """
-        Queries the inference server to see if everything is ready to perform inference.
-        Args:
-            detector_id: ID of the detector on which to run local edge inference
-        Returns:
-            True if edge inference for the specified detector is available, False otherwise
-        """
+        """Check whether inference pods for this detector are ready to serve."""
         primary_url = get_edge_inference_service_name(detector_id) + ":8000"
         oodd_url = (
             get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
@@ -356,10 +268,6 @@ class EdgeInferenceManager:
                 f"Edge inference server and/or OODD inference server is not ready. {primary_url=}, {oodd_url=}"
             )
             return False
-
-        if not self.detector_configured_for_edge_inference(detector_id):
-            self._apply_detector_config(detector_id, InferenceConfig(name="auto_discovered", enabled=True))
-            logger.info(f"Auto-discovered inference pod for {detector_id}")
         return True
 
     def run_inference(self, detector_id: str, image_bytes: bytes, content_type: str, mode: ModeEnum) -> dict:
@@ -410,11 +318,8 @@ class EdgeInferenceManager:
         """
         logger.debug(f"Checking if there are new models available for {detector_id}")
 
-        api_token = (
-            self.detector_inference_configs[detector_id].api_token
-            if self.detector_configured_for_edge_inference(detector_id)
-            else None
-        )
+        config = self._get_detector_config(detector_id)
+        api_token = config.api_token if config and config.enabled else None
 
         # fallback to env var if we don't have a token in the config
         api_token = api_token or os.environ.get("GROUNDLIGHT_API_TOKEN", None)
@@ -459,8 +364,9 @@ class EdgeInferenceManager:
             True if there hasn't been an escalation on this detector in the last `min_time_between_escalations` seconds,
               False otherwise.
         """
-        min_time_between_escalations = self.min_times_between_escalations.get(detector_id, 2)
-        last_escalation_time = self.last_escalation_times[detector_id]
+        config = self._get_detector_config(detector_id)
+        min_time_between_escalations = config.min_time_between_escalations if config else 2
+        last_escalation_time = self.last_escalation_times.get(detector_id)
 
         if last_escalation_time is None or (time.time() - last_escalation_time) > min_time_between_escalations:
             self.last_escalation_times[detector_id] = time.time()

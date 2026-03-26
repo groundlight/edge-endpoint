@@ -2,10 +2,8 @@ import logging
 import os
 import time
 
-from groundlight.edge import EdgeEndpointConfig
-
 from app.core.database import DatabaseManager
-from app.core.edge_config_loader import get_detector_inference_configs, get_refresh_rate, load_edge_config
+from app.core.edge_config_loader import EdgeConfigManager
 from app.core.edge_inference import (
     EdgeInferenceManager,
     delete_old_model_versions,
@@ -195,20 +193,14 @@ def manage_update_models(
 
             for detector_id in pending_deletions:
                 db_manager.delete_inference_deployment_records(detector_id)
-                edge_inference_manager.remove_detector(detector_id)
             logger.info(f"Finished deleting {len(pending_deletions)} detector(s)")
-
-        # Pick up newly added detectors from DB
-        undeployed = db_manager.get_inference_deployment_records(deployment_created=False, pending_deletion=False)
-        if undeployed:
-            unique_new = {r.detector_id: r.api_token for r in undeployed}
-            for detector_id, api_token in unique_new.items():
-                edge_inference_manager.update_inference_config(detector_id=detector_id, api_token=api_token)
 
         # Check for model updates and apply model updates
         start = time.time()
-        logger.debug("Starting model update check for existing inference deployments.")
-        for detector_id in list(edge_inference_manager.detector_inference_configs.keys()):
+        deployed_records = db_manager.get_inference_deployment_records(pending_deletion=False)
+        deployed_detector_ids = {r.detector_id for r in deployed_records}
+        logger.debug(f"Starting model update check for {len(deployed_detector_ids)} detector(s).")
+        for detector_id in deployed_detector_ids:
             try:
                 logger.debug(f"Checking new models and inference deployments for detector_id: {detector_id}")
                 _check_new_models_and_inference_deployments(
@@ -223,7 +215,7 @@ def manage_update_models(
                 logger.info(f"Failed to update model for detector_id: {detector_id}. Error: {e}", exc_info=True)
 
         elapsed_s = time.time() - start
-        refresh_rate = get_refresh_rate()
+        refresh_rate = EdgeConfigManager.active().global_config.refresh_rate
         logger.debug(f"Model update check completed in {elapsed_s:.2f} seconds.")
         if elapsed_s < refresh_rate:
             sleep_duration = refresh_rate - elapsed_s
@@ -255,13 +247,8 @@ def manage_update_models(
 if __name__ == "__main__":
     logger.info("Starting model updater.")
 
-    edge_config: EdgeEndpointConfig = load_edge_config()
-    logger.info(f"{edge_config=}")
-
-    detector_inference_configs = get_detector_inference_configs(edge_config)
-
     logger.info("Creating edge inference manager, deployment manager, and database manager.")
-    edge_inference_manager = EdgeInferenceManager(detector_inference_configs=detector_inference_configs, verbose=True)
+    edge_inference_manager = EdgeInferenceManager(verbose=True)
     deployment_manager = InferenceDeploymentManager()
 
     # We will delegate creation of database tables to the edge-endpoint container.
