@@ -11,8 +11,8 @@ from kubernetes import client, config
 
 from app.core.edge_config_loader import EdgeConfigManager
 from app.core.edge_inference import get_current_pipeline_config, get_predictor_metadata
-from app.core.naming import get_primary_edge_model_dir
 from app.core.file_paths import MODEL_REPOSITORY_PATH
+from app.core.naming import get_primary_edge_model_dir
 
 logger = logging.getLogger(__name__)
 

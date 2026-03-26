@@ -126,4 +126,3 @@ def reconcile_config(new_config: EdgeEndpointConfig, db_manager: DatabaseManager
         f"Config reconciled: {len(removed)} detector(s) removed, {len(added)} detector(s) added. "
         f"Removed detectors: {removed} | Added detectors: {added}"
     )
-
