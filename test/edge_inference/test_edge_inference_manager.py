@@ -4,9 +4,9 @@ from unittest import mock
 
 import pytest
 import yaml
+from groundlight.edge import InferenceConfig
 from model import ModeEnum
 
-from app.core.configs import EdgeInferenceConfig
 from app.core.edge_inference import EdgeInferenceManager, get_edge_inference_service_name
 from app.core.utils import ModelInfoBase, ModelInfoNoBinary, ModelInfoWithBinary
 
@@ -100,7 +100,8 @@ def oodd_model_info_no_binary() -> ModelInfoNoBinary:
 
 @pytest.fixture
 def detector_inference_config():
-    return {"test_detector": EdgeInferenceConfig()}
+    """Build a detector inference config map for manager tests."""
+    return {"test_detector": InferenceConfig(name="test_config")}
 
 
 class TestEdgeInferenceManager:

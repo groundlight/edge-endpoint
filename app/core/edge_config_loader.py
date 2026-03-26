@@ -2,75 +2,51 @@ import logging
 import os
 from typing import Dict
 
-import yaml
+from groundlight.edge import EdgeEndpointConfig, InferenceConfig
 
-from .configs import EdgeInferenceConfig, RootEdgeConfig
 from .file_paths import DEFAULT_EDGE_CONFIG_PATH
 
 logger = logging.getLogger(__name__)
 
 
-def load_edge_config() -> RootEdgeConfig:
+def load_edge_config() -> EdgeEndpointConfig:
     """
     Reads the edge config from the EDGE_CONFIG environment variable if it exists.
     If EDGE_CONFIG is not set, reads the default edge config file.
     """
     yaml_config = os.environ.get("EDGE_CONFIG", "").strip()
     if yaml_config:
-        return _load_config_from_yaml(yaml_config)
+        return EdgeEndpointConfig.from_yaml(yaml_str=yaml_config)
 
-    logger.warning("EDGE_CONFIG environment variable not set. Checking default locations.")
-
-    if os.path.exists(DEFAULT_EDGE_CONFIG_PATH):
-        logger.info(f"Loading edge config from {DEFAULT_EDGE_CONFIG_PATH}")
-        with open(DEFAULT_EDGE_CONFIG_PATH, "r") as f:
-            return _load_config_from_yaml(f)
-
-    raise FileNotFoundError(f"Could not find edge config file in default location: {DEFAULT_EDGE_CONFIG_PATH}")
-
-
-def _load_config_from_yaml(yaml_config) -> RootEdgeConfig:
-    """
-    Creates a `RootEdgeConfig` from the config yaml. Raises an error if there are duplicate detector ids.
-    """
-    config = yaml.safe_load(yaml_config)
-
-    detectors = config.get("detectors", [])
-    detector_ids = [det["detector_id"] for det in detectors]
-
-    # Check for duplicate detector IDs
-    if len(detector_ids) != len(set(detector_ids)):
-        raise ValueError("Duplicate detector IDs found in the configuration. Each detector should only have one entry.")
-
-    config["detectors"] = {det["detector_id"]: det for det in detectors}
-
-    return RootEdgeConfig(**config)
+    logger.info(
+        f"EDGE_CONFIG environment variable not set. Checking default Edge Config path: {DEFAULT_EDGE_CONFIG_PATH}."
+    )
+    return EdgeEndpointConfig.from_yaml(filename=DEFAULT_EDGE_CONFIG_PATH)
 
 
 def get_detector_inference_configs(
-    root_edge_config: RootEdgeConfig,
-) -> dict[str, EdgeInferenceConfig] | None:
+    root_edge_config: EdgeEndpointConfig,
+) -> dict[str, InferenceConfig] | None:
     """
-    Produces a dict mapping detector IDs to their associated `EdgeInferenceConfig`.
+    Produces a dict mapping detector IDs to their associated `InferenceConfig`.
     Returns None if there are no detectors in the config file.
     """
-    # Mapping of config names to EdgeInferenceConfig objects
-    edge_inference_configs: dict[str, EdgeInferenceConfig] = root_edge_config.edge_inference_configs
+    # Mapping of config names to InferenceConfig objects
+    edge_inference_configs: dict[str, InferenceConfig] = root_edge_config.edge_inference_configs
 
-    # Filter out detectors whose ID's are empty strings
-    detectors = {det_id: detector for det_id, detector in root_edge_config.detectors.items() if det_id != ""}
+    # Filter out detectors whose IDs are empty strings.
+    detectors = [detector for detector in root_edge_config.detectors if detector.detector_id != ""]
 
-    detector_to_inference_config: dict[str, EdgeInferenceConfig] | None = None
+    detector_to_inference_config: dict[str, InferenceConfig] | None = None
     if detectors:
         detector_to_inference_config = {
-            detector_id: edge_inference_configs[detector_config.edge_inference_config]
-            for detector_id, detector_config in detectors.items()
+            detector.detector_id: edge_inference_configs[detector.edge_inference_config] for detector in detectors
         }
 
     return detector_to_inference_config
 
 
-def get_detector_edge_configs_by_id() -> Dict[str, EdgeInferenceConfig]:
+def get_detector_edge_configs_by_id() -> Dict[str, InferenceConfig]:
     """
     Convenience helper that loads the edge config and returns detector-level inference configs,
     defaulting to an empty dict when none are defined.
