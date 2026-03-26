@@ -5,6 +5,7 @@
 # https://k3d.io/v5.7.4/usage/advanced/cuda/#building-a-customized-k3s-image
 # https://github.com/k3s-io/k3s/blob/master/package/Dockerfile
 
+# Using Balena provided Jetson Orin image as base (Ubuntu 22.04)
 FROM balenalib/jetson-agx-orin-devkit-ubuntu:jammy-20240401
 
 ENV DEBIAN_FRONTEND=noninteractive

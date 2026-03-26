@@ -56,6 +56,4 @@ EDGE_ENDPOINT_VALUES - Optional. Comma-separated key=value pairs passed as helm 
 ```
 
 The bastion automatically detects the inference flavor (cpu/gpu/jetson) from the server container
-and configures the Helm deployment accordingly. AWS credentials are handled by the Helm chart's
-ECR credential jobs, so `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` no longer need to be set
-as fleet variables.
+and configures the Helm deployment accordingly.
