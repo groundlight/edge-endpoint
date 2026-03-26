@@ -19,15 +19,9 @@ test-with-docker: install  ## Run tests that require a live edge-endpoint server
 test-all: test test-with-docker  ## Run all tests in one make command
 	@echo "All tests completed."
 
-test-with-k3s-setup-ee:
-	. test/integration/test-with-k3s-setup-ee.sh
-
 test-with-k3s-helm:
 	. test/integration/test-with-k3s-helm.sh
 
-validate-setup-ee:
-	test/validate_setup_ee.sh
-	
 validate-setup-helm:
 	test/validate_setup_helm.sh
 

@@ -4,7 +4,7 @@
 
 source /etc/bash_completion
 
-alias k=kubectl
+alias k="kubectl -n edge"
 source <(kubectl completion bash)
 complete -F __start_kubectl k
 

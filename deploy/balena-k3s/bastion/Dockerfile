@@ -28,7 +28,9 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     bash-completion \
     gettext-base \
     procps \
-    htop && \
+    htop \
+    python3 \
+    python3-yaml && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # This works for both x86_64 and aarch64, but its not simultaneously multi-arch
@@ -37,10 +39,10 @@ RUN arch=$(uname -m) && \
         curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"; \
     else \
         curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"; \
-    fi
-RUN unzip awscliv2.zip && rm awscliv2.zip
-RUN ./aws/install
-RUN aws --version
+    fi && \
+    unzip awscliv2.zip && rm awscliv2.zip && \
+    ./aws/install && \
+    aws --version
 
 COPY --from=arkade /src/arkade /usr/local/bin/arkade
 
@@ -54,13 +56,9 @@ RUN arkade version && \
     k9s@v0.27.2 \
     kubectl@v1.26.2
 
-
-# Copy edge-endpoint to /app/edge-endpoint
-RUN mkdir -p /app/edge-endpoint
-COPY . /app/edge-endpoint
-
-RUN echo "source /app/edge-endpoint/deploy/balena-k3s/bastion/src/kube-bash.sh" >> /root/.bashrc
-RUN chmod +x ./edge-endpoint/deploy/bin/*.sh
+COPY src/ /app/src/
+RUN echo "source ./src/kube-bash.sh" >> /root/.bashrc
+RUN printenv > /app/env.txt
 
 ENTRYPOINT []
-CMD ["/bin/sh", "-c", "./edge-endpoint/deploy/bin/setup-ee.sh && tail -f /dev/null"]
+CMD ["/bin/sh", "-c", "./src/init-k8s-resources.sh; tail -f /dev/null"]
