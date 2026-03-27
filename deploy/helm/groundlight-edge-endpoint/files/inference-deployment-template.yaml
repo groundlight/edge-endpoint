@@ -37,6 +37,7 @@ spec:
 {{ if eq .Values.inferenceFlavor "gpu" }}
       runtimeClassName: nvidia  # Required for GPU use in k3s
 {{- end }}
+      serviceAccountName: edge-endpoint-service-account
       imagePullSecrets:
       - name: registry-credentials
       strategy:
@@ -46,6 +47,22 @@ spec:
           maxUnavailable: 0  # Aim for no downtime during rollout
 
       initContainers:
+      - name: wait-for-warmup
+        image: bitnamilegacy/kubectl:latest
+        imagePullPolicy: IfNotPresent
+        command:
+          - sh
+          - -c
+          - |
+            NS=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
+            echo "Checking for warmup-inference-model job..."
+            if kubectl get job warmup-inference-model -n $NS &>/dev/null; then
+              echo "Waiting for warmup-inference-model to complete..."
+              kubectl wait --for=condition=complete job/warmup-inference-model -n $NS --timeout=1800s || echo "Wait timed out or job failed, proceeding anyway."
+            else
+              echo "Warmup job not found, proceeding."
+            fi
+
       # NOTE: the sync-pinamod container is duplicated in the warmup_inference_model.yaml Job
       # TODO: refactor to share code between the Job and the initContainer in the Deployment
       - name: sync-pinamod
