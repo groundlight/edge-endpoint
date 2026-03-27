@@ -36,6 +36,8 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+PER_CLASS_ACTIVITY_TYPES = ["escalations", "below_threshold_iqs"]
+
 
 class ConfidenceHistogramConfig:
     """Confidence histogram parameters and logic.
@@ -192,7 +194,8 @@ class FilesystemActivityTrackingHelper:
 class ActivityRetriever:
     """Retrieve IQ activity metrics from the filesystem to report them."""
 
-    def _previous_hour_local(self) -> str:
+    @staticmethod
+    def _previous_hour_local() -> str:
         """Get the previous hour as a local-time string matching hourly activity filenames."""
         return (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
 
@@ -234,12 +237,13 @@ class ActivityRetriever:
         # the individual detector fields
         return json.dumps(active_detector_activity)
 
-    def get_last_hour(self) -> str:
+    @staticmethod
+    def get_last_hour() -> str:
         """Get the last hour in UTC."""
         return (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
 
     def get_per_class_activity(
-        self, detector_id: str, activity_type: str, hourly_files: list[Path] | None = None
+        self, detector_id: str, activity_type: str, hourly_files: list[Path]
     ) -> dict[str, int]:
         """Get per-class counts for an activity type for the previous hour.
 
@@ -247,19 +251,12 @@ class ActivityRetriever:
             detector_id: The detector ID.
             activity_type: "below_threshold_iqs" or "escalations".
             hourly_files: Pre-fetched list of hourly files to filter from.
-                         If None, globs the detector folder.
 
         Returns:
             Dict mapping class index strings to counts.
         """
         prefix = f"{activity_type}_class_"
-
-        if hourly_files is not None:
-            activity_files = [f for f in hourly_files if f.name.startswith(prefix)]
-        else:
-            time = self._previous_hour_local()
-            detector_folder = _tracker().detector_folder(detector_id)
-            activity_files = list(detector_folder.glob(f"{prefix}*_{time}"))
+        activity_files = [f for f in hourly_files if f.name.startswith(prefix)]
 
         by_class: dict[str, int] = {}
 
@@ -348,7 +345,6 @@ class ActivityRetriever:
         activity_files = list(detector_folder.glob(f"*_{time}"))
 
         detector_metrics = {}
-        per_class_activity_types = ["escalations", "below_threshold_iqs"]
 
         for activity_type in ["iqs", "escalations", "audits", "below_threshold_iqs"]:
             # Get aggregate files (exclude per-class files which contain "_class_")
@@ -362,7 +358,7 @@ class ActivityRetriever:
             detector_metrics[f"last_{activity_type[:-1]}"] = last_activity
 
             # Add per-class breakdown for supported activity types
-            if activity_type in per_class_activity_types:
+            if activity_type in PER_CLASS_ACTIVITY_TYPES:
                 by_class = self.get_per_class_activity(detector_id, activity_type, hourly_files=activity_files)
                 if by_class:
                     detector_metrics[f"{activity_type}_by_class"] = by_class
@@ -394,7 +390,6 @@ def record_activity_for_metrics(detector_id: str, activity_type: str, class_inde
         class_index: For per-class tracking of escalations and below_threshold_iqs.
     """
     supported_activity_types = ["iqs", "escalations", "audits", "below_threshold_iqs"]
-    per_class_activity_types = ["escalations", "below_threshold_iqs"]
 
     if activity_type not in supported_activity_types:
         raise ValueError(
@@ -410,7 +405,7 @@ def record_activity_for_metrics(detector_id: str, activity_type: str, class_inde
     _tracker().increment_counter_file(f)
 
     # Record per-class for supported activity types
-    if class_index is not None and activity_type in per_class_activity_types:
+    if class_index is not None and activity_type in PER_CLASS_ACTIVITY_TYPES:
         per_class_prefix = f"{activity_type}_class_{class_index}"
         f = _tracker().hourly_activity_file(per_class_prefix, current_hour, detector_id)
         _tracker().increment_counter_file(f)

@@ -720,31 +720,31 @@ def test_get_per_class_activity(monkeypatch, tmp_base_dir, _test_tracker):
     """Test retrieving per-class activity counts."""
     monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
 
-    with patch("app.metrics.iq_activity.datetime") as mock_datetime:
-        mock_datetime.now.return_value = datetime(2025, 4, 4, 11, 0, 0)
-        retriever = ActivityRetriever()
+    retriever = ActivityRetriever()
 
-        det = "det_per_class_activity"
-        det_dir = Path(tmp_base_dir, "detectors", det)
-        os.makedirs(det_dir, exist_ok=True)
-        hour = "2025-04-04_10"
+    det = "det_per_class_activity"
+    det_dir = Path(tmp_base_dir, "detectors", det)
+    os.makedirs(det_dir, exist_ok=True)
+    hour = "2025-04-04_10"
 
-        # Per-class escalations
-        Path(det_dir, f"escalations_class_0_11111_{hour}").write_text("5")
-        Path(det_dir, f"escalations_class_0_22222_{hour}").write_text("3")
-        Path(det_dir, f"escalations_class_1_11111_{hour}").write_text("7")
+    # Per-class escalations
+    Path(det_dir, f"escalations_class_0_11111_{hour}").write_text("5")
+    Path(det_dir, f"escalations_class_0_22222_{hour}").write_text("3")
+    Path(det_dir, f"escalations_class_1_11111_{hour}").write_text("7")
 
-        # Per-class below_threshold_iqs
-        Path(det_dir, f"below_threshold_iqs_class_0_11111_{hour}").write_text("10")
-        Path(det_dir, f"below_threshold_iqs_class_1_11111_{hour}").write_text("15")
+    # Per-class below_threshold_iqs
+    Path(det_dir, f"below_threshold_iqs_class_0_11111_{hour}").write_text("10")
+    Path(det_dir, f"below_threshold_iqs_class_1_11111_{hour}").write_text("15")
 
-        escalations_by_class = retriever.get_per_class_activity(det, "escalations")
-        assert escalations_by_class["0"] == 8  # 5 + 3
-        assert escalations_by_class["1"] == 7
+    hourly_files = list(det_dir.glob(f"*_{hour}"))
 
-        below_threshold_by_class = retriever.get_per_class_activity(det, "below_threshold_iqs")
-        assert below_threshold_by_class["0"] == 10
-        assert below_threshold_by_class["1"] == 15
+    escalations_by_class = retriever.get_per_class_activity(det, "escalations", hourly_files)
+    assert escalations_by_class["0"] == 8  # 5 + 3
+    assert escalations_by_class["1"] == 7
+
+    below_threshold_by_class = retriever.get_per_class_activity(det, "below_threshold_iqs", hourly_files)
+    assert below_threshold_by_class["0"] == 10
+    assert below_threshold_by_class["1"] == 15
 
 
 def test_get_detector_activity_metrics_with_per_class(monkeypatch, tmp_base_dir, _test_tracker):
