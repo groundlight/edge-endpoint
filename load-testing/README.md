@@ -44,8 +44,6 @@ export GROUNDLIGHT_ENDPOINT="http://<EDGE-ENDPOINT-IP>:30101"
 
 - **Named pipeline config**
   - Pass `--edge-pipeline-config <pipeline_config_name>`.
-  - The scripts validate cloud and loaded edge pipeline consistency before benchmarking.
-  - Leading/trailing whitespace is trimmed automatically.
 
 - **Custom YAML-defined pipeline**
   - Do **not** pass `--edge-pipeline-config`.
@@ -88,8 +86,6 @@ After the load test finishes, it automatically parses the results and writes a t
 * `load_test_results.json`: inputs, summary outputs, and run metadata
 * `throughput_and_system_utilization_over_time.png`: throughput/errors/expected vs CPU/GPU/RAM/VRAM
 * `time_vs_latency.png`: latency over time vs number of clients
-
-`load-testing/load_tests/` is ignored by git by default.
 
 #### Evaluate
 Review the generated plots and `load_test_results.json`.
