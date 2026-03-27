@@ -242,9 +242,7 @@ class ActivityRetriever:
         """Get the last hour in UTC."""
         return (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
 
-    def get_per_class_activity(
-        self, detector_id: str, activity_type: str, hourly_files: list[Path]
-    ) -> dict[str, int]:
+    def get_per_class_activity(self, detector_id: str, activity_type: str, hourly_files: list[Path]) -> dict[str, int]:
         """Get per-class counts for an activity type for the previous hour.
 
         Args:
