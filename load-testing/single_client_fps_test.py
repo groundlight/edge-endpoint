@@ -43,7 +43,7 @@ def parse_arguments():
 def main(detector_mode: str, image_width: int, image_height: int, edge_pipeline_config: str | None = None) -> None:
     TRAINING_TIMEOUT_SEC = 60 * 20
     INFERENCE_POD_READY_TIMEOUT_SEC = 60 * 10
-    edge_pipeline_config = glh.normalize_edge_pipeline_config(edge_pipeline_config)
+    requested_edge_pipeline_config = glh.normalize_edge_pipeline_config(edge_pipeline_config)
 
     WARMUP_ITERATIONS = 300
     TESTING_ITERATIONS = 1000
@@ -60,14 +60,14 @@ def main(detector_mode: str, image_width: int, image_height: int, edge_pipeline_
     gl_cloud = ExperimentalApi(endpoint=glh.CLOUD_ENDPOINT_PROD)
 
     detector_name = f'Single Client FPS Test {image_width} x {image_height} - {detector_mode}'
-    if edge_pipeline_config is not None:
-        detector_name += f" - {glh.hash_pipeline_config(edge_pipeline_config)}"
+    if requested_edge_pipeline_config is not None:
+        detector_name += f" - {glh.hash_pipeline_config(requested_edge_pipeline_config)}"
     if detector_mode == "BINARY":
         detector = gl.get_or_create_detector(
             name=detector_name,
             query='Is the image background black?',
             group_name=DETECTOR_GROUP_NAME,
-            edge_pipeline_config=edge_pipeline_config,
+            edge_pipeline_config=requested_edge_pipeline_config,
         )
         generate_image = imgh.generate_random_binary_image
         generate_image_kwargs = {
@@ -84,7 +84,7 @@ def main(detector_mode: str, image_width: int, image_height: int, edge_pipeline_
             class_name=class_name,
             max_count=max_count,
             group_name=DETECTOR_GROUP_NAME,
-            edge_pipeline_config=edge_pipeline_config,
+            edge_pipeline_config=requested_edge_pipeline_config,
         )
         generate_image = imgh.generate_random_count_image
         generate_image_kwargs = {
@@ -97,11 +97,11 @@ def main(detector_mode: str, image_width: int, image_height: int, edge_pipeline_
     else:
         raise ValueError(f'Detector mode {detector_mode} not recognized.')
 
-    cloud_pipeline_config = glh.get_detector_pipeline_configs(gl, detector.id).get('pipeline_config')
-    print(f"Cloud pipeline config for {detector.id}: {cloud_pipeline_config}")
+    configured_edge_pipeline_config = glh.get_detector_edge_pipeline_configs(gl, detector.id).get('pipeline_config')
+    print(f"Configured edge pipeline for {detector.id}: {configured_edge_pipeline_config}")
 
-    if edge_pipeline_config is not None:
-        glh.assert_cloud_pipeline_matches_provided(gl, detector.id, edge_pipeline_config)
+    if requested_edge_pipeline_config is not None:
+        glh.assert_configured_edge_pipeline_matches_provided(gl, detector.id, requested_edge_pipeline_config)
     
     # Check if the detector has trained. If not, prime it with some labels
     stats = glh.get_detector_evaluation(gl, detector.id)
@@ -128,10 +128,10 @@ def main(detector_mode: str, image_width: int, image_height: int, edge_pipeline_
     glh.wait_for_ready_inference_pod(
         gl, detector, image_width, image_height,
         timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC,
-        edge_pipeline_config=edge_pipeline_config,
+        edge_pipeline_config=requested_edge_pipeline_config,
     )
-    edge_pipeline_config = glh.get_detector_edge_metrics(gl, detector.id).get('pipeline_config')
-    print(f"Inference pod is ready for {detector.id} with pipeline_config='{edge_pipeline_config}'")
+    loaded_edge_pipeline_config = glh.get_detector_edge_metrics(gl, detector.id).get('pipeline_config')
+    print(f"Inference pod is ready for {detector.id} with loaded edge pipeline '{loaded_edge_pipeline_config}'")
 
     # Warm up
     for _ in tqdm(range(WARMUP_ITERATIONS), "Warming up"):
@@ -163,10 +163,10 @@ def main(detector_mode: str, image_width: int, image_height: int, edge_pipeline_
 
     # Check if the pipeline running on the edge changed during the test. This seems extremely unlikely, but 
     # it would invalidate the test.
-    edge_pipeline_config_end = glh.get_detector_edge_metrics(gl, detector.id).get('pipeline_config')
-    if edge_pipeline_config != edge_pipeline_config_end:
+    loaded_edge_pipeline_config_end = glh.get_detector_edge_metrics(gl, detector.id).get('pipeline_config')
+    if loaded_edge_pipeline_config != loaded_edge_pipeline_config_end:
         raise RuntimeError(
-            f'The pipeline configuration on the Edge Endpoint changed from `{edge_pipeline_config}` to `{edge_pipeline_config_end}`. This test is invalid.'
+            f'The loaded edge pipeline changed from `{loaded_edge_pipeline_config}` to `{loaded_edge_pipeline_config_end}` during the test. This test is invalid.'
         )
 
     # Check which images were used for the `edge-endpoint` container and the inference server container
@@ -180,7 +180,7 @@ def main(detector_mode: str, image_width: int, image_height: int, edge_pipeline_
     print(f"edge_endpoint_image: {edge_image}")
     print(f"inference_server_image: {inference_image}")
     print(f'detector_id: {detector.id}')
-    print(f'pipeline_config: {edge_pipeline_config}')
+    print(f'loaded_edge_pipeline_config: {loaded_edge_pipeline_config}')
     print(f'detector_name: {detector.name}')
     print(f'detector_query: {detector.query}')
     print(f'detector_mode: {detector_mode}')

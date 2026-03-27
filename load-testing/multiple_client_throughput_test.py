@@ -114,7 +114,7 @@ def _provision_detector(
         raise ValueError(f"Detector mode {detector_mode} not recognized.")
 
     if edge_pipeline_config is not None:
-        glh.assert_cloud_pipeline_matches_provided(gl, detector.id, edge_pipeline_config)
+        glh.assert_configured_edge_pipeline_matches_provided(gl, detector.id, edge_pipeline_config)
 
     stats = glh.get_detector_evaluation(gl, detector.id)
     if not glh.detector_is_sufficiently_trained(stats, 0.6, 30):

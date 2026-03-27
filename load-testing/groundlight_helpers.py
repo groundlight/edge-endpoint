@@ -94,12 +94,12 @@ def call_edge_api(gl_client: ExperimentalApi, path: str, params: dict) -> dict:
 
     return call_api(url, params)
 
-def get_detector_pipeline_configs(gl: ExperimentalApi, detector_id: str) -> dict:
+def get_detector_edge_pipeline_configs(gl: ExperimentalApi, detector_id: str) -> dict:
     """
-    Get the detector pipeline configs that have been trained in the cloud for the Edge Endpoint.
+    Get the detector's configured edge pipeline configs from cloud metadata.
 
-    These haven't necessary been downloaded to the Edge Endpoint yet; they simply represent the 
-    latest available pipeline config in the cloud for the Edge Endpoint. 
+    These have not necessarily been downloaded to this Edge Endpoint yet.
+    They represent the desired edge pipeline configs known in the cloud.
     """
     
     # Ideally we would use `gl.edge_api.get_model_urls` to get this info, but
@@ -260,17 +260,17 @@ def wait_for_edge_answer(
         time.sleep(5)
 
 
-def assert_cloud_pipeline_matches_provided(
+def assert_configured_edge_pipeline_matches_provided(
     gl: ExperimentalApi, detector_id: str, expected_pipeline_config: str
 ) -> None:
-    """Raises if the cloud pipeline config does not match the provided config."""
-    cloud_config = get_detector_pipeline_configs(gl, detector_id).get("pipeline_config")
-    if not _pipeline_configs_equal(expected_pipeline_config, cloud_config):
+    """Raise if the configured edge pipeline does not match the provided config."""
+    configured_edge_pipeline = get_detector_edge_pipeline_configs(gl, detector_id).get("pipeline_config")
+    if not _pipeline_configs_equal(expected_pipeline_config, configured_edge_pipeline):
         raise RuntimeError(
-            f"The pipeline_config provided does not match the pipeline_config in the cloud for detector {detector_id}. "
+            f"The provided edge pipeline config does not match the detector's configured edge pipeline for {detector_id}. "
             "This can happen if the detector's pipeline config was changed after creation (e.g. via admin).\n"
             f"  Provided: {expected_pipeline_config!r}\n"
-            f"  Cloud:    {cloud_config!r}"
+            f"  Configured edge: {configured_edge_pipeline!r}"
         )
 
 
@@ -288,22 +288,22 @@ def assert_loaded_pipeline_matches_provided(
         )
 
 
-def wait_for_loaded_pipeline_to_match_cloud(
+def wait_for_loaded_pipeline_to_match_configured_edge(
     gl: ExperimentalApi, detector_id: str, timeout_sec: float = PIPELINE_LOADED_TIMEOUT_SEC
 ) -> None:
-    """After an edge answer exists, waits until the cloud pipeline config is loaded locally."""
-    cloud_configs = get_detector_pipeline_configs(gl, detector_id)
-    expected = cloud_configs.get("pipeline_config")
+    """After an edge answer exists, wait until the loaded edge pipeline matches the configured edge pipeline."""
+    configured_edge_configs = get_detector_edge_pipeline_configs(gl, detector_id)
+    expected = configured_edge_configs.get("pipeline_config")
     poll_start = time.time()
     while True:
         elapsed = time.time() - poll_start
         if elapsed > timeout_sec:
             loaded = (get_detector_edge_metrics(gl, detector_id) or {}).get("pipeline_config")
             raise RuntimeError(
-                f"Pipeline for detector {detector_id} did not match cloud config within {timeout_sec:.2f} seconds. "
+                f"Loaded edge pipeline for detector {detector_id} did not match configured edge pipeline within {timeout_sec:.2f} seconds. "
                 "The detector's pipeline config may have been changed after creation (e.g. via admin).\n"
-                f"  Cloud:  {expected!r}\n"
-                f"  Loaded: {loaded!r}"
+                f"  Configured edge: {expected!r}\n"
+                f"  Loaded edge:     {loaded!r}"
             )
         loaded = (get_detector_edge_metrics(gl, detector_id) or {}).get("pipeline_config")
         if _pipeline_configs_equal(expected, loaded):
@@ -319,7 +319,7 @@ def wait_for_ready_inference_pod(
     timeout_sec: float,
     edge_pipeline_config: str | None = None,
 ) -> None:
-    """Waits for an edge answer, then ensures the loaded pipeline matches (provided or cloud)."""
+    """Wait for an edge answer, then ensure loaded edge pipeline matches configured edge pipeline."""
     wait_for_edge_answer(gl, detector, image_width, image_height, timeout_sec)
     if edge_pipeline_config is not None:
         # If a pipeline config was provided, we expect the loaded pipeline config to match right away.
@@ -332,7 +332,7 @@ def wait_for_ready_inference_pod(
         # When a new pipeline is configured in Admin, it will take some time for the detector retrain,
         # and for the new pipeline to make its way to the egde. Therefore, we will wait here for a bit
         # to ensure that the edge pipeline configured in the cloud matches what was downloaded to the edge.
-        wait_for_loaded_pipeline_to_match_cloud(gl, detector.id, timeout_sec=PIPELINE_LOADED_TIMEOUT_SEC)
+        wait_for_loaded_pipeline_to_match_configured_edge(gl, detector.id, timeout_sec=PIPELINE_LOADED_TIMEOUT_SEC)
 
 def detector_is_sufficiently_trained(
     stats: dict,

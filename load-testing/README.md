@@ -55,7 +55,7 @@ export GROUNDLIGHT_ENDPOINT="http://<EDGE-ENDPOINT-IP>:30101"
 
 Notes:
 - `--edge-pipeline-config` currently targets named pipeline configs. Passing custom YAML blocks directly is not supported in this workflow.
-- If `--edge-pipeline-config` is omitted, the detector's current/default cloud pipeline is used.
+- If `--edge-pipeline-config` is omitted, the detector's current/default edge pipeline is used.
 
 ### Multiple Client Throughput Test
 
@@ -105,7 +105,7 @@ uv run python single_client_fps_test.py DETECTOR_MODE [--image-width WIDTH] [--i
 ```
 
 #### Configuration
-By default (when `--edge-pipeline-config` is not provided), this script evaluates using the detector's current/default cloud pipeline.
+By default (when `--edge-pipeline-config` is not provided), this script evaluates using the detector's current/default edge pipeline.
 
 To evaluate a named pipeline config directly, pass:
 `--edge-pipeline-config <pipeline_config_name>`.

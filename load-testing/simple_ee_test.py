@@ -25,27 +25,27 @@ TRAINING_TIMEOUT_SEC = 10 * 60
 INFERENCE_POD_READY_TIMEOUT_SEC = 60 * 10
 
 def main(edge_pipeline_config: str | None = None) -> None:
-    edge_pipeline_config = glh.normalize_edge_pipeline_config(edge_pipeline_config)
+    requested_edge_pipeline_config = glh.normalize_edge_pipeline_config(edge_pipeline_config)
     gl = ExperimentalApi()
     glh.error_if_endpoint_is_cloud(gl)
 
     detector_name = "Simple EE Test - Count"
-    if edge_pipeline_config is not None:
-        detector_name += f" - {glh.hash_pipeline_config(edge_pipeline_config)}"
+    if requested_edge_pipeline_config is not None:
+        detector_name += f" - {glh.hash_pipeline_config(requested_edge_pipeline_config)}"
     detector = glh.get_or_create_count_detector(
         gl,
         name=detector_name,
         class_name=CLASS_NAME,
         max_count=MAX_COUNT,
         group_name=DETECTOR_GROUP_NAME,
-        edge_pipeline_config=edge_pipeline_config,
+        edge_pipeline_config=requested_edge_pipeline_config,
     )
 
-    cloud_pipeline_config = glh.get_detector_pipeline_configs(gl, detector.id).get('pipeline_config')
-    print(f"Cloud pipeline config for {detector.id}: {cloud_pipeline_config}")
+    configured_edge_pipeline_config = glh.get_detector_edge_pipeline_configs(gl, detector.id).get('pipeline_config')
+    print(f"Configured edge pipeline for {detector.id}: {configured_edge_pipeline_config}")
 
-    if edge_pipeline_config is not None:
-        glh.assert_cloud_pipeline_matches_provided(gl, detector.id, edge_pipeline_config)
+    if requested_edge_pipeline_config is not None:
+        glh.assert_configured_edge_pipeline_matches_provided(gl, detector.id, requested_edge_pipeline_config)
 
     # Check if the detector has trained. If not, prime it with some labels
     stats = glh.get_detector_evaluation(gl, detector.id)
@@ -72,10 +72,10 @@ def main(edge_pipeline_config: str | None = None) -> None:
     glh.wait_for_ready_inference_pod(
         gl, detector, IMAGE_WIDTH, IMAGE_HEIGHT,
         timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC,
-        edge_pipeline_config=edge_pipeline_config,
+        edge_pipeline_config=requested_edge_pipeline_config,
     )
-    edge_pipeline_config = glh.get_detector_edge_metrics(gl, detector.id).get('pipeline_config')
-    print(f"Inference pod is ready for {detector.id} with pipeline_config='{edge_pipeline_config}'")
+    loaded_edge_pipeline_config = glh.get_detector_edge_metrics(gl, detector.id).get('pipeline_config')
+    print(f"Inference pod is ready for {detector.id} with loaded edge pipeline '{loaded_edge_pipeline_config}'")
 
     print(f'Adding a label to {detector.id}...')
     image, label, rois = imgh.generate_random_image(gl, detector, IMAGE_WIDTH, IMAGE_HEIGHT)
