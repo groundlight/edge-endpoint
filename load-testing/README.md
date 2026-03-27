@@ -38,6 +38,23 @@ export GROUNDLIGHT_API_TOKEN="<YOUR-GROUNDLIGHT-API-TOKEN>"
 export GROUNDLIGHT_ENDPOINT="http://<EDGE-ENDPOINT-IP>:30101"
 ```
 
+### Specifying a pipeline to test
+
+`multiple_client_throughput_test.py`, `single_client_fps_test.py`, and `simple_ee_test.py` all support `--edge-pipeline-config`.
+
+- **Named pipeline config**
+  - Pass `--edge-pipeline-config <pipeline_config_name>`.
+
+- **Custom YAML-defined pipeline**
+  - Do **not** pass `--edge-pipeline-config`.
+  - Run the script to trigger the creation of the detector.
+  - Configure the detector pipeline in Admin.
+  - Run the script again.
+
+Notes:
+- `--edge-pipeline-config` currently targets named pipeline configs. Passing custom YAML blocks directly is not supported in this workflow.
+- If `--edge-pipeline-config` is omitted, the detector's current/default edge pipeline is used.
+
 ### Multiple Client Throughput Test
 
 #### Purpose
@@ -60,6 +77,8 @@ uv run python multiple_client_throughput_test.py DETECTOR_MODE [options]
     * Per-client request rate.
 * `--image-width` (optional, default: 640)
 * `--image-height` (optional, default: 480)
+* `--edge-pipeline-config` (optional)
+    * Named edge pipeline config to benchmark.
 
 #### Outputs
 After the load test finishes, it automatically parses the results and writes a timestamped directory under `load-testing/load_tests/` containing:
@@ -67,8 +86,6 @@ After the load test finishes, it automatically parses the results and writes a t
 * `load_test_results.json`: inputs, summary outputs, and run metadata
 * `throughput_and_system_utilization_over_time.png`: throughput/errors/expected vs CPU/GPU/RAM/VRAM
 * `time_vs_latency.png`: latency over time vs number of clients
-
-`load-testing/load_tests/` is ignored by git by default.
 
 #### Evaluate
 Review the generated plots and `load_test_results.json`.
@@ -80,13 +97,16 @@ Measures end-to-end single-client throughput (frames per second) for a single de
 
 #### Usage
 ```
-uv run python single_client_fps_test.py DETECTOR_MODE [--image-width WIDTH] [--image-height HEIGHT]
+uv run python single_client_fps_test.py DETECTOR_MODE [--image-width WIDTH] [--image-height HEIGHT] [--edge-pipeline-config NAME]
 ```
 
 #### Configuration
-By default, this script will evaluate using the default pipeline for the given detector type. If you wish to evaluate a different pipeline, you need to:
-1. Switch to the desired edge pipeline in Django admin
-1. Wait until the new pipelines trains and downloads to your Edge Endpoint. You can check the status of your detector's pipeline on `http://<EDGE-ENDPOINT-IP>:30101/status`.
+By default (when `--edge-pipeline-config` is not provided), this script evaluates using the detector's current/default edge pipeline.
+
+To evaluate a named pipeline config directly, pass:
+`--edge-pipeline-config <pipeline_config_name>`.
+
+To evaluate a custom YAML-defined pipeline, configure it in Admin and run without `--edge-pipeline-config`.
 
 #### Evaluate
 After the script runs, you will see a print out of the detector's performance and other relevant details of the test. 

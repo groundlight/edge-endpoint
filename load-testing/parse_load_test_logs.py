@@ -52,84 +52,191 @@ class SystemUtilizationSummary(BaseModel):
 STEADY_THROUGHPUT_RATIO = 0.95
 STEADY_SUCCESS_RATE = 0.99
 
-def parse_log_file(log_file: str) -> LoadTestResults:
-    """Parse the log file to gather load test results."""
-    start_time = None
-    latency_buckets = {}
-    error_buckets = {}
-    total_request_buckets = {}
-    client_buckets = {}
-    gpu_buckets = {}
-    cpu_buckets = {}
-    ram_buckets = {}
-    vram_buckets = {}
 
-    # Read the log file and extract request start timestamps, response times, and errors
+def _event_timestamp_seconds(log_data: dict[str, Any]) -> float:
+    """Return event timestamp in epoch seconds."""
+    timestamp = log_data.get("ts")
+    if timestamp is not None:
+        return float(timestamp)
+    return datetime.strptime(log_data["asctime"], "%Y-%m-%d %H:%M:%S").timestamp()
+
+
+def _to_datetime_series(start_ts: float, buckets: dict[int, Any]) -> dict[datetime, Any]:
+    """Convert second-offset buckets to datetime-keyed series."""
+    return {datetime.fromtimestamp(start_ts + bucket_idx): value for bucket_idx, value in sorted(buckets.items())}
+
+
+def _parse_bucketed_series(log_file: str) -> dict[str, Any]:
+    """Parse log file into fixed 1-second bucketed series and ramp transitions."""
+    entries: list[dict[str, Any]] = []
     with open(log_file) as file:
-        num_clients = 0
         for line in file:
-            if "RAMP" in line:
-                num_clients = int(re.search(r"\d+", line).group())
+            stripped = line.strip()
+            if not stripped:
                 continue
-
-            log_data = json.loads(line.strip())
-            timestamp = datetime.strptime(log_data["asctime"], "%Y-%m-%d %H:%M:%S")
-            event_type = log_data.get("event", "request")
-
-            if start_time is None and event_type == "request":
-                start_time = timestamp  # Record first request time
-
-            time_bucket = timestamp.replace(microsecond=0)  # Per second granularity
-
-            if event_type == "gpu":
-                gpu_buckets.setdefault(time_bucket, [])
-                vram_buckets.setdefault(time_bucket, [])
-                gpu_buckets[time_bucket].append(float(log_data.get("gpu_utilization", 0.0)))
-                vram_buckets[time_bucket].append(float(log_data.get("vram_utilization", 0.0)))
-            elif event_type == "request":
-                if start_time is None:
-                    start_time = timestamp
-                # Bucket latencies by second
-                latency_buckets.setdefault(time_bucket, [])
-                latency_buckets[time_bucket].append(log_data["latency"])
-
-                # Bucketing throughput
-                error_buckets.setdefault(time_bucket, 0)
-                total_request_buckets.setdefault(time_bucket, 0)
-                client_buckets[time_bucket] = num_clients
-
-                total_request_buckets[time_bucket] += 1
-                if not log_data["success"]:
-                    error_buckets[time_bucket] += 1
-            elif event_type == "cpu":
-                cpu_buckets.setdefault(time_bucket, [])
-                cpu_buckets[time_bucket].append(float(log_data.get("cpu_percent", 0.0)))
-                memory_percent = log_data.get("memory_percent")
-                if memory_percent is not None:
-                    ram_buckets.setdefault(time_bucket, [])
-                    ram_buckets[time_bucket].append(float(memory_percent))
-            else:
+            if stripped.startswith("RAMP"):
+                client_match = re.search(r"\d+", stripped)
+                if not client_match:
+                    continue
+                ramp_ts_match = re.search(r"ts=(\d+(?:\.\d+)?)", stripped)
+                entries.append(
+                    {
+                        "type": "ramp",
+                        "clients": int(client_match.group()),
+                        "ts": float(ramp_ts_match.group(1)) if ramp_ts_match else None,
+                    }
+                )
                 continue
+            if not stripped.startswith("{"):
+                continue
+            payload = json.loads(stripped)
+            entries.append(
+                {
+                    "type": payload.get("event", "request"),
+                    "ts": _event_timestamp_seconds(payload),
+                    "payload": payload,
+                }
+            )
 
-    # Calculate average latencies for each time bucket
-    average_latencies = {bucket: sum(latencies) / len(latencies) for bucket, latencies in latency_buckets.items()}
-    average_gpu = {bucket: sum(vals) / len(vals) for bucket, vals in gpu_buckets.items()}
-    average_cpu = {bucket: sum(vals) / len(vals) for bucket, vals in cpu_buckets.items()}
-    average_ram = {bucket: sum(vals) / len(vals) for bucket, vals in ram_buckets.items()}
-    average_vram = {bucket: sum(vals) / len(vals) for bucket, vals in vram_buckets.items()}
+    request_times = [entry["ts"] for entry in entries if entry["type"] == "request"]
+    if not request_times:
+        raise RuntimeError("Log file did not contain request events.")
+    first_ramp_times = [entry["ts"] for entry in entries if entry["type"] == "ramp" and entry["ts"] is not None]
+    start_ts = first_ramp_times[0] if first_ramp_times else request_times[0]
+    latest_request_ts = max(request_times)
+    full_seconds = max(1, int(latest_request_ts - start_ts))
 
-    output_dict = {
-        "start_time": start_time,
-        "average_latency_by_time": average_latencies,
-        "errors_by_time": error_buckets,
-        "requests_by_time": total_request_buckets,
-        "clients_by_time": client_buckets,
-        "gpu_by_time": average_gpu,
-        "cpu_by_time": average_cpu,
-        "ram_by_time": average_ram,
-        "vram_by_time": average_vram,
+    requests_by_second: dict[int, int] = {}
+    errors_by_second: dict[int, int] = {}
+    latencies_by_second: dict[int, list[float]] = {}
+    cpu_by_second: dict[int, list[float]] = {}
+    ram_by_second: dict[int, list[float]] = {}
+    gpu_by_second: dict[int, list[float]] = {}
+    vram_by_second: dict[int, list[float]] = {}
+    ramp_transitions: list[tuple[int, int]] = []
+    current_clients = 0
+
+    for entry in entries:
+        if entry["type"] == "ramp":
+            current_clients = int(entry["clients"])
+            ramp_ts = entry["ts"] if entry["ts"] is not None else start_ts
+            ramp_second = max(0, int(ramp_ts - start_ts))
+            ramp_transitions.append((ramp_second, current_clients))
+            continue
+
+        event_ts = float(entry["ts"])
+        bucket_idx = int(event_ts - start_ts)
+        if bucket_idx < 0:
+            continue
+        payload = entry["payload"]
+        event_type = entry["type"]
+
+        if event_type == "request":
+            if bucket_idx >= full_seconds:
+                continue
+            requests_by_second[bucket_idx] = requests_by_second.get(bucket_idx, 0) + 1
+            errors_by_second.setdefault(bucket_idx, 0)
+            latencies_by_second.setdefault(bucket_idx, []).append(float(payload.get("latency", 0.0)))
+            if not payload.get("success", False):
+                errors_by_second[bucket_idx] += 1
+        elif event_type == "cpu":
+            cpu_by_second.setdefault(bucket_idx, []).append(float(payload.get("cpu_percent", 0.0)))
+            memory_percent = payload.get("memory_percent")
+            if memory_percent is not None:
+                ram_by_second.setdefault(bucket_idx, []).append(float(memory_percent))
+        elif event_type == "gpu":
+            gpu_by_second.setdefault(bucket_idx, []).append(float(payload.get("gpu_utilization", 0.0)))
+            vram_by_second.setdefault(bucket_idx, []).append(float(payload.get("vram_utilization", 0.0)))
+
+    clients_by_second: dict[int, int] = {}
+    if ramp_transitions:
+        ramp_transitions.sort(key=lambda item: item[0])
+        active_clients = ramp_transitions[0][1]
+        transition_idx = 0
+        for second_idx in range(full_seconds):
+            while transition_idx + 1 < len(ramp_transitions) and ramp_transitions[transition_idx + 1][0] <= second_idx:
+                transition_idx += 1
+                active_clients = ramp_transitions[transition_idx][1]
+            clients_by_second[second_idx] = active_clients
+    else:
+        for second_idx in range(full_seconds):
+            clients_by_second[second_idx] = current_clients
+
+    for second_idx in range(full_seconds):
+        requests_by_second.setdefault(second_idx, 0)
+        errors_by_second.setdefault(second_idx, 0)
+        latencies_by_second.setdefault(second_idx, [])
+
+    return {
+        "start_ts": start_ts,
+        "full_seconds": full_seconds,
+        "requests_by_second": requests_by_second,
+        "errors_by_second": errors_by_second,
+        "clients_by_second": clients_by_second,
+        "latencies_by_second": latencies_by_second,
+        "gpu_by_second": gpu_by_second,
+        "cpu_by_second": cpu_by_second,
+        "ram_by_second": ram_by_second,
+        "vram_by_second": vram_by_second,
     }
-    return LoadTestResults(**output_dict)
+
+
+def parse_log_file(log_file: str) -> LoadTestResults:
+    """Parse the log file into fixed 1-second bucketed time series."""
+    parsed = _parse_bucketed_series(log_file)
+    start_ts = parsed["start_ts"]
+    average_latencies = _to_datetime_series(
+        start_ts,
+        {
+            second: (sum(values) / len(values))
+            for second, values in parsed["latencies_by_second"].items()
+            if values
+        },
+    )
+    average_gpu = _to_datetime_series(
+        start_ts,
+        {
+            second: (sum(values) / len(values))
+            for second, values in parsed["gpu_by_second"].items()
+            if values
+        },
+    )
+    average_cpu = _to_datetime_series(
+        start_ts,
+        {
+            second: (sum(values) / len(values))
+            for second, values in parsed["cpu_by_second"].items()
+            if values
+        },
+    )
+    average_ram = _to_datetime_series(
+        start_ts,
+        {
+            second: (sum(values) / len(values))
+            for second, values in parsed["ram_by_second"].items()
+            if values
+        },
+    )
+    average_vram = _to_datetime_series(
+        start_ts,
+        {
+            second: (sum(values) / len(values))
+            for second, values in parsed["vram_by_second"].items()
+            if values
+        },
+    )
+
+    return LoadTestResults(
+        start_time=datetime.fromtimestamp(start_ts),
+        average_latency_by_time=average_latencies,
+        errors_by_time=_to_datetime_series(start_ts, parsed["errors_by_second"]),
+        requests_by_time=_to_datetime_series(start_ts, parsed["requests_by_second"]),
+        clients_by_time=_to_datetime_series(start_ts, parsed["clients_by_second"]),
+        gpu_by_time=average_gpu,
+        cpu_by_time=average_cpu,
+        ram_by_time=average_ram,
+        vram_by_time=average_vram,
+    )
 
 
 def _percentile(values: list[float], percentile_value: float) -> float:
@@ -240,62 +347,37 @@ def _calculate_bucket_metrics(
     log_file: str,
     requests_per_second: int,
 ) -> list[BucketMetrics]:
-    buckets: list[dict[str, Any]] = []
-    current_bucket: dict[str, Any] | None = None
-
-    with open(log_file) as file:
-        for line in file:
-            stripped = line.strip()
-            if not stripped:
-                continue
-            if stripped.startswith("RAMP"):
-                client_match = re.search(r"\d+", stripped)
-                if not client_match:
-                    continue
-                num_clients = int(client_match.group())
-                current_bucket = {
-                    "index": len(buckets),
-                    "num_clients": num_clients,
-                    "timestamps": [],
-                    "latencies": [],
-                    "total_requests": 0,
-                    "success_count": 0,
-                }
-                buckets.append(current_bucket)
-                continue
-
-            if not stripped.startswith("{"):
-                continue
-            log_data = json.loads(stripped)
-
-            if log_data.get("event", "request") != "request":
-                continue
-            if current_bucket is None:
-                continue
-
-            timestamp = datetime.strptime(log_data["asctime"], "%Y-%m-%d %H:%M:%S")
-            current_bucket["timestamps"].append(timestamp)
-            current_bucket["latencies"].append(float(log_data.get("latency", 0.0)))
-            current_bucket["total_requests"] += 1
-            if log_data.get("success", False):
-                current_bucket["success_count"] += 1
+    parsed = _parse_bucketed_series(log_file)
+    clients_by_second = parsed["clients_by_second"]
+    requests_by_second = parsed["requests_by_second"]
+    errors_by_second = parsed["errors_by_second"]
+    latencies_by_second = parsed["latencies_by_second"]
+    total_seconds = int(parsed["full_seconds"])
 
     bucket_metrics: list[BucketMetrics] = []
+    if total_seconds <= 0:
+        return bucket_metrics
 
-    for bucket in buckets:
-        total_requests = bucket["total_requests"]
-        if total_requests == 0:
-            continue
+    bucket_index = 0
+    second_idx = 0
+    while second_idx < total_seconds:
+        num_clients = int(clients_by_second[second_idx])
+        run_start = second_idx
+        while second_idx < total_seconds and int(clients_by_second[second_idx]) == num_clients:
+            second_idx += 1
+        run_end = second_idx
 
-        timestamps = bucket["timestamps"]
-        start_time = min(timestamps)
-        end_time = max(timestamps)
-        duration_sec = max((end_time - start_time).total_seconds(), 1e-6)
-        achieved_rps = total_requests / duration_sec
-        expected_rps = requests_per_second * bucket["num_clients"]
-        success_rate = bucket["success_count"] / total_requests if total_requests else 0.0
-        latency_p50 = _percentile(bucket["latencies"], 0.5)
-        latency_p95 = _percentile(bucket["latencies"], 0.95)
+        seconds = range(run_start, run_end)
+        total_requests = sum(int(requests_by_second[s]) for s in seconds)
+        total_errors = sum(int(errors_by_second[s]) for s in seconds)
+        success_count = total_requests - total_errors
+        duration_sec = float(run_end - run_start)
+        achieved_rps = (total_requests / duration_sec) if duration_sec > 0 else 0.0
+        expected_rps = requests_per_second * num_clients
+        success_rate = (success_count / total_requests) if total_requests else 0.0
+        latency_samples = [lat for s in seconds for lat in latencies_by_second.get(s, [])]
+        latency_p50 = _percentile(latency_samples, 0.5)
+        latency_p95 = _percentile(latency_samples, 0.95)
 
         is_steady = (
             expected_rps > 0
@@ -305,10 +387,10 @@ def _calculate_bucket_metrics(
 
         bucket_metrics.append(
             BucketMetrics(
-                index=bucket["index"],
-                num_clients=bucket["num_clients"],
+                index=bucket_index,
+                num_clients=num_clients,
                 total_requests=total_requests,
-                success_count=bucket["success_count"],
+                success_count=success_count,
                 duration_sec=duration_sec,
                 achieved_rps=achieved_rps,
                 expected_rps=expected_rps,
@@ -318,6 +400,7 @@ def _calculate_bucket_metrics(
                 is_steady=is_steady,
             )
         )
+        bucket_index += 1
 
     return bucket_metrics
 
@@ -341,9 +424,18 @@ def plot_throughput_and_system_utilization_by_time(
 
     # Calculate elapsed time in seconds
     start_time = load_test_results.start_time
-    error_elapsed_seconds = [(time - start_time).total_seconds() for time in error_times]
-    request_elapsed_seconds = [(time - start_time).total_seconds() for time in request_times]
+    # Plot request/error values at the end of each 1-second bucket [t, t+1),
+    # which avoids showing a visual ramp-up before the next target step.
+    error_elapsed_seconds = [(time - start_time).total_seconds() + 1 for time in error_times]
+    request_elapsed_seconds = [(time - start_time).total_seconds() + 1 for time in request_times]
+    error_elapsed_seconds = [0.0, *error_elapsed_seconds]
+    error_rate = [0, *error_rate]
+    request_elapsed_seconds = [0.0, *request_elapsed_seconds]
+    request_rate = [0, *request_rate]
     client_elapsed_seconds = [(time - start_time).total_seconds() for time in client_times]
+    if client_elapsed_seconds:
+        client_elapsed_seconds = [*client_elapsed_seconds, client_elapsed_seconds[-1] + 1.0]
+        expected_response_rate = [*expected_response_rate, expected_response_rate[-1]]
     gpu_items = sorted(load_test_results.gpu_by_time.items())
     cpu_items = sorted(load_test_results.cpu_by_time.items())
     ram_items = sorted(load_test_results.ram_by_time.items())
@@ -361,8 +453,24 @@ def plot_throughput_and_system_utilization_by_time(
     fig, ax1 = plt.subplots(figsize=(10, 6))
 
     # Plot throughput and errors on the main y-axis
-    ax1.plot(request_elapsed_seconds, request_rate, linestyle="-", color="green", label="Throughput", alpha=0.9)
-    ax1.plot(error_elapsed_seconds, error_rate, linestyle="-", color="red", label="Errors", alpha=0.9)
+    ax1.plot(
+        request_elapsed_seconds,
+        request_rate,
+        linestyle="-",
+        color="green",
+        label="Throughput",
+        alpha=0.9,
+        zorder=5,
+    )
+    ax1.plot(
+        error_elapsed_seconds,
+        error_rate,
+        linestyle="-",
+        color="red",
+        label="Errors",
+        alpha=0.9,
+        zorder=3,
+    )
     ax1.step(
         client_elapsed_seconds,
         expected_response_rate,
@@ -370,6 +478,7 @@ def plot_throughput_and_system_utilization_by_time(
         color="black",
         label="Expected Requests / Num Clients",
         alpha=0.9,
+        zorder=4,
     )
     ax1.set_xlabel("Elapsed Time (s)")
     ax1.set_ylabel("Total Requests / Second")
@@ -383,7 +492,14 @@ def plot_throughput_and_system_utilization_by_time(
     ax1.set_ylim((0, ylim_upper * 1.05))
 
     if maximum_steady_rps is not None:
-        ax1.axhline(y=maximum_steady_rps, color="blue", linestyle="-", linewidth=1.5, label="Max Steady RPS")
+        ax1.axhline(
+            y=maximum_steady_rps,
+            color="blue",
+            linestyle="-",
+            linewidth=1.5,
+            label="Max Steady RPS",
+            zorder=6,
+        )
 
     # Create system utilization axis for CPU/GPU
     utilization_axis = None
@@ -402,6 +518,7 @@ def plot_throughput_and_system_utilization_by_time(
                 color="orange",
                 linestyle=":",
                 label="GPU Utilization",
+                zorder=2,
             )
             utilization_lines.append(gpu_line)
         if cpu_elapsed_seconds:
@@ -411,6 +528,7 @@ def plot_throughput_and_system_utilization_by_time(
                 color="teal",
                 linestyle=":",
                 label="CPU Utilization",
+                zorder=2,
             )
             utilization_lines.append(cpu_line)
         if ram_elapsed_seconds:
@@ -420,6 +538,7 @@ def plot_throughput_and_system_utilization_by_time(
                 color="brown",
                 linestyle=":",
                 label="RAM Utilization",
+                zorder=2,
             )
             utilization_lines.append(ram_line)
         if vram_elapsed_seconds:
@@ -429,6 +548,7 @@ def plot_throughput_and_system_utilization_by_time(
                 color="magenta",
                 linestyle=":",
                 label="VRAM Utilization",
+                zorder=2,
             )
             utilization_lines.append(vram_line)
         utilization_axis.set_xlim(ax1.get_xlim())

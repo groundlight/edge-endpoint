@@ -43,7 +43,8 @@ class SystemMonitor:
         psutil.cpu_percent(interval=None)  # Prime cpu_percent measurement
         while not stop_event.is_set():
             loop_start = time.time()
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            event_ts = time.time()
+            timestamp = datetime.fromtimestamp(event_ts).strftime("%Y-%m-%d %H:%M:%S")
 
             cpu_percent = psutil.cpu_percent(interval=None)
             memory_percent = psutil.virtual_memory().percent
@@ -51,6 +52,7 @@ class SystemMonitor:
                 log_file,
                 {
                     "asctime": timestamp,
+                    "ts": event_ts,
                     "event": "cpu",
                     "cpu_percent": round(cpu_percent, 2),
                     "memory_percent": round(memory_percent, 2),
@@ -64,6 +66,7 @@ class SystemMonitor:
             average_vram_utilization = sum(vram_utilizations) / len(vram_utilizations) if vram_utilizations else 0.0
             gpu_payload = {
                 "asctime": timestamp,
+                "ts": event_ts,
                 "event": "gpu",
                 "gpu_utilization": round(average_gpu_utilization, 2),
                 "vram_utilization": round(average_vram_utilization, 2),
