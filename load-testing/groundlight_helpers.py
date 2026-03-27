@@ -330,7 +330,7 @@ def wait_for_ready_inference_pod(
         # When no pipeline config is provided, users are allowed to change the pipeline config in Admin; 
         # this workflow supports custom yaml pipelines, which aren't currently supported in the Python SDK. 
         # When a new pipeline is configured in Admin, it will take some time for the detector retrain,
-        # and for the new pipeline to make its way to the egde. Therefore, we will wait here for a bit
+        # and for the new pipeline to make its way to the edge. Therefore, we will wait here for a bit
         # to ensure that the edge pipeline configured in the cloud matches what was downloaded to the edge.
         wait_for_loaded_pipeline_to_match_configured_edge(gl, detector.id, timeout_sec=PIPELINE_LOADED_TIMEOUT_SEC)
 
