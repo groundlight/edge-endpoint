@@ -14,7 +14,7 @@ router = APIRouter()
 async def get_edge_detector_readiness(app_state: AppState = Depends(get_app_state)):
     """Return readiness status for each configured detector.
 
-    Checks whether the inference pod (and OODD pod, if applicable) for each
+    Checks whether the primary inference pod (and OODD pod, if applicable) for each
     detector is responding to health checks.
     """
     config = EdgeConfigManager.active()

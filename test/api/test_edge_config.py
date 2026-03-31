@@ -1,4 +1,13 @@
 from fastapi.testclient import TestClient
+from groundlight.edge import EdgeEndpointConfig
+
+
+def test_get_edge_config(test_client: TestClient):
+    """GET /edge-config should return 200 with a valid config payload."""
+    response = test_client.get("/edge-config")
+    assert response.status_code == 200
+    config = EdgeEndpointConfig.from_payload(response.json())
+    assert config is not None
 
 
 def test_set_edge_config_invalid_body(test_client: TestClient):
