@@ -2,7 +2,7 @@ import os
 import tempfile
 
 import pytest
-from groundlight.edge import DetectorConfig, EdgeEndpointConfig, InferenceConfig
+from groundlight.edge import DEFAULT, EdgeEndpointConfig, InferenceConfig
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -14,7 +14,7 @@ def _config_with_detectors(*detector_ids: str) -> EdgeEndpointConfig:
     """Helper to build an EdgeEndpointConfig with the given detector IDs."""
     config = EdgeEndpointConfig()
     for did in detector_ids:
-        config.detectors.append(DetectorConfig(detector_id=did, edge_inference_config="default"))
+        config.add_detector(did, DEFAULT)
     return config
 
 
@@ -144,7 +144,7 @@ class TestEdgeConfigManager:
         assert {d.detector_id for d in second.detectors if d.detector_id} == {"det_B"}
 
     def test_load_startup_config_env_var(self, monkeypatch):
-        monkeypatch.setenv("EDGE_CONFIG", '{"detectors": [{"detector_id": "det_ENV", "edge_inference_config": "default"}]}')
+        monkeypatch.setenv("EDGE_CONFIG", '{"edge_inference_configs": {"default": {"enabled": true}}, "detectors": [{"detector_id": "det_ENV", "edge_inference_config": "default"}]}')
         config = EdgeConfigManager.load_startup_config()
         assert any(d.detector_id == "det_ENV" for d in config.detectors)
 
@@ -170,7 +170,7 @@ class TestEdgeConfigManager:
 
     def test_load_startup_config_priority_env_over_helm(self, monkeypatch):
         """Env var should win even if Helm config exists."""
-        monkeypatch.setenv("EDGE_CONFIG", '{"detectors": [{"detector_id": "det_ENV", "edge_inference_config": "default"}]}')
+        monkeypatch.setenv("EDGE_CONFIG", '{"edge_inference_configs": {"default": {"enabled": true}}, "detectors": [{"detector_id": "det_ENV", "edge_inference_config": "default"}]}')
         import yaml
 
         with open(self.helm_path, "w") as f:
