@@ -52,7 +52,7 @@ class EdgeConfigManager:
         try:
             mtime = os.path.getmtime(ACTIVE_EDGE_CONFIG_PATH)
         except FileNotFoundError:
-            logger.error("Active config file not found at %s", ACTIVE_EDGE_CONFIG_PATH, exc_info=True)
+            logger.debug("Active config file not yet available at %s, using defaults", ACTIVE_EDGE_CONFIG_PATH)
             return cls._cached_config
         if mtime != cls._cached_mtime:
             cls._cached_mtime = mtime

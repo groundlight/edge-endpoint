@@ -1,7 +1,8 @@
 import logging
 
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from groundlight.edge import EdgeEndpointConfig
+from pydantic import ValidationError
 
 from app.core.app_state import AppState, get_app_state
 from app.core.edge_config_loader import EdgeConfigManager, reconcile_config
@@ -23,6 +24,8 @@ async def set_edge_config(
     app_state: AppState = Depends(get_app_state),
 ):
     """Replaces the active edge endpoint configuration with the provided configuration."""
-    new_config = EdgeEndpointConfig.from_payload(body)
+    try:
+        new_config = EdgeEndpointConfig.from_payload(body)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=e.errors()) from e
     reconcile_config(new_config, app_state.db_manager)
-    return new_config.to_payload()
