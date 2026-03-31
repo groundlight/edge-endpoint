@@ -39,6 +39,9 @@ EDGE_CONFIG_FILE="/tmp/edge-config.$$.yaml"
 cat > $EDGE_CONFIG_FILE <<EOF
 global_config:
   refresh_rate: $REFRESH_RATE
+edge_inference_configs:
+  default:
+    enabled: true
 detectors:
   - detector_id: "$DETECTOR_ID"
     edge_inference_config: default
