@@ -17,7 +17,8 @@ spec:
       serviceAccountName: job-cleanup-sa  # Ensure permissions to delete Jobs
       containers:
         - name: kubectl
-          image: bitnamilegacy/kubectl:latest
+          image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
+          imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
           command:
             - /bin/sh
             - -c
