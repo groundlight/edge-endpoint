@@ -15,6 +15,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 TEN_MINUTES = 60 * 10
+POD_DELETION_TIMEOUT_SECONDS = 60 * 3
 
 USE_MINIMAL_IMAGE = os.environ.get("USE_MINIMAL_IMAGE", "false") == "true"
 
@@ -172,7 +173,8 @@ def manage_update_models(
 
             # Poll until all pods are fully terminated
             poll_start = time.time()
-            while time.time() - poll_start < TEN_MINUTES:
+            all_gone = False
+            while time.time() - poll_start < POD_DELETION_TIMEOUT_SECONDS:
                 all_gone = all(
                     deployment_manager.is_inference_deployment_fully_deleted(did)
                     and (
@@ -184,12 +186,15 @@ def manage_update_models(
                 if all_gone:
                     break
                 time.sleep(5)
-            else:
-                logger.error(f"Timed out waiting for detector pods to terminate: {pending_deletions}")
 
-            for detector_id in pending_deletions:
-                db_manager.delete_inference_deployment_records(detector_id)
-            logger.info(f"Finished deleting {len(pending_deletions)} detector(s)")
+            if all_gone:
+                for detector_id in pending_deletions:
+                    db_manager.delete_inference_deployment_records(detector_id)
+                logger.info(f"Finished deleting {len(pending_deletions)} detector(s) from DB.")
+            else:
+                logger.error(
+                    f"Timed out waiting for detector pods to terminate: {pending_deletions}. "
+                )
 
         # Check for model updates and apply model updates
         start = time.time()
