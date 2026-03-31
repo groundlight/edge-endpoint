@@ -25,8 +25,7 @@ containers:
         subPath: init-aws-access-retrieve.sh
 
   - name: kubectl
-    image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
-    imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+    image: bitnami/kubectl:latest
     command:
       - /bin/sh
       - /app/init-aws-access-apply.sh
