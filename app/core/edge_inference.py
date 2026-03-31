@@ -275,7 +275,7 @@ class EdgeInferenceManager:
                 - "score": float
                 - "confidence": float
                 - "probability": float
-                - "label": str
+                - "label": int
         """
         logger.info(f"Submitting image to edge inference service. {detector_id=}")
         start_time = time.perf_counter()
