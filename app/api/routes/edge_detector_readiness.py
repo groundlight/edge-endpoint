@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter
 
-from app.core.edge_config_loader import EdgeConfigManager
+from app.core.edge_config_manager import EdgeConfigManager
 from app.core.edge_inference import is_edge_inference_ready
 from app.core.naming import get_edge_inference_service_name
 

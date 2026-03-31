@@ -13,7 +13,7 @@ from app.core.app_state import (
     get_groundlight_sdk_instance,
     refresh_detector_metadata_if_needed,
 )
-from app.core.edge_config_loader import EdgeConfigManager
+from app.core.edge_config_manager import EdgeConfigManager
 from app.core.naming import get_edge_inference_model_name
 from app.core.utils import create_iq, generate_iq_id, generate_metadata_dict, generate_request_id
 from app.escalation_queue.models import SubmitImageQueryParams

@@ -5,7 +5,7 @@ from groundlight.edge import EdgeEndpointConfig
 from pydantic import ValidationError
 
 from app.core.app_state import AppState, get_app_state
-from app.core.edge_config_loader import EdgeConfigManager, reconcile_config
+from app.core.edge_config_manager import EdgeConfigManager, reconcile_config
 
 logger = logging.getLogger(__name__)
 

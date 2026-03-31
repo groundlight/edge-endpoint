@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import DatabaseManager
-from app.core.edge_config_loader import apply_detector_changes, compute_detector_diff
+from app.core.edge_config_manager import apply_detector_changes, compute_detector_diff
 
 
 def _config_with_detectors(*detector_ids: str) -> EdgeEndpointConfig:
