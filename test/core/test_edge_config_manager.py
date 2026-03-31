@@ -1,5 +1,4 @@
 import os
-import tempfile
 
 import pytest
 from groundlight.edge import DetectorConfig, EdgeEndpointConfig, InferenceConfig
@@ -144,7 +143,9 @@ class TestEdgeConfigManager:
         assert {d.detector_id for d in second.detectors if d.detector_id} == {"det_B"}
 
     def test_load_startup_config_env_var(self, monkeypatch):
-        monkeypatch.setenv("EDGE_CONFIG", '{"detectors": [{"detector_id": "det_ENV", "edge_inference_config": "default"}]}')
+        monkeypatch.setenv(
+            "EDGE_CONFIG", '{"detectors": [{"detector_id": "det_ENV", "edge_inference_config": "default"}]}'
+        )
         config = EdgeConfigManager.load_startup_config()
         assert any(d.detector_id == "det_ENV" for d in config.detectors)
 
@@ -170,7 +171,9 @@ class TestEdgeConfigManager:
 
     def test_load_startup_config_priority_env_over_helm(self, monkeypatch):
         """Env var should win even if Helm config exists."""
-        monkeypatch.setenv("EDGE_CONFIG", '{"detectors": [{"detector_id": "det_ENV", "edge_inference_config": "default"}]}')
+        monkeypatch.setenv(
+            "EDGE_CONFIG", '{"detectors": [{"detector_id": "det_ENV", "edge_inference_config": "default"}]}'
+        )
         import yaml
 
         with open(self.helm_path, "w") as f:
