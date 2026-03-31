@@ -37,6 +37,7 @@ spec:
 {{ if eq .Values.inferenceFlavor "gpu" }}
       runtimeClassName: nvidia  # Required for GPU use in k3s
 {{- end }}
+      serviceAccountName: edge-endpoint-service-account
       imagePullSecrets:
       - name: registry-credentials
       strategy:
@@ -46,6 +47,11 @@ spec:
           maxUnavailable: 0  # Aim for no downtime during rollout
 
       initContainers:
+      - name: wait-for-warmup
+        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
+        imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        command: ["/bin/bash", "/groundlight-edge/deploy/bin/wait-for-warmup.sh"]
+
       # NOTE: the sync-pinamod container is duplicated in the warmup_inference_model.yaml Job
       # TODO: refactor to share code between the Job and the initContainer in the Deployment
       - name: sync-pinamod
@@ -99,7 +105,7 @@ spec:
             port: 8000
           initialDelaySeconds: 10
           periodSeconds: 10
-          failureThreshold: 120  # Wait for up to 20 min
+          failureThreshold: 270  # Wait for up to 45 min
         readinessProbe:
           httpGet:
             path: /health/ready  # Checks if the server is ready to serve requests
