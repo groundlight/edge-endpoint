@@ -2,10 +2,25 @@ Groundlight Edge Endpoint in the namespace "{{ .Values.namespace }}" has been in
 
 Set the `GROUNDLIGHT_ENDPOINT` environment variable to the following URL to use the endpoint in your application:
 
-From your host: 
+{{- if .Values.httpEnabled }}
+
+From your host (HTTP): 
 
 export GROUNDLIGHT_ENDPOINT="http://localhost:{{ .Values.edgeEndpointPort }}/"
 
-From within the cluster:
+From within the cluster (HTTP):
 
-export GROUNDLIGHT_ENDPOINT="http://edge-endpoint-service.{{ .Values.namespace }}.svc.cluster.local:30101/"   
+export GROUNDLIGHT_ENDPOINT="http://edge-endpoint-service.{{ .Values.namespace }}.svc.cluster.local:30101/"
+{{- end }}
+
+From your host (HTTPS): 
+
+export GROUNDLIGHT_ENDPOINT="https://localhost:{{ .Values.edgeEndpointHttpsPort }}/"
+
+From within the cluster (HTTPS):
+
+export GROUNDLIGHT_ENDPOINT="https://edge-endpoint-service.{{ .Values.namespace }}.svc.cluster.local:443/"
+{{- if not .Values.httpEnabled }}
+
+NOTE: HTTP access is disabled. Only HTTPS is available on port {{ .Values.edgeEndpointHttpsPort }}.
+{{- end }}

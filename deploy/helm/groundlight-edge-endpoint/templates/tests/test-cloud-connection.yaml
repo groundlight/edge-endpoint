@@ -13,10 +13,13 @@ spec:
     - name: wget
       image: busybox
       command: ['sh']
-      # Note that we use port 30101 here which is the internal port and not the port exposed to the host
       args: 
       - '-c'
+      {{- if .Values.httpEnabled }}
       - 'wget -O - --header "x-api-token: ${GROUNDLIGHT_API_TOKEN}" {{ include "groundlight-edge-endpoint.fullname" . }}-service:30101/device-api/v1/me'
+      {{- else }}
+      - 'wget --no-check-certificate -O - --header "x-api-token: ${GROUNDLIGHT_API_TOKEN}" https://{{ include "groundlight-edge-endpoint.fullname" . }}-service:443/device-api/v1/me'
+      {{- end }}
       env:
       - name: GROUNDLIGHT_API_TOKEN
         valueFrom:
