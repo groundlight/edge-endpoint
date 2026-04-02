@@ -192,9 +192,7 @@ def manage_update_models(
                     db_manager.delete_inference_deployment_records(detector_id)
                 logger.info(f"Finished deleting {len(pending_deletions)} detector(s) from DB.")
             else:
-                logger.error(
-                    f"Timed out waiting for detector pods to terminate: {pending_deletions}. "
-                )
+                logger.error(f"Timed out waiting for detector pods to terminate: {pending_deletions}. ")
 
         # Check for model updates and apply model updates
         start = time.time()
