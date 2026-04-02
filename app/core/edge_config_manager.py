@@ -62,10 +62,9 @@ class EdgeConfigManager:
     @staticmethod
     def detector_configs(config: EdgeEndpointConfig) -> dict[str, InferenceConfig]:
         """Return a mapping of detector IDs to their InferenceConfig."""
-        detectors = [d for d in config.detectors if d.detector_id]
-        if not detectors:
+        if not config.detectors:
             return {}
-        return {d.detector_id: config.edge_inference_configs[d.edge_inference_config] for d in detectors}
+        return {d.detector_id: config.edge_inference_configs[d.edge_inference_config] for d in config.detectors}
 
     @staticmethod
     def detector_config(config: EdgeEndpointConfig, detector_id: str) -> InferenceConfig | None:
@@ -108,7 +107,7 @@ def compute_detector_diff(current_detector_ids: set[str], new_config: EdgeEndpoi
 
     Returns (removed_ids, added_ids).
     """
-    desired = {d.detector_id for d in new_config.detectors if d.detector_id}
+    desired = {d.detector_id for d in new_config.detectors}
     return current_detector_ids - desired, desired - current_detector_ids
 
 
