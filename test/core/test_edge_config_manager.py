@@ -8,6 +8,14 @@ from sqlalchemy.orm import sessionmaker
 from app.core.database import DatabaseManager
 from app.core.edge_config_manager import EdgeConfigManager, apply_detector_changes, compute_detector_diff
 
+DET_A = "det_AAAAAAAAAAAAAAAAAAAAAAAAAAA"
+DET_B = "det_BBBBBBBBBBBBBBBBBBBBBBBBBBB"
+DET_C = "det_CCCCCCCCCCCCCCCCCCCCCCCCCCC"
+DET_D = "det_DDDDDDDDDDDDDDDDDDDDDDDDDDD"
+DET_ENV = "det_ENVENVENVENVENVENVENVENVENV"
+DET_HELM = "det_HELMHELMHELMHELMHELMHELMHEL"
+DET_PVC = "det_PVCPVCPVCPVCPVCPVCPVCPVCPVC"
+
 
 def _config_with_detectors(*detector_ids: str) -> EdgeEndpointConfig:
     """Helper to build an EdgeEndpointConfig with the given detector IDs."""
@@ -18,42 +26,36 @@ def _config_with_detectors(*detector_ids: str) -> EdgeEndpointConfig:
 
 
 def test_compute_detector_diff_no_changes():
-    removed, added = compute_detector_diff({"det_A", "det_B"}, _config_with_detectors("det_A", "det_B"))
+    removed, added = compute_detector_diff({DET_A, DET_B}, _config_with_detectors(DET_A, DET_B))
     assert removed == set()
     assert added == set()
 
 
 def test_compute_detector_diff_all_added():
-    removed, added = compute_detector_diff(set(), _config_with_detectors("det_A", "det_B"))
+    removed, added = compute_detector_diff(set(), _config_with_detectors(DET_A, DET_B))
     assert removed == set()
-    assert added == {"det_A", "det_B"}
+    assert added == {DET_A, DET_B}
 
 
 def test_compute_detector_diff_all_removed():
-    removed, added = compute_detector_diff({"det_A", "det_B"}, _config_with_detectors())
-    assert removed == {"det_A", "det_B"}
+    removed, added = compute_detector_diff({DET_A, DET_B}, _config_with_detectors())
+    assert removed == {DET_A, DET_B}
     assert added == set()
 
 
 def test_compute_detector_diff_mixed():
     removed, added = compute_detector_diff(
-        {"det_A", "det_B", "det_C"},
-        _config_with_detectors("det_B", "det_D"),
+        {DET_A, DET_B, DET_C},
+        _config_with_detectors(DET_B, DET_D),
     )
-    assert removed == {"det_A", "det_C"}
-    assert added == {"det_D"}
+    assert removed == {DET_A, DET_C}
+    assert added == {DET_D}
 
 
 def test_compute_detector_diff_empty_both():
     removed, added = compute_detector_diff(set(), _config_with_detectors())
     assert removed == set()
     assert added == set()
-
-
-def test_compute_detector_diff_filters_empty_detector_ids():
-    """Detectors with empty-string IDs in the config should be ignored."""
-    removed, added = compute_detector_diff(set(), _config_with_detectors("det_A", ""))
-    assert added == {"det_A"}
 
 
 @pytest.fixture(scope="module")
@@ -114,11 +116,11 @@ class TestEdgeConfigManager:
         EdgeConfigManager._cached_mtime = 0.0
 
     def test_save_and_active_roundtrip(self):
-        config = _config_with_detectors("det_A", "det_B")
+        config = _config_with_detectors(DET_A, DET_B)
         EdgeConfigManager.save(config)
         loaded = EdgeConfigManager.active()
-        loaded_ids = {d.detector_id for d in loaded.detectors if d.detector_id}
-        assert loaded_ids == {"det_A", "det_B"}
+        loaded_ids = {d.detector_id for d in loaded.detectors}
+        assert loaded_ids == {DET_A, DET_B}
 
     def test_active_returns_defaults_when_no_file(self):
         result = EdgeConfigManager.active()
@@ -126,7 +128,7 @@ class TestEdgeConfigManager:
         assert isinstance(result, EdgeEndpointConfig)
 
     def test_active_uses_mtime_cache(self):
-        config = _config_with_detectors("det_A")
+        config = _config_with_detectors(DET_A)
         EdgeConfigManager.save(config)
 
         first = EdgeConfigManager.active()
@@ -134,37 +136,37 @@ class TestEdgeConfigManager:
         assert first is second  # same object from cache, not re-read
 
     def test_active_reloads_on_file_change(self):
-        EdgeConfigManager.save(_config_with_detectors("det_A"))
+        EdgeConfigManager.save(_config_with_detectors(DET_A))
         first = EdgeConfigManager.active()
 
-        EdgeConfigManager.save(_config_with_detectors("det_B"))
+        EdgeConfigManager.save(_config_with_detectors(DET_B))
         second = EdgeConfigManager.active()
         assert first is not second
-        assert {d.detector_id for d in second.detectors if d.detector_id} == {"det_B"}
+        assert {d.detector_id for d in second.detectors} == {DET_B}
 
     def test_load_startup_config_env_var(self, monkeypatch):
         monkeypatch.setenv(
             "EDGE_CONFIG",
-            '{"edge_inference_configs": {"default": {"enabled": true}}, "detectors": [{"detector_id": "det_ENV", "edge_inference_config": "default"}]}',
+            f'{{"edge_inference_configs": {{"default": {{"enabled": true}}}}, "detectors": [{{"detector_id": "{DET_ENV}", "edge_inference_config": "default"}}]}}',
         )
         config = EdgeConfigManager.load_startup_config()
-        assert any(d.detector_id == "det_ENV" for d in config.detectors)
+        assert any(d.detector_id == DET_ENV for d in config.detectors)
 
     def test_load_startup_config_helm(self):
-        helm_config = _config_with_detectors("det_HELM")
+        helm_config = _config_with_detectors(DET_HELM)
         os.makedirs(os.path.dirname(self.helm_path), exist_ok=True)
         import yaml
 
         with open(self.helm_path, "w") as f:
             yaml.dump(helm_config.to_payload(), f)
         config = EdgeConfigManager.load_startup_config()
-        assert any(d.detector_id == "det_HELM" for d in config.detectors)
+        assert any(d.detector_id == DET_HELM for d in config.detectors)
 
     def test_load_startup_config_active_pvc(self):
-        pvc_config = _config_with_detectors("det_PVC")
+        pvc_config = _config_with_detectors(DET_PVC)
         EdgeConfigManager.save(pvc_config)
         config = EdgeConfigManager.load_startup_config()
-        assert any(d.detector_id == "det_PVC" for d in config.detectors)
+        assert any(d.detector_id == DET_PVC for d in config.detectors)
 
     def test_load_startup_config_defaults(self):
         config = EdgeConfigManager.load_startup_config()
@@ -174,29 +176,29 @@ class TestEdgeConfigManager:
         """Env var should win even if Helm config exists."""
         monkeypatch.setenv(
             "EDGE_CONFIG",
-            '{"edge_inference_configs": {"default": {"enabled": true}}, "detectors": [{"detector_id": "det_ENV", "edge_inference_config": "default"}]}',
+            f'{{"edge_inference_configs": {{"default": {{"enabled": true}}}}, "detectors": [{{"detector_id": "{DET_ENV}", "edge_inference_config": "default"}}]}}',
         )
         import yaml
 
         with open(self.helm_path, "w") as f:
-            yaml.dump(_config_with_detectors("det_HELM").to_payload(), f)
+            yaml.dump(_config_with_detectors(DET_HELM).to_payload(), f)
         config = EdgeConfigManager.load_startup_config()
-        ids = {d.detector_id for d in config.detectors if d.detector_id}
-        assert "det_ENV" in ids
-        assert "det_HELM" not in ids
+        ids = {d.detector_id for d in config.detectors}
+        assert DET_ENV in ids
+        assert DET_HELM not in ids
 
     def test_detector_configs(self):
-        config = _config_with_detectors("det_A", "det_B")
+        config = _config_with_detectors(DET_A, DET_B)
         result = EdgeConfigManager.detector_configs(config)
-        assert set(result.keys()) == {"det_A", "det_B"}
+        assert set(result.keys()) == {DET_A, DET_B}
         assert all(isinstance(v, InferenceConfig) for v in result.values())
 
     def test_detector_config_found(self):
-        config = _config_with_detectors("det_A")
-        result = EdgeConfigManager.detector_config(config, "det_A")
+        config = _config_with_detectors(DET_A)
+        result = EdgeConfigManager.detector_config(config, DET_A)
         assert isinstance(result, InferenceConfig)
 
     def test_detector_config_not_found(self):
-        config = _config_with_detectors("det_A")
+        config = _config_with_detectors(DET_A)
         result = EdgeConfigManager.detector_config(config, "det_MISSING")
         assert result is None
