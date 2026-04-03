@@ -16,6 +16,7 @@ from app.api.api import api_router, edge_config_router, edge_detector_readiness_
 from app.api.naming import API_BASE_PATH
 from app.core.app_state import AppState
 from app.core.edge_config_manager import EdgeConfigManager, reconcile_config
+from app.core.file_paths import ACTIVE_EDGE_CONFIG_PATH, HELM_CONFIGMAP_PATH
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
@@ -42,6 +43,20 @@ async def startup_event():
     if env_config:
         logging.info("EDGE_CONFIG env var set, writing to active config file")
         EdgeConfigManager.save(EdgeEndpointConfig.from_yaml(yaml_str=env_config))
+    # Ensure backwards compatibility. When we are confident that all users have upgraded, we can deprecate this logic.
+    elif not os.path.exists(ACTIVE_EDGE_CONFIG_PATH):
+        if os.path.exists(HELM_CONFIGMAP_PATH):
+            logging.warning(
+                "Active config file not found at %s, but Helm ConfigMap exists at %s. "
+                "This likely means the Helm chart version does not yet support SDK-based config management. "
+                "Copying Helm ConfigMap to active config for backward compatibility.",
+                ACTIVE_EDGE_CONFIG_PATH, HELM_CONFIGMAP_PATH
+            )
+            EdgeConfigManager.save(EdgeEndpointConfig.from_yaml(filename=HELM_CONFIGMAP_PATH))
+        else:
+            logging.warning(
+                "No active config file or Helm ConfigMap found. Using Pydantic defaults."
+            )
 
     config = EdgeConfigManager.active()
     reconcile_config(config, app.state.app_state.db_manager)
