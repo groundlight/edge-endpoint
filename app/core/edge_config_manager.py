@@ -40,7 +40,11 @@ class EdgeConfigManager:
                 cls._cached_config = EdgeEndpointConfig.from_yaml(filename=ACTIVE_EDGE_CONFIG_PATH)
                 cls._cached_mtime = mtime
             except Exception:
-                logger.error("Failed to parse active config at %s, using cached/default config", ACTIVE_EDGE_CONFIG_PATH, exc_info=True)
+                logger.error(
+                    "Failed to parse active config at %s, using cached/default config",
+                    ACTIVE_EDGE_CONFIG_PATH,
+                    exc_info=True,
+                )
         return cls._cached_config
 
     @staticmethod
