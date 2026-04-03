@@ -49,13 +49,12 @@ async def startup_event():
                 "Active config file not found at %s, but Helm ConfigMap exists at %s. "
                 "This likely means the Helm chart version does not yet support SDK-based config management. "
                 "Copying Helm ConfigMap to active config for backward compatibility.",
-                ACTIVE_EDGE_CONFIG_PATH, HELM_CONFIGMAP_PATH
+                ACTIVE_EDGE_CONFIG_PATH,
+                HELM_CONFIGMAP_PATH,
             )
             EdgeConfigManager.save(EdgeEndpointConfig.from_yaml(filename=HELM_CONFIGMAP_PATH))
         else:
-            logging.warning(
-                "No active config file or Helm ConfigMap found. Using Pydantic defaults."
-            )
+            logging.warning("No active config file or Helm ConfigMap found. Using Pydantic defaults.")
 
     config = EdgeConfigManager.active()
     reconcile_config(config, app.state.app_state.db_manager)
