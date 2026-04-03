@@ -9,7 +9,6 @@ import logging
 import os
 
 from fastapi import FastAPI
-
 from groundlight.edge import EdgeEndpointConfig
 
 from app.api.api import api_router, edge_config_router, edge_detector_readiness_router, health_router, ping_router
