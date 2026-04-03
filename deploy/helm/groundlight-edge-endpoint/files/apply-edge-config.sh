@@ -14,10 +14,12 @@ fi
 
 echo "Helm revision changed ($STORED_REV -> $HELM_REVISION)."
 
-# Only copy if the ConfigMap has real content (not just "{}")
+# Only copy if the ConfigMap has real content (not just "{}").
+# When no config file is provided via Helm, we intentionally preserve whatever
+# active config exists on PVC (e.g. config applied via the Python SDK).
 CONTENT=$(cat "$SRC" 2>/dev/null | tr -d '[:space:]')
 if [ -z "$CONTENT" ] || [ "$CONTENT" = "{}" ]; then
-    echo "No config file provided via Helm, skipping."
+    echo "No config file provided via Helm, preserving existing active config."
 else
     mkdir -p "$(dirname "$DST")"
     cp "$SRC" "$DST"

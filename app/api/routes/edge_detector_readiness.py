@@ -1,11 +1,7 @@
-import logging
-
 from fastapi import APIRouter, Depends
 
 from app.core.app_state import AppState, get_app_state
 from app.core.edge_config_manager import EdgeConfigManager
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 

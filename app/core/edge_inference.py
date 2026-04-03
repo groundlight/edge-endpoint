@@ -404,7 +404,7 @@ def fetch_model_info(detector_id: str, api_token: Optional[str] = None) -> tuple
 
 def get_model_buffer(model_info: ModelInfoBase) -> bytes | None:
     if isinstance(model_info, ModelInfoWithBinary):
-        logger.info(f"New model binary available ({model_info.model_binary_id}), attemping to update model.")
+        logger.info(f"New model binary available ({model_info.model_binary_id}), attempting to update model.")
         model_buffer = get_object_using_presigned_url(model_info.model_binary_url)
     else:
         logger.info("Got a pipeline config but no model binary, attempting to update model.")

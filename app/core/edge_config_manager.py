@@ -36,8 +36,11 @@ class EdgeConfigManager:
             logger.debug("Active config file not yet available at %s, using defaults", ACTIVE_EDGE_CONFIG_PATH)
             return cls._cached_config
         if mtime != cls._cached_mtime:
-            cls._cached_mtime = mtime
-            cls._cached_config = EdgeEndpointConfig.from_yaml(filename=ACTIVE_EDGE_CONFIG_PATH)
+            try:
+                cls._cached_config = EdgeEndpointConfig.from_yaml(filename=ACTIVE_EDGE_CONFIG_PATH)
+                cls._cached_mtime = mtime
+            except Exception:
+                logger.error("Failed to parse active config at %s, using cached/default config", ACTIVE_EDGE_CONFIG_PATH, exc_info=True)
         return cls._cached_config
 
     @staticmethod
@@ -93,10 +96,7 @@ def compute_detector_diff(current_detector_ids: set[str], new_config: EdgeEndpoi
 
 
 def reconcile_config(new_config: EdgeEndpointConfig, db_manager: DatabaseManager) -> None:
-    """
-    Compute the diff between a provided config and the DB state. Apply the new config. Write the new
-    config to disk.
-    """
+    """Diff desired config against DB, mark detectors for deletion/creation, then save config to disk."""
     current = get_active_detector_ids(db_manager)
     removed, added = compute_detector_diff(current, new_config)
 
