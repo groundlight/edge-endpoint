@@ -41,6 +41,7 @@ spec:
       containers:
       - name: validation-error
         image: busybox:1.35
+        imagePullPolicy: IfNotPresent
         command:
         - /bin/sh
         - -c
