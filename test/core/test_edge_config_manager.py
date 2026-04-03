@@ -1,5 +1,3 @@
-import os
-
 import pytest
 from groundlight.edge import DEFAULT, EdgeEndpointConfig, InferenceConfig
 from sqlalchemy import create_engine
@@ -12,9 +10,6 @@ DET_A = "det_AAAAAAAAAAAAAAAAAAAAAAAAAAA"
 DET_B = "det_BBBBBBBBBBBBBBBBBBBBBBBBBBB"
 DET_C = "det_CCCCCCCCCCCCCCCCCCCCCCCCCCC"
 DET_D = "det_DDDDDDDDDDDDDDDDDDDDDDDDDDD"
-DET_ENV = "det_ENVENVENVENVENVENVENVENVENV"
-DET_HELM = "det_HELMHELMHELMHELMHELMHELMHEL"
-DET_PVC = "det_PVCPVCPVCPVCPVCPVCPVCPVCPVC"
 
 
 def _config_with_detectors(*detector_ids: str) -> EdgeEndpointConfig:
@@ -102,16 +97,13 @@ def test_apply_detector_changes_noop_when_empty(db_manager):
 
 
 class TestEdgeConfigManager:
-    """Tests for EdgeConfigManager save/active/load_startup_config and mtime caching."""
+    """Tests for EdgeConfigManager save/active and mtime caching."""
 
     @pytest.fixture(autouse=True)
     def isolated_config(self, tmp_path, monkeypatch):
         """Point config paths at temp files and reset class-level cache between tests."""
         self.active_path = str(tmp_path / "active-edge-config.yaml")
-        self.helm_path = str(tmp_path / "helm-edge-config.yaml")
         monkeypatch.setattr("app.core.edge_config_manager.ACTIVE_EDGE_CONFIG_PATH", self.active_path)
-        monkeypatch.setattr("app.core.edge_config_manager.HELM_EDGE_CONFIG_PATH", self.helm_path)
-        monkeypatch.delenv("EDGE_CONFIG", raising=False)
         EdgeConfigManager._cached_config = EdgeEndpointConfig()
         EdgeConfigManager._cached_mtime = 0.0
 
@@ -133,7 +125,7 @@ class TestEdgeConfigManager:
 
         first = EdgeConfigManager.active()
         second = EdgeConfigManager.active()
-        assert first is second  # same object from cache, not re-read
+        assert first is second
 
     def test_active_reloads_on_file_change(self):
         EdgeConfigManager.save(_config_with_detectors(DET_A))
@@ -143,49 +135,6 @@ class TestEdgeConfigManager:
         second = EdgeConfigManager.active()
         assert first is not second
         assert {d.detector_id for d in second.detectors} == {DET_B}
-
-    def test_load_startup_config_env_var(self, monkeypatch):
-        monkeypatch.setenv(
-            "EDGE_CONFIG",
-            f'{{"edge_inference_configs": {{"default": {{"enabled": true}}}}, "detectors": [{{"detector_id": "{DET_ENV}", "edge_inference_config": "default"}}]}}',
-        )
-        config = EdgeConfigManager.load_startup_config()
-        assert any(d.detector_id == DET_ENV for d in config.detectors)
-
-    def test_load_startup_config_helm(self):
-        helm_config = _config_with_detectors(DET_HELM)
-        os.makedirs(os.path.dirname(self.helm_path), exist_ok=True)
-        import yaml
-
-        with open(self.helm_path, "w") as f:
-            yaml.dump(helm_config.to_payload(), f)
-        config = EdgeConfigManager.load_startup_config()
-        assert any(d.detector_id == DET_HELM for d in config.detectors)
-
-    def test_load_startup_config_active_pvc(self):
-        pvc_config = _config_with_detectors(DET_PVC)
-        EdgeConfigManager.save(pvc_config)
-        config = EdgeConfigManager.load_startup_config()
-        assert any(d.detector_id == DET_PVC for d in config.detectors)
-
-    def test_load_startup_config_defaults(self):
-        config = EdgeConfigManager.load_startup_config()
-        assert isinstance(config, EdgeEndpointConfig)
-
-    def test_load_startup_config_priority_env_over_helm(self, monkeypatch):
-        """Env var should win even if Helm config exists."""
-        monkeypatch.setenv(
-            "EDGE_CONFIG",
-            f'{{"edge_inference_configs": {{"default": {{"enabled": true}}}}, "detectors": [{{"detector_id": "{DET_ENV}", "edge_inference_config": "default"}}]}}',
-        )
-        import yaml
-
-        with open(self.helm_path, "w") as f:
-            yaml.dump(_config_with_detectors(DET_HELM).to_payload(), f)
-        config = EdgeConfigManager.load_startup_config()
-        ids = {d.detector_id for d in config.detectors}
-        assert DET_ENV in ids
-        assert DET_HELM not in ids
 
     def test_detector_configs(self):
         config = _config_with_detectors(DET_A, DET_B)

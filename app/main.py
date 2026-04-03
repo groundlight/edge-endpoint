@@ -10,6 +10,8 @@ import os
 
 from fastapi import FastAPI
 
+from groundlight.edge import EdgeEndpointConfig
+
 from app.api.api import api_router, edge_config_router, edge_detector_readiness_router, health_router, ping_router
 from app.api.naming import API_BASE_PATH
 from app.core.app_state import AppState
@@ -36,7 +38,12 @@ async def startup_event():
     app.state.app_state = AppState()
     app.state.app_state.db_manager.reset_database()
 
-    config = EdgeConfigManager.load_startup_config()
+    env_config = os.environ.get("EDGE_CONFIG", "").strip()
+    if env_config:
+        logging.info("EDGE_CONFIG env var set, writing to active config file")
+        EdgeConfigManager.save(EdgeEndpointConfig.from_yaml(yaml_str=env_config))
+
+    config = EdgeConfigManager.active()
     reconcile_config(config, app.state.app_state.db_manager)
     logging.info(f"edge_config={config}")
 

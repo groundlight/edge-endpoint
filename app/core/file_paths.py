@@ -1,4 +1,3 @@
-HELM_EDGE_CONFIG_PATH = "/etc/groundlight/edge-config/edge-config.yaml"
 ACTIVE_EDGE_CONFIG_PATH = "/opt/groundlight/edge/config/active-edge-config.yaml"
 INFERENCE_DEPLOYMENT_TEMPLATE_PATH = "/etc/groundlight/inference-deployment/inference_deployment_template.yaml"
 

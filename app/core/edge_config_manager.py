@@ -5,7 +5,7 @@ import yaml
 from groundlight.edge import EdgeEndpointConfig, InferenceConfig
 
 from .database import DatabaseManager
-from .file_paths import ACTIVE_EDGE_CONFIG_PATH, HELM_EDGE_CONFIG_PATH
+from .file_paths import ACTIVE_EDGE_CONFIG_PATH
 from .naming import get_edge_inference_model_name
 
 logger = logging.getLogger(__name__)
@@ -14,30 +14,11 @@ GROUNDLIGHT_API_TOKEN = os.environ.get("GROUNDLIGHT_API_TOKEN", "")
 
 
 class EdgeConfigManager:
-    """Manages the lifecycle of the edge endpoint configuration: startup loading, saving, and
+    """Manages the lifecycle of the edge endpoint configuration: saving and
     mtime-cached reading of the active config file on PVC."""
 
     _cached_config: EdgeEndpointConfig = EdgeEndpointConfig()
     _cached_mtime: float = 0.0
-
-    @classmethod
-    def load_startup_config(cls) -> EdgeEndpointConfig:
-        """Load edge config at startup.
-
-        Sources checked in order:
-        1. EDGE_CONFIG env var (Docker tests, non-Helm setups)
-        2. Helm-mounted ConfigMap (always wins when present)
-        3. Active config on PVC (previous set_edge_config survives restarts)
-        4. Pydantic defaults
-        """
-        yaml_config = os.environ.get("EDGE_CONFIG", "").strip()
-        if yaml_config:
-            return EdgeEndpointConfig.from_yaml(yaml_str=yaml_config)
-        if os.path.exists(HELM_EDGE_CONFIG_PATH):
-            return EdgeEndpointConfig.from_yaml(filename=HELM_EDGE_CONFIG_PATH)
-        if os.path.exists(ACTIVE_EDGE_CONFIG_PATH):
-            return EdgeEndpointConfig.from_yaml(filename=ACTIVE_EDGE_CONFIG_PATH)
-        return EdgeEndpointConfig()
 
     @classmethod
     def save(cls, config: EdgeEndpointConfig) -> None:
