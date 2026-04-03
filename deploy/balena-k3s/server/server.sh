@@ -54,6 +54,16 @@ else
 fi
 echo "$flavor" > "$FLAVOR_FILE"
 
+# Copy preloaded images to k3s agent images directory for airgap/restricted network support.
+# k3s automatically imports tarballs from this directory on startup.
+# See: https://docs.k3s.io/installation/airgap
+if [ -d /opt/k3s/preload-images ] && [ "$(ls -A /opt/k3s/preload-images 2>/dev/null)" ]; then
+    echo "Copying preloaded images to k3s agent images directory..."
+    mkdir -p /var/lib/rancher/k3s/agent/images/
+    cp /opt/k3s/preload-images/* /var/lib/rancher/k3s/agent/images/
+    echo "Preloaded images ready"
+fi
+
 # Copy GPU operator manifests to the K3s auto-deploy directory if they exist.
 # K3s automatically applies any manifests placed here on startup.
 # https://docs.k3s.io/installation/packaged-components#auto-deploying-manifests-addons
