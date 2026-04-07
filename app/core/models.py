@@ -41,6 +41,12 @@ class InferenceDeployment(Base):
         nullable=True,
         comment="Name of the kubernetes deployment for the inference server.",
     )
+    pending_deletion = Column(
+        Boolean,
+        default=False,
+        nullable=False,
+        comment="When True, the model-updater will delete this detector's K8s resources and then remove this row.",
+    )
 
     created_at = Column(
         DateTime, nullable=True, default=datetime.datetime.utcnow, comment="Timestamp of record creation"

@@ -8,24 +8,25 @@ It is behind nginx, which forwards any request to the cloud if this doesn't hand
 import logging
 import os
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
+from groundlight.edge import EdgeEndpointConfig
 
-from app.api.api import api_router, health_router, ping_router
+from app.api.api import api_router, edge_config_router, edge_detector_readiness_router, health_router, ping_router
 from app.api.naming import API_BASE_PATH
 from app.core.app_state import AppState
+<<<<<<< HEAD
 from app.profiling import PROFILING_ENABLED
 from app.profiling.middleware import ProfilingMiddleware
+=======
+from app.core.edge_config_manager import EdgeConfigManager, reconcile_config
+from app.core.file_paths import ACTIVE_EDGE_CONFIG_PATH, HELM_CONFIGMAP_PATH
+>>>>>>> main
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
-DEPLOY_DETECTOR_LEVEL_INFERENCE = bool(int(os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", 0)))
 
 logging.basicConfig(
     level=LOG_LEVEL, format="%(asctime)s.%(msecs)03d %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
 )
-# The asyncio executor is too verbose at INFO level, so we set it to WARNING
-if LOG_LEVEL == "INFO":
-    logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
 
 app = FastAPI(title="edge-endpoint")
 if PROFILING_ENABLED:
@@ -33,20 +34,8 @@ if PROFILING_ENABLED:
 app.include_router(router=api_router, prefix=API_BASE_PATH)
 app.include_router(router=ping_router)
 app.include_router(router=health_router)
-
-scheduler = AsyncIOScheduler()
-
-
-def update_inference_config(app_state: AppState) -> None:
-    """Update the App's edge-inference config by querying the database for new detectors."""
-    logging.debug("Querying database for updated inference deployment records...")
-    detectors = app_state.db_manager.get_inference_deployment_records(deployment_created=True)
-    if detectors:
-        for detector_record in detectors:
-            app_state.edge_inference_manager.update_inference_config(
-                detector_id=detector_record.detector_id,  # type: ignore
-                api_token=detector_record.api_token,  # type: ignore
-            )
+app.include_router(router=edge_config_router)
+app.include_router(router=edge_detector_readiness_router)
 
 
 @app.on_event("startup")
@@ -56,7 +45,23 @@ async def startup_event():
     app.state.app_state = AppState()
     app.state.app_state.db_manager.reset_database()
 
-    logging.info(f"edge_config={app.state.app_state.edge_config}")
+    env_config = os.environ.get("EDGE_CONFIG", "").strip()
+    if env_config:
+        logging.info("EDGE_CONFIG env var set, writing to active config file")
+        EdgeConfigManager.save(EdgeEndpointConfig.from_yaml(yaml_str=env_config))
+    # Ensure backwards compatibility. When we are confident that all users have upgraded, we can deprecate this logic.
+    elif not os.path.exists(ACTIVE_EDGE_CONFIG_PATH):
+        if os.path.exists(HELM_CONFIGMAP_PATH):
+            logging.warning(
+                "Active config file not found at %s, but Helm ConfigMap exists at %s. "
+                "This likely means the Helm chart version does not yet support SDK-based config management. "
+                "Copying Helm ConfigMap to active config for backward compatibility.",
+                ACTIVE_EDGE_CONFIG_PATH,
+                HELM_CONFIGMAP_PATH,
+            )
+            EdgeConfigManager.save(EdgeEndpointConfig.from_yaml(filename=HELM_CONFIGMAP_PATH))
+        else:
+            logging.warning("No active config file or Helm ConfigMap found. Using Pydantic defaults.")
 
     if DEPLOY_DETECTOR_LEVEL_INFERENCE:
         # Add job to periodically update the inference config
@@ -70,6 +75,10 @@ async def startup_event():
 
     if DEPLOY_DETECTOR_LEVEL_INFERENCE or PROFILING_ENABLED:
         scheduler.start()
+
+    config = EdgeConfigManager.active()
+    reconcile_config(config, app.state.app_state.db_manager)
+    logging.info(f"edge_config={config}")
 
     app.state.app_state.is_ready = True
     logging.info("Application is ready to serve requests.")
