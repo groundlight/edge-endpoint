@@ -14,6 +14,8 @@ from fastapi import FastAPI
 from app.api.api import api_router, health_router, ping_router
 from app.api.naming import API_BASE_PATH
 from app.core.app_state import AppState
+from app.profiling import PROFILING_ENABLED
+from app.profiling.middleware import ProfilingMiddleware
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 DEPLOY_DETECTOR_LEVEL_INFERENCE = bool(int(os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", 0)))
@@ -26,6 +28,8 @@ if LOG_LEVEL == "INFO":
     logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
 
 app = FastAPI(title="edge-endpoint")
+if PROFILING_ENABLED:
+    app.add_middleware(ProfilingMiddleware)
 app.include_router(router=api_router, prefix=API_BASE_PATH)
 app.include_router(router=ping_router)
 app.include_router(router=health_router)
@@ -57,6 +61,14 @@ async def startup_event():
     if DEPLOY_DETECTOR_LEVEL_INFERENCE:
         # Add job to periodically update the inference config
         scheduler.add_job(update_inference_config, "interval", seconds=30, args=[app.state.app_state])
+
+    if PROFILING_ENABLED:
+        from app.profiling import get_profiling_manager
+
+        logging.info("Profiling is enabled. Trace data will be written to disk.")
+        scheduler.add_job(get_profiling_manager().cleanup_old_files, "interval", hours=1)
+
+    if DEPLOY_DETECTOR_LEVEL_INFERENCE or PROFILING_ENABLED:
         scheduler.start()
 
     app.state.app_state.is_ready = True
@@ -68,5 +80,5 @@ async def shutdown_event():
     """Lifecycle event that is triggered when the application is shutting down."""
     app.state.app_state.is_ready = False
     app.state.app_state.db_manager.shutdown()
-    if DEPLOY_DETECTOR_LEVEL_INFERENCE:
+    if DEPLOY_DETECTOR_LEVEL_INFERENCE or PROFILING_ENABLED:
         scheduler.shutdown()
