@@ -56,7 +56,6 @@ spec:
       # This service account is used by the edge logic to access the Kubernetes API
       # from within the pod. See templates/service_account.yaml for more details
       serviceAccountName: edge-endpoint-service-account
-      hostPID: true  # Required for nsenter to mount-s3 in host mount namespace
       initContainers:
       - name: generate-tls-cert
         image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
@@ -84,32 +83,29 @@ spec:
         - -c
         - |
           set -e
-          MOUNT_POINT="{{ .Values.s3Mount.mountPath }}"
-          CACHE_DIR="{{ .Values.s3Mount.cachePath }}"
+          MOUNT_POINT="/host-root{{ .Values.s3Mount.mountPath }}"
+          CACHE_DIR="/host-root{{ .Values.s3Mount.cachePath }}"
           BUCKET="{{ .Values.s3Mount.bucket }}"
           REGION="{{ .Values.s3Mount.region }}"
-          HOST_MOUNT_S3_BIN="/opt/groundlight/edge/bin/mount-s3"
 
-          # Copy mount-s3 binary and AWS credentials to the host
-          nsenter -t 1 -m -- mkdir -p "$MOUNT_POINT" "$CACHE_DIR" "$(dirname $HOST_MOUNT_S3_BIN)" /root/.aws
-          # Use cp to a temp file + mv to handle "Text file busy" when binary is in use
-          cp "$(which mount-s3)" "/host-root${HOST_MOUNT_S3_BIN}.tmp" && mv -f "/host-root${HOST_MOUNT_S3_BIN}.tmp" "/host-root${HOST_MOUNT_S3_BIN}"
-          # Copy FUSE libraries needed by mount-s3
-          cp /usr/lib/x86_64-linux-gnu/libfuse.so.2* /host-root/usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
-          # Copy AWS credentials
+          mkdir -p "$MOUNT_POINT" "$CACHE_DIR"
+
+          # Copy AWS credentials to host for mount-s3 to use
+          mkdir -p /host-root/root/.aws
           cp /root/.aws/credentials /host-root/root/.aws/credentials 2>/dev/null || true
           cp /root/.aws/config /host-root/root/.aws/config 2>/dev/null || true
 
           # Unmount if stale mount exists from a previous run
-          if nsenter -t 1 -m -- mountpoint -q "$MOUNT_POINT" 2>/dev/null; then
+          if mountpoint -q "$MOUNT_POINT" 2>/dev/null; then
             echo "Unmounting stale mount at $MOUNT_POINT"
-            nsenter -t 1 -m -- umount "$MOUNT_POINT" || true
+            umount "$MOUNT_POINT" || fusermount -u "$MOUNT_POINT" || true
           fi
 
-          echo "Mounting s3://$BUCKET at $MOUNT_POINT (cache: $CACHE_DIR, region: $REGION)"
-          # Run mount-s3 in the host mount namespace so the FUSE mount is directly
-          # on the host filesystem, visible to all pods via hostPath volumes.
-          nsenter -t 1 -m -- "$HOST_MOUNT_S3_BIN" "$BUCKET" "$MOUNT_POINT" \
+          echo "Mounting s3://$BUCKET at $MOUNT_POINT (region: $REGION)"
+          # Mount on /host-root/<path> which is a bind mount of the host's root filesystem.
+          # This makes the FUSE mount visible at the host path, accessible by other pods
+          # via hostPath volumes.
+          mount-s3 "$BUCKET" "$MOUNT_POINT" \
             --region "$REGION" \
             --read-only \
             --cache "$CACHE_DIR" \
@@ -118,6 +114,7 @@ spec:
         volumeMounts:
         - name: host-root
           mountPath: /host-root
+          mountPropagation: Bidirectional
         - name: aws-credentials
           mountPath: /root/.aws
           readOnly: true
