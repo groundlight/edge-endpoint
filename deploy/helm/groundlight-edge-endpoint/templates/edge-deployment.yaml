@@ -92,7 +92,8 @@ spec:
 
           # Copy mount-s3 binary and AWS credentials to the host
           nsenter -t 1 -m -- mkdir -p "$MOUNT_POINT" "$CACHE_DIR" "$(dirname $HOST_MOUNT_S3_BIN)" /root/.aws
-          cp "$(which mount-s3)" "/host-root${HOST_MOUNT_S3_BIN}"
+          # Use cp to a temp file + mv to handle "Text file busy" when binary is in use
+          cp "$(which mount-s3)" "/host-root${HOST_MOUNT_S3_BIN}.tmp" && mv -f "/host-root${HOST_MOUNT_S3_BIN}.tmp" "/host-root${HOST_MOUNT_S3_BIN}"
           # Copy FUSE libraries needed by mount-s3
           cp /usr/lib/x86_64-linux-gnu/libfuse.so.2* /host-root/usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
           # Copy AWS credentials
