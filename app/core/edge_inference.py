@@ -305,7 +305,9 @@ class EdgeInferenceManager:
                 if get_current_tracer() is not None:
                     ctx_primary = contextvars.copy_context()
                     ctx_oodd = contextvars.copy_context()
-                    f_primary = executor.submit(ctx_primary.run, _submit_primary_inference, primary_url, image_bytes, content_type)
+                    f_primary = executor.submit(
+                        ctx_primary.run, _submit_primary_inference, primary_url, image_bytes, content_type
+                    )
                     f_oodd = executor.submit(ctx_oodd.run, _submit_oodd_inference, oodd_url, image_bytes, content_type)
                 else:
                     f_primary = executor.submit(submit_image_for_inference, primary_url, image_bytes, content_type)

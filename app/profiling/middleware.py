@@ -1,6 +1,7 @@
 import logging
 
 from app.profiling import PROFILING_ENABLED, record_trace, start_trace
+
 # Middleware is the sole setter of the tracer context; public API only exposes getters.
 from app.profiling.context import _current_tracer
 
@@ -40,5 +41,5 @@ def _parse_detector_id(query_string: str) -> str:
     """Extract detector_id from a raw query string."""
     for part in query_string.split("&"):
         if part.startswith("detector_id="):
-            return part[len("detector_id="):]
+            return part[len("detector_id=") :]
     return "unknown"
