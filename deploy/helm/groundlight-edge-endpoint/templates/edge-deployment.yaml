@@ -57,8 +57,24 @@ spec:
       # from within the pod. See templates/service_account.yaml for more details
       serviceAccountName: edge-endpoint-service-account
       initContainers:
-      - name: mount-s3
+      - name: generate-tls-cert
         image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
+        imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        volumeMounts:
+        - name: nginx-certs
+          mountPath: /etc/nginx/certs
+        command: ["/bin/bash", "/groundlight-edge/app/bin/generate-tls-cert.sh"]
+      - name: database-prep
+        image: *edgeEndpointImage
+        imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        volumeMounts:
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/sqlite
+        command: ["/bin/bash", "/groundlight-edge/deploy/bin/setup_db.sh"]
+
+      containers:
+      - name: mount-s3
+        image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
         securityContext:
           privileged: true  # Required for FUSE mount
@@ -74,19 +90,20 @@ spec:
 
           mkdir -p "$MOUNT_POINT" "$CACHE_DIR"
 
-          # Check if already mounted (e.g., from a previous run)
-          if mountpoint -q "$MOUNT_POINT"; then
-            echo "S3 bucket already mounted at $MOUNT_POINT, skipping"
-            exit 0
+          # Unmount if stale mount exists from a previous run
+          if mountpoint -q "$MOUNT_POINT" 2>/dev/null; then
+            echo "Unmounting stale mount at $MOUNT_POINT"
+            umount "$MOUNT_POINT" || fusermount -u "$MOUNT_POINT" || true
           fi
 
           echo "Mounting s3://$BUCKET at $MOUNT_POINT (cache: $CACHE_DIR, region: $REGION)"
+          # Run mount-s3 in foreground mode so the container stays alive
           mount-s3 "$BUCKET" "$MOUNT_POINT" \
             --region "$REGION" \
             --read-only \
             --cache "$CACHE_DIR" \
-            --allow-other
-          echo "S3 mount complete"
+            --allow-other \
+            --foreground
         volumeMounts:
         - name: pinamod-mount
           mountPath: {{ .Values.s3Mount.mountPath }}
@@ -96,22 +113,6 @@ spec:
         - name: aws-credentials
           mountPath: /root/.aws
           readOnly: true
-      - name: generate-tls-cert
-        image: *edgeEndpointImage
-        imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
-        volumeMounts:
-        - name: nginx-certs
-          mountPath: /etc/nginx/certs
-        command: ["/bin/bash", "/groundlight-edge/app/bin/generate-tls-cert.sh"]
-      - name: database-prep
-        image: *edgeEndpointImage
-        imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
-        volumeMounts:
-        - name: edge-endpoint-persistent-volume
-          mountPath: /opt/groundlight/edge/sqlite
-        command: ["/bin/bash", "/groundlight-edge/deploy/bin/setup_db.sh"]
-
-      containers:
       - name: nginx
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
