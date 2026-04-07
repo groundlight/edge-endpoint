@@ -57,8 +57,47 @@ spec:
       # from within the pod. See templates/service_account.yaml for more details
       serviceAccountName: edge-endpoint-service-account
       initContainers:
-      - name: generate-tls-cert
+      - name: mount-s3
         image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
+        imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        securityContext:
+          privileged: true  # Required for FUSE mount
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          MOUNT_POINT="{{ .Values.s3Mount.mountPath }}"
+          CACHE_DIR="{{ .Values.s3Mount.cachePath }}"
+          BUCKET="{{ .Values.s3Mount.bucket }}"
+          REGION="{{ .Values.s3Mount.region }}"
+
+          mkdir -p "$MOUNT_POINT" "$CACHE_DIR"
+
+          # Check if already mounted (e.g., from a previous run)
+          if mountpoint -q "$MOUNT_POINT"; then
+            echo "S3 bucket already mounted at $MOUNT_POINT, skipping"
+            exit 0
+          fi
+
+          echo "Mounting s3://$BUCKET at $MOUNT_POINT (cache: $CACHE_DIR, region: $REGION)"
+          mount-s3 "$BUCKET" "$MOUNT_POINT" \
+            --region "$REGION" \
+            --read-only \
+            --cache "$CACHE_DIR" \
+            --allow-other
+          echo "S3 mount complete"
+        volumeMounts:
+        - name: pinamod-mount
+          mountPath: {{ .Values.s3Mount.mountPath }}
+          mountPropagation: Bidirectional
+        - name: pinamod-cache
+          mountPath: {{ .Values.s3Mount.cachePath }}
+        - name: aws-credentials
+          mountPath: /root/.aws
+          readOnly: true
+      - name: generate-tls-cert
+        image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
         volumeMounts:
         - name: nginx-certs
@@ -287,3 +326,14 @@ spec:
         hostPath:
           path: /opt/groundlight/queue/{{ .Values.namespace }}
           type: DirectoryOrCreate
+      - name: pinamod-mount
+        hostPath:
+          path: {{ .Values.s3Mount.mountPath }}
+          type: DirectoryOrCreate
+      - name: pinamod-cache
+        hostPath:
+          path: {{ .Values.s3Mount.cachePath }}
+          type: DirectoryOrCreate
+      - name: aws-credentials
+        secret:
+          secretName: aws-credentials-file

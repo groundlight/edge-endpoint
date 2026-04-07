@@ -59,6 +59,14 @@ upstreamEndpoint: "https://api.groundlight.ai"
 # Currently, all Groundlight services are deployed in the us-west-2 region
 awsRegion: "us-west-2"
 
+# S3 FUSE mount configuration for model weights (pinamod + pretrained weights)
+# mount-s3 mounts the S3 bucket as a local filesystem with local disk caching
+s3Mount:
+  bucket: "pinamod-artifacts-public"
+  region: "us-west-2"
+  mountPath: "/opt/groundlight/edge/pinamod-mount"
+  cachePath: "/opt/groundlight/edge/pinamod-cache"
+
 ecrRegistry: "767397850842.dkr.ecr.us-west-2.amazonaws.com"
 
 # This sets the log level for all the containers, both edge endpoint and inference.

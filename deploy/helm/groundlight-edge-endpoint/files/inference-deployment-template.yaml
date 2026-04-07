@@ -46,28 +46,6 @@ spec:
           maxSurge: 1
           maxUnavailable: 0  # Aim for no downtime during rollout
 
-      initContainers:
-      - name: wait-for-warmup
-        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
-        imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
-        command: ["/bin/bash", "/groundlight-edge/deploy/bin/wait-for-warmup.sh"]
-
-      # NOTE: the sync-pinamod container is duplicated in the warmup_inference_model.yaml Job
-      # TODO: refactor to share code between the Job and the initContainer in the Deployment
-      - name: sync-pinamod
-        image: amazon/aws-cli:latest
-        imagePullPolicy: IfNotPresent
-        # Sync models from S3 to the local hostmapped filesystem.
-        command: ['sh', '-c', 'aws --region us-west-2 s3 sync s3://pinamod-artifacts-public/pinamod $PINAMOD_DIR --delete']
-        env:
-        - name: PINAMOD_DIR
-          value: /opt/models/pinamod
-        volumeMounts:
-        - name: pina-models
-          mountPath: /opt/models
-        - name: aws-credentials
-          mountPath: /root/.aws
-
       containers:
       - name: inference-server
         image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/gl-edge-inference{{ if .Values.useMinimalImage }}-minimal{{ end }}:{{ include "groundlight-edge-endpoint.inferenceTag" . }}
@@ -79,6 +57,14 @@ spec:
           value: placeholder-model-name
         - name: PINAMOD_DIR
           value: /opt/models/pinamod
+        - name: HF_HUB_CACHE
+          value: /opt/models/pretrained-weights/hf-hub
+        - name: TORCH_HOME
+          value: /opt/models/pretrained-weights/torch-home
+        - name: HF_HUB_OFFLINE
+          value: "1"
+        - name: TRANSFORMERS_OFFLINE
+          value: "1"
         - name: LOG_LEVEL
           value: {{ .Values.logLevel | quote }}
         - name: LOAD_ALL_PIPELINES  # Load only the pipelines that are needed for edge inference.
@@ -90,12 +76,9 @@ spec:
         volumeMounts:
         - name: edge-endpoint-persistent-volume
           mountPath: *modelRepository
-        - name: pina-models
+        - name: pinamod-mount
           mountPath: /opt/models
           readOnly: true
-        # necessary to access pretrained model weights stored in S3
-        - name: aws-credentials
-          mountPath: /root/.aws
         ports:
         - containerPort: 8000
           name: http-fastapi
@@ -128,10 +111,7 @@ spec:
       - name: edge-endpoint-persistent-volume
         persistentVolumeClaim:
           claimName: edge-endpoint-pvc
-      - name: pina-models
+      - name: pinamod-mount
         hostPath:
-          path: /opt/groundlight/edge/pinamod-public
+          path: {{ .Values.s3Mount.mountPath }}
           type: Directory
-      - name: aws-credentials
-        secret:
-          secretName: aws-credentials-file
