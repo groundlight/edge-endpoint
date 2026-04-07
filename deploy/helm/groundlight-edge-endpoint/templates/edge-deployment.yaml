@@ -83,12 +83,13 @@ spec:
         - -c
         - |
           set -e
-          MOUNT_POINT="{{ .Values.s3Mount.mountPath }}"
+          MOUNT_POINT="/mnt/s3"
+          HOST_MOUNT_POINT="{{ .Values.s3Mount.mountPath }}"
           CACHE_DIR="{{ .Values.s3Mount.cachePath }}"
           BUCKET="{{ .Values.s3Mount.bucket }}"
           REGION="{{ .Values.s3Mount.region }}"
 
-          mkdir -p "$MOUNT_POINT" "$CACHE_DIR"
+          mkdir -p "$MOUNT_POINT"
 
           # Unmount if stale mount exists from a previous run
           if mountpoint -q "$MOUNT_POINT" 2>/dev/null; then
@@ -97,7 +98,10 @@ spec:
           fi
 
           echo "Mounting s3://$BUCKET at $MOUNT_POINT (cache: $CACHE_DIR, region: $REGION)"
-          # Run mount-s3 in foreground mode so the container stays alive
+          # Run mount-s3 in foreground mode so the container stays alive.
+          # The mount is on /mnt/s3 inside the container, which is backed by the
+          # hostPath volume at HOST_MOUNT_POINT. With mountPropagation: Bidirectional,
+          # the FUSE mount propagates to the host and is visible to other pods.
           mount-s3 "$BUCKET" "$MOUNT_POINT" \
             --region "$REGION" \
             --read-only \
@@ -106,7 +110,7 @@ spec:
             --foreground
         volumeMounts:
         - name: pinamod-mount
-          mountPath: {{ .Values.s3Mount.mountPath }}
+          mountPath: /mnt/s3
           mountPropagation: Bidirectional
         - name: pinamod-cache
           mountPath: {{ .Values.s3Mount.cachePath }}
