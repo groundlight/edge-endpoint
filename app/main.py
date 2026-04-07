@@ -14,13 +14,10 @@ from groundlight.edge import EdgeEndpointConfig
 from app.api.api import api_router, edge_config_router, edge_detector_readiness_router, health_router, ping_router
 from app.api.naming import API_BASE_PATH
 from app.core.app_state import AppState
-<<<<<<< HEAD
 from app.profiling import PROFILING_ENABLED
 from app.profiling.middleware import ProfilingMiddleware
-=======
 from app.core.edge_config_manager import EdgeConfigManager, reconcile_config
 from app.core.file_paths import ACTIVE_EDGE_CONFIG_PATH, HELM_CONFIGMAP_PATH
->>>>>>> main
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
