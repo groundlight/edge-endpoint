@@ -2,7 +2,7 @@ import contextvars
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from app.profiling.context import _current_span, _current_tracer, get_current_span, get_current_tracer, trace_span
+from app.profiling.context import _current_tracer, get_current_span, get_current_tracer, trace_span
 from app.profiling.tracer import RequestTracer
 
 

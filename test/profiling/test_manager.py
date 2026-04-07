@@ -76,7 +76,7 @@ class TestRecordTrace:
         assert len(lines) == 2
 
     def test_creates_traces_directory(self, tmp_profiling_dir):
-        manager = ProfilingManager(base_dir=tmp_profiling_dir)
+        ProfilingManager(base_dir=tmp_profiling_dir)
         assert os.path.isdir(os.path.join(tmp_profiling_dir, "traces"))
 
 
