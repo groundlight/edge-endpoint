@@ -13,7 +13,8 @@ from app.core.app_state import (
     get_groundlight_sdk_instance,
     refresh_detector_metadata_if_needed,
 )
-from app.core.edge_inference import get_edge_inference_model_name
+from app.core.edge_config_manager import EdgeConfigManager
+from app.core.naming import get_edge_inference_model_name
 from app.core.utils import create_iq, generate_iq_id, generate_metadata_dict, generate_request_id
 from app.escalation_queue.models import SubmitImageQueryParams
 from app.escalation_queue.queue_utils import safe_escalate_with_queue_write, write_escalation_to_queue
@@ -106,7 +107,8 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     request_id = request.headers.get("x-request-id") or generate_request_id()
 
     require_human_review = human_review == "ALWAYS"
-    detector_inference_config = app_state.edge_inference_manager.detector_inference_configs.get(detector_id)
+    edge_config = EdgeConfigManager.active()
+    detector_inference_config = EdgeConfigManager.detector_config(edge_config, detector_id)
     return_edge_prediction = (
         detector_inference_config.always_return_edge_prediction if detector_inference_config is not None else False
     )
@@ -202,7 +204,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 return image_query
 
             if is_confident_enough:  # Audit confident edge predictions at the specified rate
-                if random.random() < app_state.edge_config.global_config.confident_audit_rate:
+                if random.random() < edge_config.global_config.confident_audit_rate:
                     logger.debug(
                         f"Auditing confident edge prediction with confidence {ml_confidence} for detector {detector_id=}."
                     )
@@ -233,7 +235,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             # Escalate after returning edge prediction if escalation is enabled and we have low confidence.
             if not is_confident_enough:
                 # Only escalate if we haven't escalated on this detector too recently.
-                if app_state.edge_inference_manager.escalation_cooldown_complete(detector_id=detector_id):
+                if app_state.edge_inference_manager.escalation_cooldown_complete(detector_id, edge_config):
                     logger.debug(
                         f"Escalating to cloud due to low confidence: {ml_confidence} < thresh={confidence_threshold}"
                     )
