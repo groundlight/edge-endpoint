@@ -73,6 +73,17 @@ spec:
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/sqlite
         command: ["/bin/bash", "/groundlight-edge/deploy/bin/setup_db.sh"]
+      - name: apply-edge-config
+        image: busybox:1.36
+        env:
+        - name: HELM_REVISION
+          value: "{{ .Release.Revision }}-{{ now | unixEpoch }}"
+        volumeMounts:
+        - name: edge-config-volume
+          mountPath: /etc/groundlight/edge-config
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/config
+        command: ["/bin/sh", "/etc/groundlight/edge-config/apply-edge-config.sh"]
 
       containers:
       - name: nginx
@@ -161,6 +172,8 @@ spec:
           subPath: dummy-nginx.conf
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/sqlite
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/config
         - name: device-info-volume
           mountPath: /opt/groundlight/device
         - name: escalation-queue-volume
@@ -197,6 +210,8 @@ spec:
             mountPath: /opt/groundlight/device
           - name: edge-endpoint-persistent-volume
             mountPath: /opt/groundlight/edge/serving/model-repo
+          - name: edge-endpoint-persistent-volume
+            mountPath: /opt/groundlight/edge/config
           - name: escalation-queue-volume
             mountPath: /opt/groundlight/queue
       
@@ -267,6 +282,8 @@ spec:
 
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/serving/model-repo
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/config
 
         - name: device-info-volume
           mountPath: /opt/groundlight/device
