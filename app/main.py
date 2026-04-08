@@ -8,6 +8,7 @@ It is behind nginx, which forwards any request to the cloud if this doesn't hand
 import logging
 import os
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 from groundlight.edge import EdgeEndpointConfig
 
@@ -18,6 +19,9 @@ from app.core.edge_config_manager import EdgeConfigManager, reconcile_config
 from app.core.file_paths import ACTIVE_EDGE_CONFIG_PATH, HELM_CONFIGMAP_PATH
 from app.profiling import PROFILING_ENABLED
 from app.profiling.middleware import ProfilingMiddleware
+
+DEPLOY_DETECTOR_LEVEL_INFERENCE = bool(int(os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", 0)))
+scheduler = AsyncIOScheduler()
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
@@ -59,10 +63,6 @@ async def startup_event():
             EdgeConfigManager.save(EdgeEndpointConfig.from_yaml(filename=HELM_CONFIGMAP_PATH))
         else:
             logging.warning("No active config file or Helm ConfigMap found. Using Pydantic defaults.")
-
-    if DEPLOY_DETECTOR_LEVEL_INFERENCE:
-        # Add job to periodically update the inference config
-        scheduler.add_job(update_inference_config, "interval", seconds=30, args=[app.state.app_state])
 
     if PROFILING_ENABLED:
         from app.profiling import get_profiling_manager
