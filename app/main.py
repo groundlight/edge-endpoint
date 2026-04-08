@@ -20,7 +20,6 @@ from app.core.file_paths import ACTIVE_EDGE_CONFIG_PATH, HELM_CONFIGMAP_PATH
 from app.profiling import PROFILING_ENABLED
 from app.profiling.middleware import ProfilingMiddleware
 
-DEPLOY_DETECTOR_LEVEL_INFERENCE = bool(int(os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", 0)))
 scheduler = AsyncIOScheduler()
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -70,7 +69,7 @@ async def startup_event():
         logging.info("Profiling is enabled. Trace data will be written to disk.")
         scheduler.add_job(get_profiling_manager().cleanup_old_files, "interval", hours=1)
 
-    if DEPLOY_DETECTOR_LEVEL_INFERENCE or PROFILING_ENABLED:
+    if PROFILING_ENABLED:
         scheduler.start()
 
     config = EdgeConfigManager.active()
@@ -86,5 +85,5 @@ async def shutdown_event():
     """Lifecycle event that is triggered when the application is shutting down."""
     app.state.app_state.is_ready = False
     app.state.app_state.db_manager.shutdown()
-    if DEPLOY_DETECTOR_LEVEL_INFERENCE or PROFILING_ENABLED:
+    if PROFILING_ENABLED:
         scheduler.shutdown()
