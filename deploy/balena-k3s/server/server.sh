@@ -33,6 +33,11 @@ if iptables -t nat -L CNI-HOSTPORT-DNAT -n >/dev/null 2>&1; then
     echo "CNI portmap cleanup complete"
 fi
 
+# Ensure the root filesystem has shared mount propagation so that k3s pods can use
+# mountPropagation: Bidirectional (needed by the mount-s3 FUSE sidecar).
+# In Balena, the server container's root is private by default.
+mount --make-rshared /
+
 # Detect inference flavor and write to /shared/INFERENCE_FLAVOR for bastion to read
 mkdir -p /shared
 FLAVOR_FILE="/shared/INFERENCE_FLAVOR"
