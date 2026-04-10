@@ -14,7 +14,7 @@ import { CodeHighlight } from "@mantine/code-highlight";
 import DetectorDetails from "./components/DetectorDetails";
 import ResourceUsage from "./components/ResourceUsage";
 
-const REFRESH_MS = 10_000;
+const REFRESH_MS = 5_000; // TODO: revert to 10_000 before merging
 
 const parseIfJson = (value) => {
   if (typeof value === "string") {

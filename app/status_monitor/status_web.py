@@ -47,7 +47,6 @@ async def get_metrics():
 
 
 @app.get("/status/resources.json")
-@app.get("/status/gpu.json")
 def get_resources():
     """Return per-detector GPU and RAM usage as JSON."""
     return resource_collector.collect()

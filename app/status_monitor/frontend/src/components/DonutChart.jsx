@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Sector } from "recharts";
 import { Text, Stack } from "@mantine/core";
 
@@ -51,14 +52,32 @@ export default function DonutChart({
   onSliceHover,
   onSliceClick,
 }) {
-  const data = slices.map((s) => ({ ...s, name: s.label, value: s.bytes, fill: s.color }));
+  const MAX_DETECTOR_SLOTS = 30;
+  const ZERO_SLICE = { type: "placeholder", bytes: 0, color: "transparent", pct: 0, label: "" };
+
+  const seenDetectorKeysRef = useRef([]);
+  const seenKeys = seenDetectorKeysRef.current;
+
+  const sliceMap = new Map(slices.map((s) => [s.sliceKey, s]));
+  const summarySlices = slices.filter((s) => s.type !== "detector");
+
+  for (const s of slices) {
+    if (s.type === "detector" && !seenKeys.includes(s.sliceKey)) {
+      seenKeys.push(s.sliceKey);
+    }
+  }
+
+  const detectorSlices = Array.from({ length: MAX_DETECTOR_SLOTS }, (_, i) =>
+    i < seenKeys.length
+      ? sliceMap.get(seenKeys[i]) || { ...ZERO_SLICE, sliceKey: seenKeys[i] }
+      : { ...ZERO_SLICE, sliceKey: `__pad_${i}` }
+  );
+
+  const data = [...detectorSlices, ...summarySlices].map((s) => ({ ...s, name: s.label, value: s.bytes, fill: s.color }));
 
   const renderSlice = (props) => {
     const isActive = props?.payload?.sliceKey === activeSliceKey;
-    if (isActive) {
-      return <ActiveSlice {...props} />;
-    }
-    return <Sector {...props} />;
+    return isActive ? <ActiveSlice {...props} /> : <Sector {...props} />;
   };
 
   return (
@@ -74,7 +93,7 @@ export default function DonutChart({
             outerRadius={DONUT_OUTER_RADIUS}
             startAngle={90}
             endAngle={-270}
-            paddingAngle={1}
+            paddingAngle={0}
             strokeWidth={0}
             isAnimationActive
             animationDuration={900}
@@ -85,7 +104,12 @@ export default function DonutChart({
             onClick={(_, index) => onSliceClick?.(data[index] ?? null)}
           >
             {data.map((entry, i) => (
-              <Cell key={entry.sliceKey} fill={entry.fill} />
+              <Cell
+                key={i}
+                fill={entry.fill}
+                stroke={entry.value > 0 ? "#fff" : "none"}
+                strokeWidth={entry.value > 0 ? 1 : 0}
+              />
             ))}
           </Pie>
           <Tooltip content={<CustomTooltip />} isAnimationActive={false} />
