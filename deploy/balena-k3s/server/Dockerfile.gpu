@@ -1,0 +1,123 @@
+# GPU K3s server for balena deployment on x86_64 devices
+#
+# This is a multi-stage Dockerfile that:
+# 1. Builds NVIDIA kernel modules against balenaOS kernel headers (builder stage)
+# 2. Installs NVIDIA driver userspace, K3s, and nvidia-container-toolkit (final stage)
+# 3. At runtime, load_gpu.sh loads the kernel modules before starting K3s
+#
+# This replaces what was previously a separate "gpu" container + "server" container.
+#
+# IMPORTANT: BALENA_OS_VERSION must match the balenaOS version running on the device.
+# See https://github.com/balena-io-examples/nvidia-x86 for details.
+#
+# References:
+# https://blog.balena.io/how-to-use-nvidia-gpu-on-x86-device-balenaos/
+# https://k3d.io/v5.7.4/usage/advanced/cuda/#building-a-customized-k3s-image
+
+# -------------------------
+# Stage 1: Build NVIDIA kernel modules for balenaOS
+# -------------------------
+
+FROM ubuntu:22.04 AS builder
+
+ARG NVIDIA_DRIVER_VERSION="570.133.07"
+ARG BALENA_OS_VERSION="6.0.24%2Brev1"
+ARG BALENA_MACHINE_NAME="generic-amd64"
+ARG YOCTO_VERSION="6.6.23"
+ARG YOCTO_KERNEL="${YOCTO_VERSION}-yocto-standard"
+
+ENV NVIDIA_DRIVER=NVIDIA-Linux-x86_64-${NVIDIA_DRIVER_VERSION}
+ENV DEBIAN_FRONTEND=noninteractive
+
+WORKDIR /usr/src
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential git wget curl unzip bc libelf-dev libssl-dev bison flex \
+    ca-certificates kmod libglvnd-dev && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /usr/src/kernel_source
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+RUN \
+    [ "${BALENA_OS_VERSION%%.*}" -gt "2" ] && FILE_NAME="kernel_modules_headers.tar.gz" || FILE_NAME="kernel_source.tar.gz" && \
+    curl -fsSL "https://files.balena-cloud.com/images/${BALENA_MACHINE_NAME}/${BALENA_OS_VERSION}/${FILE_NAME}" \
+    | tar xz --strip-components=2 && \
+    make -C build modules_prepare -j"$(nproc)"
+
+WORKDIR /usr/src/nvidia
+
+RUN curl -fsSL -O https://us.download.nvidia.com/XFree86/Linux-x86_64/${NVIDIA_DRIVER_VERSION}/${NVIDIA_DRIVER}.run && \
+    chmod +x ./${NVIDIA_DRIVER}.run && \
+    ./${NVIDIA_DRIVER}.run --extract-only && \
+    ./${NVIDIA_DRIVER}/nvidia-installer \
+      --ui=none --no-questions --no-drm --no-x-check --no-systemd --no-kernel-module \
+      --no-distro-scripts --install-compat32-libs --no-nouveau-check --no-rpms --no-backup \
+      --no-abi-note --no-check-for-alternate-installs --no-libglx-indirect --install-libglvnd \
+      --x-prefix=/tmp/null --x-module-path=/tmp/null --x-library-path=/tmp/null --x-sysconfig-path=/tmp/null \
+      --kernel-name=${YOCTO_KERNEL} --skip-depmod --expert && \
+    make -C ${NVIDIA_DRIVER}/kernel KERNEL_MODLIB=/usr/src/kernel_source IGNORE_CC_MISMATCH=1 modules && \
+    mkdir -p /out && find ${NVIDIA_DRIVER}/kernel -name '*.ko' -exec cp {} /out/ \; && \
+    find /out -type f -name '*.ko' -exec strip --strip-unneeded {} \; || true
+
+# -------------------------
+# Stage 2: K3s server with NVIDIA driver userspace and toolkit
+# -------------------------
+
+FROM ubuntu:22.04
+
+ARG NVIDIA_DRIVER_VERSION="570.133.07"
+ARG K3S_TAG="v1.28.8+k3s1"
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV K3S_TAG=${K3S_TAG}
+ENV NVIDIA_DRIVER_VERSION=${NVIDIA_DRIVER_VERSION}
+ENV NVIDIA_DRIVER=NVIDIA-Linux-x86_64-${NVIDIA_DRIVER_VERSION}
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl runc systemd ca-certificates kmod procps gnupg2 iptables && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy pre-built kernel modules from builder stage immediately so the builder
+# image can be released before the heavy installs below.
+COPY --from=builder /out /nvidia/driver
+
+# Install NVIDIA driver userspace (no kernel module -- we built those in the builder stage)
+RUN curl -fsSLO https://us.download.nvidia.com/XFree86/Linux-x86_64/${NVIDIA_DRIVER_VERSION}/${NVIDIA_DRIVER}.run && \
+    chmod +x ./${NVIDIA_DRIVER}.run && \
+    ./${NVIDIA_DRIVER}.run \
+        --ui=none \
+        --no-questions \
+        --no-drm \
+        --no-x-check \
+        --no-systemd \
+        --no-kernel-module \
+        --no-distro-scripts \
+        --no-nouveau-check \
+        --no-rpms \
+        --no-backup \
+        --no-abi-note \
+        --no-check-for-alternate-installs \
+        --no-libglx-indirect && \
+    rm ${NVIDIA_DRIVER}.run
+
+# Install K3s binary (also installs containerd - must be done before installing nvidia-container-toolkit)
+RUN curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_START=true INSTALL_K3S_SKIP_ENABLE=true INSTALL_K3S_VERSION=${K3S_TAG} sh
+
+RUN curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg && \
+    curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+        sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+        tee /etc/apt/sources.list.d/nvidia-container-toolkit.list && \
+    apt-get update && apt-get install -y --no-install-recommends nvidia-container-toolkit && \
+    rm -rf /var/lib/apt/lists/* && \
+    nvidia-ctk runtime configure --runtime=containerd || true
+
+COPY manifests/nvidia-gpu-operator.yaml /opt/k3s/manifests/
+
+RUN mkdir -p /opt/groundlight/edge/pinamod-public
+
+WORKDIR /workspace
+COPY server.sh ./server.sh
+COPY load_gpu.sh ./load_gpu.sh
+
+CMD [ "bash", "-lc", "./load_gpu.sh && ./server.sh" ]

@@ -13,6 +13,7 @@ from parse_load_test_logs import (
     summarize_throughput,
     write_load_test_results_to_file,
 )
+from tqdm import tqdm
 
 import groundlight_helpers as glh
 import image_helpers as imgh
@@ -62,17 +63,27 @@ def _create_runtime_directory() -> tuple[str, str]:
 
 
 def _provision_detector(
-    gl: ExperimentalApi, gl_cloud: ExperimentalApi, detector_mode: str, image_width: int, image_height: int
+    gl: ExperimentalApi,
+    gl_cloud: ExperimentalApi,
+    detector_mode: str,
+    image_width: int,
+    image_height: int,
+    edge_pipeline_config: str | None = None,
 ):
     TRAINING_TIMEOUT_SEC = 60 * 20
     INFERENCE_POD_READY_TIMEOUT_SEC = 60 * 10
 
     detector_name = f"Throughput Test {image_width} x {image_height} - {detector_mode}"
+    if edge_pipeline_config is not None:
+        config_hash = glh.hash_pipeline_config(edge_pipeline_config)
+        detector_name += f" - {config_hash}"
+
     if detector_mode == "BINARY":
         detector = gl.get_or_create_detector(
             name=detector_name,
             query="Is the image background black?",
             group_name=DETECTOR_GROUP_NAME,
+            edge_pipeline_config=edge_pipeline_config,
         )
         generate_image = imgh.generate_random_binary_image
         generate_image_kwargs = {
@@ -89,6 +100,7 @@ def _provision_detector(
             class_name=class_name,
             max_count=max_count,
             group_name=DETECTOR_GROUP_NAME,
+            edge_pipeline_config=edge_pipeline_config,
         )
         generate_image = imgh.generate_random_count_image
         generate_image_kwargs = {
@@ -101,19 +113,28 @@ def _provision_detector(
     else:
         raise ValueError(f"Detector mode {detector_mode} not recognized.")
 
-    pipeline_configs = glh.get_detector_pipeline_configs(gl, detector.id)
-    latest_edge_pipeline_config_in_cloud = pipeline_configs.get("pipeline_config")
+    if edge_pipeline_config is not None:
+        glh.assert_configured_edge_pipeline_matches_provided(gl, detector.id, edge_pipeline_config)
 
     stats = glh.get_detector_evaluation(gl, detector.id)
     if not glh.detector_is_sufficiently_trained(stats, 0.6, 30):
+        print(
+            f"{detector.id} is not sufficiently trained yet "
+            f"(projected_ml_accuracy={stats.get('projected_ml_accuracy')}, total_labels={stats.get('total_labels')}; "
+            "need projected_ml_accuracy>0.6 and total_labels>=30). Priming with 30 labels."
+        )
         glh.prime_detector(gl_cloud, detector, 30, image_width, image_height)
+        print(f"Waiting up to {TRAINING_TIMEOUT_SEC} seconds for training to complete for {detector.id}...")
         glh.wait_until_sufficiently_trained(gl, detector, 0.6, 30, timeout_sec=TRAINING_TIMEOUT_SEC)
 
     print(f'Waiting for inference pod to be ready for {detector.id}...')
     glh.wait_for_ready_inference_pod(
-        gl, detector, image_width, image_height, latest_edge_pipeline_config_in_cloud, timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC
+        gl, detector, image_width, image_height,
+        timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC,
+        edge_pipeline_config=edge_pipeline_config,
     )
-    print(f'Inference pod ready for {detector.id}.')
+    loaded_pipeline_config = (glh.get_detector_edge_metrics(gl, detector.id) or {}).get("pipeline_config")
+    print(f"Inference pod ready for {detector.id} with pipeline '{loaded_pipeline_config}'.")
 
     return detector, generate_image, generate_image_kwargs
 
@@ -160,21 +181,30 @@ def send_image_requests(  # noqa: PLR0913
     request_number = 1
 
     while time.time() - start_time < duration:
-        log_data = {
-            "asctime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "event": "request",
-            "worker_number": process_id,
-            "request_number": request_number,
-        }
         request_start_time = time.time()
 
         try:
             image, _, _ = generate_image(**generate_image_kwargs)
             iq = gl.submit_image_query(detector, image, **glh.IQ_KWARGS_FOR_NO_ESCALATION)
             glh.error_if_not_from_edge(iq)
-            log_data.update({"latency": round(time.time() - request_start_time, 4), "success": True})
+            success = True
+            error = None
         except Exception as e:
-            log_data.update({"latency": round(time.time() - request_start_time, 4), "success": False, "error": str(e)})
+            success = False
+            error = str(e)
+
+        request_end_time = time.time()
+        log_data = {
+            "asctime": datetime.fromtimestamp(request_end_time).strftime("%Y-%m-%d %H:%M:%S"),
+            "ts": request_end_time,
+            "event": "request",
+            "worker_number": process_id,
+            "request_number": request_number,
+            "latency": round(request_end_time - request_start_time, 4),
+            "success": success,
+        }
+        if error is not None:
+            log_data["error"] = error
 
         with open(log_file, "a") as log:
             log.write(json.dumps(log_data) + "\n")
@@ -215,35 +245,44 @@ def incremental_client_ramp_up(  # noqa: PLR0913
     start_time = time.time()
     num_detectors = len(detectors)
 
-    for num_clients_ramping_to in ramp_steps:
-        print(f"Ramping up to {num_clients_ramping_to} clients.")
-        with open(log_file, "a") as log:
-            log.write(f"RAMP {num_clients_ramping_to}\n")
-        num_existing_clients = len(active_processes)
-        for _ in range(num_clients_ramping_to - num_existing_clients):
-            process_id = len(active_processes)
-            remaining_time = total_duration - (time.time() - start_time)
-            detector_id = detectors[process_id % num_detectors]
+    with tqdm(total=total_duration, desc="Running with 0 clients", unit="s") as ramp_progress:
+        elapsed_seconds = 0
+        for step_idx, num_clients_ramping_to in enumerate(ramp_steps):
+            ramp_ts = time.time()
+            with open(log_file, "a") as log:
+                log.write(f"RAMP {num_clients_ramping_to} ts={ramp_ts}\n")
+            num_existing_clients = len(active_processes)
+            for _ in range(num_clients_ramping_to - num_existing_clients):
+                process_id = len(active_processes)
+                remaining_time = total_duration - (time.time() - start_time)
+                detector_id = detectors[process_id % num_detectors]
 
-            process = multiprocessing.Process(
-                target=send_image_requests,
-                args=(
-                    process_id,
-                    detector_id,
-                    detector_mode,
-                    image_width,
-                    image_height,
-                    requests_per_second,
-                    remaining_time,
-                    log_file,
-                ),
-            )
-            process.start()
-            active_processes.append(process)
+                process = multiprocessing.Process(
+                    target=send_image_requests,
+                    args=(
+                        process_id,
+                        detector_id,
+                        detector_mode,
+                        image_width,
+                        image_height,
+                        requests_per_second,
+                        remaining_time,
+                        log_file,
+                    ),
+                )
+                process.start()
+                active_processes.append(process)
 
-        print(f"Running with {len(active_processes)} clients...")
-        print(f"Sleeping for {time_between_ramp} seconds.")
-        time.sleep(time_between_ramp)
+            ramp_progress.set_description(f"Running with {len(active_processes)} clients")
+            seconds_this_step = min(time_between_ramp, max(0, total_duration - elapsed_seconds))
+            for second in range(seconds_this_step):
+                time.sleep(1)
+                elapsed_seconds += 1
+                ramp_progress.update(1)
+                seconds_remaining_this_step = seconds_this_step - (second + 1)
+                ramp_progress.set_postfix_str(
+                    f"step {step_idx + 1}/{len(ramp_steps)}, next ramp in {seconds_remaining_this_step}s"
+                )
 
     for process in active_processes:
         process.join()
@@ -258,14 +297,16 @@ if __name__ == "__main__":
     parser.add_argument("--requests-per-second", type=int, default=10, help="Per-client request rate.")
     parser.add_argument("--image-width", type=int, default=640)
     parser.add_argument("--image-height", type=int, default=480)
+    parser.add_argument("--edge-pipeline-config", type=str, default=None, help="Edge pipeline configuration name.")
     args = parser.parse_args()
+    edge_pipeline_config = glh.normalize_edge_pipeline_config(args.edge_pipeline_config)
 
     gl = ExperimentalApi()
     glh.error_if_endpoint_is_cloud(gl)
     gl_cloud = ExperimentalApi(endpoint=glh.CLOUD_ENDPOINT_PROD)
 
     detector, generate_image, generate_image_kwargs = _provision_detector(
-        gl, gl_cloud, args.detector_mode, args.image_width, args.image_height
+        gl, gl_cloud, args.detector_mode, args.image_width, args.image_height, edge_pipeline_config=edge_pipeline_config
     )
 
     runtime_dir, log_file = _create_runtime_directory()

@@ -6,8 +6,8 @@ import pytest
 import yaml
 from model import ModeEnum
 
-from app.core.configs import EdgeInferenceConfig
-from app.core.edge_inference import EdgeInferenceManager, get_edge_inference_service_name
+from app.core.edge_inference import EdgeInferenceManager
+from app.core.naming import get_edge_inference_service_name
 from app.core.utils import ModelInfoBase, ModelInfoNoBinary, ModelInfoWithBinary
 
 
@@ -98,11 +98,6 @@ def oodd_model_info_no_binary() -> ModelInfoNoBinary:
     )
 
 
-@pytest.fixture
-def detector_inference_config():
-    return {"test_detector": EdgeInferenceConfig()}
-
-
 class TestEdgeInferenceManager:
     def test_update_model_with_binary(self, edge_model_info_with_binary, oodd_model_info_with_binary):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -110,7 +105,7 @@ class TestEdgeInferenceManager:
                 with mock.patch("app.core.edge_inference.get_object_using_presigned_url") as mock_get_from_s3:
                     mock_get_from_s3.return_value = b"test_model"
                     mock_fetch.return_value = (edge_model_info_with_binary, oodd_model_info_with_binary)
-                    edge_manager = EdgeInferenceManager(detector_inference_configs=None)
+                    edge_manager = EdgeInferenceManager()
                     edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
                     detector_id = "test_detector"
                     edge_manager.update_models_if_available(detector_id)
@@ -144,7 +139,7 @@ class TestEdgeInferenceManager:
         with tempfile.TemporaryDirectory() as temp_dir:
             with mock.patch("app.core.edge_inference.fetch_model_info") as mock_fetch:
                 mock_fetch.return_value = (edge_model_info_no_binary, oodd_model_info_no_binary)
-                edge_manager = EdgeInferenceManager(detector_inference_configs=None)
+                edge_manager = EdgeInferenceManager()
                 edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
                 detector_id = "test_detector"
                 edge_manager.update_models_if_available(detector_id)
@@ -168,7 +163,7 @@ class TestEdgeInferenceManager:
                 assert not os.path.exists(os.path.join(temp_dir, detector_id, "primary", "3"))
                 assert not os.path.exists(os.path.join(temp_dir, detector_id, "oodd", "3"))
 
-    def test_run_inference_with_oodd(self, detector_inference_config):
+    def test_run_inference_with_oodd(self):
         mock_response = {
             "multi_predictions": None,
             "predictions": {"confidences": [0.54], "labels": [0]},
@@ -178,7 +173,7 @@ class TestEdgeInferenceManager:
         with mock.patch("app.core.edge_inference.submit_image_for_inference") as mock_submit:
             mock_submit.return_value = mock_response
             # separate_oodd_inference is True by default
-            edge_manager = EdgeInferenceManager(detector_inference_configs=detector_inference_config)
+            edge_manager = EdgeInferenceManager()
             edge_manager.run_inference("test_detector", b"test_image", "image/jpeg", mode=ModeEnum.BINARY)
             primary_inference_client_url = get_edge_inference_service_name("test_detector") + ":8000"
             oodd_inference_client_url = get_edge_inference_service_name("test_detector", is_oodd=True) + ":8000"
@@ -192,7 +187,7 @@ class TestEdgeInferenceManager:
             assert primary_call in calls
             assert oodd_call in calls
 
-    def test_run_inference_without_oodd(self, detector_inference_config):
+    def test_run_inference_without_oodd(self):
         mock_response = {
             "multi_predictions": None,
             "predictions": {"confidences": [0.54], "labels": [0]},
@@ -201,9 +196,7 @@ class TestEdgeInferenceManager:
 
         with mock.patch("app.core.edge_inference.submit_image_for_inference") as mock_submit:
             mock_submit.return_value = mock_response
-            edge_manager = EdgeInferenceManager(
-                detector_inference_configs=detector_inference_config, separate_oodd_inference=False
-            )
+            edge_manager = EdgeInferenceManager(separate_oodd_inference=False)
             edge_manager.run_inference("test_detector", b"test_image", "image/jpeg", mode=ModeEnum.BINARY)
             primary_inference_client_url = get_edge_inference_service_name("test_detector") + ":8000"
 

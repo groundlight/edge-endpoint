@@ -2,11 +2,13 @@ from groundlight import ExperimentalApi, Detector, ApiException, ImageQuery
 
 from groundlight_openapi_client.exceptions import ApiTypeError
 
+from concurrent.futures import ThreadPoolExecutor
+import hashlib
 import os
 import requests
 import json
-import yaml
 import time
+import yaml
 from tqdm import trange
 
 import image_helpers as imgh
@@ -18,6 +20,27 @@ CLOUD_ENDPOINT_PROD = 'https://api.groundlight.ai/device-api'
 # unless an inference pod doesn't exist for the detector, in which case we have no choice but to escalate
 IQ_KWARGS_FOR_NO_ESCALATION = {'wait': 0.0, 'human_review': 'NEVER', 'confidence_threshold': 0.0}
 IQ_KWARGS_NON_HUMAN_CLOUD_ESCALATION = {'wait': 0.0, 'human_review': 'NEVER', 'confidence_threshold': 1.0}
+PRIMING_MAX_BATCH_SIZE = 10
+
+PIPELINE_LOADED_TIMEOUT_SEC = 60 * 3
+
+
+def hash_pipeline_config(pipeline_config: str) -> str:
+    """Return a short deterministic hash of the pipeline config string."""
+    return hashlib.sha256(pipeline_config.encode()).hexdigest()[:12]
+
+
+def normalize_edge_pipeline_config(pipeline_config: str | None) -> str | None:
+    """Trim surrounding whitespace and normalize empty values to None."""
+    if pipeline_config is None:
+        return None
+    normalized = pipeline_config.strip()
+    return normalized or None
+
+
+def _pipeline_configs_equal(a: str | None, b: str | None) -> bool:
+    """Return True if the two pipeline config strings are equivalent (YAML-normalized)."""
+    return yaml.safe_load(a or "") == yaml.safe_load(b or "")
 
 
 class APIError(Exception):
@@ -71,12 +94,12 @@ def call_edge_api(gl_client: ExperimentalApi, path: str, params: dict) -> dict:
 
     return call_api(url, params)
 
-def get_detector_pipeline_configs(gl: ExperimentalApi, detector_id: str) -> dict:
+def get_detector_edge_pipeline_configs(gl: ExperimentalApi, detector_id: str) -> dict:
     """
-    Get the detector pipeline configs that have been trained in the cloud for the Edge Endpoint.
+    Get the detector's configured edge pipeline configs from cloud metadata.
 
-    These haven't necessary been downloaded to the Edge Endpoint yet; they simply represent the 
-    latest available pipeline config in the cloud for the Edge Endpoint. 
+    These have not necessarily been downloaded to this Edge Endpoint yet.
+    They represent the desired edge pipeline configs known in the cloud.
     """
     
     # Ideally we would use `gl.edge_api.get_model_urls` to get this info, but
@@ -149,7 +172,8 @@ def get_or_create_count_detector(
     class_name: str,
     max_count: int, 
     group_name: str,
-    ) -> list[Detector]:
+    edge_pipeline_config: str | None = None,
+    ) -> Detector:
     """Create a counting detector or return an existing one with the same name if it already exists."""
 
     query_text = f"Count all the {class_name}s"
@@ -160,6 +184,7 @@ def get_or_create_count_detector(
             class_name,
             max_count=max_count,
             group_name=group_name,
+            edge_pipeline_config=edge_pipeline_config,
         )
     except ApiException as e:
         if e.status != 400 or "unique_undeleted_name_per_set" not in getattr(e, "body", ""):
@@ -191,63 +216,123 @@ def prime_detector(
     num_labels: int, 
     image_width: int, 
     image_height: int) -> None:
-    """
-    Submits a handful of labels to a detector so that the cloud can train a model. 
-    """
-    for _ in trange(num_labels, desc=f"Priming {detector.id} with {num_labels} labels.", unit="label"):
+    """Submit synthetic labels in bounded concurrent batches to trigger model training."""
+
+    def _prime_one() -> None:
+        """Generate one sample, submit it, and attach the synthetic label."""
         image, label, rois = imgh.generate_random_image(gl, detector, image_width, image_height)
-        # iq = gl.ask_async(detector, image, human_review="NEVER") # using ask_sync is causing a race condition on the server, commmenting it out until that is fixed
         iq = gl.submit_image_query(detector, image, **IQ_KWARGS_FOR_NO_ESCALATION)
         gl.add_label(iq, label, rois)
 
-def wait_for_ready_inference_pod(
+    remaining = num_labels
+    with trange(num_labels, desc=f"Priming {detector.id} with {num_labels} labels.", unit="label") as progress:
+        while remaining > 0:
+            batch_size = min(PRIMING_MAX_BATCH_SIZE, remaining)
+            with ThreadPoolExecutor(max_workers=batch_size) as executor:
+                futures = [executor.submit(_prime_one) for _ in range(batch_size)]
+                for future in futures:
+                    future.result()
+                    progress.update(1)
+            remaining -= batch_size
+
+def wait_for_edge_answer(
     gl: ExperimentalApi,
     detector: Detector,
-    image_width: int, 
+    image_width: int,
     image_height: int,
-    pipeline_config: str,
     timeout_sec: float,
-    ) -> None:
-    """
-    Waits until an inference pod is ready and using the correct pipeline_config.
-    """
-
-    # Submit an image query to trigger pod creation
+) -> None:
+    """Waits until the inference pod returns at least one edge answer."""
     image, _, _ = imgh.generate_random_image(gl, detector, image_width, image_height)
-    _ = gl.submit_image_query(
-        detector, 
-        image, 
-        **IQ_KWARGS_FOR_NO_ESCALATION) 
+    _ = gl.submit_image_query(detector, image, **IQ_KWARGS_FOR_NO_ESCALATION)
 
-    # Poll until correct pipeline_config is used
     poll_start = time.time()
     while True:
         elapsed_time = time.time() - poll_start
         if elapsed_time > timeout_sec:
             raise RuntimeError(
-                f"Failed to roll out inference pod for {detector.id} with pipeline_config='{pipeline_config}' after {timeout_sec:.2f} seconds."
+                f"Inference pod for {detector.id} did not return an edge answer after {timeout_sec:.2f} seconds."
             )
-
-        # Check if correct pipeline is used
-        detector_edge_metrics = get_detector_edge_metrics(gl, detector.id)
-        if detector_edge_metrics is not None:
-            edge_pipeline_config = detector_edge_metrics.get('pipeline_config')
-
-            if yaml.safe_load(pipeline_config or "") == yaml.safe_load(edge_pipeline_config or ""):
-
-                # Correct pipeline is used and the pod is ready
-                # Double check that the pod is returning edge answers
-                image, _, _ = imgh.generate_random_image(gl, detector, image_width, image_height)
-                iq = gl.submit_image_query(
-                    detector, 
-                    image, 
-                    **IQ_KWARGS_FOR_NO_ESCALATION) 
-
-                if iq.result.from_edge:
-                    return # We got an edge answer and the pipeline_config is correct
-
-        # Inference pod is not yet ready. Wait and retry
+        image, _, _ = imgh.generate_random_image(gl, detector, image_width, image_height)
+        iq = gl.submit_image_query(detector, image, **IQ_KWARGS_FOR_NO_ESCALATION)
+        if iq.result.from_edge:
+            return
         time.sleep(5)
+
+
+def assert_configured_edge_pipeline_matches_provided(
+    gl: ExperimentalApi, detector_id: str, expected_pipeline_config: str
+) -> None:
+    """Raise if the configured edge pipeline does not match the provided config."""
+    configured_edge_pipeline = get_detector_edge_pipeline_configs(gl, detector_id).get("pipeline_config")
+    if not _pipeline_configs_equal(expected_pipeline_config, configured_edge_pipeline):
+        raise RuntimeError(
+            f"The provided edge pipeline config does not match the detector's configured edge pipeline for {detector_id}. "
+            "This can happen if the detector's pipeline config was changed after creation (e.g. via admin).\n"
+            f"  Provided: {expected_pipeline_config!r}\n"
+            f"  Configured edge: {configured_edge_pipeline!r}"
+        )
+
+
+def assert_loaded_pipeline_matches_provided(
+    gl: ExperimentalApi, detector_id: str, expected_pipeline_config: str
+) -> None:
+    """Raises if the pipeline loaded on the edge does not match the expected config."""
+    loaded = (get_detector_edge_metrics(gl, detector_id) or {}).get("pipeline_config")
+    if not _pipeline_configs_equal(expected_pipeline_config, loaded):
+        raise RuntimeError(
+            f"The pipeline config provided does not match the pipeline loaded for detector {detector_id}. "
+            "This can happen if the detector's pipeline config was changed after creation (e.g. via admin).\n"
+            f"  Provided: {expected_pipeline_config!r}\n"
+            f"  Loaded:   {loaded!r}"
+        )
+
+
+def wait_for_loaded_pipeline_to_match_configured_edge(
+    gl: ExperimentalApi, detector_id: str, timeout_sec: float = PIPELINE_LOADED_TIMEOUT_SEC
+) -> None:
+    """After an edge answer exists, wait until the loaded edge pipeline matches the configured edge pipeline."""
+    configured_edge_configs = get_detector_edge_pipeline_configs(gl, detector_id)
+    expected = configured_edge_configs.get("pipeline_config")
+    poll_start = time.time()
+    while True:
+        elapsed = time.time() - poll_start
+        if elapsed > timeout_sec:
+            loaded = (get_detector_edge_metrics(gl, detector_id) or {}).get("pipeline_config")
+            raise RuntimeError(
+                f"Loaded edge pipeline for detector {detector_id} did not match configured edge pipeline within {timeout_sec:.2f} seconds. "
+                "The detector's pipeline config may have been changed after creation (e.g. via admin).\n"
+                f"  Configured edge: {expected!r}\n"
+                f"  Loaded edge:     {loaded!r}"
+            )
+        loaded = (get_detector_edge_metrics(gl, detector_id) or {}).get("pipeline_config")
+        if _pipeline_configs_equal(expected, loaded):
+            return
+        time.sleep(5)
+
+
+def wait_for_ready_inference_pod(
+    gl: ExperimentalApi,
+    detector: Detector,
+    image_width: int,
+    image_height: int,
+    timeout_sec: float,
+    edge_pipeline_config: str | None = None,
+) -> None:
+    """Wait for an edge answer, then ensure loaded edge pipeline matches configured edge pipeline."""
+    wait_for_edge_answer(gl, detector, image_width, image_height, timeout_sec)
+    if edge_pipeline_config is not None:
+        # If a pipeline config was provided, we expect the loaded pipeline config to match right away.
+        # If it doesn't match, it likely means someone changed it in Admin, which would cause
+        # the test to run with a pipeline other than what the user expects. We fail loudly if that happens.
+        assert_loaded_pipeline_matches_provided(gl, detector.id, edge_pipeline_config)
+    else:
+        # When no pipeline config is provided, users are allowed to change the pipeline config in Admin; 
+        # this workflow supports custom yaml pipelines, which aren't currently supported in the Python SDK. 
+        # When a new pipeline is configured in Admin, it will take some time for the detector retrain,
+        # and for the new pipeline to make its way to the edge. Therefore, we will wait here for a bit
+        # to ensure that the edge pipeline configured in the cloud matches what was downloaded to the edge.
+        wait_for_loaded_pipeline_to_match_configured_edge(gl, detector.id, timeout_sec=PIPELINE_LOADED_TIMEOUT_SEC)
 
 def detector_is_sufficiently_trained(
     stats: dict,

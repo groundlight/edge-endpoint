@@ -6,18 +6,19 @@ from datetime import datetime, timedelta, timezone
 import psutil
 import tzlocal
 import yaml
+from groundlight.edge import InferenceConfig
 from kubernetes import client, config
 
-from app.core.configs import EdgeInferenceConfig
-from app.core.edge_config_loader import get_detector_edge_configs_by_id
-from app.core.edge_inference import get_current_pipeline_config, get_predictor_metadata, get_primary_edge_model_dir
+from app.core.edge_config_manager import EdgeConfigManager
+from app.core.edge_inference import get_current_pipeline_config, get_predictor_metadata
 from app.core.file_paths import MODEL_REPOSITORY_PATH
+from app.core.naming import get_primary_edge_model_dir
 
 logger = logging.getLogger(__name__)
 
 
-def _edge_config_to_dict(config: EdgeInferenceConfig | None) -> dict | None:
-    """Convert an EdgeInferenceConfig to a plain dict for JSON serialization."""
+def _edge_config_to_dict(config: InferenceConfig | None) -> dict | None:
+    """Convert an InferenceConfig to a plain dict for JSON serialization."""
     if config is None:
         return None
     return {
@@ -304,7 +305,7 @@ def get_detector_details() -> str:
         if det_id and _get_annotation(pod, "groundlight.dev/model-name") == f"{det_id}/primary":
             pods_by_detector.setdefault(det_id, []).append(pod)
 
-    detector_edge_configs = get_detector_edge_configs_by_id()
+    detector_edge_configs = EdgeConfigManager.detector_configs(EdgeConfigManager.active())
     detector_details: dict[str, dict] = {}
 
     for dep in deployments.items:

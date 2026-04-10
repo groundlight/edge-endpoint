@@ -35,6 +35,7 @@ imagePullPolicy: "Always"
 # http://edge-endpoint-service.edge.svc.cluster.local:30101/ (or substitute the appropriate
 # namespace if you've overriden the default value).
 edgeEndpointPort: 30101
+edgeEndpointHttpsPort: 30143
 
 # This is used as the base of the name for the PersistentVolume. The full name of the volume is 
 # created by appending the namespace to this value. Generally, this should not be overridden.
