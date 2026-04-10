@@ -62,4 +62,3 @@ class ProfilingManager:
             except OSError:
                 logger.warning(f"Failed to clean up profiling trace file: {f}")
         return deleted
-
