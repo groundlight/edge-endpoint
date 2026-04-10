@@ -28,32 +28,16 @@ class TestTraceSpanDecorator:
 
             @trace_span
             def my_func():
+                time.sleep(0.01)
                 return 42
 
             result = my_func()
             assert result == 42
 
             trace = tracer.finish()
-            span_names = [s.name for s in trace.spans]
-            assert "my_func" in span_names
-        finally:
-            _current_tracer.reset(token)
-
-    def test_span_is_finished_after_call(self):
-        tracer = RequestTracer(operation="root", detector_id="det_1")
-        token = _current_tracer.set(tracer)
-        try:
-
-            @trace_span
-            def timed_func():
-                time.sleep(0.01)
-
-            timed_func()
-
-            trace = tracer.finish()
-            timed_span = [s for s in trace.spans if s.name == "timed_func"][0]
-            assert timed_span.end_time_ns is not None
-            assert timed_span.duration_ms >= 5  # conservative for CI
+            span = [s for s in trace.spans if s.name == "my_func"][0]
+            assert span.end_time_ns is not None
+            assert span.duration_ms >= 5  # conservative for CI
         finally:
             _current_tracer.reset(token)
 

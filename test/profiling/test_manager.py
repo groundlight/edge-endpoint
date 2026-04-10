@@ -9,13 +9,13 @@ from app.profiling.models import Span, Trace
 
 
 @pytest.fixture
-def tmp_profiling_dir(tmp_path):
-    return str(tmp_path / "profiling")
+def tmp_traces_dir(tmp_path):
+    return str(tmp_path / "edge-profiling")
 
 
 @pytest.fixture
-def manager(tmp_profiling_dir):
-    return ProfilingManager(base_dir=tmp_profiling_dir)
+def manager(tmp_traces_dir):
+    return ProfilingManager(traces_dir=tmp_traces_dir)
 
 
 def _make_trace(trace_id="t1", detector_id="det_1", spans=None):
@@ -47,42 +47,40 @@ def _make_trace(trace_id="t1", detector_id="det_1", spans=None):
 
 
 class TestRecordTrace:
-    def test_writes_jsonl_file(self, manager, tmp_profiling_dir):
+    def test_writes_jsonl_file(self, manager, tmp_traces_dir):
         trace = _make_trace()
         manager.record_trace(trace)
 
-        traces_dir = os.path.join(tmp_profiling_dir, "traces")
-        files = list(os.listdir(traces_dir))
+        files = list(os.listdir(tmp_traces_dir))
         assert len(files) == 1
         assert files[0].endswith(".jsonl")
 
-        with open(os.path.join(traces_dir, files[0])) as f:
+        with open(os.path.join(tmp_traces_dir, files[0])) as f:
             lines = f.readlines()
         assert len(lines) == 1
         parsed = json.loads(lines[0])
         assert parsed["trace_id"] == "t1"
         assert len(parsed["spans"]) == 2
 
-    def test_multiple_traces_same_file(self, manager, tmp_profiling_dir):
+    def test_multiple_traces_same_file(self, manager, tmp_traces_dir):
         manager.record_trace(_make_trace(trace_id="t1"))
         manager.record_trace(_make_trace(trace_id="t2"))
 
-        traces_dir = os.path.join(tmp_profiling_dir, "traces")
-        files = list(os.listdir(traces_dir))
+        files = list(os.listdir(tmp_traces_dir))
         assert len(files) == 1
 
-        with open(os.path.join(traces_dir, files[0])) as f:
+        with open(os.path.join(tmp_traces_dir, files[0])) as f:
             lines = f.readlines()
         assert len(lines) == 2
 
-    def test_creates_traces_directory(self, tmp_profiling_dir):
-        ProfilingManager(base_dir=tmp_profiling_dir)
-        assert os.path.isdir(os.path.join(tmp_profiling_dir, "traces"))
+    def test_creates_traces_directory(self, tmp_traces_dir):
+        ProfilingManager(traces_dir=tmp_traces_dir)
+        assert os.path.isdir(tmp_traces_dir)
 
 
 class TestFileRotation:
-    def test_rotation_after_interval(self, tmp_profiling_dir):
-        manager = ProfilingManager(base_dir=tmp_profiling_dir)
+    def test_rotation_after_interval(self, tmp_traces_dir):
+        manager = ProfilingManager(traces_dir=tmp_traces_dir)
         manager.record_trace(_make_trace(trace_id="t1"))
 
         # Force rotation by backdating the creation time
@@ -90,16 +88,14 @@ class TestFileRotation:
 
         manager.record_trace(_make_trace(trace_id="t2"))
 
-        traces_dir = os.path.join(tmp_profiling_dir, "traces")
-        files = list(os.listdir(traces_dir))
+        files = list(os.listdir(tmp_traces_dir))
         assert len(files) == 2
 
 
 class TestCleanup:
-    def test_cleanup_old_files(self, manager, tmp_profiling_dir):
-        traces_dir = os.path.join(tmp_profiling_dir, "traces")
+    def test_cleanup_old_files(self, manager, tmp_traces_dir):
         # Create a fake old file
-        old_file = os.path.join(traces_dir, "traces_123_2025-01-01_00-00-00.jsonl")
+        old_file = os.path.join(tmp_traces_dir, "traces_123_2025-01-01_00-00-00.jsonl")
         with open(old_file, "w") as f:
             f.write("{}\n")
         # Set mtime to 48 hours ago
@@ -111,7 +107,7 @@ class TestCleanup:
 
         deleted = manager.cleanup_old_files()
         assert deleted == 1
-        remaining = list(os.listdir(traces_dir))
+        remaining = list(os.listdir(tmp_traces_dir))
         assert len(remaining) == 1
         assert "2025-01-01" not in remaining[0]
 

@@ -25,15 +25,24 @@ def profiling_app():
 @pytest.fixture
 def tmp_manager(tmp_path):
     """ProfilingManager writing to a temp directory."""
-    return ProfilingManager(base_dir=str(tmp_path / "profiling"))
+    return ProfilingManager(traces_dir=str(tmp_path / "profiling"))
 
 
 class TestProfilingMiddleware:
-    def test_no_traces_when_disabled(self, profiling_app):
+    def test_no_traces_when_disabled(self, profiling_app, tmp_path):
         """When ENABLE_PROFILING is not set, no traces should be created."""
-        with TestClient(profiling_app) as client:
-            response = client.get("/test?detector_id=det_1")
-            assert response.status_code == 200
+        traces_dir = tmp_path / "profiling"
+        traces_dir.mkdir()
+
+        with (
+            patch("app.profiling.manager.PROFILING_DIR", str(traces_dir)),
+            patch("app.profiling._manager", None),
+        ):
+            with TestClient(profiling_app) as client:
+                response = client.get("/test?detector_id=det_1")
+                assert response.status_code == 200
+
+        assert list(traces_dir.glob("*.jsonl")) == []
 
     def test_traces_created_when_enabled(self, profiling_app, tmp_manager):
         """When profiling is enabled, traces should be written for each request."""

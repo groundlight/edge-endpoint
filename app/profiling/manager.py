@@ -10,7 +10,7 @@ from app.profiling.models import Trace
 
 logger = logging.getLogger(__name__)
 
-PROFILING_BASE_DIR = "/opt/groundlight/device/edge-profiling"
+PROFILING_DIR = "/opt/groundlight/device/edge-profiling"
 ROTATION_INTERVAL_SECONDS = 300  # 5 minutes
 MAX_FILE_AGE_HOURS = 24
 
@@ -18,9 +18,8 @@ MAX_FILE_AGE_HOURS = 24
 class ProfilingManager:
     """Manages trace storage. Singleton."""
 
-    def __init__(self, base_dir: str = PROFILING_BASE_DIR):
-        self.base_dir = Path(base_dir)
-        self.traces_dir = self.base_dir / "traces"
+    def __init__(self, traces_dir: str = PROFILING_DIR):
+        self.traces_dir = Path(traces_dir)
         os.makedirs(self.traces_dir, exist_ok=True)
 
         self._write_lock = threading.Lock()
