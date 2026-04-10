@@ -188,7 +188,7 @@ def _pod_is_progressing(pod: client.V1Pod) -> bool:
         if cs.state and cs.state.waiting:
             return cs.state.waiting.reason in _PROGRESSING_WAIT_REASONS
         if cs.state and cs.state.running and not cs.ready:
-            return True
+            return (cs.restart_count or 0) == 0
     # No container statuses yet -- pod is freshly created / being scheduled
     return pod.status.phase == "Pending"
 
