@@ -96,6 +96,7 @@ spec:
         # necessary to access pretrained model weights stored in S3
         - name: aws-credentials
           mountPath: /root/.aws
+        # Shared volume for profiling traces.
         - name: device-info-volume
           mountPath: /opt/groundlight/device
         ports:

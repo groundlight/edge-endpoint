@@ -263,6 +263,7 @@ class EdgeInferenceManager:
         self.separate_oodd_inference = separate_oodd_inference
         self.last_escalation_times: dict[str, float | None] = {}
 
+    @trace_span("inference_is_available")
     def inference_is_available(self, detector_id: str) -> bool:
         """Check whether inference pods for this detector are ready to serve."""
         primary_url = get_edge_inference_service_name(detector_id) + ":8000"

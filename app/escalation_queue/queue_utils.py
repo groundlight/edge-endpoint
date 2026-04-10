@@ -6,6 +6,7 @@ from model import ImageQuery
 from app.core.utils import get_formatted_timestamp_str, safe_call_sdk
 from app.escalation_queue.models import EscalationInfo, SubmitImageQueryParams
 from app.escalation_queue.queue_writer import QueueWriter
+from app.profiling.context import trace_span
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ def write_escalation_to_queue(
         logger.error(f"Failed to write escalation to queue for detector {detector_id} with error {e}.")
 
 
+@trace_span("escalate_to_cloud")
 def safe_escalate_with_queue_write(
     gl: Groundlight,
     queue_writer: QueueWriter,

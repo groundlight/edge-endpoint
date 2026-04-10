@@ -11,6 +11,8 @@ from urllib3.util.retry import Retry
 
 from app.escalation_queue.queue_writer import QueueWriter
 
+from app.profiling.context import trace_span
+
 from .database import DatabaseManager
 from .edge_inference import EdgeInferenceManager
 from .utils import TimestampedCache, safe_call_sdk
@@ -76,6 +78,7 @@ def refresh_detector_metadata_if_needed(detector_id: str, gl: Groundlight) -> No
                 metadata_cache.restore_suspended_value(detector_id)
 
 
+@trace_span("get_detector_metadata")
 @cachetools.cached(
     cache=TimestampedCache(maxsize=MAX_DETECTOR_IDS_CACHE_SIZE),
     key=lambda detector_id, gl: detector_id,
