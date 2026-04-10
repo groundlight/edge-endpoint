@@ -11,7 +11,7 @@ class TestTraceSpanDecorator:
         """Decorated function runs normally when no tracer is in context."""
         call_count = 0
 
-        @trace_span("test_op")
+        @trace_span
         def my_func(x):
             nonlocal call_count
             call_count += 1
@@ -26,7 +26,7 @@ class TestTraceSpanDecorator:
         token = _current_tracer.set(tracer)
         try:
 
-            @trace_span("child_op")
+            @trace_span
             def my_func():
                 return 42
 
@@ -35,7 +35,7 @@ class TestTraceSpanDecorator:
 
             trace = tracer.finish()
             span_names = [s.name for s in trace.spans]
-            assert "child_op" in span_names
+            assert "my_func" in span_names
         finally:
             _current_tracer.reset(token)
 
@@ -44,14 +44,14 @@ class TestTraceSpanDecorator:
         token = _current_tracer.set(tracer)
         try:
 
-            @trace_span("timed_op")
-            def my_func():
+            @trace_span
+            def timed_func():
                 time.sleep(0.01)
 
-            my_func()
+            timed_func()
 
             trace = tracer.finish()
-            timed_span = [s for s in trace.spans if s.name == "timed_op"][0]
+            timed_span = [s for s in trace.spans if s.name == "timed_func"][0]
             assert timed_span.end_time_ns is not None
             assert timed_span.duration_ms >= 5  # conservative for CI
         finally:
@@ -62,17 +62,17 @@ class TestTraceSpanDecorator:
         token = _current_tracer.set(tracer)
         try:
 
-            @trace_span("failing_op")
-            def my_func():
+            @trace_span
+            def failing_func():
                 raise ValueError("test error")
 
             try:
-                my_func()
+                failing_func()
             except ValueError:
                 pass
 
             trace = tracer.finish()
-            failing_span = [s for s in trace.spans if s.name == "failing_op"][0]
+            failing_span = [s for s in trace.spans if s.name == "failing_func"][0]
             assert failing_span.end_time_ns is not None
         finally:
             _current_tracer.reset(token)
@@ -82,11 +82,11 @@ class TestTraceSpanDecorator:
         token = _current_tracer.set(tracer)
         try:
 
-            @trace_span("inner")
+            @trace_span
             def inner():
                 return "done"
 
-            @trace_span("outer")
+            @trace_span
             def outer():
                 return inner()
 
@@ -110,12 +110,12 @@ class TestTraceSpanDecorator:
         captured_span = None
         try:
 
-            @trace_span("observable")
-            def my_func():
+            @trace_span
+            def observable():
                 nonlocal captured_span
                 captured_span = get_current_span()
 
-            my_func()
+            observable()
             assert captured_span is not None
             assert captured_span.name == "observable"
         finally:
@@ -127,7 +127,7 @@ class TestTraceSpanDecorator:
         try:
             assert get_current_span() is None
 
-            @trace_span("temp")
+            @trace_span
             def my_func():
                 pass
 
@@ -142,7 +142,7 @@ class TestTraceSpanDecorator:
         token = _current_tracer.set(tracer)
         try:
 
-            @trace_span("threaded_op")
+            @trace_span
             def worker():
                 return get_current_tracer() is not None
 
@@ -152,7 +152,7 @@ class TestTraceSpanDecorator:
                 assert future.result() is True
 
             trace = tracer.finish()
-            assert "threaded_op" in [s.name for s in trace.spans]
+            assert "worker" in [s.name for s in trace.spans]
         finally:
             _current_tracer.reset(token)
 

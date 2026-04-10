@@ -31,7 +31,7 @@ def write_escalation_to_queue(
         logger.error(f"Failed to write escalation to queue for detector {detector_id} with error {e}.")
 
 
-@trace_span("escalate_to_cloud")
+@trace_span
 def safe_escalate_with_queue_write(
     gl: Groundlight,
     queue_writer: QueueWriter,

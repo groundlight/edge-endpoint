@@ -78,7 +78,7 @@ def refresh_detector_metadata_if_needed(detector_id: str, gl: Groundlight) -> No
                 metadata_cache.restore_suspended_value(detector_id)
 
 
-@trace_span("get_detector_metadata")
+@trace_span
 @cachetools.cached(
     cache=TimestampedCache(maxsize=MAX_DETECTOR_IDS_CACHE_SIZE),
     key=lambda detector_id, gl: detector_id,

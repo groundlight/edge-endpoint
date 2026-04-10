@@ -66,17 +66,19 @@ def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, co
         raise RuntimeError("Failed to submit image for inference") from e
 
 
-@trace_span("primary_inference")
+@trace_span
 def _submit_primary_inference(inference_client_url: str, image_bytes: bytes, content_type: str) -> dict:
+    """Wrapper around submit_image_for_inference for separate tracing of primary inference."""
     return submit_image_for_inference(inference_client_url, image_bytes, content_type)
 
 
-@trace_span("oodd_inference")
+@trace_span
 def _submit_oodd_inference(inference_client_url: str, image_bytes: bytes, content_type: str) -> dict:
+    """Wrapper around submit_image_for_inference for separate tracing of OODD inference."""
     return submit_image_for_inference(inference_client_url, image_bytes, content_type)
 
 
-@trace_span("get_inference_result")
+@trace_span
 def get_inference_result(primary_response: dict, oodd_response: dict | None, mode: ModeEnum | None = None) -> str:
     """
     Get the final inference result from the primary and OODD responses. If the OODD response is None, we return the
@@ -263,7 +265,7 @@ class EdgeInferenceManager:
         self.separate_oodd_inference = separate_oodd_inference
         self.last_escalation_times: dict[str, float | None] = {}
 
-    @trace_span("inference_is_available")
+    @trace_span
     def inference_is_available(self, detector_id: str) -> bool:
         """Check whether inference pods for this detector are ready to serve."""
         primary_url = get_edge_inference_service_name(detector_id) + ":8000"
