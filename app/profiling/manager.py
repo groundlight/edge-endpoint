@@ -36,11 +36,8 @@ class ProfilingManager:
             if self._current_file is None or (now - self._current_file_created_at) >= ROTATION_INTERVAL_SECONDS:
                 self._rotate_file(now)
 
-            try:
-                with open(self._current_file, "a") as f:
-                    f.write(line)
-            except OSError:
-                logger.warning(f"Failed to write profiling trace to {self._current_file}")
+            with open(self._current_file, "a") as f:
+                f.write(line)
 
     def _rotate_file(self, now: float) -> None:
         """Create a new trace file. Must be called under _write_lock."""
@@ -60,5 +57,5 @@ class ProfilingManager:
                     f.unlink()
                     deleted += 1
             except OSError:
-                logger.warning(f"Failed to clean up profiling trace file: {f}")
+                logger.error(f"Failed to clean up profiling trace file: {f}")
         return deleted

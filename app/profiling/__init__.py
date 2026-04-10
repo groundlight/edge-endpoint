@@ -1,5 +1,8 @@
-from app.profiling.config import PROFILING_ENABLED
+import os
+
 from app.profiling.context import get_current_span, get_current_tracer, trace_span
+
+PROFILING_ENABLED: bool = os.environ.get("ENABLE_PROFILING", "false").lower() == "true"
 
 _manager = None
 
