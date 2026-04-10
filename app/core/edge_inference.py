@@ -51,6 +51,7 @@ def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, co
     tracer = get_current_tracer()
     span = get_current_span()
     if tracer is not None and span is not None:
+        # Consumed by the inference server's TracingMiddleware to create correlated child spans
         headers["X-GL-Trace-Id"] = tracer.trace_id
         headers["X-GL-Parent-Span-Id"] = span.span_id
     try:
@@ -310,8 +311,8 @@ class EdgeInferenceManager:
                     )
                     f_oodd = executor.submit(ctx_oodd.run, _submit_oodd_inference, oodd_url, image_bytes, content_type)
                 else:
-                    f_primary = executor.submit(submit_image_for_inference, primary_url, image_bytes, content_type)
-                    f_oodd = executor.submit(submit_image_for_inference, oodd_url, image_bytes, content_type)
+                    f_primary = executor.submit(_submit_primary_inference, primary_url, image_bytes, content_type)
+                    f_oodd = executor.submit(_submit_oodd_inference, oodd_url, image_bytes, content_type)
                 response = f_primary.result()
                 oodd_response = f_oodd.result()
         else:
