@@ -60,7 +60,7 @@ function GpuCapacitySummary({ observedGpus, totalBytes, usedBytes }) {
           {formatBytes(usedGpuBytes)} / {formatBytes(totalGpuBytes)}, {formatPctInt(usedGpuBytes, totalGpuBytes)}
         </Text>
         {gpus.map((gpu, i) => (
-          <Text key={`${gpu.name}-${i}`} size="xs" c="dimmed">
+          <Text key={`${gpu.name}-${i}`} size="xs" c="gray.8">
             GPU {gpu.index ?? i}: {gpu.name} ({formatBytes(getUsed(gpu))} / {formatBytes(getTotal(gpu))})
           </Text>
         ))}
@@ -187,7 +187,7 @@ function LegendItem({
             <Text size="sm" fw={500} style={{ whiteSpace: "nowrap", minWidth: 64, textAlign: "right" }}>
               {vramValue}
             </Text>
-            <Text size="sm" c="dimmed" style={{ whiteSpace: "nowrap", minWidth: 48, textAlign: "right" }}>
+            <Text size="sm" c="gray.8" style={{ whiteSpace: "nowrap", minWidth: 48, textAlign: "right" }}>
               {vramPct}
             </Text>
           </>
@@ -195,7 +195,7 @@ function LegendItem({
         <Text size="sm" fw={500} style={{ whiteSpace: "nowrap", minWidth: 64, textAlign: "right" }}>
           {ramValue}
         </Text>
-        <Text size="sm" c="dimmed" style={{ whiteSpace: "nowrap", minWidth: 48, textAlign: "right" }}>
+        <Text size="sm" c="gray.8" style={{ whiteSpace: "nowrap", minWidth: 48, textAlign: "right" }}>
           {ramPct}
         </Text>
       </Group>
@@ -259,7 +259,7 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
   if (resourceData.error) {
     return (
       <Paper shadow="xs" p="md" radius="sm">
-        <Text c="dimmed" fs="italic">
+        <Text c="gray.8" fs="italic">
           {resourceData.error}
         </Text>
       </Paper>
@@ -276,7 +276,7 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
   if (!hasVram && !hasRam) {
     return (
       <Paper shadow="xs" p="md" radius="sm">
-        <Text c="dimmed" fs="italic">
+        <Text c="gray.8" fs="italic">
           No resource data available.
         </Text>
       </Paper>
@@ -381,7 +381,7 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
       <div className="resource-donuts-row">
         {hasVram && (
           <Stack gap="xs" align="center">
-            <Text size="xs" fw={600} c="dimmed">VRAM</Text>
+            <Text size="xs" fw={600} c="gray.8">VRAM</Text>
             <GpuCapacitySummary
               observedGpus={resourceData.observed_gpus}
               totalBytes={totalVram}
@@ -398,7 +398,7 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
         )}
         {hasRam && (
           <Stack gap="xs" align="center">
-            <Text size="xs" fw={600} c="dimmed">RAM</Text>
+            <Text size="xs" fw={600} c="gray.8">RAM</Text>
             <RamCapacitySummary totalBytes={totalRam} usedBytes={usedRam} />
             <DonutChart
               slices={ramResult.slices}
@@ -412,23 +412,26 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
       </div>
 
       <Stack gap="xs" mt="md">
-        <Group gap="lg">
-          <Text size="xs" c="dimmed" fw={600}>
-            Detectors loaded: {detectorLegend.length}
-          </Text>
-          {(hasVram || hasRam) && (
-            <Group gap={0}>
-              {hasVram && (
-                <Text size="xs" c="dimmed" fw={600} style={{ minWidth: 112, textAlign: "right" }}>
+        <div style={{ padding: "3px 6px" }}>
+          <Group gap="xs" wrap="nowrap">
+            <div style={{ width: 14, flexShrink: 0 }} />
+            <Text size="xs" c="gray.8" fw={600} style={{ flex: 1, minWidth: 0 }}>
+              Detectors loaded: {detectorLegend.length}
+            </Text>
+            {hasVram && (
+              <>
+                <Text size="xs" c="gray.8" fw={600} style={{ whiteSpace: "nowrap", minWidth: 64, textAlign: "right" }}>
                   VRAM
                 </Text>
-              )}
-              <Text size="xs" c="dimmed" fw={600} style={{ minWidth: 112, textAlign: "right" }}>
-                RAM
-              </Text>
-            </Group>
-          )}
-        </Group>
+                <div style={{ minWidth: 48 }} />
+              </>
+            )}
+            <Text size="xs" c="gray.8" fw={600} style={{ whiteSpace: "nowrap", minWidth: 64, textAlign: "right" }}>
+              RAM
+            </Text>
+            <div style={{ minWidth: 48 }} />
+          </Group>
+        </div>
         {visibleLegend.map((item, i) => (
           <LegendItem
             key={item.sliceKey}
@@ -450,7 +453,7 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
           </UnstyledButton>
         )}
         <Stack gap={2} mt={6}>
-          <Text size="xs" c="dimmed" fw={600}>
+          <Text size="xs" c="gray.8" fw={600}>
             System
           </Text>
           {systemLegend.map((item) => (

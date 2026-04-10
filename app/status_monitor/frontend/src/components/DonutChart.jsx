@@ -105,7 +105,7 @@ export default function DonutChart({
         <Text fw={500} size="xl">
           {centerText}
         </Text>
-        <Text size="xs" c="dimmed">
+        <Text size="xs" c="gray.8">
           used
         </Text>
       </Stack>
