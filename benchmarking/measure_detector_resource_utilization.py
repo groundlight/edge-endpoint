@@ -4,143 +4,39 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import yaml
 import requests
 from groundlight import ExperimentalApi
 from groundlight.edge import EdgeEndpointConfig, GlobalConfig, NO_CLOUD
 from model import Detector
 
+PIPELINES_FILE: Path = Path(__file__).parent / "pipelines.yaml"
 
-# All pipeline configs defined in zuuul's predictors/pipeline/registry, grouped by detector mode.
-# Excludes: symlinks (duplicates), constant/mock pipelines, and cloud-only LLM pipelines.
-# Generated from zuuul/predictors/predictors/pipeline/registry/ and predictors_edge/pipeline/registry/.
-PIPELINES: List[Tuple[str, str]] = [
-    # --- BINARY (default edge: generic-cached-timm-efficientnetv2s-calibrated-mlp) ---
-    ("BINARY", "generic-cached-timm-efficientnetv2s-calibrated-mlp"),
-    # ("BINARY", "groundlight-default-edge"),
-    ("BINARY", "basic-active-learning-mcdropout-pipeline"),
-    ("BINARY", "basic-active-learning-pipeline"),
-    ("BINARY", "generic-cached-timm-tinynet_e-mlp"),
-    ("BINARY", "groundlight-decision-region-default-2025-01-08"),
-    ("BINARY", "groundlight-default-2025-01-08"),
-    ("BINARY", "groundlight-gru-temporal"),
-    ("BINARY", "groundlight-mlp-temporal"),
-    ("BINARY", "zero-shot-object-groundingdino-decision-region"),
-    ("BINARY", "generic-cached-b4mu11-add-smooth-mlp"),
-    ("BINARY", "generic-cached-timm-mobilenetv3_small_050-calibrated-smoothed-mlp"),
-    ("BINARY", "generic-cached-timm-resnet18-knn"),
-    ("BINARY", "e2e-efficientnet-b0-3epochs"),
-    ("BINARY", "crop-to-roi-alkishop-lock-2"),
-    ("BINARY", "crop-to-roi-green-dumpster-overflow"),
-    ("BINARY", "roi-door-locked"),
-    ("BINARY", "overhead-person-count"),
-    ("BINARY", "zero-shot-groundingdino-object"),
-    ("BINARY", "zero-shot-text-knn-mlp-pipeline"),
-    ("BINARY", "e2e-efficientnet-b0-3epochs-with-calibration"),
-    ("BINARY", "generic-cached-timm-efficientnetv2s-knn"),
-    ("BINARY", "generic-cached-timm-squash-eva02_large_mim-calibrated-smoothed-mlp"),
-    ("BINARY", "generic-cached-timm-squash-vit_reg4_dinov2-calibrated-smoothed-mlp"),
-    ("BINARY", "generic-cached-timm-squash-vit_so400_siglipv2-calibrated-smoothed-mlp"),
-    ("BINARY", "generic-cached-timm-squash-vitamin_xl-calibrated-smoothed-mlp"),
-    # # prod/custom
-    # ("BINARY", "timm-border-groundlight-default-2024-11-13"),
-    # ("BINARY", "timm-squash-groundlight-default-2024-11-08"),
-    # ("BINARY", "zero-shot-switching-3scale-efficientnetv2s-oodd-calibrated-mlp"),
-    # ("BINARY", "zero-shot-text-knn-mlp-oodd"),
-    # ("BINARY", "zero-shot-switching-timm-efficientnetv2s-oodd-nw"),
-    # # experimental
-    # ("BINARY", "e2e-efficientnet-b2-3epochs-with-calibration"),
-    # ("BINARY", "e2e-efficientnet-b4-3epochs-with-calibration"),
-    # ("BINARY", "e2e-timm-efficientnetv2_s-3epochs-with-calibration"),
-    # ("BINARY", "generic-efficientnet-pipeline"),
-    # ("BINARY", "numpy-padding-calibrated-e2e-100epochs-reset"),
-    # ("BINARY", "numpy-padding-e2e-100epochs-reset"),
-    # ("BINARY", "resize-both-sides-calibrated-e2e-100epochs-reset"),
-    # ("BINARY", "resize-both-sides-e2e-100epochs-reset"),
-    # ("BINARY", "zero-shot-switching-calibrated-e2e-efficientnet-b0-100epochs-reset-on-train"),
-    # ("BINARY", "zero-shot-switching-e2e-efficientnet-b0-100epochs-reset-on-train"),
-    # ("BINARY", "zero-shot-switching-with-pure-efficientnet-b0--chainlink-fence-wide-angle--no-reset-on-train--cropped"),
-    # ("BINARY", "zero-shot-switching-with-pure-efficientnet-b0--chainlink-fence-wide-angle--no-reset-on-train"),
-    # ("BINARY", "zero-shot-switching-with-pure-efficientnet-b0--chainlink-fence-wide-angle--reset-on-train--cropped"),
-    # ("BINARY", "zero-shot-switching-with-pure-efficientnet-b0--chainlink-fence-wide-angle--reset-on-train"),
-    # ("BINARY", "ensemble-convnext-eva-mlp"),
-    # ("BINARY", "ensemble-efficientnet-clip"),
-    # ("BINARY", "crop-to-roi-chainlink-fence-fixed"),
-    # ("BINARY", "generic-cached-b4mu11-add-smooth-knn-mlp"),
-    # ("BINARY", "generic-cached-b4mu11-mlp"),
-    # ("BINARY", "generic-cached-efficientnet-knn"),
-    # ("BINARY", "generic-cached-efficientnet-xgb"),
-    # ("BINARY", "generic-cached-distance-based-outlier-detector"),
-    # ("BINARY", "generic-cached-timm-convnext_xxl-mlp"),
-    # ("BINARY", "generic-cached-timm-efficientnetv2s-calibrated-autoflaml"),
-    # ("BINARY", "generic-cached-timm-efficientnetv2s-xgb"),
-    # ("BINARY", "generic-cached-timm-eva02_large_clip-mlp"),
-    # ("BINARY", "generic-cached-timm-eva02_large_mlm-mlp"),
-    # ("BINARY", "generic-cached-timm-squash-convnextv2_tiny-calibrated-smoothed-mlp"),
-    # ("BINARY", "generic-cached-timm-squash-eva02_giant_clip-calibrated-smoothed-mlp"),
-    # ("BINARY", "generic-cached-timm-squash-vit_base_clip-calibrated-smoothed-mlp"),
-    # ("BINARY", "generic-cached-timm-squash-vit_giantopt_siglipv2-calibrated-smoothed-mlp"),
-    # ("BINARY", "generic-cached-timm-squash-vit_huge_clip-calibrated-smoothed-mlp"),
-    # ("BINARY", "generic-cached-timm-mobilenetv3_small-calibrated-smoothed-mlp"),
-    # ("BINARY", "generic-cached-timm-mobilenetv3_small_075-calibrated-smoothed-mlp"),
-    # ("BINARY", "experimental-lora-beit-large-patch16-224"),
-    # ("BINARY", "mahalanobis-oodd"),
-    # ("BINARY", "numpy-padding-default-2023-11-13"),
-    # ("BINARY", "numpy-padding-transform-constant-0"),
-    # ("BINARY", "zero-shot-switching-efficientnetv2s-oodd-calibrated--chainlink-fence-wide-angle--cropped"),
-    # ("BINARY", "zero-shot-text-knn-mcdropout-oodd"),
-    # ("BINARY", "zero-shot-text-knn-mlp-oodd-calibrated"),
-    # # experimental objdet-based binary
-    # ("BINARY", "at-least-2-pastries-centernet"),
-    # ("BINARY", "at-least-2-pastries-groundingdino"),
-    # ("BINARY", "at-least-2-pastries-yolos"),
-    # ("BINARY", "at-least-2-pastries-yolox"),
-    # ("BINARY", "at-least-2-pastries"),
-    # ("BINARY", "at-least-one-customer-rcnn-crop-classify"),
-    # ("BINARY", "at-least-one-customer-rcnn-only"),
-    # ("BINARY", "at-least-one-customer-rcnn-pretrained-v2"),
-    # ("BINARY", "faster_rcnn_training_config_example"),
-    # ("BINARY", "lowpri-hatbander-bandlength"),
-    # ("BINARY", "more-than-two-customers"),
-    # ("BINARY", "tag-present"),
-    # # deprecated
-    # ("BINARY", "groundlight-decision-region-default-2023-11-13"),
-    # ("BINARY", "groundlight-decision-region-default-2024-11-14"),
-    # ("BINARY", "groundlight-default-2023-11-13"),
-    # ("BINARY", "groundlight-default-2024-11-14"),
-    # ("BINARY", "groundlight-oodd-default"),
-    # ("BINARY", "zero-shot-switching-efficientnetv2s-oodd"),
-    # # --- MULTI_CLASS (default edge: multiclass-generic-cached-timm-efficientnetv2s-calibrated-mlp) ---
-    # ("MULTI_CLASS", "multiclass-generic-cached-timm-efficientnetv2s-calibrated-mlp"),
-    # ("MULTI_CLASS", "groundlight-default-multiclass-2025-01-08"),
-    # ("MULTI_CLASS", "multiclass-generic-cached-timm-squash-effnetv2-calibrated-smoothed-mlp"),
-    # ("MULTI_CLASS", "multiclass-generic-cached-timm-squash-eva02_large_mim-calibrated-smoothed-mlp"),
-    # ("MULTI_CLASS", "multiclass-generic-cached-timm-squash-vit_reg4_dinov2-calibrated-smoothed-mlp"),
-    # ("MULTI_CLASS", "multiclass-generic-cached-timm-squash-vit_so400_siglipv2-calibrated-smoothed-mlp"),
-    # ("MULTI_CLASS", "multiclass-generic-cached-timm-squash-vitamin_xl-calibrated-smoothed-mlp"),
-    # ("MULTI_CLASS", "e2e-timm-efficientnetv2_s-3epochs-with-multiclass-calibration"),
-    # ("MULTI_CLASS", "generic-cached-timm-efficientnetv2s-mlp-multiclass"),
-    # ("MULTI_CLASS", "generic-cached-timm-mobilenetv3_small-calibrated-smoothed-mlp-multiclass"),
-    # ("MULTI_CLASS", "multiclass-generic-cached-timm-squash-vit_base_dinov3-calibrated-smoothed-mlp"),
-    # ("MULTI_CLASS", "multiclass-generic-cached-timm-squash-vit_large_dinov3-calibrated-smoothed-mlp"),
-    # ("MULTI_CLASS", "groundlight-default-multiclass-2024-11-20"),
-    # # --- COUNT (default edge: count-step-centernet) ---
-    # ("COUNT", "count-step-centernet"),
-    # ("COUNT", "count-step-groundingdino"),
-    # ("COUNT", "count-step-rfdetr"),
-    # ("COUNT", "count-step-yolox"),
-    # ("COUNT", "count-step-yolox-tracking"),
-    # ("COUNT", "count-step-yolos"),
-    # ("COUNT", "count-step-yolov9"),
-    # ("COUNT", "count-step-groundingdino-no-timm-selector"),
-    # # --- BOUNDING_BOX (default edge: bounding-boxes-step-yolox) ---
-    # ("BOUNDING_BOX", "bounding-boxes-step-yolox"),
-    # ("BOUNDING_BOX", "bounding-boxes-step-centernet"),
-    # ("BOUNDING_BOX", "bounding-boxes-step-groundingdino"),
-    # ("BOUNDING_BOX", "bounding-boxes-step-rfdetr"),
-    # ("BOUNDING_BOX", "zero-shot-rfdetr-object"),
-    # # --- OODD (shared across modes, deployed as second inference pod) ---
-    # ("OODD", "groundlight-oodd-default-2025-02-25"),
-]
+
+def load_pipelines(path: Path = PIPELINES_FILE) -> List[Tuple[str, str]]:
+    """Load (mode, pipeline) pairs from the YAML file.
+
+    Expected format:
+        BINARY:
+          - generic-cached-timm-efficientnetv2s-calibrated-mlp
+          - basic-active-learning-pipeline
+        MULTI_CLASS:
+          - multiclass-generic-cached-timm-efficientnetv2s-calibrated-mlp
+        COUNT:
+          - count-step-centernet
+        BOUNDING_BOX:
+          - bounding-boxes-step-yolox
+    """
+    with open(path) as f:
+        data = yaml.safe_load(f)
+    pipelines: List[Tuple[str, str]] = []
+    for mode, names in data.items():
+        for name in names or []:
+            pipelines.append((mode, name))
+    return pipelines
+
+
+PIPELINES: List[Tuple[str, str]] = load_pipelines()
 
 DETECTOR_BATCH_SIZE: int = 3
 NAME_PREFIX: str = "vram-bench"

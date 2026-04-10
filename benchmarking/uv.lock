@@ -17,12 +17,14 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "groundlight" },
+    { name = "pyyaml" },
     { name = "requests" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "groundlight", specifier = ">=0.26.0" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "requests", specifier = ">=2.33.1" },
 ]
 
