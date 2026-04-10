@@ -10,7 +10,6 @@ from model import Detector
 from urllib3.util.retry import Retry
 
 from app.escalation_queue.queue_writer import QueueWriter
-
 from app.profiling.context import trace_span
 
 from .database import DatabaseManager
