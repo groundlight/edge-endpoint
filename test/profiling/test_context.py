@@ -88,11 +88,12 @@ class TestTraceSpanDecorator:
         finally:
             _current_tracer.reset(token)
 
-    def test_current_span_set_during_execution(self):
+    def test_current_span_scoped_to_execution(self):
         tracer = RequestTracer(operation="root", detector_id="det_1")
         token = _current_tracer.set(tracer)
         captured_span = None
         try:
+            assert get_current_span() is None
 
             @trace_span
             def observable():
@@ -102,21 +103,7 @@ class TestTraceSpanDecorator:
             observable()
             assert captured_span is not None
             assert captured_span.name == "observable"
-        finally:
-            _current_tracer.reset(token)
-
-    def test_current_span_reset_after_execution(self):
-        tracer = RequestTracer(operation="root", detector_id="det_1")
-        token = _current_tracer.set(tracer)
-        try:
-            assert get_current_span() is None
-
-            @trace_span
-            def my_func():
-                pass
-
-            my_func()
-            assert get_current_span() is None
+            assert get_current_span() is None  # reset after execution
         finally:
             _current_tracer.reset(token)
 
@@ -142,8 +129,6 @@ class TestTraceSpanDecorator:
 
 
 class TestGetHelpers:
-    def test_get_current_tracer_default_none(self):
+    def test_defaults_are_none(self):
         assert get_current_tracer() is None
-
-    def test_get_current_span_default_none(self):
         assert get_current_span() is None

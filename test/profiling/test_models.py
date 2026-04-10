@@ -44,20 +44,10 @@ class TestSpan:
         assert d["end_time_ns"] == 200
         assert d["duration_ms"] == 0.0001
         assert d["annotations"] == {"key": "value"}
-
-    def test_to_dict_json_serializable(self):
-        span = Span(
-            name="test",
-            trace_id="abc",
-            span_id="def",
-            parent_span_id=None,
-            start_time_ns=0,
-            end_time_ns=1_000_000,
-        )
-        serialized = json.dumps(span.to_dict())
-        parsed = json.loads(serialized)
-        assert parsed["name"] == "test"
-        assert parsed["parent_span_id"] is None
+        # Verify JSON round-trip
+        parsed = json.loads(json.dumps(d))
+        assert parsed["name"] == "primary_inference"
+        assert parsed["parent_span_id"] == "ccc"
 
     def test_annotations_default_empty(self):
         span = Span(name="x", trace_id="a", span_id="b", parent_span_id=None, start_time_ns=0)
@@ -86,13 +76,9 @@ class TestTrace:
         assert d["start_wall_time_iso"] == "2026-04-01T00:00:00+00:00"
         assert len(d["spans"]) == 1
         assert d["spans"][0]["name"] == "root"
-
-    def test_to_dict_json_roundtrip(self):
-        span = Span(name="a", trace_id="t", span_id="s", parent_span_id=None, start_time_ns=0, end_time_ns=1000)
-        trace = Trace(trace_id="t", detector_id="det_1", start_wall_time_iso="2026-01-01T00:00:00+00:00", spans=[span])
-        serialized = json.dumps(trace.to_dict())
-        parsed = json.loads(serialized)
-        assert parsed["trace_id"] == "t"
+        # Verify JSON round-trip
+        parsed = json.loads(json.dumps(d))
+        assert parsed["trace_id"] == "t1"
         assert len(parsed["spans"]) == 1
 
     def test_empty_spans(self):

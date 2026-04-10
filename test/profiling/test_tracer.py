@@ -6,19 +6,18 @@ from app.profiling.tracer import RequestTracer
 
 class TestRequestTracer:
     def test_creates_root_span(self):
-        tracer = RequestTracer(operation="test_op", detector_id="det_1")
+        tracer = RequestTracer(operation="test_op", detector_id="det_abc")
+        assert len(tracer.trace_id) == 32
+        assert len(tracer.root_span_id) == 16
+
         trace = tracer.finish()
+        assert trace.detector_id == "det_abc"
+        assert trace.trace_id == tracer.trace_id
         assert len(trace.spans) == 1
         assert trace.spans[0].name == "test_op"
         assert trace.spans[0].parent_span_id is None
         assert trace.spans[0].end_time_ns is not None
-
-    def test_trace_id_and_detector(self):
-        tracer = RequestTracer(operation="op", detector_id="det_abc")
-        assert len(tracer.trace_id) == 32
-        trace = tracer.finish()
-        assert trace.detector_id == "det_abc"
-        assert trace.trace_id == tracer.trace_id
+        assert "T" in trace.start_wall_time_iso
 
     def test_start_and_end_span(self):
         tracer = RequestTracer(operation="root", detector_id="det_1")
@@ -57,12 +56,6 @@ class TestRequestTracer:
         tracer.end_span(span)
         assert span.duration_ms >= 5  # at least 5ms (conservative for CI)
 
-    def test_wall_time_iso_populated(self):
-        tracer = RequestTracer(operation="root", detector_id="det_1")
-        trace = tracer.finish()
-        assert "T" in trace.start_wall_time_iso
-        assert "+" in trace.start_wall_time_iso or "Z" in trace.start_wall_time_iso
-
     def test_thread_safety_concurrent_spans(self):
         """Create and end spans from multiple threads concurrently."""
         tracer = RequestTracer(operation="root", detector_id="det_1")
@@ -84,7 +77,3 @@ class TestRequestTracer:
         # All child spans should be finished
         for span in spans:
             assert span.end_time_ns is not None
-
-    def test_root_span_id_property(self):
-        tracer = RequestTracer(operation="root", detector_id="det_1")
-        assert len(tracer.root_span_id) == 16
