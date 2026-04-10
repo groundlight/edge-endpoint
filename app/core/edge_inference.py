@@ -314,12 +314,12 @@ class EdgeInferenceManager:
                     )
                     f_oodd = executor.submit(ctx_oodd.run, _submit_oodd_inference, oodd_url, image_bytes, content_type)
                 else:
-                    f_primary = executor.submit(_submit_primary_inference, primary_url, image_bytes, content_type)
-                    f_oodd = executor.submit(_submit_oodd_inference, oodd_url, image_bytes, content_type)
+                    f_primary = executor.submit(submit_image_for_inference, primary_url, image_bytes, content_type)
+                    f_oodd = executor.submit(submit_image_for_inference, oodd_url, image_bytes, content_type)
                 response = f_primary.result()
                 oodd_response = f_oodd.result()
         else:
-            response = _submit_primary_inference(primary_url, image_bytes, content_type)
+            response = submit_image_for_inference(primary_url, image_bytes, content_type)
             oodd_response = None
 
         output_dict = get_inference_result(response, oodd_response, mode)
