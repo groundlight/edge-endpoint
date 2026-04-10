@@ -20,8 +20,6 @@ from app.core.file_paths import ACTIVE_EDGE_CONFIG_PATH, HELM_CONFIGMAP_PATH
 from app.profiling import PROFILING_ENABLED
 from app.profiling.middleware import ProfilingMiddleware
 
-scheduler = AsyncIOScheduler()
-
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
 logging.basicConfig(
@@ -67,10 +65,10 @@ async def startup_event():
         from app.profiling import get_profiling_manager
 
         logging.info("Profiling is enabled. Trace data will be written to disk.")
+        scheduler = AsyncIOScheduler()
         scheduler.add_job(get_profiling_manager().cleanup_old_files, "interval", hours=1)
-
-    if PROFILING_ENABLED:
         scheduler.start()
+        app.state.profiling_scheduler = scheduler
 
     config = EdgeConfigManager.active()
     reconcile_config(config, app.state.app_state.db_manager)
@@ -85,5 +83,5 @@ async def shutdown_event():
     """Lifecycle event that is triggered when the application is shutting down."""
     app.state.app_state.is_ready = False
     app.state.app_state.db_manager.shutdown()
-    if PROFILING_ENABLED:
-        scheduler.shutdown()
+    if hasattr(app.state, "profiling_scheduler"):
+        app.state.profiling_scheduler.shutdown()
