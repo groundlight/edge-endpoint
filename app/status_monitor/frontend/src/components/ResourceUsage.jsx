@@ -270,6 +270,7 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
   const usedVram = resourceData.used_vram_bytes || 0;
   const totalRam = resourceData.total_ram_bytes || 0;
   const usedRam = resourceData.used_ram_bytes || 0;
+  const ramEvictionPct = resourceData.ram_eviction_threshold_pct ?? null;
   const hasVram = totalVram > 0;
   const hasRam = totalRam > 0;
 
@@ -381,7 +382,7 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
       <div className="resource-donuts-row">
         {hasVram && (
           <Stack gap="xs" align="center">
-            <Text size="xs" fw={600} c="gray.8">VRAM</Text>
+            <Text size="lg" fw={700} c="gray.8">VRAM</Text>
             <GpuCapacitySummary
               observedGpus={resourceData.observed_gpus}
               totalBytes={totalVram}
@@ -398,7 +399,7 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
         )}
         {hasRam && (
           <Stack gap="xs" align="center">
-            <Text size="xs" fw={600} c="gray.8">RAM</Text>
+            <Text size="lg" fw={700} c="gray.8">RAM</Text>
             <RamCapacitySummary totalBytes={totalRam} usedBytes={usedRam} />
             <DonutChart
               slices={ramResult.slices}
@@ -406,6 +407,7 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
               activeSliceKey={hoveredSliceKey}
               onSliceHover={onSliceHover}
               onSliceClick={onSliceClick}
+              evictionThresholdPct={ramEvictionPct}
             />
           </Stack>
         )}
@@ -414,9 +416,8 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
       <Stack gap="xs" mt="md">
         <div style={{ padding: "3px 6px" }}>
           <Group gap="xs" wrap="nowrap">
-            <div style={{ width: 14, flexShrink: 0 }} />
             <Text size="xs" c="gray.8" fw={600} style={{ flex: 1, minWidth: 0 }}>
-              Detectors loaded: {detectorLegend.length}
+              Detectors ({detectorLegend.length})
             </Text>
             {hasVram && (
               <>
@@ -453,7 +454,7 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
           </UnstyledButton>
         )}
         <Stack gap={2} mt={6}>
-          <Text size="xs" c="gray.8" fw={600}>
+          <Text size="xs" c="gray.8" fw={600} style={{ padding: "3px 6px" }}>
             System
           </Text>
           {systemLegend.map((item) => (

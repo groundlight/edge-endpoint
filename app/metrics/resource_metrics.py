@@ -2,12 +2,14 @@
 
 GPU (VRAM) data comes from each inference pod's /gpu-usage HTTP endpoint.
 RAM data comes from the Kubernetes Metrics Server (metrics.k8s.io/v1beta1).
+System-level RAM uses the Kubernetes Node API so that the numbers match
+the kubelet's view of memory (which drives eviction decisions).
 """
 
+import json
 import logging
 import re
 
-import psutil
 import requests
 from kubernetes import client, config
 
@@ -133,13 +135,14 @@ class ResourceMetricsCollector:
             det["total_vram_bytes"] = (det["primary_vram_bytes"] or 0) + (det["oodd_vram_bytes"] or 0)
             det["total_ram_bytes"] = (det["primary_ram_bytes"] or 0) + (det["oodd_ram_bytes"] or 0)
 
-        mem = psutil.virtual_memory()
+        node_ram = _get_node_ram()
 
         return {
             "total_vram_bytes": all_gpus_total,
             "used_vram_bytes": all_gpus_used,
-            "total_ram_bytes": mem.total,
-            "used_ram_bytes": mem.used,
+            "total_ram_bytes": node_ram["total"],
+            "used_ram_bytes": node_ram["used"],
+            "ram_eviction_threshold_pct": node_ram["eviction_threshold_pct"],
             "detectors": list(detectors.values()),
             "loading_vram_bytes": loading_vram_bytes,
             "loading_ram_bytes": loading_ram_bytes,
@@ -154,17 +157,81 @@ class ResourceMetricsCollector:
 
 
 def _empty_response() -> dict:
-    mem = psutil.virtual_memory()
+    node_ram = _get_node_ram()
     return {
         "total_vram_bytes": 0,
         "used_vram_bytes": 0,
-        "total_ram_bytes": mem.total,
-        "used_ram_bytes": mem.used,
+        "total_ram_bytes": node_ram["total"],
+        "used_ram_bytes": node_ram["used"],
+        "ram_eviction_threshold_pct": node_ram["eviction_threshold_pct"],
         "detectors": [],
         "loading_vram_bytes": 0,
         "loading_ram_bytes": 0,
         "observed_gpus": [],
     }
+
+
+def _get_node_ram() -> dict:
+    """Get system RAM total and used from the Kubernetes Node API and Metrics Server.
+
+    Uses the node's capacity for total RAM and the Metrics Server for current
+    usage. This matches the kubelet's view of memory, which drives pod eviction.
+    Also extracts the kubelet's soft eviction threshold so the frontend can
+    display it on the donut chart.
+    """
+    try:
+        v1 = client.CoreV1Api()
+        nodes = v1.list_node()
+        if not nodes.items:
+            raise ValueError("No nodes found")
+        node = nodes.items[0]
+        total = _parse_k8s_memory(node.status.capacity.get("memory", "0"))
+
+        custom = client.CustomObjectsApi()
+        node_metrics = custom.list_cluster_custom_object(
+            group="metrics.k8s.io",
+            version="v1beta1",
+            plural="nodes",
+        )
+        used = 0
+        for item in node_metrics.get("items", []):
+            if item.get("metadata", {}).get("name") == node.metadata.name:
+                used = _parse_k8s_memory(item.get("usage", {}).get("memory", "0"))
+                break
+
+        eviction_pct = _parse_eviction_threshold(node)
+
+        return {"total": total, "used": used, "eviction_threshold_pct": eviction_pct}
+    except Exception:
+        logger.error("Failed to get node RAM from Kubernetes APIs", exc_info=True)
+        return {"total": 0, "used": 0, "eviction_threshold_pct": None}
+
+
+_EVICTION_MEM_RE = re.compile(r"memory\.available<(\d+)%")
+
+
+def _parse_eviction_threshold(node) -> int | None:
+    """Extract the soft memory eviction threshold from kubelet args.
+
+    Returns the percentage of total RAM at which the kubelet starts evicting
+    pods (i.e. 100 - available%), or None if not found. Checks the
+    k3s.io/node-args annotation for eviction-soft first, then eviction-hard.
+    """
+    annotations = node.metadata.annotations or {}
+    node_args_raw = annotations.get("k3s.io/node-args", "")
+    try:
+        args = json.loads(node_args_raw) if node_args_raw else []
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+    for flag in ("eviction-soft=", "eviction-hard="):
+        for arg in args:
+            if flag in str(arg):
+                m = _EVICTION_MEM_RE.search(str(arg))
+                if m:
+                    available_pct = int(m.group(1))
+                    return 100 - available_pct
+    return None
 
 
 def _find_inference_pods(pod_list) -> list[tuple]:
