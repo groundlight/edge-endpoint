@@ -10,7 +10,7 @@ Usage:
 
 import json
 import random
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.request import urlopen
 
 PORT = 3001
@@ -23,24 +23,47 @@ SYSTEM_RAM_TOTAL = 16_455_831_552
 random.seed(42)
 DETECTOR_POOL = []
 NAMES = [
-    "Hardhat Detection", "Forklift Counter", "Spill Detection", "PPE Compliance",
-    "Fire Extinguisher", "Door Open/Closed", "Conveyor Belt", "Parking Lot",
-    "Safety Vest", "Gauge Reading", "Crack Detection", "Weld Inspection",
-    "Pallet Counter", "Smoke Detection", "Leak Detection", "Label Verification",
-    "Package Sorting", "Belt Alignment", "Valve Position", "Tank Level",
-    "Fence Integrity", "Vehicle Counter", "Pedestrian Safety", "Dock Door",
-    "Aisle Clearance", "Bin Fullness", "Rust Detection", "Bolt Presence",
+    "Hardhat Detection",
+    "Forklift Counter",
+    "Spill Detection",
+    "PPE Compliance",
+    "Fire Extinguisher",
+    "Door Open/Closed",
+    "Conveyor Belt",
+    "Parking Lot",
+    "Safety Vest",
+    "Gauge Reading",
+    "Crack Detection",
+    "Weld Inspection",
+    "Pallet Counter",
+    "Smoke Detection",
+    "Leak Detection",
+    "Label Verification",
+    "Package Sorting",
+    "Belt Alignment",
+    "Valve Position",
+    "Tank Level",
+    "Fence Integrity",
+    "Vehicle Counter",
+    "Pedestrian Safety",
+    "Dock Door",
+    "Aisle Clearance",
+    "Bin Fullness",
+    "Rust Detection",
+    "Bolt Presence",
     "Cable Routing",
 ]
 for i, name in enumerate(NAMES):
-    DETECTOR_POOL.append({
-        "id": f"det_{i:04d}_{name.replace(' ', '_')[:12]}",
-        "name": name,
-        "primary_vram": random.randint(380, 430) * 1_000_000,
-        "oodd_vram": random.randint(380, 400) * 1_000_000,
-        "primary_ram": random.randint(780, 1250) * 1_000_000,
-        "oodd_ram": random.randint(780, 850) * 1_000_000,
-    })
+    DETECTOR_POOL.append(
+        {
+            "id": f"det_{i:04d}_{name.replace(' ', '_')[:12]}",
+            "name": name,
+            "primary_vram": random.randint(380, 430) * 1_000_000,
+            "oodd_vram": random.randint(380, 400) * 1_000_000,
+            "primary_ram": random.randint(780, 1250) * 1_000_000,
+            "oodd_ram": random.randint(780, 850) * 1_000_000,
+        }
+    )
 
 
 def read_state():
@@ -71,15 +94,17 @@ def build_resources(state):
         d = DETECTOR_POOL[i]
         total_vram = d["primary_vram"] + d["oodd_vram"]
         total_ram = d["primary_ram"] + d["oodd_ram"]
-        detectors.append({
-            "detector_id": d["id"],
-            "primary_vram_bytes": d["primary_vram"],
-            "oodd_vram_bytes": d["oodd_vram"],
-            "total_vram_bytes": total_vram,
-            "primary_ram_bytes": d["primary_ram"],
-            "oodd_ram_bytes": d["oodd_ram"],
-            "total_ram_bytes": total_ram,
-        })
+        detectors.append(
+            {
+                "detector_id": d["id"],
+                "primary_vram_bytes": d["primary_vram"],
+                "oodd_vram_bytes": d["oodd_vram"],
+                "total_vram_bytes": total_vram,
+                "primary_ram_bytes": d["primary_ram"],
+                "oodd_ram_bytes": d["oodd_ram"],
+                "total_ram_bytes": total_ram,
+            }
+        )
         used_vram += total_vram
         used_ram += total_ram
 
@@ -99,7 +124,12 @@ def build_resources(state):
         "loading_vram_bytes": loading_vram,
         "loading_ram_bytes": loading_ram,
         "observed_gpus": [
-            {"name": "Tesla T4", "total_vram_bytes": TESLA_T4_TOTAL, "used_vram_bytes": min(used_vram, TESLA_T4_TOTAL), "index": 0}
+            {
+                "name": "Tesla T4",
+                "total_vram_bytes": TESLA_T4_TOTAL,
+                "used_vram_bytes": min(used_vram, TESLA_T4_TOTAL),
+                "index": 0,
+            }
         ],
     }
 

@@ -9,8 +9,8 @@ Usage:
 """
 
 import json
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import parse_qs, urlparse
 
 PORT = 3002
 STATE_FILE = "/tmp/mock-state.json"
@@ -252,7 +252,9 @@ class ControlHandler(BaseHTTPRequestHandler):
                 state["synthetic"] = params["synthetic"][0] == "1"
             write_state(state)
             mode = "synthetic" if state.get("synthetic", True) else "real"
-            print(f"[control] {mode}, {state['num_detectors']} detectors, loading={state['loading']}, eviction={state.get('eviction', 75)}")
+            print(
+                f"[control] {mode}, {state['num_detectors']} detectors, loading={state['loading']}, eviction={state.get('eviction', 75)}"
+            )
             self.send_response(200)
             self.end_headers()
         else:
