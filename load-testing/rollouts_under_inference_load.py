@@ -1,5 +1,6 @@
 from groundlight import Groundlight, ExperimentalApi, Detector
 from groundlight.edge import EdgeEndpointConfig, NO_CLOUD
+import subprocess
 import threading
 import types
 import time
@@ -19,9 +20,27 @@ VICTORY_DURATION_SEC = 3 * 60
 
 def disable_sdk_retries(gl: ExperimentalApi) -> None:
     """Monkeypatch the SDK's internal API client to remove the RequestsRetryDecorator
-    from call_api, so that 5xx errors propagate immediately without retries."""
+    from call_api, so that 5xx errors propagate immediately without retries.
+    NOTE: This reaches into SDK internals and may break if the retry decorator changes."""
     api = gl.api_client
     api.call_api = types.MethodType(api.call_api.__wrapped__, api)
+
+
+def get_max_inference_revision() -> int:
+    """Get the highest revision number across all inferencemodel deployments."""
+    result = subprocess.run(
+        ["kubectl", "get", "deployments", "-n", "edge",
+         "-o", "jsonpath={range .items[*]}{.metadata.name}={.metadata.annotations.deployment\\.kubernetes\\.io/revision}{\"\\n\"}{end}"],
+        capture_output=True, text=True,
+    )
+    max_rev = 0
+    for line in result.stdout.strip().splitlines():
+        if "=" not in line:
+            continue
+        name, rev = line.split("=", 1)
+        if name.startswith("inferencemodel-"):
+            max_rev = max(max_rev, int(rev))
+    return max_rev
 
 
 def _add_label_sync(gl_cloud: Groundlight, detector: Detector) -> None:
@@ -89,6 +108,10 @@ def main():
     gl.edge.set_config(edge_config)
     print('Edge config applied, inference pod ready.')
 
+    # Record deployment revision before the test to verify rollouts occurred.
+    revision_before = get_max_inference_revision()
+    print(f'Max inference deployment revision before test: {revision_before}')
+
     # Inference loop: submit as fast as possible, with periodic labels to trigger model rollouts.
     last_label_time = 0
     iteration = 0
@@ -123,7 +146,18 @@ def main():
         iteration += 1
 
     elapsed = time.time() - test_start
-    print(f'\nVictory! Ran {iteration} inference queries over {elapsed:.0f}s with no errors.')
+
+    # Verify that rollouts actually occurred during the test.
+    revision_after = get_max_inference_revision()
+    if revision_after <= revision_before:
+        raise RuntimeError(
+            f'No rollouts occurred during the test ({iteration} queries over {elapsed:.0f}s). '
+            f'Results are inconclusive.'
+        )
+
+    rollouts = revision_after - revision_before
+    print(f'\nVictory! Ran {iteration} inference queries over {elapsed:.0f}s through '
+          f'{rollouts} rollout(s) with no errors.')
 
 
 if __name__ == "__main__":
