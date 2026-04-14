@@ -15,7 +15,8 @@ LABEL_INTERVAL_SEC = 30.0
 LABELS_PER_BATCH = 3
 MIN_STARTING_LABELS = 30
 CONFIDENCE_THRESHOLD = 0.0
-VICTORY_DURATION_SEC = 3 * 60
+VICTORY_DURATION_SEC = 4 * 60
+MIN_ROLLOUTS = 2
 
 
 def disable_sdk_retries(gl: ExperimentalApi) -> None:
@@ -147,15 +148,15 @@ def main():
 
     elapsed = time.time() - test_start
 
-    # Verify that rollouts actually occurred during the test.
+    # Verify that enough rollouts occurred during the test.
     revision_after = get_max_inference_revision()
-    if revision_after <= revision_before:
+    rollouts = revision_after - revision_before
+    if rollouts < MIN_ROLLOUTS:
         raise RuntimeError(
-            f'No rollouts occurred during the test ({iteration} queries over {elapsed:.0f}s). '
-            f'Results are inconclusive.'
+            f'Only {rollouts} rollout(s) occurred during the test ({iteration} queries over '
+            f'{elapsed:.0f}s), need at least {MIN_ROLLOUTS}. Results are inconclusive.'
         )
 
-    rollouts = revision_after - revision_before
     print(f'\nVictory! Ran {iteration} inference queries over {elapsed:.0f}s through '
           f'{rollouts} rollout(s) with no errors.')
 
