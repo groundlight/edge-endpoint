@@ -19,11 +19,6 @@ CACHE_DIR="/host-root${CACHE_PATH}"
 
 mkdir -p "$MOUNT_POINT" "$CACHE_DIR"
 
-# Copy AWS credentials to host for mount-s3 to use
-mkdir -p /host-root/root/.aws
-cp /root/.aws/credentials /host-root/root/.aws/credentials 2>/dev/null || true
-cp /root/.aws/config /host-root/root/.aws/config 2>/dev/null || true
-
 # Unmount if stale mount exists from a previous run
 if mountpoint -q "$MOUNT_POINT" 2>/dev/null; then
     echo "Unmounting stale mount at $MOUNT_POINT"
