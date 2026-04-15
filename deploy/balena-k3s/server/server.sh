@@ -33,6 +33,11 @@ if iptables -t nat -L CNI-HOSTPORT-DNAT -n >/dev/null 2>&1; then
     echo "CNI portmap cleanup complete"
 fi
 
+# Ensure the root filesystem has shared mount propagation so that k3s pods can use
+# mountPropagation: Bidirectional (needed by the mount-s3 FUSE sidecar).
+# In Balena, the server container's root is private by default.
+mount --make-rshared /
+
 # Detect inference flavor and write to /shared/INFERENCE_FLAVOR for bastion to read
 mkdir -p /shared
 FLAVOR_FILE="/shared/INFERENCE_FLAVOR"
@@ -53,6 +58,16 @@ else
     fi
 fi
 echo "$flavor" > "$FLAVOR_FILE"
+
+# Copy preloaded images to k3s agent images directory for airgap/restricted network support.
+# k3s automatically imports tarballs from this directory on startup.
+# See: https://docs.k3s.io/installation/airgap
+if [ -d /opt/k3s/preload-images ] && [ "$(ls -A /opt/k3s/preload-images 2>/dev/null)" ]; then
+    echo "Copying preloaded images to k3s agent images directory..."
+    mkdir -p /var/lib/rancher/k3s/agent/images/
+    cp /opt/k3s/preload-images/* /var/lib/rancher/k3s/agent/images/
+    echo "Preloaded images ready"
+fi
 
 # Copy GPU operator manifests to the K3s auto-deploy directory if they exist.
 # K3s automatically applies any manifests placed here on startup.

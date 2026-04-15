@@ -16,14 +16,10 @@ Depending on the deployment methods, there may be additional networking requirem
 
 Groundlight edge endpoint requires the following outbound access:
 
-- `*.groundlight.ai`: Groundlight endpoint for receiving detector metadata
-- `*.us-west-2.amazonaws.com`: AWS access for inference image download
-- `*.s3.amazonaws.com`: AWS access for model binaries download
-- `*.sts.amazonaws.com`: AWS authentication
-- `*.huggingface.co`: Model download
-- `*.hf.co`: Hugging Face CDN
-- `*.docker.io`: Docker image download
-- `*.docker.com`: Docker image download
+- `*.groundlight.ai`: Groundlight endpoint for receiving detector metadata and temporary AWS credentials
+- `*.us-west-2.amazonaws.com`: AWS access for inference image download (ECR), model weights (S3), and credential refresh (STS)
+- `*.s3.amazonaws.com`: AWS S3 access for model weights via FUSE mount
+- `*.sts.amazonaws.com`: AWS STS for credential refresh
 
 The device must also be able to reach DNS and NTP servers either on the local network (provided by DHCP or Static assignment), or on the Internet (ports 53 and 123).
 
