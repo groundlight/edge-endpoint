@@ -297,11 +297,12 @@ def provision_detector(
     image_height: int = 480,
     group_name: str = "Load Testing",
     edge_pipeline_config: str | None = None,
-    min_total_labels: int = 30,
+    num_labels: int = 30,
     training_timeout_sec: float = 60 * 20,
 ) -> Detector:
     """Create or fetch a detector, prime it if undertrained, and wait for training to finish.
 
+    num_labels is the number of labels submitted during priming.
     gl_cloud is used for priming because the edge endpoint may already be in NO_CLOUD mode
     from a previous run, preventing labels from reaching cloud for training.
     """
@@ -341,23 +342,27 @@ def provision_detector(
     if edge_pipeline_config is not None:
         assert_configured_edge_pipeline_matches_provided(gl, detector.id, edge_pipeline_config)
 
+    # The pipeline may train before all submitted labels have been ingested,
+    # so we accept a lower threshold when checking training completeness.
+    min_training_labels = int(num_labels * 0.75)
+
     pipeline_details = get_edge_pipeline_details(gl, detector.id)
-    if not edge_pipeline_is_sufficiently_trained(pipeline_details, min_total_labels):
+    if not edge_pipeline_is_sufficiently_trained(pipeline_details, min_training_labels):
         print(
             f"Edge pipeline for {detector.id} is not sufficiently trained "
             f"(trained_at={pipeline_details.get('trained_at')}, label_cnt={pipeline_details.get('label_cnt')}). "
-            f"Priming with {min_total_labels} labels."
+            f"Priming with {num_labels} labels."
         )
-        prime_detector(gl_cloud, detector, min_total_labels, image_width, image_height)
+        prime_detector(gl_cloud, detector, num_labels, image_width, image_height)
         print(f"Waiting up to {training_timeout_sec}s for edge pipeline training for {detector.id}...")
         wait_for_edge_pipeline_trained(
-            gl, detector, min_total_labels, timeout_sec=training_timeout_sec
+            gl, detector, min_training_labels, timeout_sec=training_timeout_sec
         )
 
     return detector
 
 
-def edge_pipeline_is_sufficiently_trained(pipeline_details: dict, min_total_labels: int) -> bool:
+def edge_pipeline_is_sufficiently_trained(pipeline_details: dict, min_training_labels: int) -> bool:
     """Return True if the edge pipeline has trained with enough labels.
 
     Uses trained_at (set when the pipeline actually trains) and label_cnt from the
@@ -365,12 +370,12 @@ def edge_pipeline_is_sufficiently_trained(pipeline_details: dict, min_total_labe
     """
     label_cnt = pipeline_details.get("label_cnt") or 0
     has_trained = pipeline_details.get("trained_at") is not None
-    return has_trained and label_cnt >= min_total_labels
+    return has_trained and label_cnt >= min_training_labels
 
 def wait_for_edge_pipeline_trained(
     gl: ExperimentalApi,
     detector: Detector,
-    min_total_labels: int,
+    min_training_labels: int,
     timeout_sec: float,
     poll_interval_sec: float = 5.0,
 ) -> dict:
@@ -378,7 +383,7 @@ def wait_for_edge_pipeline_trained(
     start = time.time()
     while True:
         pipeline_details = get_edge_pipeline_details(gl, detector.id)
-        if edge_pipeline_is_sufficiently_trained(pipeline_details, min_total_labels):
+        if edge_pipeline_is_sufficiently_trained(pipeline_details, min_training_labels):
             return pipeline_details
 
         if (time.time() - start) > timeout_sec:
