@@ -319,7 +319,7 @@ class EdgeInferenceManager:
                 response = f_primary.result()
                 oodd_response = f_oodd.result()
         else:
-            response = submit_image_for_inference(primary_url, image_bytes, content_type)
+            response = _submit_primary_inference(primary_url, image_bytes, content_type)
             oodd_response = None
 
         output_dict = get_inference_result(response, oodd_response, mode)
