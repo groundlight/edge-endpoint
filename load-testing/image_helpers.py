@@ -9,10 +9,12 @@ BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 
 def get_random_color() -> tuple[int, int, int]:
+    """Return a random RGB color tuple."""
     return tuple(int(x) for x in np.random.randint(0, 256, 3))
 
 
 def generate_color_canvas(width: int, height: int, color: tuple[int, int, int]) -> np.ndarray:
+    """Return a solid-color image as a numpy array."""
     return np.full((height, width, 3), color, dtype=np.uint8)
 
 
@@ -21,6 +23,7 @@ def generate_random_binary_image(
     image_width: int = 640,
     image_height: int = 480,
 ) -> tuple[np.ndarray, str, None]:
+    """Generate a random black or white image with a timestamp overlay and matching YES/NO label."""
     image_shape = (image_height, image_width, 3)
 
     if random.choice([True, False]):
@@ -45,6 +48,7 @@ def generate_random_count_image(
     class_name: str = 'object',
     max_count: int = 10,
 ) -> tuple[np.ndarray, int, list[ROI]]:
+    """Generate an image with a random number of circles and corresponding count label and ROIs."""
     count = random.randint(0, max_count)
 
     image_diagonal = math.sqrt(image_width ** 2 + image_height ** 2)
@@ -89,6 +93,7 @@ def generate_random_image(
     image_width: int,
     image_height: int,
 ) -> tuple[np.ndarray, int | str, list[ROI]] | None:
+    """Dispatch to the appropriate image generator based on the detector's mode."""
     detector_mode = detector.mode
     if detector_mode == 'COUNT':
         detector_mode_configuration = detector.mode_configuration
@@ -101,6 +106,18 @@ def generate_random_image(
             class_name=class_name,
             max_count=max_count,
         )
+    elif detector_mode == 'BOUNDING_BOX':
+        config = detector.mode_configuration
+        class_name = config["class_name"]
+        max_num_bboxes = int(config.get("max_num_bboxes", 10))
+        image, _, rois = generate_random_count_image(
+            gl,
+            image_width=image_width,
+            image_height=image_height,
+            class_name=class_name,
+            max_count=max_num_bboxes,
+        )
+        label = "BOUNDING_BOX" if rois else "NO_OBJECTS"
     elif detector_mode == 'BINARY':
         image, label, rois = generate_random_binary_image(
             gl,

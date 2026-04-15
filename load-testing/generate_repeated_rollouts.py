@@ -80,53 +80,44 @@ def main(num_detectors: int) -> None:
 
     # Prime the detectors, if necessary
     for detector in detectors:
-        detector_stats = glh.get_detector_evaluation(gl, detector.id)
+        pipeline_details = glh.get_edge_pipeline_details(gl, detector.id)
 
-        projected_ml_accuracy = detector_stats['projected_ml_accuracy']
-        if projected_ml_accuracy is not None:
-            print(
-                f'{detector.id} has a Projected ML accuracy of {projected_ml_accuracy:.2f} '
-                'No need to provide additional training labels.'
-            )
+        if pipeline_details['trained_at'] is not None:
+            print(f'{detector.id} edge pipeline already trained (label_cnt={pipeline_details["label_cnt"]}). No need to prime.')
             continue
-        else:
-            print(
-                f'{detector.id} has no evaluation results. '
-                'We might need to prime the detector.'
-            )
 
+        print(f'{detector.id} edge pipeline has not been trained. We might need to prime the detector.')
 
-        total_labels = detector_stats['total_labels']
-        num_labels_to_add = MIN_STARTING_LABELS - total_labels
+        label_cnt = pipeline_details['label_cnt'] or 0
+        num_labels_to_add = MIN_STARTING_LABELS - label_cnt
         if num_labels_to_add > 0:
             print(
-                f'{detector.id} only has {total_labels} ground truth labels. '
+                f'{detector.id} only has {label_cnt} labels. '
                 f'Needs an additional {num_labels_to_add} labels. Priming detector...'
             )
             prime_detector(gl, detector, num_labels_to_add)
         else:
             print(
-                f'{detector.id} already has enough labels (actual={total_labels}, required={MIN_STARTING_LABELS}). No need to prime.'
+                f'{detector.id} already has enough labels (actual={label_cnt}, required={MIN_STARTING_LABELS}). No need to prime.'
             )
 
-    # Wait for evaluation to occur
+    # Wait for edge pipeline training to complete
     poll_timeout_sec = 2 * 60 
     for detector in detectors:
-        print(f'Checking evaluation results for {detector.id}...')
+        print(f'Checking edge pipeline training status for {detector.id}...')
         pollstart = time.time()
         while True:
-            detector_stats = glh.get_detector_evaluation(gl, detector.id)
-            projected_ml_accuracy = detector_stats['projected_ml_accuracy']
+            pipeline_details = glh.get_edge_pipeline_details(gl, detector.id)
 
-            if projected_ml_accuracy is not None:
-                print(f'Evaluation has completed for {detector.id}. Projected ML Accuracy: {projected_ml_accuracy:.2f}')
+            if pipeline_details['trained_at'] is not None:
+                print(f'Edge pipeline training complete for {detector.id} (label_cnt={pipeline_details["label_cnt"]}).')
                 break
 
             now = time.time()
             elapsed_time = now - pollstart
             if elapsed_time > poll_timeout_sec:
                 raise RuntimeError(
-                    f'Failed to receive evaluation results for {detector.id} after {elapsed_time} seconds.'
+                    f'Edge pipeline for {detector.id} did not finish training after {elapsed_time:.0f} seconds.'
                 )
 
             time.sleep(5)

@@ -1,5 +1,4 @@
 from groundlight import Groundlight, ExperimentalApi, Detector
-from groundlight.edge import EdgeEndpointConfig, NO_CLOUD
 import subprocess
 import threading
 import types
@@ -76,10 +75,10 @@ def main():
     )
     print(f'Using detector {detector.id}')
 
-    # Prime the detector if it hasn't been trained yet
-    stats = glh.get_detector_evaluation(gl, detector.id)
-    if stats['projected_ml_accuracy'] is None:
-        num_existing = stats['total_labels'] or 0
+    # Prime the detector if the edge pipeline hasn't been trained yet
+    pipeline_details = glh.get_edge_pipeline_details(gl, detector.id)
+    if pipeline_details['trained_at'] is None:
+        num_existing = pipeline_details['label_cnt'] or 0
         num_needed = max(0, MIN_STARTING_LABELS - num_existing)
         if num_needed > 0:
             print(f'Priming detector with {num_needed} labels...')
@@ -87,27 +86,22 @@ def main():
                 _add_label_sync(gl_cloud, detector)
                 print(f'  [{i+1}/{num_needed}] primed')
 
-        print('Waiting for model training...')
+        print('Waiting for edge pipeline training...')
         poll_timeout_sec = 120
         start = time.time()
         while True:
-            stats = glh.get_detector_evaluation(gl, detector.id)
-            if stats['projected_ml_accuracy'] is not None:
-                print(f'Training complete. Projected ML accuracy: {stats["projected_ml_accuracy"]:.2f}')
+            pipeline_details = glh.get_edge_pipeline_details(gl, detector.id)
+            if pipeline_details['trained_at'] is not None:
+                print(f'Training complete (label_cnt={pipeline_details["label_cnt"]}).')
                 break
             elapsed = time.time() - start
             if elapsed > poll_timeout_sec:
-                raise RuntimeError(f'Model training did not complete within {poll_timeout_sec}s')
+                raise RuntimeError(f'Edge pipeline training did not complete within {poll_timeout_sec}s')
             time.sleep(5)
     else:
-        print(f'Detector already trained. Projected ML accuracy: {stats["projected_ml_accuracy"]:.2f}')
+        print(f'Edge pipeline already trained (label_cnt={pipeline_details["label_cnt"]}).')
 
-    # Configure edge with NO_CLOUD
-    edge_config = EdgeEndpointConfig()
-    edge_config.add_detector(detector, NO_CLOUD)
-    print('Pushing edge config (NO_CLOUD)...')
-    gl.edge.set_config(edge_config)
-    print('Edge config applied, inference pod ready.')
+    glh.configure_edge_endpoint(gl, detector)
 
     # Record deployment revision before the test to verify rollouts occurred.
     revision_before = get_max_inference_revision()
