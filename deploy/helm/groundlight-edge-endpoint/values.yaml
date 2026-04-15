@@ -29,11 +29,16 @@ useMinimalImage: false
 # a new version of the image with the requested tag available when starting containers.
 imagePullPolicy: "Always"
 
-# The port that the Edge Endpoint will listen on on the host. 
-# Within the cluster, edge-endpoint always listens on port 30101 and can be addressed by 
+# Whether to enable the HTTP (non-TLS) port on the edge endpoint.
+# When set to false, only HTTPS access is available, and the HTTP port is fully disabled
+# (removed from the Kubernetes Service, NGINX listener, and container port).
+httpEnabled: true
+
+# The HTTP port that the Edge Endpoint will listen on on the host (only used when httpEnabled is true).
+# Within the cluster, edge-endpoint listens on port 30101 and can be addressed by
 # other services in the cluster on that port using
 # http://edge-endpoint-service.edge.svc.cluster.local:30101/ (or substitute the appropriate
-# namespace if you've overriden the default value).
+# namespace if you've overridden the default value).
 edgeEndpointPort: 30101
 edgeEndpointHttpsPort: 30143
 
