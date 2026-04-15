@@ -20,6 +20,9 @@ export GROUNDLIGHT_ENDPOINT="https://localhost:{{ .Values.edgeEndpointHttpsPort 
 From within the cluster (HTTPS):
 
 export GROUNDLIGHT_ENDPOINT="https://edge-endpoint-service.{{ .Values.namespace }}.svc.cluster.local:443/"
+
+NOTE: The edge endpoint uses a self-signed TLS certificate. Set DISABLE_TLS_VERIFY=1
+or pass disable_tls_verification=True to the Groundlight() constructor.
 {{- if not .Values.httpEnabled }}
 
 NOTE: HTTP access is disabled. Only HTTPS is available on port {{ .Values.edgeEndpointHttpsPort }}.

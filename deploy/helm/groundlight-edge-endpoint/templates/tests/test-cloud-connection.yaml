@@ -13,7 +13,10 @@ spec:
     - name: wget
       image: busybox
       command: ['sh']
-      args: 
+      # We use the internal service port here (30101 for HTTP, 443 for HTTPS), not the
+      # NodePort exposed to the host. When httpEnabled is false, we use --no-check-certificate
+      # since the edge endpoint uses a self-signed certificate.
+      args:
       - '-c'
       {{- if .Values.httpEnabled }}
       - 'wget -O - --header "x-api-token: ${GROUNDLIGHT_API_TOKEN}" {{ include "groundlight-edge-endpoint.fullname" . }}-service:30101/device-api/v1/me'
