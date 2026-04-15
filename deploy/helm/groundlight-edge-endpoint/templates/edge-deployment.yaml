@@ -21,11 +21,13 @@ spec:
   selector:
     app: edge-logic-server
   ports:
+    {{- if .Values.httpEnabled }}
     - protocol: TCP
       # Service port for NGINX
       port: 30101
       name: http
       nodePort: {{ .Values.edgeEndpointPort }}
+    {{- end }}
     - protocol: TCP
       # HTTPS port for NGINX
       port: 443
@@ -125,8 +127,10 @@ spec:
             memory: "50Mi"
         command: ["/bin/bash", "-c", "./app/bin/launch-nginx.sh"]
         ports:
+        {{- if .Values.httpEnabled }}
         - containerPort: 30101
           name: http
+        {{- end }}
         - containerPort: 443
           name: https
         volumeMounts:
@@ -138,21 +142,30 @@ spec:
         startupProbe:
           httpGet:
             path: /health/live  # Checks if the server is up
-            port: 30101
+            port: {{ if .Values.httpEnabled }}30101{{ else }}443{{ end }}
+            {{- if not .Values.httpEnabled }}
+            scheme: HTTPS
+            {{- end }}
           initialDelaySeconds: 10
           periodSeconds: 10
           failureThreshold: 6  # Wait for up to 1 min
         readinessProbe:
           httpGet:
             path: /health/ready  # Checks if the server is ready to serve requests
-            port: 30101
+            port: {{ if .Values.httpEnabled }}30101{{ else }}443{{ end }}
+            {{- if not .Values.httpEnabled }}
+            scheme: HTTPS
+            {{- end }}
           initialDelaySeconds: 10
           periodSeconds: 10
           failureThreshold: 2  # after 20 seconds of failure, stop sending traffic to the pod
         livenessProbe:
           httpGet:
             path: /health/ready
-            port: 30101
+            port: {{ if .Values.httpEnabled }}30101{{ else }}443{{ end }}
+            {{- if not .Values.httpEnabled }}
+            scheme: HTTPS
+            {{- end }}
           initialDelaySeconds: 10
           periodSeconds: 10
           failureThreshold: 4  # after 40 seconds of failure, restart the pod
@@ -181,6 +194,8 @@ spec:
           value: "{{ .Values.upstreamEndpoint }}"
         - name: USE_MINIMAL_IMAGE
           value: "{{ .Values.useMinimalImage }}"
+        - name: ENABLE_PROFILING
+          value: "{{ .Values.enableProfiling }}"
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
