@@ -17,8 +17,6 @@ IMAGE_WIDTH = 640
 IMAGE_HEIGHT = 480
 NUM_QUERIES = 10
 
-
-
 def main(edge_pipeline_config: str | None = None) -> None:
     requested_edge_pipeline_config = glh.normalize_edge_pipeline_config(edge_pipeline_config)
     gl = ExperimentalApi()

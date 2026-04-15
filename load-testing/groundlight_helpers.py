@@ -1,5 +1,5 @@
 from groundlight import ExperimentalApi, Detector, ApiException, ImageQuery
-from groundlight.edge import EdgeEndpointConfig, InferenceConfig, NO_CLOUD, DEFAULT
+from groundlight.edge import EdgeEndpointConfig, InferenceConfig, NO_CLOUD
 
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
