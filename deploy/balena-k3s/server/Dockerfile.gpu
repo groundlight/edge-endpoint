@@ -17,6 +17,7 @@
 
 # -------------------------
 # Stage 1: Preload - download third-party images as tarballs for airgap/restricted network support
+# NOTE: Keep the preloaded image list in sync across Dockerfile, Dockerfile.gpu, and Dockerfile.jetson
 # -------------------------
 FROM alpine:3.20 AS preloader
 ARG K3S_TAG="v1.28.8+k3s1"
@@ -46,7 +47,6 @@ RUN ARCH=$(uname -m) && \
     crane pull --platform "$PLAT" docker.io/amazon/aws-cli:latest /preload/aws-cli-latest.tar && \
     crane pull --platform "$PLAT" docker.io/bitnami/kubectl:latest /preload/kubectl-latest.tar && \
     crane pull --platform "$PLAT" docker.io/alpine:3.20 /preload/alpine-3.20.tar && \
-    crane pull --platform "$PLAT" docker.io/busybox:1.35 /preload/busybox-1.35.tar && \
     crane pull --platform "$PLAT" docker.io/busybox:1.36 /preload/busybox-1.36.tar
 
 # -------------------------

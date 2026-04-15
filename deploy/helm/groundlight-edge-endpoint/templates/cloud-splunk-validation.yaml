@@ -40,7 +40,7 @@ spec:
       restartPolicy: Never
       containers:
       - name: validation-error
-        image: busybox:1.35
+        image: busybox:1.36
         imagePullPolicy: IfNotPresent
         command:
         - /bin/sh
