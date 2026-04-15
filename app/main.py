@@ -8,6 +8,7 @@ It is behind nginx, which forwards any request to the cloud if this doesn't hand
 import logging
 import os
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 from groundlight.edge import EdgeEndpointConfig
 
@@ -16,6 +17,8 @@ from app.api.naming import API_BASE_PATH
 from app.core.app_state import AppState
 from app.core.edge_config_manager import EdgeConfigManager, reconcile_config
 from app.core.file_paths import ACTIVE_EDGE_CONFIG_PATH, HELM_CONFIGMAP_PATH
+from app.profiling import PROFILING_ENABLED
+from app.profiling.middleware import ProfilingMiddleware
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
@@ -24,6 +27,8 @@ logging.basicConfig(
 )
 
 app = FastAPI(title="edge-endpoint")
+if PROFILING_ENABLED:
+    app.add_middleware(ProfilingMiddleware)
 app.include_router(router=api_router, prefix=API_BASE_PATH)
 app.include_router(router=ping_router)
 app.include_router(router=health_router)
@@ -56,6 +61,15 @@ async def startup_event():
         else:
             logging.warning("No active config file or Helm ConfigMap found. Using Pydantic defaults.")
 
+    if PROFILING_ENABLED:
+        from app.profiling import get_profiling_manager
+
+        logging.info("Profiling is enabled. Trace data will be written to disk.")
+        scheduler = AsyncIOScheduler()
+        scheduler.add_job(get_profiling_manager().cleanup_old_files, "interval", hours=1)
+        scheduler.start()
+        app.state.profiling_scheduler = scheduler
+
     config = EdgeConfigManager.active()
     reconcile_config(config, app.state.app_state.db_manager)
     logging.info(f"edge_config={config}")
@@ -69,3 +83,5 @@ async def shutdown_event():
     """Lifecycle event that is triggered when the application is shutting down."""
     app.state.app_state.is_ready = False
     app.state.app_state.db_manager.shutdown()
+    if hasattr(app.state, "profiling_scheduler"):
+        app.state.profiling_scheduler.shutdown()

@@ -163,6 +163,8 @@ spec:
           value: "{{ .Values.upstreamEndpoint }}"
         - name: USE_MINIMAL_IMAGE
           value: "{{ .Values.useMinimalImage }}"
+        - name: ENABLE_PROFILING
+          value: "{{ .Values.enableProfiling }}"
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config

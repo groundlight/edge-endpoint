@@ -24,6 +24,11 @@ inferenceTag: ""
 # an object detection or counting model. 
 useMinimalImage: false
 
+# Enable request-level tracing profiling for the edge endpoint.
+# When enabled, per-request trace data (span timings, annotations) is written to
+# /opt/groundlight/device/edge-profiling/ as JSONL files. Disabled by default.
+enableProfiling: false
+
 # The image pull policy for the containers.
 # The default value is "Always" which means that Kubernetes will always check to see if there's 
 # a new version of the image with the requested tag available when starting containers.
