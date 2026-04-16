@@ -68,7 +68,7 @@ export default function LegendItem({
 
   if (!helpText) return row;
   return (
-    <Tooltip label={helpText} multiline w={260} openDelay={300} position="top" withArrow>
+    <Tooltip label={helpText} multiline maw={260} openDelay={300} position="top" withArrow>
       {row}
     </Tooltip>
   );
