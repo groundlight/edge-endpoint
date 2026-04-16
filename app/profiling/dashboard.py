@@ -82,7 +82,6 @@ def _(mo):
         Traces are read from JSONL files written by the profiling middleware.
         """
     )
-    return
 
 
 @app.cell
@@ -134,7 +133,6 @@ def _(get_detector_ids, load_traces, mo, traces_dir):
 @app.cell
 def _(detector_filter, mo, refresh, time_range):
     mo.hstack([time_range, detector_filter, refresh], justify="start", gap=1)
-    return
 
 
 @app.cell
@@ -183,22 +181,26 @@ def _(compute_span_stats, mo, traces):
     _table_data = []
     for _name in sorted(stats.keys(), key=span_sort_key):
         _s = stats[_name]
-        _table_data.append({
-            "Span": _name,
-            "Count": _s["count"],
-            "p50 (ms)": _s["p50"],
-            "p95 (ms)": _s["p95"],
-            "p99 (ms)": _s["p99"],
-            "Mean (ms)": _s["mean"],
-            "Min (ms)": _s["min"],
-            "Max (ms)": _s["max"],
-        })
+        _table_data.append(
+            {
+                "Span": _name,
+                "Count": _s["count"],
+                "p50 (ms)": _s["p50"],
+                "p95 (ms)": _s["p95"],
+                "p99 (ms)": _s["p99"],
+                "Mean (ms)": _s["mean"],
+                "Min (ms)": _s["min"],
+                "Max (ms)": _s["max"],
+            }
+        )
 
     if _table_data:
-        _out = mo.vstack([
-            mo.md("## Latency Summary by Span"),
-            mo.ui.table(_table_data, selection=None, label="Per-span latency statistics"),
-        ])
+        _out = mo.vstack(
+            [
+                mo.md("## Latency Summary by Span"),
+                mo.ui.table(_table_data, selection=None, label="Per-span latency statistics"),
+            ]
+        )
     else:
         _out = mo.md("## Latency Summary by Span\n\n*No spans to display.*")
 
@@ -236,17 +238,11 @@ def _(go, mo, traces):
         _out = mo.md("## Latency Distribution\n\n*No span data to plot.*")
 
     _out
-    return
 
 
 @app.cell
 def _(KEY_SPANS, compute_time_series, go, mo, traces):
-    _existing_spans = {
-        _s.get("name")
-        for _t in traces
-        for _s in _t.get("spans", [])
-        if _s.get("name")
-    }
+    _existing_spans = {_s.get("name") for _t in traces for _s in _t.get("spans", []) if _s.get("name")}
     _spans_to_plot = [s for s in KEY_SPANS if s in _existing_spans]
 
     if _spans_to_plot:
@@ -286,7 +282,6 @@ def _(KEY_SPANS, compute_time_series, go, mo, traces):
         _out = mo.md("## Latency Over Time\n\n*Not enough span data to plot time series.*")
 
     _out
-    return
 
 
 @app.cell
@@ -312,15 +307,12 @@ def _(SPAN_COLORS, compute_time_series, go, mo, traces):
         _out = mo.md("## Throughput\n\n*No data.*")
 
     _out
-    return
 
 
 @app.cell
 def _(MAX_TRACES_IN_SELECTOR, mo, traces):
     # Show recent traces for waterfall selection.
-    _recent = sorted(
-        traces, key=lambda t: t.get("start_wall_time_iso", ""), reverse=True
-    )[:MAX_TRACES_IN_SELECTOR]
+    _recent = sorted(traces, key=lambda t: t.get("start_wall_time_iso", ""), reverse=True)[:MAX_TRACES_IN_SELECTOR]
 
     _trace_options = {"(none)": ""}
     for _t in _recent:
@@ -332,11 +324,15 @@ def _(MAX_TRACES_IN_SELECTOR, mo, traces):
 
     trace_selector = mo.ui.dropdown(options=_trace_options, value="(none)", label="Select trace")
 
-    mo.vstack([
-        mo.md("## Trace Waterfall"),
-        mo.md(f"Select one of the {MAX_TRACES_IN_SELECTOR} most recent traces to see a Gantt-style timeline of its spans."),
-        trace_selector,
-    ])
+    mo.vstack(
+        [
+            mo.md("## Trace Waterfall"),
+            mo.md(
+                f"Select one of the {MAX_TRACES_IN_SELECTOR} most recent traces to see a Gantt-style timeline of its spans."
+            ),
+            trace_selector,
+        ]
+    )
     return (trace_selector,)
 
 
@@ -356,7 +352,6 @@ def _(FALLBACK_COLOR, SPAN_COLORS, get_trace_detail, go, mo, trace_selector, tra
                 _output = build_waterfall(_detail, _spans, go, mo, SPAN_COLORS, FALLBACK_COLOR)
 
     _output
-    return
 
 
 @app.function
@@ -401,18 +396,22 @@ def build_waterfall(detail, spans, go, mo, span_colors, fallback_color):
         annotations = s.get("annotations") or {}
         annotation_str = ", ".join(f"{k}={v}" for k, v in sorted(annotations.items())) if annotations else ""
         parent = s.get("parent_span_id")
-        span_table.append({
-            "Span": s.get("name", "unknown"),
-            "Start (ms)": round((s.get("start_time_ns", 0) - root_start) / 1_000_000, 2),
-            "Duration (ms)": round(s.get("duration_ms", 0), 2),
-            "Parent": parent[:8] if parent else "(root)",
-            "Annotations": annotation_str,
-        })
+        span_table.append(
+            {
+                "Span": s.get("name", "unknown"),
+                "Start (ms)": round((s.get("start_time_ns", 0) - root_start) / 1_000_000, 2),
+                "Duration (ms)": round(s.get("duration_ms", 0), 2),
+                "Parent": parent[:8] if parent else "(root)",
+                "Annotations": annotation_str,
+            }
+        )
 
-    return mo.vstack([
-        mo.ui.plotly(fig),
-        mo.ui.table(span_table, selection=None, label="Span details"),
-    ])
+    return mo.vstack(
+        [
+            mo.ui.plotly(fig),
+            mo.ui.table(span_table, selection=None, label="Span details"),
+        ]
+    )
 
 
 if __name__ == "__main__":

@@ -81,11 +81,14 @@ class TestLoadTraces:
 
     def test_filter_by_detector_id(self, tmp_path):
         traces_dir = str(tmp_path / "profiling")
-        _write_traces(traces_dir, [
-            _make_trace_dict(trace_id="t1", detector_id="det_a"),
-            _make_trace_dict(trace_id="t2", detector_id="det_b"),
-            _make_trace_dict(trace_id="t3", detector_id="det_a"),
-        ])
+        _write_traces(
+            traces_dir,
+            [
+                _make_trace_dict(trace_id="t1", detector_id="det_a"),
+                _make_trace_dict(trace_id="t2", detector_id="det_b"),
+                _make_trace_dict(trace_id="t3", detector_id="det_a"),
+            ],
+        )
 
         result = load_traces(traces_dir, detector_id="det_a")
         assert len(result) == 2
@@ -97,10 +100,13 @@ class TestLoadTraces:
         old_time = (now - timedelta(hours=2)).isoformat()
         recent_time = (now - timedelta(minutes=5)).isoformat()
 
-        _write_traces(traces_dir, [
-            _make_trace_dict(trace_id="old", start_wall_time_iso=old_time),
-            _make_trace_dict(trace_id="recent", start_wall_time_iso=recent_time),
-        ])
+        _write_traces(
+            traces_dir,
+            [
+                _make_trace_dict(trace_id="old", start_wall_time_iso=old_time),
+                _make_trace_dict(trace_id="recent", start_wall_time_iso=recent_time),
+            ],
+        )
 
         result = load_traces(traces_dir, since_minutes=30)
         assert len(result) == 1
@@ -113,11 +119,14 @@ class TestLoadTraces:
         old = (now - timedelta(hours=2)).isoformat()
         recent = (now - timedelta(minutes=5)).isoformat()
 
-        _write_traces(traces_dir, [
-            _make_trace_dict(trace_id="old_a", detector_id="det_a", start_wall_time_iso=old),
-            _make_trace_dict(trace_id="recent_a", detector_id="det_a", start_wall_time_iso=recent),
-            _make_trace_dict(trace_id="recent_b", detector_id="det_b", start_wall_time_iso=recent),
-        ])
+        _write_traces(
+            traces_dir,
+            [
+                _make_trace_dict(trace_id="old_a", detector_id="det_a", start_wall_time_iso=old),
+                _make_trace_dict(trace_id="recent_a", detector_id="det_a", start_wall_time_iso=recent),
+                _make_trace_dict(trace_id="recent_b", detector_id="det_b", start_wall_time_iso=recent),
+            ],
+        )
 
         result = load_traces(traces_dir, since_minutes=30, detector_id="det_a")
         assert len(result) == 1
@@ -151,8 +160,12 @@ class TestLoadTraces:
 
     def test_reads_multiple_files(self, tmp_path):
         traces_dir = str(tmp_path / "profiling")
-        _write_traces(traces_dir, [_make_trace_dict(trace_id="t1")], filename="traces_1_2026-04-01_00-00-00_000000.jsonl")
-        _write_traces(traces_dir, [_make_trace_dict(trace_id="t2")], filename="traces_1_2026-04-01_00-05-00_000000.jsonl")
+        _write_traces(
+            traces_dir, [_make_trace_dict(trace_id="t1")], filename="traces_1_2026-04-01_00-00-00_000000.jsonl"
+        )
+        _write_traces(
+            traces_dir, [_make_trace_dict(trace_id="t2")], filename="traces_1_2026-04-01_00-05-00_000000.jsonl"
+        )
 
         result = load_traces(traces_dir)
         assert len(result) == 2
@@ -185,10 +198,13 @@ class TestLoadTraces:
         """A timezone-naive timestamp would cause TypeError in aware comparison. Skip instead."""
         traces_dir = str(tmp_path / "profiling")
         now = datetime.now(timezone.utc)
-        _write_traces(traces_dir, [
-            _make_trace_dict(trace_id="naive", start_wall_time_iso="2026-04-01T12:00:00"),
-            _make_trace_dict(trace_id="aware", start_wall_time_iso=now.isoformat()),
-        ])
+        _write_traces(
+            traces_dir,
+            [
+                _make_trace_dict(trace_id="naive", start_wall_time_iso="2026-04-01T12:00:00"),
+                _make_trace_dict(trace_id="aware", start_wall_time_iso=now.isoformat()),
+            ],
+        )
 
         # Should not raise, and should skip the naive trace.
         result = load_traces(traces_dir, since_minutes=60)
@@ -198,9 +214,12 @@ class TestLoadTraces:
     def test_naive_timestamps_kept_when_no_time_filter(self, tmp_path):
         """Without a time filter, naive timestamps are kept (no comparison needed)."""
         traces_dir = str(tmp_path / "profiling")
-        _write_traces(traces_dir, [
-            _make_trace_dict(trace_id="naive", start_wall_time_iso="2026-04-01T12:00:00"),
-        ])
+        _write_traces(
+            traces_dir,
+            [
+                _make_trace_dict(trace_id="naive", start_wall_time_iso="2026-04-01T12:00:00"),
+            ],
+        )
 
         result = load_traces(traces_dir)
         assert len(result) == 1
@@ -211,16 +230,18 @@ class TestComputeSpanStats:
         traces = [
             _make_trace_dict(
                 trace_id=f"t{i}",
-                spans=[{
-                    "name": "request",
-                    "trace_id": f"t{i}",
-                    "span_id": "s1",
-                    "parent_span_id": None,
-                    "start_time_ns": 0,
-                    "end_time_ns": (i + 1) * 10_000_000,
-                    "duration_ms": (i + 1) * 10.0,
-                    "annotations": {},
-                }],
+                spans=[
+                    {
+                        "name": "request",
+                        "trace_id": f"t{i}",
+                        "span_id": "s1",
+                        "parent_span_id": None,
+                        "start_time_ns": 0,
+                        "end_time_ns": (i + 1) * 10_000_000,
+                        "duration_ms": (i + 1) * 10.0,
+                        "annotations": {},
+                    }
+                ],
             )
             for i in range(10)
         ]
@@ -238,16 +259,18 @@ class TestComputeSpanStats:
         traces = [
             _make_trace_dict(
                 trace_id=f"t{i}",
-                spans=[{
-                    "name": "request",
-                    "trace_id": f"t{i}",
-                    "span_id": "s1",
-                    "parent_span_id": None,
-                    "start_time_ns": 0,
-                    "end_time_ns": (i + 1) * 10_000_000,
-                    "duration_ms": (i + 1) * 10.0,
-                    "annotations": {},
-                }],
+                spans=[
+                    {
+                        "name": "request",
+                        "trace_id": f"t{i}",
+                        "span_id": "s1",
+                        "parent_span_id": None,
+                        "start_time_ns": 0,
+                        "end_time_ns": (i + 1) * 10_000_000,
+                        "duration_ms": (i + 1) * 10.0,
+                        "annotations": {},
+                    }
+                ],
             )
             for i in range(10)
         ]
@@ -264,16 +287,18 @@ class TestComputeSpanStats:
         traces = [
             _make_trace_dict(
                 trace_id=f"t{i}",
-                spans=[{
-                    "name": "request",
-                    "trace_id": f"t{i}",
-                    "span_id": "s1",
-                    "parent_span_id": None,
-                    "start_time_ns": 0,
-                    "end_time_ns": int(d * 1_000_000),
-                    "duration_ms": float(d),
-                    "annotations": {},
-                }],
+                spans=[
+                    {
+                        "name": "request",
+                        "trace_id": f"t{i}",
+                        "span_id": "s1",
+                        "parent_span_id": None,
+                        "start_time_ns": 0,
+                        "end_time_ns": int(d * 1_000_000),
+                        "duration_ms": float(d),
+                        "annotations": {},
+                    }
+                ],
             )
             for i, d in enumerate(durations)
         ]
@@ -290,16 +315,22 @@ class TestComputeSpanStats:
         assert "primary_inference" in stats
 
     def test_skips_negative_durations(self):
-        traces = [_make_trace_dict(spans=[{
-            "name": "unfinished",
-            "trace_id": "t1",
-            "span_id": "s1",
-            "parent_span_id": None,
-            "start_time_ns": 0,
-            "end_time_ns": None,
-            "duration_ms": -1.0,
-            "annotations": {},
-        }])]
+        traces = [
+            _make_trace_dict(
+                spans=[
+                    {
+                        "name": "unfinished",
+                        "trace_id": "t1",
+                        "span_id": "s1",
+                        "parent_span_id": None,
+                        "start_time_ns": 0,
+                        "end_time_ns": None,
+                        "duration_ms": -1.0,
+                        "annotations": {},
+                    }
+                ]
+            )
+        ]
         stats = compute_span_stats(traces)
         assert stats == {}
 
@@ -335,16 +366,24 @@ class TestComputeTimeSeries:
         # All 5 traces fall in the 12:00-12:04 bucket; durations 10..50
         traces = []
         for i, dur in enumerate([10, 20, 30, 40, 50]):
-            traces.append(_make_trace_dict(
-                trace_id=f"t{i}",
-                start_wall_time_iso=(base + timedelta(minutes=i)).isoformat(),
-                spans=[{
-                    "name": "request", "trace_id": f"t{i}", "span_id": "s1",
-                    "parent_span_id": None, "start_time_ns": 0,
-                    "end_time_ns": dur * 1_000_000, "duration_ms": float(dur),
-                    "annotations": {},
-                }],
-            ))
+            traces.append(
+                _make_trace_dict(
+                    trace_id=f"t{i}",
+                    start_wall_time_iso=(base + timedelta(minutes=i)).isoformat(),
+                    spans=[
+                        {
+                            "name": "request",
+                            "trace_id": f"t{i}",
+                            "span_id": "s1",
+                            "parent_span_id": None,
+                            "start_time_ns": 0,
+                            "end_time_ns": dur * 1_000_000,
+                            "duration_ms": float(dur),
+                            "annotations": {},
+                        }
+                    ],
+                )
+            )
 
         series = compute_time_series(traces, "request", bucket_minutes=5)
         assert len(series) == 1
@@ -411,15 +450,33 @@ class TestGetTraceDetail:
         assert result["trace_id"] == "t2"
 
     def test_sorts_spans_by_start_time(self):
-        traces = [_make_trace_dict(
-            trace_id="t1",
-            spans=[
-                {"name": "b", "trace_id": "t1", "span_id": "s2", "parent_span_id": "s1",
-                 "start_time_ns": 50, "end_time_ns": 100, "duration_ms": 0.00005, "annotations": {}},
-                {"name": "a", "trace_id": "t1", "span_id": "s1", "parent_span_id": None,
-                 "start_time_ns": 0, "end_time_ns": 100, "duration_ms": 0.0001, "annotations": {}},
-            ],
-        )]
+        traces = [
+            _make_trace_dict(
+                trace_id="t1",
+                spans=[
+                    {
+                        "name": "b",
+                        "trace_id": "t1",
+                        "span_id": "s2",
+                        "parent_span_id": "s1",
+                        "start_time_ns": 50,
+                        "end_time_ns": 100,
+                        "duration_ms": 0.00005,
+                        "annotations": {},
+                    },
+                    {
+                        "name": "a",
+                        "trace_id": "t1",
+                        "span_id": "s1",
+                        "parent_span_id": None,
+                        "start_time_ns": 0,
+                        "end_time_ns": 100,
+                        "duration_ms": 0.0001,
+                        "annotations": {},
+                    },
+                ],
+            )
+        ]
         result = get_trace_detail(traces, "t1")
         assert result["spans"][0]["name"] == "a"
         assert result["spans"][1]["name"] == "b"
@@ -477,14 +534,34 @@ class TestDashboardSmoke:
 
         detail = {"trace_id": "t" * 32, "detector_id": "det_a"}
         spans = [
-            {"name": "request", "span_id": "s0", "parent_span_id": None,
-             "start_time_ns": 0, "end_time_ns": 100_000_000, "duration_ms": 100.0, "annotations": {}},
-            {"name": "primary_inference", "span_id": "s1", "parent_span_id": "s0",
-             "start_time_ns": 10_000_000, "end_time_ns": 90_000_000, "duration_ms": 80.0,
-             "annotations": {"http.status_code": "200"}},
+            {
+                "name": "request",
+                "span_id": "s0",
+                "parent_span_id": None,
+                "start_time_ns": 0,
+                "end_time_ns": 100_000_000,
+                "duration_ms": 100.0,
+                "annotations": {},
+            },
+            {
+                "name": "primary_inference",
+                "span_id": "s1",
+                "parent_span_id": "s0",
+                "start_time_ns": 10_000_000,
+                "end_time_ns": 90_000_000,
+                "duration_ms": 80.0,
+                "annotations": {"http.status_code": "200"},
+            },
             # Unfinished span — should be skipped in the chart but present in the table.
-            {"name": "aborted", "span_id": "s2", "parent_span_id": "s0",
-             "start_time_ns": 50_000_000, "end_time_ns": None, "duration_ms": -1.0, "annotations": None},
+            {
+                "name": "aborted",
+                "span_id": "s2",
+                "parent_span_id": "s0",
+                "start_time_ns": 50_000_000,
+                "end_time_ns": None,
+                "duration_ms": -1.0,
+                "annotations": None,
+            },
         ]
 
         colors = {"request": "#636EFA", "primary_inference": "#AB63FA"}

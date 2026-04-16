@@ -118,9 +118,7 @@ def compute_time_series(
         Sorted list of {"time": iso_string, "p50": float, "p95": float, "mean": float, "count": int}.
     """
     if bucket_minutes <= 0 or 60 % bucket_minutes != 0:
-        raise ValueError(
-            f"bucket_minutes must be a positive divisor of 60; got {bucket_minutes}"
-        )
+        raise ValueError(f"bucket_minutes must be a positive divisor of 60; got {bucket_minutes}")
 
     buckets: dict[str, list[float]] = {}
 
@@ -146,13 +144,15 @@ def compute_time_series(
     for bucket_key in sorted(buckets):
         entry = _stats_dict(buckets[bucket_key])
         # Time-series chart only needs p50, p95, mean, count — drop the rest for cleanliness.
-        result.append({
-            "time": bucket_key,
-            "p50": entry["p50"],
-            "p95": entry["p95"],
-            "mean": entry["mean"],
-            "count": entry["count"],
-        })
+        result.append(
+            {
+                "time": bucket_key,
+                "p50": entry["p50"],
+                "p95": entry["p95"],
+                "mean": entry["mean"],
+                "count": entry["count"],
+            }
+        )
     return result
 
 
