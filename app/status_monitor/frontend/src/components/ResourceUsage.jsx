@@ -1,206 +1,83 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Paper, Text, Group, Stack, Skeleton, UnstyledButton } from "@mantine/core";
 import DonutChart, { DONUT_SIZE } from "./DonutChart";
+import LegendItem from "./LegendItem";
+import { GpuCapacitySummary, RamCapacitySummary } from "./CapacitySummary";
+import useClipboard from "./useClipboard";
+import {
+  buildSlices,
+  formatBytes,
+  formatPct,
+  DETECTOR_COLORS,
+  FREE_COLOR,
+  LOADING_COLOR,
+  OTHER_COLOR,
+} from "./chartUtils";
 
-/** Builds a deterministic detector color palette with high adjacent contrast. */
-function buildDetectorPalette(size = 30) {
-  const step = 11; // coprime with 30; keeps adjacent colors far apart
-  const saturation = 65;
-  const lightness = 52;
-  return Array.from({ length: size }, (_, i) => {
-    const hue = (((i * step) % size) * 360) / size;
-    return `hsl(${hue.toFixed(0)} ${saturation}% ${lightness}%)`;
-  });
-}
-
-const COLORS = buildDetectorPalette(30);
-const FREE_COLOR = "#E0E0E0";
-const LOADING_COLOR = "#555555";
-const OTHER_COLOR = "#B0B0B0";
 const MAX_VISIBLE_LEGEND_ITEMS = 8;
+const COL_HEADER_STYLE = { whiteSpace: "nowrap", minWidth: 64, textAlign: "right" };
 
-function formatBytes(bytes) {
-  if (bytes == null) return "--";
-  const gb = bytes / 1024 ** 3;
-  if (gb >= 1) return `${gb.toFixed(1)} GB`;
-  return `${Math.round(bytes / 1024 ** 2)} MB`;
-}
-
-function formatPct(bytes, totalBytes) {
-  if (!totalBytes) return "0.0%";
-  return `${((bytes / totalBytes) * 100).toFixed(1)}%`;
-}
-
-function formatPctInt(bytes, totalBytes) {
-  if (!totalBytes) return "0%";
-  return `${Math.round((bytes / totalBytes) * 100)}%`;
-}
-
-function GpuCapacitySummary({ observedGpus, totalBytes, usedBytes }) {
-  const gpus = (observedGpus || []).filter((g) => g?.name);
-  const getTotal = (gpu) => gpu?.total_vram_bytes ?? gpu?.total_bytes ?? 0;
-  const getUsed = (gpu) => gpu?.used_vram_bytes ?? gpu?.used_bytes ?? 0;
-
-  if (gpus.length === 1) {
-    const gpu = gpus[0];
-    const gpuTotal = getTotal(gpu);
-    const gpuUsed = getUsed(gpu);
-    return (
-      <Text size="sm" fw={500}>
-        {gpu.name} ({formatBytes(gpuUsed)} / {formatBytes(gpuTotal)}, {formatPctInt(gpuUsed, gpuTotal)})
-      </Text>
-    );
+/** Sorts detectors by (deploy_time, detector_id) and assigns a stable color.
+ *
+ * Sorting by deploy time gives a useful visual ordering in the legend; the
+ * secondary sort on id keeps color assignment deterministic when two detectors
+ * were deployed at the exact same time.
+ */
+function prepareDetectors(resourceData, detectorDetails) {
+  const nameMap = {};
+  const deployTime = {};
+  if (detectorDetails) {
+    for (const [id, info] of Object.entries(detectorDetails)) {
+      nameMap[id] = info.detector_name || id;
+      deployTime[id] = info.deploy_time || "";
+    }
   }
-  if (gpus.length > 1) {
-    const totalGpuBytes = gpus.reduce((sum, gpu) => sum + getTotal(gpu), 0);
-    const usedGpuBytes = gpus.reduce((sum, gpu) => sum + getUsed(gpu), 0);
-    return (
-      <Stack gap={2}>
-        <Text size="sm" fw={500}>
-          {formatBytes(usedGpuBytes)} / {formatBytes(totalGpuBytes)}, {formatPctInt(usedGpuBytes, totalGpuBytes)}
-        </Text>
-        {gpus.map((gpu, i) => (
-          <Text key={`${gpu.name}-${i}`} size="xs" c="gray.8">
-            GPU {gpu.index ?? i}: {gpu.name} ({formatBytes(getUsed(gpu))} / {formatBytes(getTotal(gpu))})
-          </Text>
-        ))}
-      </Stack>
-    );
-  }
-  return (
-    <Text size="sm" fw={500}>
-      {formatBytes(usedBytes)} / {formatBytes(totalBytes)}, {formatPctInt(usedBytes, totalBytes)}
-    </Text>
-  );
+
+  const sorted = (resourceData.detectors || []).slice().sort((a, b) => {
+    const timeCmp = (deployTime[a.detector_id] || "").localeCompare(deployTime[b.detector_id] || "");
+    return timeCmp !== 0 ? timeCmp : a.detector_id.localeCompare(b.detector_id);
+  });
+
+  const colorMap = {};
+  sorted.forEach((det, i) => {
+    colorMap[det.detector_id] = DETECTOR_COLORS[i % DETECTOR_COLORS.length];
+  });
+
+  return { detectors: sorted, nameMap, colorMap };
 }
 
-function RamCapacitySummary({ totalBytes, usedBytes }) {
-  return (
-    <Text size="sm" fw={500}>
-      {formatBytes(usedBytes)} / {formatBytes(totalBytes)}, {formatPctInt(usedBytes, totalBytes)}
-    </Text>
-  );
-}
+/** Builds legend rows for detectors and for the three summary slices (loading,
+ * other, free), shared across the VRAM and RAM donuts.
+ */
+function buildLegendRows({ detectors, nameMap, colorMap, vram, ram }) {
+  const detectorRows = detectors.map((det) => ({
+    sliceKey: `det:${det.detector_id}`,
+    detectorId: det.detector_id,
+    color: colorMap[det.detector_id],
+    label: nameMap[det.detector_id] || det.detector_id,
+    vramValue: formatBytes(det.total_vram_bytes || 0),
+    vramPct: formatPct(det.total_vram_bytes || 0, vram.total),
+    ramValue: formatBytes(det.total_ram_bytes || 0),
+    ramPct: formatPct(det.total_ram_bytes || 0, ram.total),
+  }));
 
-/** Builds donut slices and computes summary values for one resource type. */
-function buildSlices({ detectors, detNameMap, totalBytes, usedBytes, loadingBytes, colorMap, vramKey, resourceLabel }) {
-  const slices = [];
-  let accountedBytes = 0;
-
-  detectors.forEach((det) => {
-    const color = colorMap[det.detector_id] || "#999";
-    const label = detNameMap[det.detector_id] || det.detector_id;
-    const bytes = det[vramKey] || 0;
-    accountedBytes += bytes;
-    slices.push({
-      sliceKey: `det:${det.detector_id}`,
-      type: "detector",
-      detectorId: det.detector_id,
-      label,
-      bytes,
-      color,
-      pct: totalBytes ? (bytes / totalBytes) * 100 : 0,
-      resourceLabel,
-    });
+  const systemRow = (sliceKey, color, label, vramBytes, ramBytes) => ({
+    sliceKey,
+    color,
+    label,
+    vramValue: formatBytes(vramBytes),
+    vramPct: formatPct(vramBytes, vram.total),
+    ramValue: formatBytes(ramBytes),
+    ramPct: formatPct(ramBytes, ram.total),
   });
 
-  accountedBytes += loadingBytes;
-  slices.push({
-    sliceKey: "summary:loading",
-    type: "summary",
-    label: "Loading Detector Models",
-    bytes: loadingBytes,
-    color: LOADING_COLOR,
-    pct: totalBytes ? (loadingBytes / totalBytes) * 100 : 0,
-    resourceLabel,
-  });
+  const systemRows = [
+    systemRow("summary:loading", LOADING_COLOR, "Loading Detector Models", vram.loading, ram.loading),
+    systemRow("summary:other", OTHER_COLOR, "Other", vram.other, ram.other),
+    systemRow("summary:free", FREE_COLOR, "Free", vram.free, ram.free),
+  ];
 
-  const otherBytes = Math.max(0, usedBytes - accountedBytes);
-  slices.push({
-    sliceKey: "summary:other",
-    type: "summary",
-    label: "Other",
-    bytes: otherBytes,
-    color: OTHER_COLOR,
-    pct: totalBytes ? (otherBytes / totalBytes) * 100 : 0,
-    resourceLabel,
-  });
-
-  const freeBytes = Math.max(0, totalBytes - usedBytes);
-  slices.push({
-    sliceKey: "summary:free",
-    type: "summary",
-    label: "Free",
-    bytes: freeBytes,
-    color: FREE_COLOR,
-    pct: totalBytes ? (freeBytes / totalBytes) * 100 : 0,
-    resourceLabel,
-  });
-
-  return { slices, otherBytes, freeBytes };
-}
-
-/** Renders one row in the shared legend with VRAM and RAM columns. */
-function LegendItem({
-  color,
-  label,
-  vramValue,
-  vramPct,
-  ramValue,
-  ramPct,
-  hasVram,
-  striped = false,
-  active = false,
-  onHoverStart,
-  onHoverEnd,
-  onClick,
-}) {
-  const clickable = Boolean(onClick);
-  return (
-    <div
-      style={{
-        padding: "3px 6px",
-        borderRadius: 4,
-        backgroundColor: active ? "#e9f2ff" : striped ? "#f7f8fa" : "transparent",
-        border: active ? "1px solid #7aa7e0" : "1px solid transparent",
-        cursor: clickable ? "pointer" : "default",
-      }}
-      onPointerEnter={() => onHoverStart?.()}
-      onPointerLeave={() => onHoverEnd?.()}
-      onClick={onClick}
-    >
-      <Group gap="xs" wrap="nowrap">
-        <div
-          style={{
-            width: 14,
-            height: 14,
-            borderRadius: 3,
-            backgroundColor: color,
-            flexShrink: 0,
-          }}
-        />
-        <Text size="sm" style={{ flex: 1, minWidth: 0 }}>
-          {label}
-        </Text>
-        {hasVram && (
-          <>
-            <Text size="sm" fw={500} style={{ whiteSpace: "nowrap", minWidth: 64, textAlign: "right" }}>
-              {vramValue}
-            </Text>
-            <Text size="sm" c="gray.8" style={{ whiteSpace: "nowrap", minWidth: 48, textAlign: "right" }}>
-              {vramPct}
-            </Text>
-          </>
-        )}
-        <Text size="sm" fw={500} style={{ whiteSpace: "nowrap", minWidth: 64, textAlign: "right" }}>
-          {ramValue}
-        </Text>
-        <Text size="sm" c="gray.8" style={{ whiteSpace: "nowrap", minWidth: 48, textAlign: "right" }}>
-          {ramPct}
-        </Text>
-      </Group>
-    </div>
-  );
+  return { detectorRows, systemRows };
 }
 
 function ResourceUsageSkeleton() {
@@ -219,161 +96,175 @@ function ResourceUsageSkeleton() {
   );
 }
 
+function Snackbar({ text }) {
+  if (!text) return null;
+  return (
+    <Paper
+      shadow="md"
+      radius="sm"
+      p="sm"
+      style={{
+        position: "fixed",
+        bottom: 20,
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 1000,
+        backgroundColor: "#1f1d23",
+      }}
+    >
+      <Text size="sm" c="white">{text}</Text>
+    </Paper>
+  );
+}
+
+/** The detector + system legend rendered below the two donuts. Hover state is
+ * shared with the donuts via `hoveredSliceKey` so that hovering a legend row
+ * highlights the matching chart slice and vice-versa.
+ */
+function Legend({ detectorRows, systemRows, hasVram, hoveredSliceKey, setHoveredSliceKey, onCopy }) {
+  const [showAll, setShowAll] = useState(false);
+  const hiddenCount = Math.max(0, detectorRows.length - MAX_VISIBLE_LEGEND_ITEMS);
+  const visibleRows = showAll ? detectorRows : detectorRows.slice(0, MAX_VISIBLE_LEGEND_ITEMS);
+
+  const rowHandlers = (sliceKey) => ({
+    active: hoveredSliceKey === sliceKey,
+    onHoverStart: () => setHoveredSliceKey(sliceKey),
+    onHoverEnd: () => setHoveredSliceKey((prev) => (prev === sliceKey ? null : prev)),
+  });
+
+  return (
+    <Stack gap="xs" mt="md">
+      <div style={{ padding: "3px 6px" }}>
+        <Group gap="xs" wrap="nowrap">
+          <Text size="xs" c="gray.8" fw={600} style={{ flex: 1, minWidth: 0 }}>
+            Detectors ({detectorRows.length})
+          </Text>
+          {hasVram && (
+            <>
+              <Text size="xs" c="gray.8" fw={600} style={COL_HEADER_STYLE}>VRAM</Text>
+              <div style={{ minWidth: 48 }} />
+            </>
+          )}
+          <Text size="xs" c="gray.8" fw={600} style={COL_HEADER_STYLE}>RAM</Text>
+          <div style={{ minWidth: 48 }} />
+        </Group>
+      </div>
+
+      {visibleRows.map((row, i) => (
+        <LegendItem
+          key={row.sliceKey}
+          {...row}
+          hasVram={hasVram}
+          striped={i % 2 === 1}
+          onClick={() => onCopy(row.detectorId)}
+          {...rowHandlers(row.sliceKey)}
+        />
+      ))}
+
+      {hiddenCount > 0 && (
+        <UnstyledButton
+          onClick={() => setShowAll((v) => !v)}
+          style={{ color: "#165a8a", fontSize: "0.85em", textAlign: "left" }}
+        >
+          {showAll ? "Show fewer detectors" : `Show all detectors (+${hiddenCount})`}
+        </UnstyledButton>
+      )}
+
+      <Stack gap={2} mt={6}>
+        <Text size="xs" c="gray.8" fw={600} style={{ padding: "3px 6px" }}>System</Text>
+        {systemRows.map((row) => (
+          <LegendItem
+            key={row.sliceKey}
+            {...row}
+            hasVram={hasVram}
+            {...rowHandlers(row.sliceKey)}
+          />
+        ))}
+      </Stack>
+    </Stack>
+  );
+}
+
+/** Top-level resource-usage panel: two side-by-side donuts (VRAM + RAM) and a
+ * shared legend, backed by the `/status/resources.json` payload.
+ */
 export default function ResourceUsage({ resourceData, detectorDetails, loading }) {
-  const [showAllLegendItems, setShowAllLegendItems] = useState(false);
   const [hoveredSliceKey, setHoveredSliceKey] = useState(null);
-  const [snackbarText, setSnackbarText] = useState(null);
-
-  useEffect(() => {
-    if (!snackbarText) return undefined;
-    const timer = setTimeout(() => setSnackbarText(null), 2200);
-    return () => clearTimeout(timer);
-  }, [snackbarText]);
-
-  const copyDetectorId = async (detectorId) => {
-    if (!detectorId) return;
-    try {
-      await navigator.clipboard.writeText(detectorId);
-      setSnackbarText(`Detector ID copied (${detectorId})`);
-    } catch {
-      try {
-        const textarea = document.createElement("textarea");
-        textarea.value = detectorId;
-        textarea.setAttribute("readonly", "");
-        textarea.style.position = "absolute";
-        textarea.style.left = "-9999px";
-        document.body.appendChild(textarea);
-        textarea.select();
-        const ok = document.execCommand("copy");
-        document.body.removeChild(textarea);
-        setSnackbarText(ok ? `Detector ID copied (${detectorId})` : "Failed to copy detector ID");
-      } catch {
-        setSnackbarText("Failed to copy detector ID");
-      }
-    }
-  };
+  const { copy, snackbarText } = useClipboard({
+    successMessage: (id) => `Detector ID copied (${id})`,
+    errorMessage: "Failed to copy detector ID",
+  });
 
   if (loading && !resourceData) return <ResourceUsageSkeleton />;
   if (!resourceData) return null;
-
   if (resourceData.error) {
     return (
       <Paper shadow="xs" p="md" radius="sm">
-        <Text c="gray.8" fs="italic">
-          {resourceData.error}
-        </Text>
+        <Text c="gray.8" fs="italic">{resourceData.error}</Text>
       </Paper>
     );
   }
 
-  const totalVram = resourceData.total_vram_bytes || 0;
-  const usedVram = resourceData.used_vram_bytes || 0;
-  const totalRam = resourceData.total_ram_bytes || 0;
-  const usedRam = resourceData.used_ram_bytes || 0;
-  const ramEvictionPct = resourceData.ram_eviction_threshold_pct ?? null;
   const observedGpus = resourceData.observed_gpus || [];
   const hasVram = observedGpus.length > 0;
-  const hasRam = totalRam > 0;
+  const hasRam = (resourceData.total_ram_bytes || 0) > 0;
 
-  const detNameMap = {};
-  const detDeployTime = {};
-  if (detectorDetails) {
-    for (const [id, info] of Object.entries(detectorDetails)) {
-      detNameMap[id] = info.detector_name || id;
-      detDeployTime[id] = info.deploy_time || "";
-    }
-  }
+  const vram = {
+    total: resourceData.total_vram_bytes || 0,
+    used: resourceData.used_vram_bytes || 0,
+    loading: resourceData.loading_vram_bytes || 0,
+  };
+  const ram = {
+    total: resourceData.total_ram_bytes || 0,
+    used: resourceData.used_ram_bytes || 0,
+    loading: resourceData.loading_ram_bytes || 0,
+    evictionPct: resourceData.ram_eviction_threshold_pct ?? null,
+  };
 
-  const detectors = (resourceData.detectors || []).slice().sort((a, b) => {
-    const timeCmp = (detDeployTime[a.detector_id] || "").localeCompare(detDeployTime[b.detector_id] || "");
-    return timeCmp !== 0 ? timeCmp : a.detector_id.localeCompare(b.detector_id);
-  });
+  const { detectors, nameMap, colorMap } = prepareDetectors(resourceData, detectorDetails);
 
-  // Assign stable colors to detectors
-  const colorMap = {};
-  detectors.forEach((det, i) => {
-    colorMap[det.detector_id] = COLORS[i % COLORS.length];
-  });
-
-  const loadingVram = resourceData.loading_vram_bytes || 0;
-  const loadingRam = resourceData.loading_ram_bytes || 0;
-
-  // Always build a consistent slice structure (even when there's no real data)
-  // so the donut chart's data array has a stable length across renders. This
-  // makes recharts animate smoothly between real-data and zero-state chart.
-  // When there's no data, the free slice fills 100% of a phantom 1-byte total.
-  const vramResult = buildSlices({
+  // Zero-state VRAM chart: render a 100%-free donut with a phantom 1-byte total.
+  // This keeps the donut's slice structure stable across the has-VRAM /
+  // no-VRAM transition so recharts animates smoothly (see DonutChart.jsx).
+  const vramSlices = buildSlices({
     detectors: hasVram ? detectors : [],
-    detNameMap,
-    totalBytes: hasVram ? totalVram : 1,
-    usedBytes: hasVram ? usedVram : 0,
-    loadingBytes: hasVram ? loadingVram : 0,
+    detNameMap: nameMap,
+    totalBytes: hasVram ? vram.total : 1,
+    usedBytes: hasVram ? vram.used : 0,
+    loadingBytes: hasVram ? vram.loading : 0,
     colorMap,
-    vramKey: "total_vram_bytes",
+    bytesKey: "total_vram_bytes",
     resourceLabel: "VRAM",
   });
 
-  const ramResult = hasRam
+  const ramSlices = hasRam
     ? buildSlices({
-        detectors, detNameMap, totalBytes: totalRam, usedBytes: usedRam,
-        loadingBytes: loadingRam, colorMap, vramKey: "total_ram_bytes", resourceLabel: "RAM",
+        detectors,
+        detNameMap: nameMap,
+        totalBytes: ram.total,
+        usedBytes: ram.used,
+        loadingBytes: ram.loading,
+        colorMap,
+        bytesKey: "total_ram_bytes",
+        resourceLabel: "RAM",
       })
     : null;
 
-  const vramPct = hasVram ? `${((usedVram / totalVram) * 100).toFixed(0)}%` : "Unknown";
-  const ramPct = hasRam ? `${((usedRam / totalRam) * 100).toFixed(0)}%` : "0%";
-
-  // Build shared legend entries
-  const detectorLegend = detectors.map((det) => ({
-    sliceKey: `det:${det.detector_id}`,
-    detectorId: det.detector_id,
-    color: colorMap[det.detector_id],
-    label: detNameMap[det.detector_id] || det.detector_id,
-    vramValue: formatBytes(det.total_vram_bytes || 0),
-    vramPct: formatPct(det.total_vram_bytes || 0, totalVram),
-    ramValue: formatBytes(det.total_ram_bytes || 0),
-    ramPct: formatPct(det.total_ram_bytes || 0, totalRam),
-  }));
-
-  const hiddenCount = Math.max(0, detectorLegend.length - MAX_VISIBLE_LEGEND_ITEMS);
-  const visibleLegend = showAllLegendItems
-    ? detectorLegend
-    : detectorLegend.slice(0, MAX_VISIBLE_LEGEND_ITEMS);
-
-  const systemLegend = [
-    {
-      sliceKey: "summary:loading",
-      color: LOADING_COLOR,
-      label: "Loading Detector Models",
-      vramValue: formatBytes(loadingVram),
-      vramPct: formatPct(loadingVram, totalVram),
-      ramValue: formatBytes(loadingRam),
-      ramPct: formatPct(loadingRam, totalRam),
+  const { detectorRows, systemRows } = buildLegendRows({
+    detectors,
+    nameMap,
+    colorMap,
+    vram: { total: vram.total, loading: vram.loading, other: vramSlices.otherBytes, free: vramSlices.freeBytes },
+    ram: {
+      total: ram.total,
+      loading: ram.loading,
+      other: ramSlices?.otherBytes ?? 0,
+      free: ramSlices?.freeBytes ?? 0,
     },
-    {
-      sliceKey: "summary:other",
-      color: OTHER_COLOR,
-      label: "Other",
-      vramValue: formatBytes(vramResult?.otherBytes ?? 0),
-      vramPct: formatPct(vramResult?.otherBytes ?? 0, totalVram),
-      ramValue: formatBytes(ramResult?.otherBytes ?? 0),
-      ramPct: formatPct(ramResult?.otherBytes ?? 0, totalRam),
-    },
-    {
-      sliceKey: "summary:free",
-      color: FREE_COLOR,
-      label: "Free",
-      vramValue: formatBytes(vramResult?.freeBytes ?? 0),
-      vramPct: formatPct(vramResult?.freeBytes ?? 0, totalVram),
-      ramValue: formatBytes(ramResult?.freeBytes ?? 0),
-      ramPct: formatPct(ramResult?.freeBytes ?? 0, totalRam),
-    },
-  ];
+  });
 
-  const onSliceHover = (key) => setHoveredSliceKey(key);
   const onSliceClick = (slice) => {
-    if (slice?.type !== "detector") return;
-    copyDetectorId(slice.detectorId);
+    if (slice?.type === "detector") copy(slice.detectorId);
   };
 
   return (
@@ -382,114 +273,45 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
         <Stack gap="xs" align="center">
           <Text size="lg" fw={700} c="gray.8">VRAM</Text>
           {hasVram ? (
-            <GpuCapacitySummary
-              observedGpus={observedGpus}
-              totalBytes={totalVram}
-              usedBytes={usedVram}
-            />
+            <GpuCapacitySummary observedGpus={observedGpus} totalBytes={vram.total} usedBytes={vram.used} />
           ) : (
             <Text size="sm" c="gray.6">No GPU discovered</Text>
           )}
           <DonutChart
-            slices={vramResult.slices}
-            centerText={vramPct}
+            slices={vramSlices.slices}
+            centerText={hasVram ? `${((vram.used / vram.total) * 100).toFixed(0)}%` : "Unknown"}
             activeSliceKey={hoveredSliceKey}
-            onSliceHover={onSliceHover}
+            onSliceHover={setHoveredSliceKey}
             onSliceClick={onSliceClick}
           />
         </Stack>
+
         {hasRam && (
           <Stack gap="xs" align="center">
             <Text size="lg" fw={700} c="gray.8">RAM</Text>
-            <RamCapacitySummary totalBytes={totalRam} usedBytes={usedRam} />
+            <RamCapacitySummary totalBytes={ram.total} usedBytes={ram.used} />
             <DonutChart
-              slices={ramResult.slices}
-              centerText={ramPct}
+              slices={ramSlices.slices}
+              centerText={`${((ram.used / ram.total) * 100).toFixed(0)}%`}
               activeSliceKey={hoveredSliceKey}
-              onSliceHover={onSliceHover}
+              onSliceHover={setHoveredSliceKey}
               onSliceClick={onSliceClick}
-              evictionThresholdPct={ramEvictionPct}
+              evictionThresholdPct={ram.evictionPct}
             />
           </Stack>
         )}
       </div>
 
-      <Stack gap="xs" mt="md">
-        <div style={{ padding: "3px 6px" }}>
-          <Group gap="xs" wrap="nowrap">
-            <Text size="xs" c="gray.8" fw={600} style={{ flex: 1, minWidth: 0 }}>
-              Detectors ({detectorLegend.length})
-            </Text>
-            {hasVram && (
-              <>
-                <Text size="xs" c="gray.8" fw={600} style={{ whiteSpace: "nowrap", minWidth: 64, textAlign: "right" }}>
-                  VRAM
-                </Text>
-                <div style={{ minWidth: 48 }} />
-              </>
-            )}
-            <Text size="xs" c="gray.8" fw={600} style={{ whiteSpace: "nowrap", minWidth: 64, textAlign: "right" }}>
-              RAM
-            </Text>
-            <div style={{ minWidth: 48 }} />
-          </Group>
-        </div>
-        {visibleLegend.map((item, i) => (
-          <LegendItem
-            key={item.sliceKey}
-            {...item}
-            hasVram={hasVram}
-            striped={i % 2 === 1}
-            active={hoveredSliceKey === item.sliceKey}
-            onHoverStart={() => setHoveredSliceKey(item.sliceKey)}
-            onHoverEnd={() => setHoveredSliceKey((prev) => (prev === item.sliceKey ? null : prev))}
-            onClick={() => copyDetectorId(item.detectorId)}
-          />
-        ))}
-        {detectorLegend.length > MAX_VISIBLE_LEGEND_ITEMS && (
-          <UnstyledButton
-            onClick={() => setShowAllLegendItems((v) => !v)}
-            style={{ color: "#165a8a", fontSize: "0.85em", textAlign: "left" }}
-          >
-            {showAllLegendItems ? "Show fewer detectors" : `Show all detectors (+${hiddenCount})`}
-          </UnstyledButton>
-        )}
-        <Stack gap={2} mt={6}>
-          <Text size="xs" c="gray.8" fw={600} style={{ padding: "3px 6px" }}>
-            System
-          </Text>
-          {systemLegend.map((item) => (
-            <LegendItem
-              key={item.sliceKey}
-              {...item}
-              hasVram={hasVram}
-              active={hoveredSliceKey === item.sliceKey}
-              onHoverStart={() => setHoveredSliceKey(item.sliceKey)}
-              onHoverEnd={() => setHoveredSliceKey((prev) => (prev === item.sliceKey ? null : prev))}
-            />
-          ))}
-        </Stack>
-      </Stack>
+      <Legend
+        detectorRows={detectorRows}
+        systemRows={systemRows}
+        hasVram={hasVram}
+        hoveredSliceKey={hoveredSliceKey}
+        setHoveredSliceKey={setHoveredSliceKey}
+        onCopy={copy}
+      />
 
-      {snackbarText && (
-        <Paper
-          shadow="md"
-          radius="sm"
-          p="sm"
-          style={{
-            position: "fixed",
-            bottom: 20,
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 1000,
-            backgroundColor: "#1f1d23",
-          }}
-        >
-          <Text size="sm" c="white">
-            {snackbarText}
-          </Text>
-        </Paper>
-      )}
+      <Snackbar text={snackbarText} />
     </Paper>
   );
 }

@@ -17,8 +17,9 @@ PORT = 3001
 REAL_ENDPOINT = "http://localhost:30101"
 STATE_FILE = "/tmp/mock-state.json"
 
-TESLA_T4_TOTAL = 16_106_127_360
-SYSTEM_RAM_TOTAL = 16_455_831_552
+GB = 1024**3
+DEFAULT_TOTAL_VRAM_GB = 15  # approx. Tesla T4
+DEFAULT_TOTAL_RAM_GB = 15
 
 random.seed(42)
 DETECTOR_POOL = []
@@ -66,23 +67,39 @@ for i, name in enumerate(NAMES):
     )
 
 
+DEFAULT_STATE = {
+    "num_detectors": 3,
+    "loading": False,
+    "eviction": 75,
+    "synthetic": True,
+    "total_vram_gb": DEFAULT_TOTAL_VRAM_GB,
+    "total_ram_gb": DEFAULT_TOTAL_RAM_GB,
+}
+
+
 def read_state():
+    """Loads mock state from disk, falling back to defaults on any error."""
     try:
         with open(STATE_FILE) as f:
-            state = json.load(f)
-        return {
-            "num_detectors": max(0, min(int(state.get("num_detectors", 3)), len(DETECTOR_POOL))),
-            "loading": bool(state.get("loading", False)),
-            "eviction": int(state.get("eviction", 75)),
-            "synthetic": bool(state.get("synthetic", True)),
-        }
+            raw = json.load(f)
     except (FileNotFoundError, ValueError, json.JSONDecodeError):
-        return {"num_detectors": 3, "loading": False, "eviction": 75, "synthetic": True}
+        raw = {}
+    return {
+        "num_detectors": max(0, min(int(raw.get("num_detectors", DEFAULT_STATE["num_detectors"])), len(DETECTOR_POOL))),
+        "loading": bool(raw.get("loading", DEFAULT_STATE["loading"])),
+        "eviction": int(raw.get("eviction", DEFAULT_STATE["eviction"])),
+        "synthetic": bool(raw.get("synthetic", DEFAULT_STATE["synthetic"])),
+        "total_vram_gb": max(1, int(raw.get("total_vram_gb", DEFAULT_STATE["total_vram_gb"]))),
+        "total_ram_gb": max(1, int(raw.get("total_ram_gb", DEFAULT_STATE["total_ram_gb"]))),
+    }
 
 
 def build_resources(state):
+    """Builds a synthetic /status/resources.json payload from the mock state."""
     num_detectors = state["num_detectors"]
     loading = state["loading"]
+    total_vram = state["total_vram_gb"] * GB
+    total_ram = state["total_ram_gb"] * GB
 
     detectors = []
     used_vram = 200_000_000 if num_detectors > 0 else 0
@@ -92,21 +109,21 @@ def build_resources(state):
 
     for i in range(num_detectors):
         d = DETECTOR_POOL[i]
-        total_vram = d["primary_vram"] + d["oodd_vram"]
-        total_ram = d["primary_ram"] + d["oodd_ram"]
+        det_vram = d["primary_vram"] + d["oodd_vram"]
+        det_ram = d["primary_ram"] + d["oodd_ram"]
         detectors.append(
             {
                 "detector_id": d["id"],
                 "primary_vram_bytes": d["primary_vram"],
                 "oodd_vram_bytes": d["oodd_vram"],
-                "total_vram_bytes": total_vram,
+                "total_vram_bytes": det_vram,
                 "primary_ram_bytes": d["primary_ram"],
                 "oodd_ram_bytes": d["oodd_ram"],
-                "total_ram_bytes": total_ram,
+                "total_ram_bytes": det_ram,
             }
         )
-        used_vram += total_vram
-        used_ram += total_ram
+        used_vram += det_vram
+        used_ram += det_ram
 
     if loading:
         loading_vram = 800_000_000
@@ -116,19 +133,19 @@ def build_resources(state):
 
     has_gpu = num_detectors > 0 or loading
     return {
-        "total_vram_bytes": TESLA_T4_TOTAL if has_gpu else 0,
-        "used_vram_bytes": min(used_vram, TESLA_T4_TOTAL) if has_gpu else 0,
-        "total_ram_bytes": SYSTEM_RAM_TOTAL,
-        "used_ram_bytes": min(used_ram, SYSTEM_RAM_TOTAL),
+        "total_vram_bytes": total_vram if has_gpu else 0,
+        "used_vram_bytes": min(used_vram, total_vram) if has_gpu else 0,
+        "total_ram_bytes": total_ram,
+        "used_ram_bytes": min(used_ram, total_ram),
         "ram_eviction_threshold_pct": state["eviction"],
         "detectors": detectors,
         "loading_vram_bytes": loading_vram,
         "loading_ram_bytes": loading_ram,
         "observed_gpus": [
             {
-                "name": "Tesla T4",
-                "total_vram_bytes": TESLA_T4_TOTAL,
-                "used_vram_bytes": min(used_vram, TESLA_T4_TOTAL),
+                "name": "Mock GPU",
+                "total_vram_bytes": total_vram,
+                "used_vram_bytes": min(used_vram, total_vram),
                 "index": 0,
             }
         ] if has_gpu else [],

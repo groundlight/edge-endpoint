@@ -1,8 +1,8 @@
 """Web-based control panel for the mock server.
 
-Provides buttons/sliders to adjust detector count, loading state, and
-eviction threshold. Writes state to /tmp/mock-state.json which the
-mock server reads on each request.
+Provides buttons/sliders to adjust detector count, loading state,
+eviction threshold, and total VRAM/RAM capacity. Writes state to
+/tmp/mock-state.json which the mock server reads on each request.
 
 Usage:
     python mock_control.py    # opens on :3002
@@ -11,17 +11,30 @@ Usage:
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
+from urllib.request import urlopen
 
 PORT = 3002
 STATE_FILE = "/tmp/mock-state.json"
+MOCK_SERVER = "http://localhost:3001"
+
+
+DEFAULT_STATE = {
+    "num_detectors": 3,
+    "loading": False,
+    "eviction": 75,
+    "synthetic": True,
+    "total_vram_gb": 15,
+    "total_ram_gb": 15,
+}
 
 
 def read_state():
+    """Loads mock state from disk, falling back to defaults on any error."""
     try:
         with open(STATE_FILE) as f:
-            return json.load(f)
+            return {**DEFAULT_STATE, **json.load(f)}
     except (FileNotFoundError, ValueError, json.JSONDecodeError):
-        return {"num_detectors": 3, "loading": False, "eviction": 75, "synthetic": True}
+        return dict(DEFAULT_STATE)
 
 
 def write_state(state):
@@ -60,6 +73,11 @@ HTML = """<!DOCTYPE html>
              background: #16213e; color: #666; }
   .seg-btn.active-synth { background: #e94560; color: #fff; }
   .seg-btn.active-live { background: #2ecc71; color: #fff; }
+  .apply-btn { padding: 10px 28px; border: none; border-radius: 8px; font-size: 1em;
+               font-weight: 700; cursor: pointer; background: #2ecc71; color: #fff;
+               transition: background 0.2s; }
+  .apply-btn:hover:not(:disabled) { background: #27ae60; }
+  .apply-btn:disabled { background: #2a2a3e; color: #555; cursor: not-allowed; }
   .json-section { width: 90%; max-width: 700px; }
   .json-section h3 { margin: 0 0 8px; font-size: 0.95em; color: #aaa; }
   .json-header { display: flex; justify-content: space-between; align-items: center; }
@@ -105,6 +123,19 @@ HTML = """<!DOCTYPE html>
            style="width:200px; accent-color:#e94560;" oninput="setEviction(this.value)">
     <span class="num" id="evictionVal" style="font-size:1.5em; min-width:50px;">75%</span>
   </div>
+  <div class="control synthetic-control">
+    <span>Total VRAM:</span>
+    <input type="range" id="totalVram" min="1" max="80" value="15"
+           style="width:200px; accent-color:#e94560;" oninput="setTotalVram(this.value)">
+    <span class="num" id="totalVramVal" style="font-size:1.5em; min-width:70px;">15 GB</span>
+  </div>
+  <div class="control synthetic-control">
+    <span>Total RAM:</span>
+    <input type="range" id="totalRam" min="1" max="128" value="15"
+           style="width:200px; accent-color:#e94560;" oninput="setTotalRam(this.value)">
+    <span class="num" id="totalRamVal" style="font-size:1.5em; min-width:70px;">15 GB</span>
+  </div>
+  <button class="apply-btn" id="applyBtn" disabled onclick="apply()">Apply</button>
   <div class="json-section">
     <div class="json-header">
       <div class="json-tabs">
@@ -119,54 +150,127 @@ HTML = """<!DOCTYPE html>
     </div>
   </div>
   <script>
-    let current = 3;
-    let synthetic = true;
-    function sendState() {
-      const loading = document.getElementById('loading').checked;
-      const eviction = document.getElementById('eviction').value;
-      return fetch('/set?num_detectors=' + current + '&loading=' + (loading ? '1' : '0') + '&eviction=' + eviction + '&synthetic=' + (synthetic ? '1' : '0'),
-                   { method: 'POST' });
+    // `applied` mirrors the state currently being served by the mock server.
+    // The draft state lives in the DOM controls; when it differs from
+    // `applied` the Apply button lights up. Data-mode changes are published
+    // immediately and bypass the Apply step.
+    let applied = null;
+    let draftSynthetic = true;
+
+    function currentDraft() {
+      return {
+        num_detectors: parseInt(document.getElementById('num').textContent, 10),
+        loading: document.getElementById('loading').checked,
+        eviction: parseInt(document.getElementById('eviction').value, 10),
+        total_vram_gb: parseInt(document.getElementById('totalVram').value, 10),
+        total_ram_gb: parseInt(document.getElementById('totalRam').value, 10),
+        synthetic: draftSynthetic,
+      };
     }
+
+    function hasPendingChanges() {
+      if (!applied || !draftSynthetic) return false;
+      const d = currentDraft();
+      return d.num_detectors !== applied.num_detectors
+          || d.loading !== applied.loading
+          || d.eviction !== applied.eviction
+          || d.total_vram_gb !== applied.total_vram_gb
+          || d.total_ram_gb !== applied.total_ram_gb;
+    }
+
+    function updateApplyButton() {
+      document.getElementById('applyBtn').disabled = !hasPendingChanges();
+    }
+
+    function postState(state) {
+      const params = new URLSearchParams({
+        num_detectors: state.num_detectors,
+        loading: state.loading ? '1' : '0',
+        eviction: state.eviction,
+        total_vram_gb: state.total_vram_gb,
+        total_ram_gb: state.total_ram_gb,
+        synthetic: state.synthetic ? '1' : '0',
+      });
+      return fetch('/set?' + params.toString(), { method: 'POST' });
+    }
+
+    async function apply() {
+      const draft = currentDraft();
+      await postState(draft);
+      applied = draft;
+      updateApplyButton();
+      refreshJson();
+    }
+
     async function setDataMode(isSynthetic) {
-      synthetic = isSynthetic;
+      // Mode toggle is immediate; we keep all other fields at their currently
+      // applied values so the mock server isn't accidentally handed unpublished edits.
+      draftSynthetic = isSynthetic;
+      const next = { ...applied, synthetic: isSynthetic };
+      await postState(next);
+      applied = next;
       updateDataModeUI();
-      await sendState();
+      updateApplyButton();
+      refreshJson();
     }
+
     function updateDataModeUI() {
-      document.getElementById('btnSynthetic').className = 'seg-btn' + (synthetic ? ' active-synth' : '');
-      document.getElementById('btnLive').className = 'seg-btn' + (synthetic ? '' : ' active-live');
-      const opacity = synthetic ? '1' : '0.4';
+      document.getElementById('btnSynthetic').className = 'seg-btn' + (draftSynthetic ? ' active-synth' : '');
+      document.getElementById('btnLive').className = 'seg-btn' + (draftSynthetic ? '' : ' active-live');
+      const opacity = draftSynthetic ? '1' : '0.4';
       for (const el of document.querySelectorAll('.synthetic-control')) {
         el.style.opacity = opacity;
-        el.style.pointerEvents = synthetic ? 'auto' : 'none';
+        el.style.pointerEvents = draftSynthetic ? 'auto' : 'none';
       }
     }
-    async function adjust(delta) {
-      current = Math.max(0, Math.min(29, current + delta));
-      document.getElementById('num').textContent = current;
-      await sendState();
+
+    function adjust(delta) {
+      const el = document.getElementById('num');
+      const next = Math.max(0, Math.min(29, parseInt(el.textContent, 10) + delta));
+      el.textContent = next;
+      updateApplyButton();
     }
-    async function toggleLoading() {
+    function toggleLoading() {
       document.getElementById('loadLabel').textContent =
         document.getElementById('loading').checked ? 'ON' : 'OFF';
-      await sendState();
+      updateApplyButton();
     }
-    async function setEviction(val) {
+    function setEviction(val) {
       document.getElementById('evictionVal').textContent = val + '%';
-      await sendState();
+      updateApplyButton();
     }
+    function setTotalVram(val) {
+      document.getElementById('totalVramVal').textContent = val + ' GB';
+      updateApplyButton();
+    }
+    function setTotalRam(val) {
+      document.getElementById('totalRamVal').textContent = val + ' GB';
+      updateApplyButton();
+    }
+
     async function refresh() {
       const r = await fetch('/current');
       const data = await r.json();
-      current = data.num_detectors;
-      document.getElementById('num').textContent = current;
-      document.getElementById('loading').checked = data.loading;
-      document.getElementById('loadLabel').textContent = data.loading ? 'ON' : 'OFF';
-      const ev = data.eviction ?? 75;
-      document.getElementById('eviction').value = ev;
-      document.getElementById('evictionVal').textContent = ev + '%';
-      synthetic = data.synthetic ?? true;
+      applied = {
+        num_detectors: data.num_detectors,
+        loading: data.loading,
+        eviction: data.eviction ?? 75,
+        total_vram_gb: data.total_vram_gb ?? 15,
+        total_ram_gb: data.total_ram_gb ?? 15,
+        synthetic: data.synthetic ?? true,
+      };
+      draftSynthetic = applied.synthetic;
+      document.getElementById('num').textContent = applied.num_detectors;
+      document.getElementById('loading').checked = applied.loading;
+      document.getElementById('loadLabel').textContent = applied.loading ? 'ON' : 'OFF';
+      document.getElementById('eviction').value = applied.eviction;
+      document.getElementById('evictionVal').textContent = applied.eviction + '%';
+      document.getElementById('totalVram').value = applied.total_vram_gb;
+      document.getElementById('totalVramVal').textContent = applied.total_vram_gb + ' GB';
+      document.getElementById('totalRam').value = applied.total_ram_gb;
+      document.getElementById('totalRamVal').textContent = applied.total_ram_gb + ' GB';
       updateDataModeUI();
+      updateApplyButton();
     }
     let activeTab = 'resources';
     function switchTab(tab) {
@@ -191,9 +295,10 @@ HTML = """<!DOCTYPE html>
     }
     async function refreshJson() {
       try {
+        // Same-origin proxy so the panel works behind port-forwarding (only :3002 needs to be reachable).
         const url = activeTab === 'resources'
-          ? 'http://localhost:3001/status/resources.json'
-          : 'http://localhost:3001/status/metrics.json';
+          ? '/preview/resources.json'
+          : '/preview/metrics.json';
         const r = await fetch(url);
         const data = await r.json();
         const pretty = JSON.stringify(data, null, 2);
@@ -211,12 +316,6 @@ HTML = """<!DOCTYPE html>
         setTimeout(() => btn.textContent = 'Copy', 1500);
       });
     }
-    // Re-fetch JSON after every state change
-    const origSendState = sendState;
-    sendState = async function() {
-      await origSendState();
-      setTimeout(refreshJson, 200);
-    };
     refresh();
     refreshJson();
   </script>
@@ -228,6 +327,20 @@ class ControlHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/current":
             body = json.dumps(read_state()).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(body)
+        elif self.path.startswith("/preview/"):
+            # Proxy the preview request through this server so the JSON tab works
+            # even when only port 3002 is reachable (e.g. remote dev via port-forwarding).
+            name = self.path.rsplit("/", 1)[-1]
+            try:
+                resp = urlopen(f"{MOCK_SERVER}/status/{name}", timeout=5)
+                body = resp.read()
+            except Exception as e:
+                self.send_error(502, f"Failed to reach mock server: {e}")
+                return
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
@@ -248,12 +361,18 @@ class ControlHandler(BaseHTTPRequestHandler):
                 state["loading"] = params["loading"][0] == "1"
             if "eviction" in params:
                 state["eviction"] = max(0, min(100, int(params["eviction"][0])))
+            if "total_vram_gb" in params:
+                state["total_vram_gb"] = max(1, min(80, int(params["total_vram_gb"][0])))
+            if "total_ram_gb" in params:
+                state["total_ram_gb"] = max(1, min(128, int(params["total_ram_gb"][0])))
             if "synthetic" in params:
                 state["synthetic"] = params["synthetic"][0] == "1"
             write_state(state)
             mode = "synthetic" if state.get("synthetic", True) else "real"
             print(
-                f"[control] {mode}, {state['num_detectors']} detectors, loading={state['loading']}, eviction={state.get('eviction', 75)}"
+                f"[control] {mode}, {state['num_detectors']} detectors, "
+                f"loading={state['loading']}, eviction={state['eviction']}, "
+                f"vram={state['total_vram_gb']}GB, ram={state['total_ram_gb']}GB"
             )
             self.send_response(200)
             self.end_headers()
