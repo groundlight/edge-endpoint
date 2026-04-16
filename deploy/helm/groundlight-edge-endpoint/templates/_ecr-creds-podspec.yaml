@@ -5,6 +5,7 @@ serviceAccountName: edge-endpoint-service-account
 containers:
   - name: aws-cli
     image: amazon/aws-cli:latest
+    imagePullPolicy: IfNotPresent
     command:
       - /bin/sh
       - /app/init-aws-access-retrieve.sh
@@ -26,6 +27,7 @@ containers:
 
   - name: kubectl
     image: bitnami/kubectl:latest
+    imagePullPolicy: IfNotPresent
     command:
       - /bin/sh
       - /app/init-aws-access-apply.sh

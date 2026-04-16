@@ -1,3 +1,4 @@
+import contextvars
 import json
 import logging
 import os
@@ -24,6 +25,7 @@ from app.core.naming import (
 )
 from app.core.speedmon import SpeedMonitor
 from app.core.utils import ModelInfoBase, ModelInfoWithBinary, parse_model_info
+from app.profiling.context import get_current_span, get_current_tracer, trace_span
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +48,12 @@ def is_edge_inference_ready(inference_client_url: str) -> bool:
 def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, content_type: str) -> dict:
     inference_url = f"http://{inference_client_url}/infer"
     headers = {"Content-Type": content_type}
+    tracer = get_current_tracer()
+    span = get_current_span()
+    if tracer is not None and span is not None:
+        # Consumed by the inference server's TracingMiddleware to create correlated child spans
+        headers["X-GL-Trace-Id"] = tracer.trace_id
+        headers["X-GL-Parent-Span-Id"] = span.span_id
     try:
         logger.debug(f"Submitting image for inference to {inference_url}")
         response = requests.post(inference_url, data=image_bytes, headers=headers)
@@ -58,6 +66,19 @@ def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, co
         raise RuntimeError("Failed to submit image for inference") from e
 
 
+@trace_span
+def _submit_primary_inference(inference_client_url: str, image_bytes: bytes, content_type: str) -> dict:
+    """Wrapper around submit_image_for_inference for separate tracing of primary inference."""
+    return submit_image_for_inference(inference_client_url, image_bytes, content_type)
+
+
+@trace_span
+def _submit_oodd_inference(inference_client_url: str, image_bytes: bytes, content_type: str) -> dict:
+    """Wrapper around submit_image_for_inference for separate tracing of OODD inference."""
+    return submit_image_for_inference(inference_client_url, image_bytes, content_type)
+
+
+@trace_span
 def get_inference_result(primary_response: dict, oodd_response: dict | None, mode: ModeEnum | None = None) -> str:
     """
     Get the final inference result from the primary and OODD responses. If the OODD response is None, we return the
@@ -244,6 +265,7 @@ class EdgeInferenceManager:
         self.separate_oodd_inference = separate_oodd_inference
         self.last_escalation_times: dict[str, float | None] = {}
 
+    @trace_span
     def inference_is_available(self, detector_id: str) -> bool:
         """Check whether inference pods for this detector are ready to serve."""
         primary_url = get_edge_inference_service_name(detector_id) + ":8000"
@@ -284,12 +306,20 @@ class EdgeInferenceManager:
         if self.separate_oodd_inference:
             oodd_url = get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
             with ThreadPoolExecutor(max_workers=2) as executor:
-                f_primary = executor.submit(submit_image_for_inference, primary_url, image_bytes, content_type)
-                f_oodd = executor.submit(submit_image_for_inference, oodd_url, image_bytes, content_type)
+                if get_current_tracer() is not None:
+                    ctx_primary = contextvars.copy_context()
+                    ctx_oodd = contextvars.copy_context()
+                    f_primary = executor.submit(
+                        ctx_primary.run, _submit_primary_inference, primary_url, image_bytes, content_type
+                    )
+                    f_oodd = executor.submit(ctx_oodd.run, _submit_oodd_inference, oodd_url, image_bytes, content_type)
+                else:
+                    f_primary = executor.submit(submit_image_for_inference, primary_url, image_bytes, content_type)
+                    f_oodd = executor.submit(submit_image_for_inference, oodd_url, image_bytes, content_type)
                 response = f_primary.result()
                 oodd_response = f_oodd.result()
         else:
-            response = submit_image_for_inference(primary_url, image_bytes, content_type)
+            response = _submit_primary_inference(primary_url, image_bytes, content_type)
             oodd_response = None
 
         output_dict = get_inference_result(response, oodd_response, mode)

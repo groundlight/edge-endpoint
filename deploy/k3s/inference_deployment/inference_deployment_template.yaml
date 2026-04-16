@@ -107,6 +107,9 @@ spec:
         - name: pina-models
           mountPath: /opt/models
           readOnly: true
+        # Shared volume for profiling traces.
+        - name: device-info-volume
+          mountPath: /opt/groundlight/device
         ports:
         - containerPort: 8000
           name: http-fastapi
@@ -143,3 +146,7 @@ spec:
         hostPath:
           path: /opt/groundlight/edge/pinamod-public
           type: Directory
+      - name: device-info-volume
+        hostPath:
+          path: /opt/groundlight/device
+          type: DirectoryOrCreate

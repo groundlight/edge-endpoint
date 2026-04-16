@@ -188,7 +188,7 @@ sdist = { url = "https://files.pythonhosted.org/packages/ed/0e/5c61eedde9f6c8771
 
 [[package]]
 name = "groundlight"
-version = "0.25.0"
+version = "0.26.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
@@ -201,9 +201,9 @@ dependencies = [
     { name = "typer" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/69/88/ed99ad809f51b77e7be0cd4d627acd35ecdab9549062f7add0a6978835b0/groundlight-0.25.0.tar.gz", hash = "sha256:98d1245d9a6d88871da6468c337a978b38b111b23d799ba0c019c87dc31f0570", size = 113211, upload-time = "2026-03-18T19:36:33.085Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a1/68/b7983fc6f6411c15831b9d96282c96725acfbf658b565727a19490726b97/groundlight-0.26.0.tar.gz", hash = "sha256:b9edb0c5f49bd8f7577e8c6a9bfdccae179c9f05e9d7fd203a042922adbcaf2d", size = 114465, upload-time = "2026-04-07T23:18:18.073Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/75/be/22f4b7cd4fe2cf90af6d24d30e27120196bcf027fe7685bbf71460454b53/groundlight-0.25.0-py3-none-any.whl", hash = "sha256:1ee961c40f7ba7cfc6e2a0e7a282c9ee13bec404f02f321c9df98880eae2626d", size = 329794, upload-time = "2026-03-18T19:36:31.748Z" },
+    { url = "https://files.pythonhosted.org/packages/19/5d/383eb0dbe4a02c2239ddc5c8c81e8ed8dcb4e31b86127ecc7db3e261013f/groundlight-0.26.0-py3-none-any.whl", hash = "sha256:70d821237b9ece6d9620990a09a097a980c8ab0796427ac60aa779cc27116252", size = 331476, upload-time = "2026-04-07T23:18:16.716Z" },
 ]
 
 [[package]]
@@ -293,7 +293,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "gputil", specifier = ">=1.4.0" },
-    { name = "groundlight", specifier = ">=0.25.0" },
+    { name = "groundlight", specifier = ">=0.26.0" },
     { name = "matplotlib", specifier = ">=3.10.6" },
     { name = "opencv-python", specifier = ">=4.12.0.88" },
     { name = "psutil", specifier = ">=7.1.0" },
