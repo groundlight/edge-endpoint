@@ -226,7 +226,7 @@ HTML = """<!DOCTYPE html>
 
     function adjust(delta) {
       const el = document.getElementById('num');
-      const next = Math.max(0, Math.min(29, parseInt(el.textContent, 10) + delta));
+      const next = Math.max(0, parseInt(el.textContent, 10) + delta);
       el.textContent = next;
       updateApplyButton();
     }
@@ -356,7 +356,7 @@ class ControlHandler(BaseHTTPRequestHandler):
             params = parse_qs(urlparse(self.path).query)
             state = read_state()
             if "num_detectors" in params:
-                state["num_detectors"] = max(0, min(int(params["num_detectors"][0]), 29))
+                state["num_detectors"] = max(0, int(params["num_detectors"][0]))
             if "loading" in params:
                 state["loading"] = params["loading"][0] == "1"
             if "eviction" in params:

@@ -14,7 +14,8 @@ import { CodeHighlight } from "@mantine/code-highlight";
 import DetectorDetails from "./components/DetectorDetails";
 import ResourceUsage from "./components/ResourceUsage";
 
-const REFRESH_MS = 10_000;
+// Faster polling in dev is helpful when iterating, slow down polling in prod
+const REFRESH_MS = import.meta.env.DEV ? 1_000 : 10_000;
 
 const parseIfJson = (value) => {
   if (typeof value === "string") {

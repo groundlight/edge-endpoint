@@ -23,8 +23,6 @@ DEFAULT_TOTAL_RAM_GB = 15
 EDGE_ENDPOINT_RAM_BYTES = 1_200_000_000  # synthetic baseline for non-inference pods
 OTHER_RAM_BASELINE_BYTES = 2_800_000_000  # kernel, kubelet, unattributed ns-local pods
 
-random.seed(42)
-DETECTOR_POOL = []
 NAMES = [
     "Hardhat Detection",
     "Forklift Counter",
@@ -36,37 +34,30 @@ NAMES = [
     "Parking Lot",
     "Safety Vest",
     "Gauge Reading",
-    "Crack Detection",
-    "Weld Inspection",
-    "Pallet Counter",
-    "Smoke Detection",
-    "Leak Detection",
-    "Label Verification",
-    "Package Sorting",
-    "Belt Alignment",
-    "Valve Position",
-    "Tank Level",
-    "Fence Integrity",
-    "Vehicle Counter",
-    "Pedestrian Safety",
-    "Dock Door",
-    "Aisle Clearance",
-    "Bin Fullness",
-    "Rust Detection",
-    "Bolt Presence",
-    "Cable Routing",
 ]
-for i, name in enumerate(NAMES):
-    DETECTOR_POOL.append(
-        {
-            "id": f"det_{i:04d}_{name.replace(' ', '_')[:12]}",
-            "name": name,
-            "primary_vram": random.randint(380, 430) * 1_000_000,
-            "oodd_vram": random.randint(380, 400) * 1_000_000,
-            "primary_ram": random.randint(780, 1250) * 1_000_000,
-            "oodd_ram": random.randint(780, 850) * 1_000_000,
-        }
-    )
+
+
+def _make_detector(i: int) -> dict:
+    """Synthesise a single mock detector for index `i`.
+
+    There is no cap on detector count; the pool is generated on demand by
+    cycling through NAMES and appending an integer suffix on each cycle
+    (e.g. "Hardhat Detection", ..., "Hardhat Detection 1", ...). Resource
+    values are seeded per-index so the same `i` always produces the same
+    detector across calls.
+    """
+    cycle = i // len(NAMES)
+    base_name = NAMES[i % len(NAMES)]
+    name = base_name if cycle == 0 else f"{base_name} {cycle}"
+    rng = random.Random(i)
+    return {
+        "id": f"det_{i:04d}_{base_name.replace(' ', '_')[:12]}",
+        "name": name,
+        "primary_vram": rng.randint(380, 430) * 1_000_000,
+        "oodd_vram": rng.randint(380, 400) * 1_000_000,
+        "primary_ram": rng.randint(780, 1250) * 1_000_000,
+        "oodd_ram": rng.randint(780, 850) * 1_000_000,
+    }
 
 
 DEFAULT_STATE = {
@@ -87,7 +78,7 @@ def read_state():
     except (FileNotFoundError, ValueError, json.JSONDecodeError):
         raw = {}
     return {
-        "num_detectors": max(0, min(int(raw.get("num_detectors", DEFAULT_STATE["num_detectors"])), len(DETECTOR_POOL))),
+        "num_detectors": max(0, int(raw.get("num_detectors", DEFAULT_STATE["num_detectors"]))),
         "loading": bool(raw.get("loading", DEFAULT_STATE["loading"])),
         "eviction": int(raw.get("eviction", DEFAULT_STATE["eviction"])),
         "synthetic": bool(raw.get("synthetic", DEFAULT_STATE["synthetic"])),
@@ -110,7 +101,7 @@ def build_resources(state):
     loading_ram = 0
 
     for i in range(num_detectors):
-        d = DETECTOR_POOL[i]
+        d = _make_detector(i)
         det_vram = d["primary_vram"] + d["oodd_vram"]
         det_ram = d["primary_ram"] + d["oodd_ram"]
         detectors.append(
@@ -176,7 +167,7 @@ def build_resources(state):
 def build_metrics(state):
     detector_details = {}
     for i in range(state["num_detectors"]):
-        d = DETECTOR_POOL[i]
+        d = _make_detector(i)
         detector_details[d["id"]] = {
             "detector_name": d["name"],
             "status": "ready",

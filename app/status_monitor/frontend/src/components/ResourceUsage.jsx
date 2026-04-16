@@ -293,10 +293,14 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
       <div className="resource-donuts-row">
         <Stack gap="xs" align="center">
           <Text size="lg" fw={700} c="gray.8">VRAM</Text>
+          {/* VRAM info is reported by inference pods. When none are running
+              we can't tell whether a GPU exists on this machine, so we show
+              a neutral "-" placeholder (keeps donuts vertically aligned)
+              rather than claiming "No GPU". */}
           {hasVram ? (
             <GpuCapacitySummary observedGpus={observedGpus} totalBytes={vram.total} usedBytes={vram.used} />
           ) : (
-            <Text size="sm" c="gray.6">No GPU discovered</Text>
+            <Text size="sm" c="gray.6">-</Text>
           )}
           <DonutChart
             slices={vramSlices.slices}

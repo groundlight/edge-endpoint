@@ -13,17 +13,19 @@ reported as a single `edge_endpoint_bytes` bucket on `system.ram`.
 import json
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 import requests
 from kubernetes import client, config
 
-from app.metrics.system_metrics import _pod_is_ready, get_namespace
+from app.metrics.system_metrics import _DATETIME_MIN_UTC, _pod_is_ready, get_namespace
 
 logger = logging.getLogger(__name__)
 
 GPU_ENDPOINT_PORT = 8000
 GPU_ENDPOINT_PATH = "/gpu-usage"
 HTTP_TIMEOUT_SEC = 2
+GPU_QUERY_MAX_WORKERS = 16
 
 _K8S_MEM_SUFFIXES = {
     "Ki": 1024,
@@ -65,6 +67,18 @@ class ResourceMetricsCollector:
     """
 
     def collect(self) -> dict:
+        """Build the `/status/resources.json` payload.
+
+        Returns a dict with two top-level keys:
+            - `system`: node-wide `ram` and `vram` totals, plus aggregate
+              buckets for currently-loading detectors, edge-endpoint platform
+              overhead, and (for VRAM) the list of observed GPU devices.
+            - `detectors`: a list of per-detector entries, each with nested
+              `ram` and `vram` objects containing `primary_bytes`,
+              `oodd_bytes`, and `total_bytes`.
+
+        If called outside a Kubernetes cluster, returns `{"error": "..."}`.
+        """
         try:
             config.load_incluster_config()
         except config.ConfigException:
@@ -88,6 +102,12 @@ class ResourceMetricsCollector:
             observed_gpus, total_vram, used_vram = [], 0, 0
             detectors, loading_vram, loading_ram = [], 0, 0
 
+        # Anything in the namespace that isn't a recognised Running inference
+        # pod counts as "edge-endpoint platform overhead": the edge-endpoint
+        # server itself, plus sidecars (network-healer, splunk, otel, etc.).
+        # This is a broad heuristic; a stray Job or a user-deployed pod in the
+        # edge namespace would also land in this bucket. Acceptable for now,
+        # since the namespace is chart-owned and unlikely to host foreign pods.
         inference_pod_names = {pod.metadata.name for pod, _, _, _ in inference_pods}
         edge_endpoint_ram = sum(
             bytes_used for name, bytes_used in ram_by_pod.items() if name not in inference_pod_names
@@ -162,6 +182,10 @@ def _parse_eviction_threshold(node) -> int | None:
     `k3s.io/node-args` annotation for eviction-soft first, then eviction-hard.
     This is k3s-specific; on non-k3s clusters this will always return None and
     the UI will simply omit the threshold marker.
+
+    Only the percentage form (`memory.available<10%`) is supported. If the
+    edge is configured with an absolute threshold (`memory.available<500Mi`)
+    this returns None and the donut will omit the marker.
     """
     annotations = node.metadata.annotations or {}
     node_args_raw = annotations.get("k3s.io/node-args", "")
@@ -215,7 +239,7 @@ def _pick_active_pods(pods: list[tuple]) -> set[str]:
     for group in groups.values():
         ready = [e for e in group if e[3]]
         if ready:
-            best = max(ready, key=lambda e: e[0].metadata.creation_timestamp or "")
+            best = max(ready, key=lambda e: e[0].metadata.creation_timestamp or _DATETIME_MIN_UTC)
             active.add(best[0].metadata.name)
     return active
 
@@ -233,8 +257,19 @@ def _query_pod_gpu(pod) -> dict | None:
 
 
 def _query_all_pod_gpus(inference_pods: list[tuple]) -> dict[str, dict | None]:
-    """Query GPU data from each inference pod's HTTP endpoint."""
-    return {pod.metadata.name: _query_pod_gpu(pod) for pod, _, _, _ in inference_pods}
+    """Query GPU data from every inference pod's HTTP endpoint in parallel.
+
+    Runs the per-pod HTTP GETs concurrently so a single slow/hung pod can't
+    stall the whole endpoint. Worst-case latency is ~HTTP_TIMEOUT_SEC rather
+    than N * HTTP_TIMEOUT_SEC.
+    """
+    pods = [pod for pod, _, _, _ in inference_pods]
+    if not pods:
+        return {}
+    max_workers = min(GPU_QUERY_MAX_WORKERS, len(pods))
+    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="gpu-query") as pool:
+        results = list(pool.map(_query_pod_gpu, pods))
+    return {pod.metadata.name: data for pod, data in zip(pods, results)}
 
 
 def _build_gpu_summary(gpu_responses: dict[str, dict | None]) -> tuple[list, int, int]:
@@ -276,6 +311,11 @@ def _build_gpu_summary(gpu_responses: dict[str, dict | None]) -> tuple[list, int
             elif gpu_used > existing.get("used_bytes", 0):
                 existing["used_bytes"] = gpu_used
 
+        # Every inference pod on a given node sees the same physical GPUs via
+        # the nvidia device plugin, so we take the max across pods (dedupe)
+        # rather than summing (which would overcount). If that invariant ever
+        # breaks (e.g. GPU MIG or multi-instance scheduling), this should be
+        # revisited.
         all_gpus_total = max(all_gpus_total, pod_total)
         all_gpus_used = max(all_gpus_used, pod_used)
 
