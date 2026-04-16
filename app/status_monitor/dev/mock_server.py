@@ -20,6 +20,8 @@ STATE_FILE = "/tmp/mock-state.json"
 GB = 1024**3
 DEFAULT_TOTAL_VRAM_GB = 15  # approx. Tesla T4
 DEFAULT_TOTAL_RAM_GB = 15
+EDGE_ENDPOINT_RAM_BYTES = 1_200_000_000  # synthetic baseline for non-inference pods
+OTHER_RAM_BASELINE_BYTES = 2_800_000_000  # kernel, kubelet, unattributed ns-local pods
 
 random.seed(42)
 DETECTOR_POOL = []
@@ -103,7 +105,7 @@ def build_resources(state):
 
     detectors = []
     used_vram = 200_000_000 if num_detectors > 0 else 0
-    used_ram = 4_000_000_000
+    used_ram = EDGE_ENDPOINT_RAM_BYTES + OTHER_RAM_BASELINE_BYTES
     loading_vram = 0
     loading_ram = 0
 
@@ -156,12 +158,14 @@ def build_resources(state):
                 "used_bytes": min(used_ram, total_ram),
                 "total_bytes": total_ram,
                 "loading_detectors_bytes": loading_ram,
+                "edge_endpoint_bytes": EDGE_ENDPOINT_RAM_BYTES,
                 "eviction_threshold_pct": state["eviction"],
             },
             "vram": {
                 "used_bytes": vram_used_bytes,
                 "total_bytes": vram_total_bytes,
                 "loading_detectors_bytes": loading_vram,
+                "edge_endpoint_bytes": 0,
                 "observed_gpus": observed_gpus,
             },
         },

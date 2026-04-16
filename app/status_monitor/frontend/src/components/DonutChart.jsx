@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Sector } from "recharts";
 import { Stack, Text } from "@mantine/core";
-import { formatBytes, MIN_DETECTOR_SLOTS } from "./chartUtils";
+import { formatBytes, getSliceHelpText, MIN_DETECTOR_SLOTS } from "./chartUtils";
 import EvictionMarker from "./EvictionMarker";
 
 export const DONUT_SIZE = 400;
@@ -16,6 +16,7 @@ const ZERO_SLICE = { type: "placeholder", bytes: 0, color: "transparent", pct: 0
 function SliceTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;
   const { payload: slice, value } = payload[0];
+  const helpText = getSliceHelpText(slice.sliceKey);
   return (
     <div className="donut-tooltip">
       <Text className="donut-tooltip-line" fw={600}>{slice.label}</Text>
@@ -25,6 +26,7 @@ function SliceTooltip({ active, payload }) {
       {slice.type === "detector" && slice.detectorId && (
         <Text className="donut-tooltip-line">{slice.detectorId}</Text>
       )}
+      {helpText && <Text className="donut-tooltip-help">{helpText}</Text>}
     </div>
   );
 }

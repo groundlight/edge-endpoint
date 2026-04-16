@@ -4,6 +4,23 @@
 export const FREE_COLOR = "#E0E0E0";
 export const LOADING_COLOR = "#555555";
 export const OTHER_COLOR = "#B0B0B0";
+export const EDGE_ENDPOINT_COLOR = "#000000";
+
+/** Human-friendly descriptions for each system-level slice, keyed by the
+ * stable `sliceKey` produced by `buildSlices`. Surfaced in the donut tooltip
+ * and as a hover tooltip on the corresponding legend row. Detector slices
+ * intentionally have no entry here.
+ */
+export const SYSTEM_SLICE_HELP = {
+  "summary:loading": "Detectors that are initializing or updating",
+  "summary:edge-endpoint": "Platform overhead — all Edge Endpoint processes other than detectors",
+  "summary:other": "Resources used outside the Edge Endpoint, such as the operating system and other applications",
+  "summary:free": "Unused capacity",
+};
+
+export function getSliceHelpText(sliceKey) {
+  return SYSTEM_SLICE_HELP[sliceKey] || null;
+}
 
 /** Minimum number of detector slots pre-allocated in the donut chart.
  * The chart pads unused slots with zero-byte placeholders so that recharts
@@ -58,6 +75,7 @@ export function buildSlices({
   totalBytes,
   usedBytes,
   loadingBytes,
+  edgeEndpointBytes = 0,
   colorMap,
   resourceKey,
   resourceLabel,
@@ -89,6 +107,17 @@ export function buildSlices({
     bytes: loadingBytes,
     color: LOADING_COLOR,
     pct: pct(loadingBytes),
+    resourceLabel,
+  });
+
+  accountedBytes += edgeEndpointBytes;
+  slices.push({
+    sliceKey: "summary:edge-endpoint",
+    type: "summary",
+    label: "Edge Endpoint",
+    bytes: edgeEndpointBytes,
+    color: EDGE_ENDPOINT_COLOR,
+    pct: pct(edgeEndpointBytes),
     resourceLabel,
   });
 

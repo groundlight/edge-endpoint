@@ -1,4 +1,4 @@
-import { Group, Text } from "@mantine/core";
+import { Group, Text, Tooltip } from "@mantine/core";
 
 const CELL_VALUE_STYLE = { whiteSpace: "nowrap", minWidth: 64, textAlign: "right" };
 const CELL_PCT_STYLE = { whiteSpace: "nowrap", minWidth: 48, textAlign: "right" };
@@ -7,7 +7,7 @@ const CELL_PCT_STYLE = { whiteSpace: "nowrap", minWidth: 48, textAlign: "right" 
  *
  * Rendering and hover state are driven entirely by the parent; this component
  * is pure. Set `onClick` to make the row act as a button (e.g. for copying
- * a detector id).
+ * a detector id). Set `helpText` to show a tooltip when the row is hovered.
  */
 export default function LegendItem({
   color,
@@ -17,6 +17,7 @@ export default function LegendItem({
   ramValue,
   ramPct,
   hasVram,
+  helpText,
   striped = false,
   active = false,
   onHoverStart,
@@ -27,7 +28,7 @@ export default function LegendItem({
   const background = active ? "#e9f2ff" : striped ? "#f7f8fa" : "transparent";
   const border = active ? "1px solid #7aa7e0" : "1px solid transparent";
 
-  return (
+  const row = (
     <div
       style={{
         padding: "3px 6px",
@@ -63,5 +64,12 @@ export default function LegendItem({
         <Text size="sm" c="gray.8" style={CELL_PCT_STYLE}>{ramPct}</Text>
       </Group>
     </div>
+  );
+
+  if (!helpText) return row;
+  return (
+    <Tooltip label={helpText} multiline w={260} openDelay={300} position="top" withArrow>
+      {row}
+    </Tooltip>
   );
 }

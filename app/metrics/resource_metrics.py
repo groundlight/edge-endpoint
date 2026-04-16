@@ -4,6 +4,10 @@ GPU (VRAM) data comes from each inference pod's /gpu-usage HTTP endpoint.
 RAM data comes from the Kubernetes Metrics Server (metrics.k8s.io/v1beta1).
 System-level RAM uses the Kubernetes Node API so that the numbers match
 the kubelet's view of memory (which drives eviction decisions).
+
+RAM used by non-inference pods in the edge namespace (the edge-endpoint
+server itself plus sidecars like splunk, opentelemetry-collector, etc.) is
+reported as a single `edge_endpoint_bytes` bucket on `system.ram`.
 """
 
 import json
@@ -31,19 +35,24 @@ _K8S_MEM_SUFFIXES = {
     "G": 1000**3,
     "T": 1000**4,
 }
-_K8S_MEM_RE = re.compile(r"^(\d+)([A-Za-z]{1,2})?$")
+_K8S_MEM_RE = re.compile(r"^(\d+(?:\.\d+)?)([A-Za-z]{1,2})?$")
 
 
 def _parse_k8s_memory(quantity: str) -> int:
-    """Parse a Kubernetes memory quantity string (e.g. '524288Ki') into bytes."""
+    """Parse a Kubernetes memory quantity string (e.g. '524288Ki', '1.5Gi') into bytes.
+
+    Kubelet-emitted values are almost always integers, but resource quantities
+    can legally be fractional, so we accept those too. Unparseable inputs log
+    a warning and return 0 rather than silently failing.
+    """
     m = _K8S_MEM_RE.match(quantity)
     if not m:
+        logger.warning("Could not parse Kubernetes memory quantity %r; returning 0", quantity)
         return 0
-    value = int(m.group(1))
+    value = float(m.group(1))
     suffix = m.group(2)
-    if suffix:
-        return value * _K8S_MEM_SUFFIXES.get(suffix, 1)
-    return value
+    multiplier = _K8S_MEM_SUFFIXES.get(suffix, 1) if suffix else 1
+    return int(value * multiplier)
 
 
 class ResourceMetricsCollector:
@@ -65,11 +74,11 @@ class ResourceMetricsCollector:
         namespace = get_namespace()
         v1 = client.CoreV1Api()
         inference_pods = _find_inference_pods(v1.list_namespaced_pod(namespace=namespace))
-        node_ram = _get_node_ram()
+        node_ram = _get_node_ram(v1)
+        ram_by_pod = _get_pod_ram_metrics(namespace)
 
         if inference_pods:
             active_pods = _pick_active_pods(inference_pods)
-            ram_by_pod = _get_pod_ram_metrics(namespace)
             gpu_responses = _query_all_pod_gpus(inference_pods)
             observed_gpus, total_vram, used_vram = _build_gpu_summary(gpu_responses)
             detectors, loading_vram, loading_ram = _attribute_detector_resources(
@@ -79,18 +88,25 @@ class ResourceMetricsCollector:
             observed_gpus, total_vram, used_vram = [], 0, 0
             detectors, loading_vram, loading_ram = [], 0, 0
 
+        inference_pod_names = {pod.metadata.name for pod, _, _, _ in inference_pods}
+        edge_endpoint_ram = sum(
+            bytes_used for name, bytes_used in ram_by_pod.items() if name not in inference_pod_names
+        )
+
         return {
             "system": {
                 "ram": {
                     "used_bytes": node_ram["used"],
                     "total_bytes": node_ram["total"],
                     "loading_detectors_bytes": loading_ram,
+                    "edge_endpoint_bytes": edge_endpoint_ram,
                     "eviction_threshold_pct": node_ram["eviction_threshold_pct"],
                 },
                 "vram": {
                     "used_bytes": used_vram,
                     "total_bytes": total_vram,
                     "loading_detectors_bytes": loading_vram,
+                    "edge_endpoint_bytes": 0,
                     "observed_gpus": observed_gpus,
                 },
             },
@@ -98,7 +114,7 @@ class ResourceMetricsCollector:
         }
 
 
-def _get_node_ram() -> dict:
+def _get_node_ram(v1: "client.CoreV1Api") -> dict:
     """Get system RAM total and used from the Kubernetes Node API and Metrics Server.
 
     Uses the node's capacity for total RAM and the Metrics Server for current
@@ -106,10 +122,12 @@ def _get_node_ram() -> dict:
     Also extracts the kubelet's soft eviction threshold.
     """
     try:
-        v1 = client.CoreV1Api()
         nodes = v1.list_node()
         if not nodes.items:
             raise ValueError("No nodes found")
+        # The edge endpoint is deployed on single-node k3s; nodes.items[0] is
+        # the only node. On a hypothetical multi-node cluster this would pick
+        # an arbitrary node, which would mis-report capacity.
         node = nodes.items[0]
         total = _parse_k8s_memory(node.status.capacity.get("memory", "0"))
 
@@ -137,11 +155,13 @@ _EVICTION_MEM_RE = re.compile(r"memory\.available<(\d+)%")
 
 
 def _parse_eviction_threshold(node) -> int | None:
-    """Extract the soft memory eviction threshold from kubelet args.
+    """Extract the soft memory eviction threshold from the k3s node-args annotation.
 
     Returns the percentage of total RAM at which the kubelet starts evicting
-    pods (i.e. 100 - available%), or None if not found. Checks the
-    k3s.io/node-args annotation for eviction-soft first, then eviction-hard.
+    pods (i.e. 100 - available%), or None if not found. Reads the
+    `k3s.io/node-args` annotation for eviction-soft first, then eviction-hard.
+    This is k3s-specific; on non-k3s clusters this will always return None and
+    the UI will simply omit the threshold marker.
     """
     annotations = node.metadata.annotations or {}
     node_args_raw = annotations.get("k3s.io/node-args", "")

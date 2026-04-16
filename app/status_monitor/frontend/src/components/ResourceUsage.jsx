@@ -8,10 +8,12 @@ import {
   buildSlices,
   formatBytes,
   formatPct,
+  getSliceHelpText,
   DETECTOR_COLORS,
   FREE_COLOR,
   LOADING_COLOR,
   OTHER_COLOR,
+  EDGE_ENDPOINT_COLOR,
 } from "./chartUtils";
 
 const MAX_VISIBLE_LEGEND_ITEMS = 8;
@@ -69,6 +71,7 @@ function buildLegendRows({ detectors, nameMap, colorMap, vram, ram }) {
     sliceKey,
     color,
     label,
+    helpText: getSliceHelpText(sliceKey),
     vramValue: formatBytes(vramBytes),
     vramPct: formatPct(vramBytes, vram.total),
     ramValue: formatBytes(ramBytes),
@@ -77,6 +80,7 @@ function buildLegendRows({ detectors, nameMap, colorMap, vram, ram }) {
 
   const systemRows = [
     systemRow("summary:loading", LOADING_COLOR, "Loading Detector Models", vram.loading, ram.loading),
+    systemRow("summary:edge-endpoint", EDGE_ENDPOINT_COLOR, "Edge Endpoint", vram.edgeEndpoint, ram.edgeEndpoint),
     systemRow("summary:other", OTHER_COLOR, "Other", vram.other, ram.other),
     systemRow("summary:free", FREE_COLOR, "Free", vram.free, ram.free),
   ];
@@ -219,11 +223,13 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
     total: systemVram.total_bytes || 0,
     used: systemVram.used_bytes || 0,
     loading: systemVram.loading_detectors_bytes || 0,
+    edgeEndpoint: systemVram.edge_endpoint_bytes || 0,
   };
   const ram = {
     total: systemRam.total_bytes || 0,
     used: systemRam.used_bytes || 0,
     loading: systemRam.loading_detectors_bytes || 0,
+    edgeEndpoint: systemRam.edge_endpoint_bytes || 0,
     evictionPct: systemRam.eviction_threshold_pct ?? null,
   };
 
@@ -238,6 +244,7 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
     totalBytes: hasVram ? vram.total : 1,
     usedBytes: hasVram ? vram.used : 0,
     loadingBytes: hasVram ? vram.loading : 0,
+    edgeEndpointBytes: hasVram ? vram.edgeEndpoint : 0,
     colorMap,
     resourceKey: "vram",
     resourceLabel: "VRAM",
@@ -250,6 +257,7 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
         totalBytes: ram.total,
         usedBytes: ram.used,
         loadingBytes: ram.loading,
+        edgeEndpointBytes: ram.edgeEndpoint,
         colorMap,
         resourceKey: "ram",
         resourceLabel: "RAM",
@@ -260,10 +268,17 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
     detectors,
     nameMap,
     colorMap,
-    vram: { total: vram.total, loading: vram.loading, other: vramSlices.otherBytes, free: vramSlices.freeBytes },
+    vram: {
+      total: vram.total,
+      loading: vram.loading,
+      edgeEndpoint: vram.edgeEndpoint,
+      other: vramSlices.otherBytes,
+      free: vramSlices.freeBytes,
+    },
     ram: {
       total: ram.total,
       loading: ram.loading,
+      edgeEndpoint: ram.edgeEndpoint,
       other: ramSlices?.otherBytes ?? 0,
       free: ramSlices?.freeBytes ?? 0,
     },
