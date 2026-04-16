@@ -31,6 +31,7 @@ def _():
         "_submit_oodd_inference": "#FFA15A",
         "get_inference_result": "#19D3F3",
         "safe_escalate_with_queue_write": "#FF6692",
+        "write_escalation_to_queue": "#B6E880",
     }
     FALLBACK_COLOR = "#B6B6B6"
 
@@ -90,7 +91,9 @@ def _(PROFILING_DIR, mo):
 
     traces_dir = _os.environ.get("PROFILING_TRACES_DIR", PROFILING_DIR)
 
-    refresh = mo.ui.refresh(default_interval="15s", label="Auto-refresh")
+    # Auto-refresh is opt-in (no default_interval) so the dashboard stays put
+    # while you investigate a trace. Pick an interval from the dropdown to enable.
+    refresh = mo.ui.refresh(options=["15s", "30s", "1m", "5m"], label="Auto-refresh")
 
     _time_options = {
         "Last 15 min": 15,
@@ -336,10 +339,7 @@ def _(MAX_TRACES_IN_SELECTOR, mo, span_filter, traces):
     # Apply the span filter, then show the N most recent matching traces.
     _required_span = span_filter.value
     if _required_span:
-        _matching = [
-            _t for _t in traces
-            if any(_s.get("name") == _required_span for _s in _t.get("spans", []))
-        ]
+        _matching = [_t for _t in traces if any(_s.get("name") == _required_span for _s in _t.get("spans", []))]
     else:
         _matching = traces
 
@@ -357,7 +357,11 @@ def _(MAX_TRACES_IN_SELECTOR, mo, span_filter, traces):
 
     _total = len(_matching)
     _shown = len(_recent)
-    _count_note = f"Showing {_shown} of {_total} matching traces." if _shown < _total else f"Showing all {_total} matching traces."
+    _count_note = (
+        f"Showing {_shown} of {_total} matching traces."
+        if _shown < _total
+        else f"Showing all {_total} matching traces."
+    )
 
     mo.vstack(
         [
