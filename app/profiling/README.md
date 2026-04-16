@@ -39,12 +39,12 @@ A [Marimo](https://marimo.io/) notebook provides interactive visualization of tr
 Marimo and plotly live in an **optional** `profiling` dependency group, so they are **not** installed by default. To install them:
 
 ```bash
-poetry install --with profiling
+poetry install --with profiling --no-root
 ```
 
 This keeps the ~50MB of dashboard dependencies out of everyone else's environment while letting anyone who wants the dashboard opt in.
 
-> **Note**: The production Docker image is built with `--without dev --without lint` (and does not include the `profiling` group either), so marimo is **not** installed in the `edge-endpoint` container. To view traces from a device, copy the trace files to your workstation (see [Custom Trace Data Directory](#custom-trace-data-directory)) or run `poetry install --with profiling` inside the container before launching the dashboard.
+> **Note**: The production Docker image is built with `--without dev --without lint` (and does not include the `profiling` group either), so marimo is **not** installed in the `edge-endpoint` container. To view traces from a device, copy the trace files to your workstation (see [Custom Trace Data Directory](#custom-trace-data-directory)) or run `poetry install --with profiling --no-root` inside the container before launching the dashboard.
 
 ### Launching the Dashboard
 
@@ -112,7 +112,7 @@ Auto-refresh polls every 15 seconds. If you just started profiling, wait up to 1
 
 **Dashboard shows ModuleNotFoundError for marimo or plotly:**
 
-The optional `profiling` dependency group isn't installed. Run `poetry install --with profiling` from the repo root.
+The optional `profiling` dependency group isn't installed. Run `poetry install --with profiling --no-root` from the repo root.
 
 ### Editing the Notebook
 
