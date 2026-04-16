@@ -310,9 +310,40 @@ def _(SPAN_COLORS, compute_time_series, go, mo, traces):
 
 
 @app.cell
-def _(MAX_TRACES_IN_SELECTOR, mo, traces):
-    # Show recent traces for waterfall selection.
-    _recent = sorted(traces, key=lambda t: t.get("start_wall_time_iso", ""), reverse=True)[:MAX_TRACES_IN_SELECTOR]
+def _(mo, traces):
+    # Collect all span names present in the current trace set to populate the filter.
+    _all_span_names = set()
+    for _t in traces:
+        for _s in _t.get("spans", []):
+            _n = _s.get("name")
+            if _n:
+                _all_span_names.add(_n)
+
+    _span_filter_options = {"Any span": ""}
+    for _n in sorted(_all_span_names, key=span_sort_key):
+        _span_filter_options[_n] = _n
+
+    span_filter = mo.ui.dropdown(
+        options=_span_filter_options,
+        value="Any span",
+        label="Containing span",
+    )
+    return (span_filter,)
+
+
+@app.cell
+def _(MAX_TRACES_IN_SELECTOR, mo, span_filter, traces):
+    # Apply the span filter, then show the N most recent matching traces.
+    _required_span = span_filter.value
+    if _required_span:
+        _matching = [
+            _t for _t in traces
+            if any(_s.get("name") == _required_span for _s in _t.get("spans", []))
+        ]
+    else:
+        _matching = traces
+
+    _recent = sorted(_matching, key=lambda t: t.get("start_wall_time_iso", ""), reverse=True)[:MAX_TRACES_IN_SELECTOR]
 
     _trace_options = {"(none)": ""}
     for _t in _recent:
@@ -324,13 +355,19 @@ def _(MAX_TRACES_IN_SELECTOR, mo, traces):
 
     trace_selector = mo.ui.dropdown(options=_trace_options, value="(none)", label="Select trace")
 
+    _total = len(_matching)
+    _shown = len(_recent)
+    _count_note = f"Showing {_shown} of {_total} matching traces." if _shown < _total else f"Showing all {_total} matching traces."
+
     mo.vstack(
         [
             mo.md("## Trace Waterfall"),
             mo.md(
-                f"Select one of the {MAX_TRACES_IN_SELECTOR} most recent traces to see a Gantt-style timeline of its spans."
+                f"Filter by a span to find specific traces (e.g. `safe_escalate_with_queue_write` for escalations), "
+                f"then select one to see a Gantt-style timeline. "
+                f"{_count_note}"
             ),
-            trace_selector,
+            mo.hstack([span_filter, trace_selector], justify="start", gap=1),
         ]
     )
     return (trace_selector,)
