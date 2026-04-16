@@ -85,7 +85,7 @@ def build_resources(state):
     loading = state["loading"]
 
     detectors = []
-    used_vram = 200_000_000
+    used_vram = 200_000_000 if num_detectors > 0 else 0
     used_ram = 4_000_000_000
     loading_vram = 0
     loading_ram = 0
@@ -114,9 +114,10 @@ def build_resources(state):
         used_vram += loading_vram
         used_ram += loading_ram
 
+    has_gpu = num_detectors > 0 or loading
     return {
-        "total_vram_bytes": TESLA_T4_TOTAL,
-        "used_vram_bytes": min(used_vram, TESLA_T4_TOTAL),
+        "total_vram_bytes": TESLA_T4_TOTAL if has_gpu else 0,
+        "used_vram_bytes": min(used_vram, TESLA_T4_TOTAL) if has_gpu else 0,
         "total_ram_bytes": SYSTEM_RAM_TOTAL,
         "used_ram_bytes": min(used_ram, SYSTEM_RAM_TOTAL),
         "ram_eviction_threshold_pct": state["eviction"],
@@ -130,7 +131,7 @@ def build_resources(state):
                 "used_vram_bytes": min(used_vram, TESLA_T4_TOTAL),
                 "index": 0,
             }
-        ],
+        ] if has_gpu else [],
     }
 
 

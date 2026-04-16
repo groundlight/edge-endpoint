@@ -271,18 +271,9 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
   const totalRam = resourceData.total_ram_bytes || 0;
   const usedRam = resourceData.used_ram_bytes || 0;
   const ramEvictionPct = resourceData.ram_eviction_threshold_pct ?? null;
-  const hasVram = totalVram > 0;
+  const observedGpus = resourceData.observed_gpus || [];
+  const hasVram = observedGpus.length > 0;
   const hasRam = totalRam > 0;
-
-  if (!hasVram && !hasRam) {
-    return (
-      <Paper shadow="xs" p="md" radius="sm">
-        <Text c="gray.8" fs="italic">
-          No resource data available.
-        </Text>
-      </Paper>
-    );
-  }
 
   const detNameMap = {};
   const detDeployTime = {};
@@ -307,12 +298,20 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
   const loadingVram = resourceData.loading_vram_bytes || 0;
   const loadingRam = resourceData.loading_ram_bytes || 0;
 
-  const vramResult = hasVram
-    ? buildSlices({
-        detectors, detNameMap, totalBytes: totalVram, usedBytes: usedVram,
-        loadingBytes: loadingVram, colorMap, vramKey: "total_vram_bytes", resourceLabel: "VRAM",
-      })
-    : null;
+  // Always build a consistent slice structure (even when there's no real data)
+  // so the donut chart's data array has a stable length across renders. This
+  // makes recharts animate smoothly between real-data and zero-state chart.
+  // When there's no data, the free slice fills 100% of a phantom 1-byte total.
+  const vramResult = buildSlices({
+    detectors: hasVram ? detectors : [],
+    detNameMap,
+    totalBytes: hasVram ? totalVram : 1,
+    usedBytes: hasVram ? usedVram : 0,
+    loadingBytes: hasVram ? loadingVram : 0,
+    colorMap,
+    vramKey: "total_vram_bytes",
+    resourceLabel: "VRAM",
+  });
 
   const ramResult = hasRam
     ? buildSlices({
@@ -321,7 +320,7 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
       })
     : null;
 
-  const vramPct = hasVram ? `${((usedVram / totalVram) * 100).toFixed(0)}%` : "0%";
+  const vramPct = hasVram ? `${((usedVram / totalVram) * 100).toFixed(0)}%` : "Unknown";
   const ramPct = hasRam ? `${((usedRam / totalRam) * 100).toFixed(0)}%` : "0%";
 
   // Build shared legend entries
@@ -380,23 +379,25 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
   return (
     <Paper shadow="xs" p="lg" radius="sm">
       <div className="resource-donuts-row">
-        {hasVram && (
-          <Stack gap="xs" align="center">
-            <Text size="lg" fw={700} c="gray.8">VRAM</Text>
+        <Stack gap="xs" align="center">
+          <Text size="lg" fw={700} c="gray.8">VRAM</Text>
+          {hasVram ? (
             <GpuCapacitySummary
-              observedGpus={resourceData.observed_gpus}
+              observedGpus={observedGpus}
               totalBytes={totalVram}
               usedBytes={usedVram}
             />
-            <DonutChart
-              slices={vramResult.slices}
-              centerText={vramPct}
-              activeSliceKey={hoveredSliceKey}
-              onSliceHover={onSliceHover}
-              onSliceClick={onSliceClick}
-            />
-          </Stack>
-        )}
+          ) : (
+            <Text size="sm" c="gray.6">No GPU discovered</Text>
+          )}
+          <DonutChart
+            slices={vramResult.slices}
+            centerText={vramPct}
+            activeSliceKey={hoveredSliceKey}
+            onSliceHover={onSliceHover}
+            onSliceClick={onSliceClick}
+          />
+        </Stack>
         {hasRam && (
           <Stack gap="xs" align="center">
             <Text size="lg" fw={700} c="gray.8">RAM</Text>

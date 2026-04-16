@@ -58,117 +58,32 @@ class ResourceMetricsCollector:
 
         namespace = get_namespace()
         v1 = client.CoreV1Api()
-        pods = v1.list_namespaced_pod(namespace=namespace)
-
-        inference_pods = _find_inference_pods(pods)
-        if not inference_pods:
-            return _empty_response()
-
-        active_pods = _pick_active_pods(inference_pods)
-        ram_by_pod = _get_pod_ram_metrics(namespace)
-
-        detectors: dict[str, dict] = {}
-        loading_vram_bytes = 0
-        loading_ram_bytes = 0
-        all_gpus_total = 0
-        all_gpus_used = 0
-        observed_gpus: dict[str, dict] = {}
-
-        for pod, det_id, is_oodd, _is_ready in inference_pods:
-            gpu_data = _query_pod_gpu(pod)
-
-            if gpu_data is not None:
-                gpu_devices = gpu_data.get("gpus") or []
-                pod_total = 0
-                pod_used = 0
-                for device in gpu_devices:
-                    gpu_name = device.get("name")
-                    gpu_total = device.get("total_bytes", 0)
-                    gpu_used = device.get("used_bytes", 0)
-                    gpu_uuid = device.get("uuid")
-                    gpu_index = device.get("index")
-                    pod_total += gpu_total
-                    pod_used += gpu_used
-                    if not gpu_name:
-                        continue
-                    key = str(gpu_uuid or f"{gpu_name}:{gpu_index}")
-                    existing = observed_gpus.get(key)
-                    if existing is None or gpu_total > existing.get("total_vram_bytes", 0):
-                        observed_gpus[key] = {
-                            "name": gpu_name,
-                            "total_vram_bytes": gpu_total,
-                            "used_vram_bytes": gpu_used,
-                            "index": gpu_index,
-                        }
-                    elif gpu_used > existing.get("used_vram_bytes", 0):
-                        existing["used_vram_bytes"] = gpu_used
-
-                all_gpus_total = max(all_gpus_total, pod_total)
-                all_gpus_used = max(all_gpus_used, pod_used)
-
-            pod_info = (gpu_data.get("pod") or {}) if gpu_data else {}
-            process_vram = pod_info.get("vram_bytes") or 0
-            process_ram = ram_by_pod.get(pod.metadata.name, 0)
-
-            if pod.metadata.name not in active_pods:
-                loading_vram_bytes += process_vram
-                loading_ram_bytes += process_ram
-                continue
-
-            if det_id not in detectors:
-                detectors[det_id] = {
-                    "detector_id": det_id,
-                    "primary_vram_bytes": None,
-                    "oodd_vram_bytes": None,
-                    "total_vram_bytes": 0,
-                    "primary_ram_bytes": None,
-                    "oodd_ram_bytes": None,
-                    "total_ram_bytes": 0,
-                }
-            det = detectors[det_id]
-            if is_oodd:
-                det["oodd_vram_bytes"] = (det["oodd_vram_bytes"] or 0) + process_vram
-                det["oodd_ram_bytes"] = (det["oodd_ram_bytes"] or 0) + process_ram
-            else:
-                det["primary_vram_bytes"] = (det["primary_vram_bytes"] or 0) + process_vram
-                det["primary_ram_bytes"] = (det["primary_ram_bytes"] or 0) + process_ram
-            det["total_vram_bytes"] = (det["primary_vram_bytes"] or 0) + (det["oodd_vram_bytes"] or 0)
-            det["total_ram_bytes"] = (det["primary_ram_bytes"] or 0) + (det["oodd_ram_bytes"] or 0)
-
+        inference_pods = _find_inference_pods(v1.list_namespaced_pod(namespace=namespace))
         node_ram = _get_node_ram()
 
+        if inference_pods:
+            active_pods = _pick_active_pods(inference_pods)
+            ram_by_pod = _get_pod_ram_metrics(namespace)
+            gpu_responses = _query_all_pod_gpus(inference_pods)
+            observed_gpus, total_vram, used_vram = _build_gpu_summary(gpu_responses)
+            detectors, loading_vram, loading_ram = _attribute_detector_resources(
+                inference_pods, active_pods, gpu_responses, ram_by_pod
+            )
+        else:
+            observed_gpus, total_vram, used_vram = [], 0, 0
+            detectors, loading_vram, loading_ram = [], 0, 0
+
         return {
-            "total_vram_bytes": all_gpus_total,
-            "used_vram_bytes": all_gpus_used,
+            "total_vram_bytes": total_vram,
+            "used_vram_bytes": used_vram,
             "total_ram_bytes": node_ram["total"],
             "used_ram_bytes": node_ram["used"],
             "ram_eviction_threshold_pct": node_ram["eviction_threshold_pct"],
-            "detectors": list(detectors.values()),
-            "loading_vram_bytes": loading_vram_bytes,
-            "loading_ram_bytes": loading_ram_bytes,
-            "observed_gpus": sorted(
-                observed_gpus.values(),
-                key=lambda g: (
-                    g.get("index") if isinstance(g.get("index"), int) else 1_000_000,
-                    g.get("name") or "",
-                ),
-            ),
+            "detectors": detectors,
+            "loading_vram_bytes": loading_vram,
+            "loading_ram_bytes": loading_ram,
+            "observed_gpus": observed_gpus,
         }
-
-
-def _empty_response() -> dict:
-    node_ram = _get_node_ram()
-    return {
-        "total_vram_bytes": 0,
-        "used_vram_bytes": 0,
-        "total_ram_bytes": node_ram["total"],
-        "used_ram_bytes": node_ram["used"],
-        "ram_eviction_threshold_pct": node_ram["eviction_threshold_pct"],
-        "detectors": [],
-        "loading_vram_bytes": 0,
-        "loading_ram_bytes": 0,
-        "observed_gpus": [],
-    }
 
 
 def _get_node_ram() -> dict:
@@ -176,8 +91,7 @@ def _get_node_ram() -> dict:
 
     Uses the node's capacity for total RAM and the Metrics Server for current
     usage. This matches the kubelet's view of memory, which drives pod eviction.
-    Also extracts the kubelet's soft eviction threshold so the frontend can
-    display it on the donut chart.
+    Also extracts the kubelet's soft eviction threshold.
     """
     try:
         v1 = client.CoreV1Api()
@@ -284,6 +198,109 @@ def _query_pod_gpu(pod) -> dict | None:
     except Exception:
         logger.debug(f"Failed to query GPU usage from pod {pod.metadata.name} at {url}")
         return None
+
+
+def _query_all_pod_gpus(inference_pods: list[tuple]) -> dict[str, dict | None]:
+    """Query GPU data from each inference pod's HTTP endpoint."""
+    return {pod.metadata.name: _query_pod_gpu(pod) for pod, _, _, _ in inference_pods}
+
+
+def _build_gpu_summary(gpu_responses: dict[str, dict | None]) -> tuple[list, int, int]:
+    """Aggregate GPU device observations across all queried pods.
+
+    Returns (sorted_observed_gpus, total_vram_bytes, used_vram_bytes).
+    """
+    observed_gpus: dict[str, dict] = {}
+    all_gpus_total = 0
+    all_gpus_used = 0
+
+    for gpu_data in gpu_responses.values():
+        if gpu_data is None:
+            continue
+        gpu_devices = gpu_data.get("gpus") or []
+        pod_total = 0
+        pod_used = 0
+        for device in gpu_devices:
+            gpu_name = device.get("name")
+            gpu_total = device.get("total_bytes", 0)
+            gpu_used = device.get("used_bytes", 0)
+            gpu_uuid = device.get("uuid")
+            gpu_index = device.get("index")
+            pod_total += gpu_total
+            pod_used += gpu_used
+            if not gpu_name:
+                continue
+            key = str(gpu_uuid or f"{gpu_name}:{gpu_index}")
+            existing = observed_gpus.get(key)
+            if existing is None or gpu_total > existing.get("total_vram_bytes", 0):
+                observed_gpus[key] = {
+                    "name": gpu_name,
+                    "total_vram_bytes": gpu_total,
+                    "used_vram_bytes": gpu_used,
+                    "index": gpu_index,
+                }
+            elif gpu_used > existing.get("used_vram_bytes", 0):
+                existing["used_vram_bytes"] = gpu_used
+
+        all_gpus_total = max(all_gpus_total, pod_total)
+        all_gpus_used = max(all_gpus_used, pod_used)
+
+    sorted_gpus = sorted(
+        observed_gpus.values(),
+        key=lambda g: (
+            g.get("index") if isinstance(g.get("index"), int) else 1_000_000,
+            g.get("name") or "",
+        ),
+    )
+    return sorted_gpus, all_gpus_total, all_gpus_used
+
+
+def _attribute_detector_resources(
+    inference_pods: list[tuple],
+    active_pods: set[str],
+    gpu_responses: dict[str, dict | None],
+    ram_by_pod: dict[str, int],
+) -> tuple[list, int, int]:
+    """Attribute VRAM and RAM usage to individual detectors or loading totals.
+
+    Returns (detectors_list, loading_vram_bytes, loading_ram_bytes).
+    """
+    detectors: dict[str, dict] = {}
+    loading_vram_bytes = 0
+    loading_ram_bytes = 0
+
+    for pod, det_id, is_oodd, _is_ready in inference_pods:
+        gpu_data = gpu_responses.get(pod.metadata.name)
+        pod_info = (gpu_data.get("pod") or {}) if gpu_data else {}
+        process_vram = pod_info.get("vram_bytes") or 0
+        process_ram = ram_by_pod.get(pod.metadata.name, 0)
+
+        if pod.metadata.name not in active_pods:
+            loading_vram_bytes += process_vram
+            loading_ram_bytes += process_ram
+            continue
+
+        if det_id not in detectors:
+            detectors[det_id] = {
+                "detector_id": det_id,
+                "primary_vram_bytes": None,
+                "oodd_vram_bytes": None,
+                "total_vram_bytes": 0,
+                "primary_ram_bytes": None,
+                "oodd_ram_bytes": None,
+                "total_ram_bytes": 0,
+            }
+        det = detectors[det_id]
+        if is_oodd:
+            det["oodd_vram_bytes"] = (det["oodd_vram_bytes"] or 0) + process_vram
+            det["oodd_ram_bytes"] = (det["oodd_ram_bytes"] or 0) + process_ram
+        else:
+            det["primary_vram_bytes"] = (det["primary_vram_bytes"] or 0) + process_vram
+            det["primary_ram_bytes"] = (det["primary_ram_bytes"] or 0) + process_ram
+        det["total_vram_bytes"] = (det["primary_vram_bytes"] or 0) + (det["oodd_vram_bytes"] or 0)
+        det["total_ram_bytes"] = (det["primary_ram_bytes"] or 0) + (det["oodd_ram_bytes"] or 0)
+
+    return list(detectors.values()), loading_vram_bytes, loading_ram_bytes
 
 
 def _get_pod_ram_metrics(namespace: str) -> dict[str, int]:
