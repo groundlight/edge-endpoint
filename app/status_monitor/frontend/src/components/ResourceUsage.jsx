@@ -50,16 +50,20 @@ function prepareDetectors(resourceData, detectorDetails) {
  * other, free), shared across the VRAM and RAM donuts.
  */
 function buildLegendRows({ detectors, nameMap, colorMap, vram, ram }) {
-  const detectorRows = detectors.map((det) => ({
-    sliceKey: `det:${det.detector_id}`,
-    detectorId: det.detector_id,
-    color: colorMap[det.detector_id],
-    label: nameMap[det.detector_id] || det.detector_id,
-    vramValue: formatBytes(det.total_vram_bytes || 0),
-    vramPct: formatPct(det.total_vram_bytes || 0, vram.total),
-    ramValue: formatBytes(det.total_ram_bytes || 0),
-    ramPct: formatPct(det.total_ram_bytes || 0, ram.total),
-  }));
+  const detectorRows = detectors.map((det) => {
+    const detVram = det.vram?.total_bytes || 0;
+    const detRam = det.ram?.total_bytes || 0;
+    return {
+      sliceKey: `det:${det.detector_id}`,
+      detectorId: det.detector_id,
+      color: colorMap[det.detector_id],
+      label: nameMap[det.detector_id] || det.detector_id,
+      vramValue: formatBytes(detVram),
+      vramPct: formatPct(detVram, vram.total),
+      ramValue: formatBytes(detRam),
+      ramPct: formatPct(detRam, ram.total),
+    };
+  });
 
   const systemRow = (sliceKey, color, label, vramBytes, ramBytes) => ({
     sliceKey,
@@ -205,20 +209,22 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
     );
   }
 
-  const observedGpus = resourceData.observed_gpus || [];
+  const systemVram = resourceData.system?.vram || {};
+  const systemRam = resourceData.system?.ram || {};
+  const observedGpus = systemVram.observed_gpus || [];
   const hasVram = observedGpus.length > 0;
-  const hasRam = (resourceData.total_ram_bytes || 0) > 0;
+  const hasRam = (systemRam.total_bytes || 0) > 0;
 
   const vram = {
-    total: resourceData.total_vram_bytes || 0,
-    used: resourceData.used_vram_bytes || 0,
-    loading: resourceData.loading_vram_bytes || 0,
+    total: systemVram.total_bytes || 0,
+    used: systemVram.used_bytes || 0,
+    loading: systemVram.loading_detectors_bytes || 0,
   };
   const ram = {
-    total: resourceData.total_ram_bytes || 0,
-    used: resourceData.used_ram_bytes || 0,
-    loading: resourceData.loading_ram_bytes || 0,
-    evictionPct: resourceData.ram_eviction_threshold_pct ?? null,
+    total: systemRam.total_bytes || 0,
+    used: systemRam.used_bytes || 0,
+    loading: systemRam.loading_detectors_bytes || 0,
+    evictionPct: systemRam.eviction_threshold_pct ?? null,
   };
 
   const { detectors, nameMap, colorMap } = prepareDetectors(resourceData, detectorDetails);
@@ -233,7 +239,7 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
     usedBytes: hasVram ? vram.used : 0,
     loadingBytes: hasVram ? vram.loading : 0,
     colorMap,
-    bytesKey: "total_vram_bytes",
+    resourceKey: "vram",
     resourceLabel: "VRAM",
   });
 
@@ -245,7 +251,7 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
         usedBytes: ram.used,
         loadingBytes: ram.loading,
         colorMap,
-        bytesKey: "total_ram_bytes",
+        resourceKey: "ram",
         resourceLabel: "RAM",
       })
     : null;

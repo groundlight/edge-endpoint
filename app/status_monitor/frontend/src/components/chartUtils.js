@@ -48,8 +48,9 @@ export function formatPctInt(bytes, totalBytes) {
  * with three summary slices (loading / other / free), which the donut chart
  * relies on for stable positional animation.
  *
- * `bytesKey` selects which field on each detector to read (e.g.
- * "total_vram_bytes" or "total_ram_bytes").
+ * `resourceKey` selects which sub-object on each detector to read (e.g.
+ * "vram" or "ram"); each detector is expected to have that key with a
+ * nested `total_bytes` field.
  */
 export function buildSlices({
   detectors,
@@ -58,7 +59,7 @@ export function buildSlices({
   usedBytes,
   loadingBytes,
   colorMap,
-  bytesKey,
+  resourceKey,
   resourceLabel,
 }) {
   const pct = (bytes) => (totalBytes ? (bytes / totalBytes) * 100 : 0);
@@ -66,7 +67,7 @@ export function buildSlices({
   let accountedBytes = 0;
 
   for (const det of detectors) {
-    const bytes = det[bytesKey] || 0;
+    const bytes = det[resourceKey]?.total_bytes || 0;
     accountedBytes += bytes;
     slices.push({
       sliceKey: `det:${det.detector_id}`,

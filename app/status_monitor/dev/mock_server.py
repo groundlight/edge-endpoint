@@ -114,12 +114,16 @@ def build_resources(state):
         detectors.append(
             {
                 "detector_id": d["id"],
-                "primary_vram_bytes": d["primary_vram"],
-                "oodd_vram_bytes": d["oodd_vram"],
-                "total_vram_bytes": det_vram,
-                "primary_ram_bytes": d["primary_ram"],
-                "oodd_ram_bytes": d["oodd_ram"],
-                "total_ram_bytes": det_ram,
+                "ram": {
+                    "primary_bytes": d["primary_ram"],
+                    "oodd_bytes": d["oodd_ram"],
+                    "total_bytes": det_ram,
+                },
+                "vram": {
+                    "primary_bytes": d["primary_vram"],
+                    "oodd_bytes": d["oodd_vram"],
+                    "total_bytes": det_vram,
+                },
             }
         )
         used_vram += det_vram
@@ -132,27 +136,36 @@ def build_resources(state):
         used_ram += loading_ram
 
     has_gpu = num_detectors > 0 or loading
+    vram_total_bytes = total_vram if has_gpu else 0
+    vram_used_bytes = min(used_vram, total_vram) if has_gpu else 0
+    observed_gpus = (
+        [
+            {
+                "name": "Mock GPU",
+                "index": 0,
+                "used_bytes": vram_used_bytes,
+                "total_bytes": vram_total_bytes,
+            }
+        ]
+        if has_gpu
+        else []
+    )
     return {
-        "total_vram_bytes": total_vram if has_gpu else 0,
-        "used_vram_bytes": min(used_vram, total_vram) if has_gpu else 0,
-        "total_ram_bytes": total_ram,
-        "used_ram_bytes": min(used_ram, total_ram),
-        "ram_eviction_threshold_pct": state["eviction"],
+        "system": {
+            "ram": {
+                "used_bytes": min(used_ram, total_ram),
+                "total_bytes": total_ram,
+                "loading_detectors_bytes": loading_ram,
+                "eviction_threshold_pct": state["eviction"],
+            },
+            "vram": {
+                "used_bytes": vram_used_bytes,
+                "total_bytes": vram_total_bytes,
+                "loading_detectors_bytes": loading_vram,
+                "observed_gpus": observed_gpus,
+            },
+        },
         "detectors": detectors,
-        "loading_vram_bytes": loading_vram,
-        "loading_ram_bytes": loading_ram,
-        "observed_gpus": (
-            [
-                {
-                    "name": "Mock GPU",
-                    "total_vram_bytes": total_vram,
-                    "used_vram_bytes": min(used_vram, total_vram),
-                    "index": 0,
-                }
-            ]
-            if has_gpu
-            else []
-        ),
     }
 
 

@@ -47,7 +47,13 @@ def _parse_k8s_memory(quantity: str) -> int:
 
 
 class ResourceMetricsCollector:
-    """Collects GPU and RAM usage per inference pod."""
+    """Collects GPU and RAM usage per inference pod.
+
+    The emitted payload is grouped by resource type (`ram` / `vram`) at both the
+    system level and per-detector, so every resource has a consistent shape
+    (`used_bytes`, `total_bytes`, ...) and new resources can be added without
+    reshuffling top-level keys.
+    """
 
     def collect(self) -> dict:
         try:
@@ -74,15 +80,21 @@ class ResourceMetricsCollector:
             detectors, loading_vram, loading_ram = [], 0, 0
 
         return {
-            "total_vram_bytes": total_vram,
-            "used_vram_bytes": used_vram,
-            "total_ram_bytes": node_ram["total"],
-            "used_ram_bytes": node_ram["used"],
-            "ram_eviction_threshold_pct": node_ram["eviction_threshold_pct"],
+            "system": {
+                "ram": {
+                    "used_bytes": node_ram["used"],
+                    "total_bytes": node_ram["total"],
+                    "loading_detectors_bytes": loading_ram,
+                    "eviction_threshold_pct": node_ram["eviction_threshold_pct"],
+                },
+                "vram": {
+                    "used_bytes": used_vram,
+                    "total_bytes": total_vram,
+                    "loading_detectors_bytes": loading_vram,
+                    "observed_gpus": observed_gpus,
+                },
+            },
             "detectors": detectors,
-            "loading_vram_bytes": loading_vram,
-            "loading_ram_bytes": loading_ram,
-            "observed_gpus": observed_gpus,
         }
 
 
@@ -208,7 +220,9 @@ def _query_all_pod_gpus(inference_pods: list[tuple]) -> dict[str, dict | None]:
 def _build_gpu_summary(gpu_responses: dict[str, dict | None]) -> tuple[list, int, int]:
     """Aggregate GPU device observations across all queried pods.
 
-    Returns (sorted_observed_gpus, total_vram_bytes, used_vram_bytes).
+    Returns (sorted_observed_gpus, total_vram_bytes, used_vram_bytes). Each
+    entry in `sorted_observed_gpus` has keys `name`, `index`, `used_bytes`,
+    `total_bytes`.
     """
     observed_gpus: dict[str, dict] = {}
     all_gpus_total = 0
@@ -232,15 +246,15 @@ def _build_gpu_summary(gpu_responses: dict[str, dict | None]) -> tuple[list, int
                 continue
             key = str(gpu_uuid or f"{gpu_name}:{gpu_index}")
             existing = observed_gpus.get(key)
-            if existing is None or gpu_total > existing.get("total_vram_bytes", 0):
+            if existing is None or gpu_total > existing.get("total_bytes", 0):
                 observed_gpus[key] = {
                     "name": gpu_name,
-                    "total_vram_bytes": gpu_total,
-                    "used_vram_bytes": gpu_used,
                     "index": gpu_index,
+                    "used_bytes": gpu_used,
+                    "total_bytes": gpu_total,
                 }
-            elif gpu_used > existing.get("used_vram_bytes", 0):
-                existing["used_vram_bytes"] = gpu_used
+            elif gpu_used > existing.get("used_bytes", 0):
+                existing["used_bytes"] = gpu_used
 
         all_gpus_total = max(all_gpus_total, pod_total)
         all_gpus_used = max(all_gpus_used, pod_used)
@@ -263,11 +277,17 @@ def _attribute_detector_resources(
 ) -> tuple[list, int, int]:
     """Attribute VRAM and RAM usage to individual detectors or loading totals.
 
-    Returns (detectors_list, loading_vram_bytes, loading_ram_bytes).
+    Returns (detectors_list, loading_vram_bytes, loading_ram_bytes). Each
+    detector entry has the nested shape:
+        {"detector_id": ..., "ram": {...}, "vram": {...}}
+    where the inner objects have `primary_bytes`, `oodd_bytes`, `total_bytes`.
     """
     detectors: dict[str, dict] = {}
     loading_vram_bytes = 0
     loading_ram_bytes = 0
+
+    def _blank_resource() -> dict:
+        return {"primary_bytes": None, "oodd_bytes": None, "total_bytes": 0}
 
     for pod, det_id, is_oodd, _is_ready in inference_pods:
         gpu_data = gpu_responses.get(pod.metadata.name)
@@ -283,22 +303,15 @@ def _attribute_detector_resources(
         if det_id not in detectors:
             detectors[det_id] = {
                 "detector_id": det_id,
-                "primary_vram_bytes": None,
-                "oodd_vram_bytes": None,
-                "total_vram_bytes": 0,
-                "primary_ram_bytes": None,
-                "oodd_ram_bytes": None,
-                "total_ram_bytes": 0,
+                "ram": _blank_resource(),
+                "vram": _blank_resource(),
             }
         det = detectors[det_id]
-        if is_oodd:
-            det["oodd_vram_bytes"] = (det["oodd_vram_bytes"] or 0) + process_vram
-            det["oodd_ram_bytes"] = (det["oodd_ram_bytes"] or 0) + process_ram
-        else:
-            det["primary_vram_bytes"] = (det["primary_vram_bytes"] or 0) + process_vram
-            det["primary_ram_bytes"] = (det["primary_ram_bytes"] or 0) + process_ram
-        det["total_vram_bytes"] = (det["primary_vram_bytes"] or 0) + (det["oodd_vram_bytes"] or 0)
-        det["total_ram_bytes"] = (det["primary_ram_bytes"] or 0) + (det["oodd_ram_bytes"] or 0)
+        slot = "oodd_bytes" if is_oodd else "primary_bytes"
+        det["vram"][slot] = (det["vram"][slot] or 0) + process_vram
+        det["ram"][slot] = (det["ram"][slot] or 0) + process_ram
+        det["vram"]["total_bytes"] = (det["vram"]["primary_bytes"] or 0) + (det["vram"]["oodd_bytes"] or 0)
+        det["ram"]["total_bytes"] = (det["ram"]["primary_bytes"] or 0) + (det["ram"]["oodd_bytes"] or 0)
 
     return list(detectors.values()), loading_vram_bytes, loading_ram_bytes
 
