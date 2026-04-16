@@ -141,14 +141,18 @@ def build_resources(state):
         "detectors": detectors,
         "loading_vram_bytes": loading_vram,
         "loading_ram_bytes": loading_ram,
-        "observed_gpus": [
-            {
-                "name": "Mock GPU",
-                "total_vram_bytes": total_vram,
-                "used_vram_bytes": min(used_vram, total_vram),
-                "index": 0,
-            }
-        ] if has_gpu else [],
+        "observed_gpus": (
+            [
+                {
+                    "name": "Mock GPU",
+                    "total_vram_bytes": total_vram,
+                    "used_vram_bytes": min(used_vram, total_vram),
+                    "index": 0,
+                }
+            ]
+            if has_gpu
+            else []
+        ),
     }
 
 
