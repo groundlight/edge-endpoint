@@ -27,7 +27,8 @@ request                              <- middleware (full request lifecycle)
 +-- _submit_primary_inference        <- HTTP to primary inference pod
 +-- _submit_oodd_inference           <- HTTP to OODD inference pod (parallel)
 +-- get_inference_result             <- result parsing + OODD confidence adjustment
-+-- safe_escalate_with_queue_write   <- cloud escalation (when triggered)
++-- write_escalation_to_queue        <- disk write for background/audit escalation (on request path)
++-- safe_escalate_with_queue_write   <- synchronous cloud escalation (when triggered)
 ```
 
 ## Profiling Dashboard
@@ -91,7 +92,7 @@ PROFILING_TRACES_DIR=/path/to/traces poetry run marimo run app/profiling/dashboa
 
 - **Time range** -- filter to last 15min, 30min, 1h, 2h, 6h, 24h, or all data
 - **Detector filter** -- focus on a specific detector. The dropdown is populated from the most recent 24h of trace data and is **not** automatically updated; if new detectors appear while the dashboard is running, reload the browser to see them.
-- **Auto-refresh** -- every 15 seconds, re-fetches trace data and updates all charts and the summary stats. Does not affect the detector dropdown.
+- **Auto-refresh** -- off by default so the dashboard stays put while you investigate. Pick an interval (15s / 30s / 1m / 5m) from the dropdown to enable polling. Does not affect the detector dropdown.
 
 ### Troubleshooting
 
@@ -108,7 +109,7 @@ PROFILING_TRACES_DIR=/path/to/traces poetry run marimo run app/profiling/dashboa
 
 **Dashboard shows old data only:**
 
-Auto-refresh polls every 15 seconds. If you just started profiling, wait up to 15s for the next tick, or manually interact with a control to force a refresh.
+Auto-refresh is off by default — click the refresh button in the top row, or pick an interval from the "Auto-refresh" dropdown to enable polling.
 
 **Dashboard shows ModuleNotFoundError for marimo or plotly:**
 

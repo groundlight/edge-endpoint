@@ -11,6 +11,7 @@ from app.profiling.context import trace_span
 logger = logging.getLogger(__name__)
 
 
+@trace_span
 def write_escalation_to_queue(
     writer: QueueWriter, detector_id: str, image_bytes: bytes, submit_iq_params: SubmitImageQueryParams, request_id: str
 ) -> None:
