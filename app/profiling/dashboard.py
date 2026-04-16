@@ -339,10 +339,7 @@ def _(MAX_TRACES_IN_SELECTOR, mo, span_filter, traces):
     # Apply the span filter, then show the N most recent matching traces.
     _required_span = span_filter.value
     if _required_span:
-        _matching = [
-            _t for _t in traces
-            if any(_s.get("name") == _required_span for _s in _t.get("spans", []))
-        ]
+        _matching = [_t for _t in traces if any(_s.get("name") == _required_span for _s in _t.get("spans", []))]
     else:
         _matching = traces
 
@@ -360,7 +357,11 @@ def _(MAX_TRACES_IN_SELECTOR, mo, span_filter, traces):
 
     _total = len(_matching)
     _shown = len(_recent)
-    _count_note = f"Showing {_shown} of {_total} matching traces." if _shown < _total else f"Showing all {_total} matching traces."
+    _count_note = (
+        f"Showing {_shown} of {_total} matching traces."
+        if _shown < _total
+        else f"Showing all {_total} matching traces."
+    )
 
     mo.vstack(
         [
