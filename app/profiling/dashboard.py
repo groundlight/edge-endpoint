@@ -273,14 +273,19 @@ def _(KEY_SPANS, compute_time_series, go, mo, traces):
                 )
 
         _fig.update_layout(
-            title="Latency Over Time (p50 solid, p95 dashed)",
             xaxis_title="Time",
             yaxis_title="Duration (ms)",
-            height=450,
-            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+            height=500,
+            margin=dict(t=20, b=80),
+            legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5),
         )
 
-        _out = mo.vstack([mo.md("## Latency Over Time"), mo.ui.plotly(_fig)])
+        _out = mo.vstack(
+            [
+                mo.md("## Latency Over Time _(p50 solid, p95 dashed)_"),
+                mo.ui.plotly(_fig),
+            ]
+        )
     else:
         _out = mo.md("## Latency Over Time\n\n*Not enough span data to plot time series.*")
 
