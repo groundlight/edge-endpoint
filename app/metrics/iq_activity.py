@@ -32,9 +32,9 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
+from pathlib import Path
 
 from app.profiling.context import trace_span
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
