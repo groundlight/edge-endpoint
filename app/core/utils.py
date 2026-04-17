@@ -29,6 +29,7 @@ from PIL import Image
 from pydantic import BaseModel, ValidationError
 
 from app.core import constants
+from app.profiling.context import trace_span
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ METADATA_SIZE_LIMIT_BYTES = (
 )
 
 
+@trace_span
 def create_iq(  # noqa: PLR0913
     detector_id: str,
     mode: ModeEnum,

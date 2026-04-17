@@ -21,7 +21,11 @@ def _():
         "inference_is_available": "#00CC96",
         "_submit_primary_inference": "#AB63FA",
         "_submit_oodd_inference": "#FFA15A",
+        "parse_inference_response": "#2CA02C",
         "get_inference_result": "#19D3F3",
+        "create_iq": "#FECB52",
+        "record_activity_for_metrics": "#9467BD",
+        "record_confidence_for_metrics": "#8C564B",
         "safe_escalate_with_queue_write": "#FF6692",
         "write_escalation_to_queue": "#B6E880",
     }

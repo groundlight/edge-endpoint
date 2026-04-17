@@ -24,9 +24,13 @@ When enabled, the profiling middleware creates a trace per request. Functions de
 request                              <- middleware (full request lifecycle)
 +-- get_detector_metadata            <- cache hit vs cloud API round-trip
 +-- inference_is_available           <- health check cache hit vs cold check
++-- record_activity_for_metrics      <- per-activity disk counter write (called multiple times per request)
 +-- _submit_primary_inference        <- HTTP to primary inference pod
 +-- _submit_oodd_inference           <- HTTP to OODD inference pod (parallel)
 +-- get_inference_result             <- result parsing + OODD confidence adjustment
+|   +-- parse_inference_response     <- parse primary/OODD response dicts
++-- record_confidence_for_metrics    <- confidence histogram disk write
++-- create_iq                        <- build final ImageQuery pydantic model
 +-- write_escalation_to_queue        <- disk write for background/audit escalation (on request path)
 +-- safe_escalate_with_queue_write   <- synchronous cloud escalation (when triggered)
 ```

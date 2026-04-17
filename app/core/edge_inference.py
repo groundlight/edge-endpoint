@@ -183,6 +183,7 @@ def calculate_confidence_for_bounding_box_mode(multi_predictions: dict) -> float
     return min_predicted_roi_score * (1 - max_dropped_roi_score)
 
 
+@trace_span
 def parse_inference_response(response: dict, mode: ModeEnum) -> dict:
     if "predictions" not in response:
         logger.error(f"Invalid inference response: {response}")
