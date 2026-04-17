@@ -312,6 +312,17 @@ def _(SPAN_COLORS, compute_time_series, go, mo, traces):
     _out
 
 
+@app.function
+def trace_duration_ms(trace: dict) -> float:
+    """Return the root ('request') span's duration for a trace, or 0.0 if not present."""
+    for span in trace.get("spans", []):
+        if span.get("name") == "request":
+            dur = span.get("duration_ms")
+            if dur is not None and dur >= 0:
+                return dur
+    return 0.0
+
+
 @app.cell
 def _(mo, traces):
     # Collect all span names present in the current trace set to populate the filter.
@@ -331,32 +342,46 @@ def _(mo, traces):
         value="Any span",
         label="Containing span",
     )
-    return (span_filter,)
+
+    sort_order = mo.ui.dropdown(
+        options=["Most recent", "Longest", "Shortest"],
+        value="Most recent",
+        label="Sort by",
+    )
+    return span_filter, sort_order
 
 
 @app.cell
-def _(MAX_TRACES_IN_SELECTOR, mo, span_filter, traces):
-    # Apply the span filter, then show the N most recent matching traces.
+def _(MAX_TRACES_IN_SELECTOR, mo, sort_order, span_filter, traces):
+    # Apply the span filter, then sort according to the selected order.
     _required_span = span_filter.value
     if _required_span:
         _matching = [_t for _t in traces if any(_s.get("name") == _required_span for _s in _t.get("spans", []))]
     else:
         _matching = traces
 
-    _recent = sorted(_matching, key=lambda t: t.get("start_wall_time_iso", ""), reverse=True)[:MAX_TRACES_IN_SELECTOR]
+    if sort_order.value == "Longest":
+        _sorted = sorted(_matching, key=trace_duration_ms, reverse=True)
+    elif sort_order.value == "Shortest":
+        _sorted = sorted(_matching, key=trace_duration_ms)
+    else:  # "Most recent"
+        _sorted = sorted(_matching, key=lambda t: t.get("start_wall_time_iso", ""), reverse=True)
+
+    _top = _sorted[:MAX_TRACES_IN_SELECTOR]
 
     _trace_options = {"(none)": ""}
-    for _t in _recent:
+    for _t in _top:
         _ts = _t.get("start_wall_time_iso", "")[:19]
         _det = _t.get("detector_id", "?")
         _tid = _t.get("trace_id", "")
-        _label = f"{_ts} | {_det} | {_tid[:12]}"
+        _dur = trace_duration_ms(_t)
+        _label = f"{_ts} | {_det} | {_dur:>6.1f}ms | {_tid[:12]}"
         _trace_options[_label] = _tid
 
     trace_selector = mo.ui.dropdown(options=_trace_options, value="(none)", label="Select trace")
 
     _total = len(_matching)
-    _shown = len(_recent)
+    _shown = len(_top)
     _count_note = (
         f"Showing {_shown} of {_total} matching traces."
         if _shown < _total
@@ -368,10 +393,10 @@ def _(MAX_TRACES_IN_SELECTOR, mo, span_filter, traces):
             mo.md("## Trace Waterfall"),
             mo.md(
                 f"Filter by a span to find specific traces (e.g. `safe_escalate_with_queue_write` for escalations), "
-                f"then select one to see a Gantt-style timeline. "
+                f"sort to find outliers, then select one to see a Gantt-style timeline. "
                 f"{_count_note}"
             ),
-            mo.hstack([span_filter, trace_selector], justify="start", gap=1),
+            mo.hstack([span_filter, sort_order, trace_selector], justify="start", gap=1),
         ]
     )
     return (trace_selector,)
