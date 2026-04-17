@@ -14,14 +14,6 @@ def span_sort_key(name: str) -> tuple[int, str]:
 def _():
     import marimo as mo
 
-    # Key spans driving the time-series chart; also canonical ordering hint.
-    KEY_SPANS = [
-        "request",
-        "_submit_primary_inference",
-        "_submit_oodd_inference",
-        "get_inference_result",
-    ]
-
     # Deterministic color per span name; unknown spans fall back to FALLBACK_COLOR.
     SPAN_COLORS = {
         "request": "#636EFA",
@@ -38,7 +30,7 @@ def _():
     # How many recent traces to offer in the waterfall selector.
     MAX_TRACES_IN_SELECTOR = 50
 
-    return FALLBACK_COLOR, KEY_SPANS, MAX_TRACES_IN_SELECTOR, SPAN_COLORS, mo
+    return FALLBACK_COLOR, MAX_TRACES_IN_SELECTOR, SPAN_COLORS, mo
 
 
 @app.cell
@@ -287,21 +279,25 @@ def _(durations_by_span, go, make_subplots, mo, stats):
             )
 
             # Overlay percentile lines; label only the first subplot to act as a legend.
+            # Any annotation_* kwarg (even with annotation_text=None) triggers plotly's
+            # default "new text" label, so we only pass annotation kwargs when we want one.
             _s = stats.get(_name, {})
             _label_this_subplot = _i == 0
             for _label, _color in _percentile_styles:
                 _val = _s.get(_label)
                 if _val is None:
                     continue
-                _fig.add_vline(
+                _vline_kwargs = dict(
                     x=_val,
                     line=dict(color=_color, dash="dash", width=1.5),
-                    annotation_text=_label if _label_this_subplot else None,
-                    annotation_position="top",
-                    annotation_font_color=_color,
                     row=_row,
                     col=_col,
                 )
+                if _label_this_subplot:
+                    _vline_kwargs["annotation_text"] = _label
+                    _vline_kwargs["annotation_position"] = "top"
+                    _vline_kwargs["annotation_font_color"] = _color
+                _fig.add_vline(**_vline_kwargs)
 
             _fig.update_xaxes(title_text="Duration (ms)", row=_row, col=_col)
             _fig.update_yaxes(title_text="Count", row=_row, col=_col)
@@ -325,50 +321,67 @@ def _(durations_by_span, go, make_subplots, mo, stats):
 
 
 @app.cell
-def _(KEY_SPANS, compute_time_series, go, mo, traces):
-    _existing_spans = {_s.get("name") for _t in traces for _s in _t.get("spans", []) if _s.get("name")}
-    _spans_to_plot = [s for s in KEY_SPANS if s in _existing_spans]
+def _(FALLBACK_COLOR, SPAN_COLORS, go, mo, traces):
+    # Scatterplot of every span's duration over time, colored by span name.
+    # Each trace contributes one point per span, so cache hits vs misses and
+    # individual outliers per span type are directly visible. Click a legend
+    # entry to toggle that span on/off.
+    _points_by_span: dict[str, list[tuple[str, float, str]]] = {}
+    for _t in traces:
+        _wall = _t.get("start_wall_time_iso", "")
+        _tid = _t.get("trace_id", "")
+        if not _wall:
+            continue
+        for _s in _t.get("spans", []):
+            _name = _s.get("name")
+            _dur = _s.get("duration_ms")
+            if _name and _dur is not None and _dur >= 0:
+                _points_by_span.setdefault(_name, []).append((_wall, _dur, _tid))
 
-    if _spans_to_plot:
+    _ordered_names = sorted(_points_by_span.keys(), key=span_sort_key)
+
+    if _ordered_names:
         _fig = go.Figure()
-        for _name in _spans_to_plot:
-            _series = compute_time_series(traces, _name, bucket_minutes=5)
-            if _series:
-                _times = [e["time"] for e in _series]
-                _fig.add_trace(
-                    go.Scatter(
-                        x=_times,
-                        y=[e["p50"] for e in _series],
-                        mode="lines+markers",
-                        name=f"{_name} p50",
-                    )
+        for _name in _ordered_names:
+            _points = _points_by_span[_name]
+            _fig.add_trace(
+                go.Scatter(
+                    x=[_p[0] for _p in _points],
+                    y=[_p[1] for _p in _points],
+                    mode="markers",
+                    name=_name,
+                    marker=dict(
+                        size=5,
+                        opacity=0.6,
+                        color=SPAN_COLORS.get(_name, FALLBACK_COLOR),
+                    ),
+                    customdata=[_p[2] for _p in _points],
+                    hovertemplate=(
+                        f"<b>{_name}</b><br>"
+                        "Time: %{x}<br>"
+                        "Duration: %{y:.1f}ms<br>"
+                        "Trace: %{customdata}<extra></extra>"
+                    ),
                 )
-                _fig.add_trace(
-                    go.Scatter(
-                        x=_times,
-                        y=[e["p95"] for e in _series],
-                        mode="lines",
-                        name=f"{_name} p95",
-                        line=dict(dash="dash"),
-                    )
-                )
+            )
 
         _fig.update_layout(
             xaxis_title="Time",
-            yaxis_title="Duration (ms)",
+            yaxis_title="Span duration (ms)",
             height=500,
             margin=dict(t=20, b=80),
             legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5),
+            hovermode="closest",
         )
 
         _out = mo.vstack(
             [
-                mo.md("## Latency Over Time _(p50 solid, p95 dashed)_"),
+                mo.md("## Latency Over Time _(one point per span, colored by span)_"),
                 mo.ui.plotly(_fig),
             ]
         )
     else:
-        _out = mo.md("## Latency Over Time\n\n*Not enough span data to plot time series.*")
+        _out = mo.md("## Latency Over Time\n\n*Not enough span data to plot.*")
 
     _out
 
