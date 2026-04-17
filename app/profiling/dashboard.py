@@ -52,6 +52,7 @@ def _():
         sys.path.insert(0, _repo_root)
 
     import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
 
     from app.profiling.data_loader import (
         compute_span_stats,
@@ -70,6 +71,7 @@ def _():
         get_trace_detail,
         go,
         load_traces,
+        make_subplots,
     )
 
 
@@ -213,20 +215,20 @@ def _(compute_span_stats, mo, traces):
 
 @app.cell
 def _(go, mo, traces):
-    _durations_by_span: dict[str, list[float]] = {}
+    durations_by_span: dict[str, list[float]] = {}
     for _t in traces:
         for _s in _t.get("spans", []):
             _dur = _s.get("duration_ms")
             _name = _s.get("name")
             if _name and _dur is not None and _dur >= 0:
-                _durations_by_span.setdefault(_name, []).append(_dur)
+                durations_by_span.setdefault(_name, []).append(_dur)
 
-    _ordered_names = sorted(_durations_by_span.keys(), key=span_sort_key)
+    _ordered_names = sorted(durations_by_span.keys(), key=span_sort_key)
 
     if _ordered_names:
         _fig = go.Figure()
         for _name in _ordered_names:
-            _fig.add_trace(go.Box(y=_durations_by_span[_name], name=_name, boxmean=True))
+            _fig.add_trace(go.Box(y=durations_by_span[_name], name=_name, boxmean=True))
 
         _fig.update_layout(
             title="Latency Distribution by Span",
@@ -239,6 +241,85 @@ def _(go, mo, traces):
         _out = mo.vstack([mo.md("## Latency Distribution"), mo.ui.plotly(_fig)])
     else:
         _out = mo.md("## Latency Distribution\n\n*No span data to plot.*")
+
+    _out
+    return (durations_by_span,)
+
+
+@app.cell
+def _(durations_by_span, go, make_subplots, mo, stats):
+    # Histograms: one subplot per span, with p50/p95/p99 shown as vertical lines.
+    # Each subplot gets its own x-axis so wildly different timescales (e.g. 2ms
+    # vs 300ms spans) each remain readable.
+    _ordered_names = sorted(durations_by_span.keys(), key=span_sort_key)
+
+    if _ordered_names:
+        _cols = 2
+        _rows = (len(_ordered_names) + _cols - 1) // _cols
+        _fig = make_subplots(
+            rows=_rows,
+            cols=_cols,
+            subplot_titles=_ordered_names,
+            horizontal_spacing=0.12,
+            vertical_spacing=0.14,
+        )
+
+        _percentile_styles = [
+            ("p50", "#00CC96"),
+            ("p95", "#FFA15A"),
+            ("p99", "#EF553B"),
+        ]
+
+        for _i, _name in enumerate(_ordered_names):
+            _row = (_i // _cols) + 1
+            _col = (_i % _cols) + 1
+
+            _fig.add_trace(
+                go.Histogram(
+                    x=durations_by_span[_name],
+                    nbinsx=40,
+                    showlegend=False,
+                    marker_color="#AAB6FB",
+                    hovertemplate="%{x:.1f}ms: %{y} samples<extra></extra>",
+                ),
+                row=_row,
+                col=_col,
+            )
+
+            # Overlay percentile lines; label only the first subplot to act as a legend.
+            _s = stats.get(_name, {})
+            _label_this_subplot = _i == 0
+            for _label, _color in _percentile_styles:
+                _val = _s.get(_label)
+                if _val is None:
+                    continue
+                _fig.add_vline(
+                    x=_val,
+                    line=dict(color=_color, dash="dash", width=1.5),
+                    annotation_text=_label if _label_this_subplot else None,
+                    annotation_position="top",
+                    annotation_font_color=_color,
+                    row=_row,
+                    col=_col,
+                )
+
+            _fig.update_xaxes(title_text="Duration (ms)", row=_row, col=_col)
+            _fig.update_yaxes(title_text="Count", row=_row, col=_col)
+
+        _fig.update_layout(
+            height=320 * _rows,
+            showlegend=False,
+            margin=dict(t=50, b=40),
+        )
+
+        _out = mo.vstack(
+            [
+                mo.md("### Histograms _(p50 green, p95 orange, p99 red)_"),
+                mo.ui.plotly(_fig),
+            ]
+        )
+    else:
+        _out = mo.md("### Histograms\n\n*No span data to plot.*")
 
     _out
 
