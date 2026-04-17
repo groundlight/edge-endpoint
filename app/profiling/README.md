@@ -85,6 +85,7 @@ PROFILING_TRACES_DIR=/path/to/traces poetry run marimo run app/profiling/dashboa
 - **Latency Summary Table** -- per-span p50/p95/p99/mean/min/max statistics
 - **Latency Distribution** -- box plots showing duration spread for each span type
 - **Latency Over Time** -- p50 and p95 trend lines for key spans in 5-minute buckets
+- **Request Duration Scatter** -- one point per trace (x = wall time, y = full-request duration) grouped by detector for color; hover shows the trace ID so you can look up slow outliers in the waterfall selector below
 - **Request Throughput** -- bar chart of requests per 5-minute window
 - **Trace Waterfall** -- select an individual trace to see a Gantt-style timeline of all spans (showing parallel execution of primary + OODD inference) plus a span-details table with annotations
 

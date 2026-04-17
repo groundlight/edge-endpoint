@@ -293,6 +293,61 @@ def _(KEY_SPANS, compute_time_series, go, mo, traces):
 
 
 @app.cell
+def _(go, mo, traces):
+    # Individual-trace scatterplot: x=wall time, y=full-request duration, one point per trace.
+    # Grouped by detector so each detector gets its own color and can be toggled in the legend.
+    _by_detector: dict[str, list[tuple[str, float, str]]] = {}
+    for _t in traces:
+        _dur = trace_duration_ms(_t)
+        _ts = _t.get("start_wall_time_iso", "")
+        _det = _t.get("detector_id") or "unknown"
+        _tid = _t.get("trace_id", "")
+        if _dur > 0 and _ts:
+            _by_detector.setdefault(_det, []).append((_ts, _dur, _tid))
+
+    if _by_detector:
+        _fig = go.Figure()
+        for _det in sorted(_by_detector.keys()):
+            _points = _by_detector[_det]
+            _fig.add_trace(
+                go.Scatter(
+                    x=[_p[0] for _p in _points],
+                    y=[_p[1] for _p in _points],
+                    mode="markers",
+                    name=_det,
+                    marker=dict(size=6, opacity=0.7),
+                    customdata=[_p[2] for _p in _points],
+                    hovertemplate=(
+                        f"<b>{_det}</b><br>"
+                        "Time: %{x}<br>"
+                        "Duration: %{y:.1f}ms<br>"
+                        "Trace: %{customdata}<extra></extra>"
+                    ),
+                )
+            )
+
+        _fig.update_layout(
+            xaxis_title="Time",
+            yaxis_title="Request duration (ms)",
+            height=500,
+            margin=dict(t=20, b=80),
+            legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5),
+            hovermode="closest",
+        )
+
+        _out = mo.vstack(
+            [
+                mo.md("## Request Duration Scatter _(one point per trace)_"),
+                mo.ui.plotly(_fig),
+            ]
+        )
+    else:
+        _out = mo.md("## Request Duration Scatter\n\n*No request data to plot.*")
+
+    _out
+
+
+@app.cell
 def _(SPAN_COLORS, compute_time_series, go, mo, traces):
     _series = compute_time_series(traces, "request", bucket_minutes=5)
     if _series:
