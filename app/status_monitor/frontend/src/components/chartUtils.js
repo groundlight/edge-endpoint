@@ -14,7 +14,7 @@ export const EDGE_ENDPOINT_COLOR = "#000000";
 export const SYSTEM_SLICE_HELP = {
   "summary:loading": "Detectors that are initializing or updating",
   "summary:edge-endpoint": "Platform overhead — all Edge Endpoint processes other than detectors",
-  "summary:other": "Resources used outside the Edge Endpoint, such as the operating system and other applications",
+  "summary:other": "Resources used by everything except the Edge Endpoint, such as the operating system and other applications",
   "summary:free": "Unused capacity",
 };
 

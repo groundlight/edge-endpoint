@@ -110,6 +110,7 @@ body {
 .recharts-sector:focus,
 .recharts-sector:focus-visible,
 .recharts-pie-sector:focus,
-.recharts-pie-sector:focus-visible {
+.recharts-pie-sector:focus-visible,
+.recharts-surface:focus {
   outline: none;
 }
