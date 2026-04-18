@@ -41,14 +41,14 @@ def generate_random_binary_image(
     return image, label, None
 
 
-def generate_random_count_image(
+def generate_random_objects_image(
     gl: ExperimentalApi,
     image_width: int = 640,
     image_height: int = 480,
     class_name: str = 'object',
     max_count: int = 10,
 ) -> tuple[np.ndarray, int, list[ROI]]:
-    """Generate an image with a random number of circles and corresponding count label and ROIs."""
+    """Generate an image containing a random number of objects (drawn as circles), with the object count and per-object ROIs."""
     count = random.randint(0, max_count)
 
     image_diagonal = math.sqrt(image_width ** 2 + image_height ** 2)
@@ -99,7 +99,7 @@ def generate_random_image(
         detector_mode_configuration = detector.mode_configuration
         class_name = detector_mode_configuration["class_name"]
         max_count = int(detector_mode_configuration["max_count"])
-        image, label, rois = generate_random_count_image(
+        image, label, rois = generate_random_objects_image(
             gl,
             image_width=image_width,
             image_height=image_height,
@@ -110,7 +110,7 @@ def generate_random_image(
         config = detector.mode_configuration
         class_name = config["class_name"]
         max_num_bboxes = int(config.get("max_num_bboxes", 10))
-        image, _, rois = generate_random_count_image(
+        image, _, rois = generate_random_objects_image(
             gl,
             image_width=image_width,
             image_height=image_height,
