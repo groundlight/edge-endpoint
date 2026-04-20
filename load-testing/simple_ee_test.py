@@ -8,74 +8,30 @@ Used for testing robustness to network changes.
 import argparse
 from groundlight import ExperimentalApi
 
+from groundlight.edge import DEFAULT
+
 import groundlight_helpers as glh
 import image_helpers as imgh
 
-DETECTOR_GROUP_NAME = "Simple EE Test"
-CLASS_NAME = "circle"
-MAX_COUNT = 10
 IMAGE_WIDTH = 640
 IMAGE_HEIGHT = 480
 NUM_QUERIES = 10
-
-MIN_PROJECTED_ML_ACCURACY = 0.0 # we don't really care about accuracy for this test
-MIN_TOTAL_LABELS = 30
-TRAINING_TIMEOUT_SEC = 10 * 60
-
-INFERENCE_POD_READY_TIMEOUT_SEC = 60 * 10
 
 def main(edge_pipeline_config: str | None = None) -> None:
     requested_edge_pipeline_config = glh.normalize_edge_pipeline_config(edge_pipeline_config)
     gl = ExperimentalApi()
     glh.error_if_endpoint_is_cloud(gl)
+    gl_cloud = ExperimentalApi(endpoint=glh.CLOUD_ENDPOINT_PROD)
 
-    detector_name = "Simple EE Test - Count"
-    if requested_edge_pipeline_config is not None:
-        detector_name += f" - {glh.hash_pipeline_config(requested_edge_pipeline_config)}"
-    detector = glh.get_or_create_count_detector(
-        gl,
-        name=detector_name,
-        class_name=CLASS_NAME,
-        max_count=MAX_COUNT,
-        group_name=DETECTOR_GROUP_NAME,
+    detector = glh.provision_detector(
+        gl, gl_cloud, "COUNT", "Simple EE Test",
+        IMAGE_WIDTH, IMAGE_HEIGHT,
+        group_name="Simple EE Test",
         edge_pipeline_config=requested_edge_pipeline_config,
+        training_timeout_sec=60 * 10,
     )
 
-    configured_edge_pipeline_config = glh.get_detector_edge_pipeline_configs(gl, detector.id).get('pipeline_config')
-    print(f"Configured edge pipeline for {detector.id}: {configured_edge_pipeline_config}")
-
-    if requested_edge_pipeline_config is not None:
-        glh.assert_configured_edge_pipeline_matches_provided(gl, detector.id, requested_edge_pipeline_config)
-
-    # Check if the detector has trained. If not, prime it with some labels
-    stats = glh.get_detector_evaluation(gl, detector.id)
-    sufficiently_trained = glh.detector_is_sufficiently_trained(stats, MIN_PROJECTED_ML_ACCURACY, MIN_TOTAL_LABELS)
-    if sufficiently_trained:
-        print(f'{detector.id} is sufficiently trained. Evaluation results: {stats}')
-    else:
-        print(f'{detector.id} is not yet sufficiently trained. Evaluation results: {stats}')
-        glh.prime_detector(gl, detector, MIN_TOTAL_LABELS, IMAGE_WIDTH, IMAGE_HEIGHT)
-
-        # After priming, wait until it trains to a sufficient level
-        print(f'Waiting up to {TRAINING_TIMEOUT_SEC} seconds for training to complete...')
-        stats = glh.wait_until_sufficiently_trained(
-            gl,
-            detector,
-            min_projected_ml_accuracy=MIN_PROJECTED_ML_ACCURACY,
-            min_total_labels=MIN_TOTAL_LABELS,
-            timeout_sec=TRAINING_TIMEOUT_SEC,
-        )
-        print(f'{detector.id} is now sufficiently trained. Evaluation results: {stats}')
-
-    # Wait for the inference pod to become available
-    print(f"Waiting up to {INFERENCE_POD_READY_TIMEOUT_SEC} seconds for inference pod to be ready for {detector.id}...")
-    glh.wait_for_ready_inference_pod(
-        gl, detector, IMAGE_WIDTH, IMAGE_HEIGHT,
-        timeout_sec=INFERENCE_POD_READY_TIMEOUT_SEC,
-        edge_pipeline_config=requested_edge_pipeline_config,
-    )
-    loaded_edge_pipeline_config = glh.get_detector_edge_metrics(gl, detector.id).get('pipeline_config')
-    print(f"Inference pod is ready for {detector.id} with loaded edge pipeline '{loaded_edge_pipeline_config}'")
+    glh.configure_edge_endpoint(gl, detector, edge_inference_config=DEFAULT)
 
     print(f'Adding a label to {detector.id}...')
     image, label, rois = imgh.generate_random_image(gl, detector, IMAGE_WIDTH, IMAGE_HEIGHT)
