@@ -12,6 +12,7 @@ reported as a single `edge_endpoint_bytes` bucket on `system.ram`.
 
 import json
 import logging
+import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 
@@ -87,7 +88,8 @@ class ResourceMetricsCollector:
 
         namespace = get_namespace()
         v1 = client.CoreV1Api()
-        inference_pods = _find_inference_pods(v1.list_namespaced_pod(namespace=namespace))
+        pod_list = v1.list_namespaced_pod(namespace=namespace)
+        inference_pods = _find_inference_pods(pod_list)
         node_ram = _get_node_ram(v1)
         ram_by_pod = _get_pod_ram_metrics(namespace)
 
@@ -126,7 +128,7 @@ class ResourceMetricsCollector:
                     "used_bytes": used_vram,
                     "total_bytes": total_vram,
                     "loading_detectors_bytes": loading_vram,
-                    "edge_endpoint_bytes": 0,
+                    "edge_endpoint_bytes": 0, # Only inference pods consume VRAM
                     "observed_gpus": observed_gpus,
                 },
             },
@@ -142,13 +144,13 @@ def _get_node_ram(v1: "client.CoreV1Api") -> dict:
     Also extracts the kubelet's soft eviction threshold.
     """
     try:
-        nodes = v1.list_node()
-        if not nodes.items:
-            raise ValueError("No nodes found")
-        # The edge endpoint is deployed on single-node k3s; nodes.items[0] is
-        # the only node. On a hypothetical multi-node cluster this would pick
-        # an arbitrary node, which would mis-report capacity.
-        node = nodes.items[0]
+        node_name = os.environ.get("NODE_NAME")
+        if not node_name:
+            raise ValueError("NODE_NAME env var not set; cannot identify our node")
+        # NODE_NAME is injected by the helm chart via the downward API
+        # (spec.nodeName) so we always report capacity for the node the
+        # edge-endpoint pod is actually running on, even on a multi-node cluster.
+        node = v1.read_node(name=node_name)
         total = _parse_k8s_memory(node.status.capacity.get("memory", "0"))
 
         custom = client.CustomObjectsApi()
@@ -208,6 +210,8 @@ def _find_inference_pods(pod_list) -> list[tuple]:
     """Return (pod, detector_id, is_oodd, is_ready) for running inference pods."""
     results = []
     for pod in pod_list.items:
+        # Non-running pods or pods without IP addresses cannot be queried for GPU metrics,
+        # so we will not include them here. 
         if not pod.status or pod.status.phase != "Running":
             continue
         if not pod.status.pod_ip:
@@ -215,6 +219,8 @@ def _find_inference_pods(pod_list) -> list[tuple]:
         annotations = pod.metadata.annotations or {}
         det_id = annotations.get("groundlight.dev/detector-id")
         model_name = annotations.get("groundlight.dev/model-name")
+        
+        # Pods lacking det_id and model_name annotations are not inference pods
         if not det_id or not model_name:
             continue
         is_oodd = model_name.endswith("/oodd")
