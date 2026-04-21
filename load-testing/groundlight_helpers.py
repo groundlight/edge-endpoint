@@ -222,7 +222,7 @@ def get_or_create_multi_class_detector(
     edge_pipeline_config: str | None = None,
 ) -> Detector:
     """Create a multi-class detector or return an existing one with the same name."""
-    query_text = f"Classify this image."
+    query_text = "Classify this image."
     try:
         return gl.create_multiclass_detector(
             name,
@@ -327,6 +327,8 @@ def get_detector_cardinality(detector: Detector) -> int:
     """Return the cardinality of the provided detector."""
     mode = detector.mode
     if mode == "BINARY":
+        # BINARY's cardinality is structurally fixed at 2, so there's nothing to read from
+        # mode_configuration.
         return get_detector_mode_default_cardinality(mode)
 
     config = detector.mode_configuration
@@ -362,10 +364,13 @@ def provision_detector(
     max_num_bboxes for BOUNDING_BOX, num_classes for MULTI_CLASS, 2 for BINARY). If not
     provided, a mode-specific default is applied.
     """
+    if cardinality is not None and cardinality < 2:
+        raise ValueError(f"cardinality must be >= 2 (got {cardinality}).")
+        
     default_cardinality = get_detector_mode_default_cardinality(detector_mode)
     if detector_mode == "BINARY" and cardinality is not None and cardinality != default_cardinality:
         raise ValueError(
-            f"--cardinality must be {default_cardinality} for BINARY detectors "
+            f"cardinality must be {default_cardinality} for BINARY detectors "
             "(BINARY has 2 labels by definition and cannot be changed)."
         )
     resolved_cardinality = cardinality if cardinality is not None else default_cardinality
