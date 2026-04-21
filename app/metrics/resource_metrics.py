@@ -128,7 +128,7 @@ class ResourceMetricsCollector:
                     "used_bytes": used_vram,
                     "total_bytes": total_vram,
                     "loading_detectors_bytes": loading_vram,
-                    "edge_endpoint_bytes": 0, # Only inference pods consume VRAM
+                    "edge_endpoint_bytes": 0,  # Only inference pods consume VRAM
                     "observed_gpus": observed_gpus,
                 },
             },
@@ -211,7 +211,7 @@ def _find_inference_pods(pod_list) -> list[tuple]:
     results = []
     for pod in pod_list.items:
         # Non-running pods or pods without IP addresses cannot be queried for GPU metrics,
-        # so we will not include them here. 
+        # so we will not include them here.
         if not pod.status or pod.status.phase != "Running":
             continue
         if not pod.status.pod_ip:
@@ -219,7 +219,7 @@ def _find_inference_pods(pod_list) -> list[tuple]:
         annotations = pod.metadata.annotations or {}
         det_id = annotations.get("groundlight.dev/detector-id")
         model_name = annotations.get("groundlight.dev/model-name")
-        
+
         # Pods lacking det_id and model_name annotations are not inference pods
         if not det_id or not model_name:
             continue
