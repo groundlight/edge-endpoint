@@ -87,6 +87,47 @@ def generate_random_objects_image(
     return image, label, rois
 
 
+def generate_random_multiclass_image(
+    gl: ExperimentalApi,  # not used, but kept for consistency with other generators
+    image_width: int = 640,
+    image_height: int = 480,
+    class_names: list[str] | None = None,
+) -> tuple[np.ndarray, str, None]:
+    """Generate an image containing one randomly-selected class string drawn at a random size, color, and position.
+
+    The returned label is the chosen class name. No ROIs are returned because multi-class is a
+    classification (not detection) problem.
+    """
+    if not class_names:
+        raise ValueError("class_names must be a non-empty list")
+
+    label = random.choice(class_names)
+
+    canvas_color = get_random_color()
+    image = generate_color_canvas(image_width, image_height, canvas_color)
+
+    # Pick a target text height as a fraction of image height so the numerals scale with image size
+    # and look comparably large regardless of resolution. Lower bound is intentionally generous.
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    target_text_height_px = random.uniform(image_height * 0.40, image_height * 0.75)
+    # For FONT_HERSHEY_SIMPLEX, text height in pixels is ~22 * font_scale (with thickness ~= 2 * font_scale).
+    font_scale = target_text_height_px / 22.0
+    thickness = max(2, int(font_scale * 2))
+
+    (text_width, text_height), baseline = cv2.getTextSize(label, font, font_scale, thickness)
+
+    # Clamp positions so the rendered text stays fully inside the image.
+    max_x = max(0, image_width - text_width)
+    max_y_baseline = max(text_height, image_height - baseline)
+    x = random.randint(0, max_x)
+    y = random.randint(text_height, max_y_baseline)
+
+    text_color = get_random_color()
+    cv2.putText(image, label, (x, y), font, font_scale, text_color, thickness)
+
+    return image, label, None
+
+
 def generate_random_image(
     gl: ExperimentalApi,
     detector: Detector,
@@ -123,6 +164,14 @@ def generate_random_image(
             gl,
             image_width=image_width,
             image_height=image_height,
+        )
+    elif detector_mode == 'MULTI_CLASS':
+        class_names = list(detector.mode_configuration["class_names"])
+        image, label, rois = generate_random_multiclass_image(
+            gl,
+            image_width=image_width,
+            image_height=image_height,
+            class_names=class_names,
         )
     else:
         raise ValueError(

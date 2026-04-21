@@ -24,10 +24,10 @@ from system_helpers import SystemMonitor
 def _collect_run_metadata(
     gl: ExperimentalApi,
     detector,
-    detector_mode: str,
     image_width: int,
     image_height: int,
 ) -> dict:
+    """Collect per-run metadata for the load test results JSON, derived from the live system and detector."""
     edge_pipeline_config = (glh.get_detector_edge_metrics(gl, detector.id) or {}).get("pipeline_config")
     edge_image, inference_image = glh.get_edge_and_inference_images(gl)
     test_timestamp = datetime.now(timezone.utc).isoformat()
@@ -36,7 +36,9 @@ def _collect_run_metadata(
         "detector_id": detector.id,
         "detector_name": detector.name,
         "detector_query": detector.query,
-        "pipeline_config": edge_pipeline_config,
+        "mode": detector.mode,
+        "cardinality": glh.get_detector_cardinality(detector),
+        "edge_pipeline_config": edge_pipeline_config,
     }
     return {
         "test_timestamp": test_timestamp,
@@ -44,7 +46,6 @@ def _collect_run_metadata(
         "edge_endpoint_image": edge_image,
         "inference_server_image": inference_image,
         "image_size": f"{image_width}x{image_height}",
-        "detector_mode": detector_mode,
         "detector": detector_payload,
     }
 
@@ -198,7 +199,9 @@ def main(  # noqa: PLR0913
     image_width: int = 640,
     image_height: int = 480,
     edge_pipeline_config: str | None = None,
+    cardinality: int | None = None,
 ) -> None:
+    """Provision a detector for the requested mode and run the multi-client throughput ramp."""
     edge_pipeline_config = glh.normalize_edge_pipeline_config(edge_pipeline_config)
 
     gl = ExperimentalApi()
@@ -212,6 +215,7 @@ def main(  # noqa: PLR0913
         image_width=image_width,
         image_height=image_height,
         edge_pipeline_config=edge_pipeline_config,
+        cardinality=cardinality,
     )
 
     glh.configure_edge_endpoint(gl, detector)
@@ -253,11 +257,12 @@ def main(  # noqa: PLR0913
         steady_rps=throughput_summary.maximum_steady_rps,
     )
 
-    metadata = _collect_run_metadata(gl, detector, detector_mode, image_width, image_height)
+    metadata = _collect_run_metadata(gl, detector, image_width, image_height)
     cli_args = argparse.Namespace(
         detector_mode=detector_mode, max_clients=max_clients, step_size=step_size,
         time_between_ramp=time_between_ramp, requests_per_second=requests_per_second,
         image_width=image_width, image_height=image_height, edge_pipeline_config=edge_pipeline_config,
+        cardinality=cardinality,
     )
     write_load_test_results_to_file(
         log_file,
@@ -278,5 +283,14 @@ if __name__ == "__main__":
     parser.add_argument("--image-width", type=int, default=640)
     parser.add_argument("--image-height", type=int, default=480)
     parser.add_argument("--edge-pipeline-config", type=str, default=None, help="Edge pipeline configuration name.")
+    parser.add_argument(
+        "--cardinality", type=int, default=None,
+        help=(
+            "Size of the detector's output/label space. Maps to max_count for COUNT, "
+            "max_num_bboxes for BOUNDING_BOX, and num_classes for MULTI_CLASS. "
+            "For BINARY only 2 is accepted. "
+            "If omitted, a per-mode default is used."
+        ),
+    )
     args = parser.parse_args()
     main(**vars(args))

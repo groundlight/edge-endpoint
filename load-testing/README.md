@@ -66,7 +66,8 @@ uv run python multiple_client_throughput_test.py DETECTOR_MODE [options]
 ```
 
 #### Options
-* `DETECTOR_MODE` (required, one of: `BINARY`, `COUNT`, `BOUNDING_BOX`)
+* `DETECTOR_MODE` (required, one of: `BINARY`, `COUNT`, `BOUNDING_BOX`, `MULTI_CLASS`)
+    * For `MULTI_CLASS`, generated images are a single random numeral drawn at random size, color, and position on a random-color canvas. The class names are the first `--num-classes` digits as strings (e.g. `["0", "1", "2"]`).
 * `--max-clients` (optional, default: 10)
     * Specifies the maximum number of processes (clients) to ramp up to during the test.
 * `--step-size` (optional, default: 1)
@@ -79,6 +80,8 @@ uv run python multiple_client_throughput_test.py DETECTOR_MODE [options]
 * `--image-height` (optional, default: 480)
 * `--edge-pipeline-config` (optional)
     * Named edge pipeline config to benchmark.
+* `--cardinality` (optional)
+    * Size of the detector's output/label space. Maps to `max_count` for `COUNT`, `max_num_bboxes` for `BOUNDING_BOX`, and `num_classes` for `MULTI_CLASS`. For `BINARY` the only accepted value is `2` (the SDK's fixed cardinality); any other value raises an error. If omitted, the per-mode default returned by `get_detector_mode_default_cardinality` in `groundlight_helpers.py` is used.
 
 #### Outputs
 After the load test finishes, it automatically parses the results and writes a timestamped directory under `load-testing/load_tests/` containing:
