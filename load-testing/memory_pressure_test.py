@@ -254,7 +254,7 @@ if __name__ == "__main__":
         main(
             args.num_detectors, 
             get_or_create_count_detectors, 
-            imgh.generate_random_count_image, 
+            imgh.generate_random_objects_image, 
             kwargs
             )
     else:

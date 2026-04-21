@@ -33,6 +33,7 @@ spec:
       containers:
       - name: healer
         image: alpine:3.20
+        imagePullPolicy: IfNotPresent
         securityContext:
           privileged: true
         command: ["/bin/sh","-c"]
