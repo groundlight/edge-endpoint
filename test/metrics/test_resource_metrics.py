@@ -45,9 +45,7 @@ def _make_inference_pod(
     if detector_id is not None:
         annotations["groundlight.dev/detector-id"] = detector_id
         if not drop_model_name:
-            annotations["groundlight.dev/model-name"] = (
-                f"{detector_id}/oodd" if is_oodd else f"{detector_id}/primary"
-            )
+            annotations["groundlight.dev/model-name"] = f"{detector_id}/oodd" if is_oodd else f"{detector_id}/primary"
     pod.metadata.annotations = annotations
     pod.status.phase = phase
     pod.status.pod_ip = pod_ip
@@ -114,16 +112,12 @@ class TestParseEvictionThreshold:
 
     def test_falls_back_to_hard_when_soft_is_absolute(self):
         """If soft is in unsupported absolute form, the hard percentage is used instead."""
-        node = _make_node(
-            ["--eviction-soft=memory.available<500Mi", "--eviction-hard=memory.available<5%"]
-        )
+        node = _make_node(["--eviction-soft=memory.available<500Mi", "--eviction-hard=memory.available<5%"])
         assert _parse_eviction_threshold(node) == 95
 
     def test_soft_preferred_over_hard(self):
         """When both soft and hard are present, soft wins."""
-        node = _make_node(
-            ["--eviction-soft=memory.available<10%", "--eviction-hard=memory.available<5%"]
-        )
+        node = _make_node(["--eviction-soft=memory.available<10%", "--eviction-hard=memory.available<5%"])
         assert _parse_eviction_threshold(node) == 90
 
     def test_absolute_form_returns_none(self):
@@ -307,14 +301,14 @@ class TestAttributeDetectorResources:
         """A pod with no GPU response contributes 0 VRAM but still picks up RAM from Metrics Server."""
         pod = _make_inference_pod("p")
         inference_pods = [(pod, DET_A, False, True)]
-        detectors, _, _ = _attribute_detector_resources(
-            inference_pods, {"p"}, gpu_responses={}, ram_by_pod={"p": 1000}
-        )
+        detectors, _, _ = _attribute_detector_resources(inference_pods, {"p"}, gpu_responses={}, ram_by_pod={"p": 1000})
         assert detectors[0]["vram"]["primary_bytes"] == 0
         assert detectors[0]["ram"]["primary_bytes"] == 1000
 
 
-def _gpu_device(name: str = "NVIDIA A10", index: int = 0, total: int = 1000, used: int = 100, uuid: str | None = "GPU-uuid-0") -> dict:
+def _gpu_device(
+    name: str = "NVIDIA A10", index: int = 0, total: int = 1000, used: int = 100, uuid: str | None = "GPU-uuid-0"
+) -> dict:
     """Build a single device entry as it appears in the /gpu-usage response."""
     return {"name": name, "index": index, "total_bytes": total, "used_bytes": used, "uuid": uuid}
 
