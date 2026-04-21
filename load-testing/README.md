@@ -38,22 +38,16 @@ export GROUNDLIGHT_API_TOKEN="<YOUR-GROUNDLIGHT-API-TOKEN>"
 export GROUNDLIGHT_ENDPOINT="http://<EDGE-ENDPOINT-IP>:30101"
 ```
 
+For each test script below, run it with `--help` to see all available CLI options.
+
 ### Specifying a pipeline to test
 
 `multiple_client_throughput_test.py` and `simple_ee_test.py` both support `--edge-pipeline-config`.
 
-- **Named pipeline config**
-  - Pass `--edge-pipeline-config <pipeline_config_name>`.
+- **Named pipeline config**: pass `--edge-pipeline-config <pipeline_config_name>`. See [edge-pipeline-configs.md](./edge-pipeline-configs.md) for common values.
+- **Custom YAML-defined pipeline**: do *not* pass `--edge-pipeline-config`. Run the script once to trigger detector creation, configure the detector pipeline in Admin, then run the script again.
 
-- **Custom YAML-defined pipeline**
-  - Do **not** pass `--edge-pipeline-config`.
-  - Run the script to trigger the creation of the detector.
-  - Configure the detector pipeline in Admin.
-  - Run the script again.
-
-Notes:
-- `--edge-pipeline-config` currently targets named pipeline configs. Passing custom YAML blocks directly is not supported in this workflow.
-- If `--edge-pipeline-config` is omitted, the detector's current/default edge pipeline is used.
+If `--edge-pipeline-config` is omitted, the detector's current/default edge pipeline is used.
 
 ### Multiple Client Throughput Test
 
@@ -64,24 +58,6 @@ Tests the Edge Endpoint's ability to handle concurrent client load by spawning m
 ```
 uv run python multiple_client_throughput_test.py DETECTOR_MODE [options]
 ```
-
-#### Options
-* `DETECTOR_MODE` (required, one of: `BINARY`, `COUNT`, `BOUNDING_BOX`, `MULTI_CLASS`)
-    * For `MULTI_CLASS`, generated images are a single random numeral drawn at random size, color, and position on a random-color canvas. The class names are the first `--num-classes` digits as strings (e.g. `["0", "1", "2"]`).
-* `--max-clients` (optional, default: 10)
-    * Specifies the maximum number of processes (clients) to ramp up to during the test.
-* `--step-size` (optional, default: 1)
-    * Sets the number of clients to add at each step in ramp-up mode. This will also be the starting number of clients.
-* `--time-between-ramp` (optional, default: 30)
-    * Seconds to run each ramp step.
-* `--requests-per-second` (optional, default: 10)
-    * Per-client request rate.
-* `--image-width` (optional, default: 640)
-* `--image-height` (optional, default: 480)
-* `--edge-pipeline-config` (optional)
-    * Named edge pipeline config to benchmark.
-* `--cardinality` (optional)
-    * Size of the detector's output/label space. Maps to `max_count` for `COUNT`, `max_num_bboxes` for `BOUNDING_BOX`, and `num_classes` for `MULTI_CLASS`. For `BINARY` the only accepted value is `2` (the SDK's fixed cardinality); any other value raises an error. If omitted, the per-mode default returned by `get_detector_mode_default_cardinality` in `groundlight_helpers.py` is used.
 
 #### Outputs
 After the load test finishes, it automatically parses the results and writes a timestamped directory under `load-testing/load_tests/` containing:
