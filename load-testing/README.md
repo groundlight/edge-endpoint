@@ -44,7 +44,7 @@ For each test script below, run it with `--help` to see all available CLI option
 
 `multiple_client_throughput_test.py` and `simple_ee_test.py` both support `--edge-pipeline-config`.
 
-- **Named pipeline config**: pass `--edge-pipeline-config <pipeline_config_name>`. See [edge-pipeline-configs.md](./edge-pipeline-configs.md) for common values.
+- **Named pipeline config**: pass `--edge-pipeline-config <pipeline_config_name>`.
 - **Custom YAML-defined pipeline**: do *not* pass `--edge-pipeline-config`. Run the script once to trigger detector creation, configure the detector pipeline in Admin, then run the script again.
 
 If `--edge-pipeline-config` is omitted, the detector's current/default edge pipeline is used.
