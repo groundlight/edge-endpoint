@@ -71,6 +71,13 @@ def _make_node(node_args: list[str] | None) -> MagicMock:
     return node
 
 
+def _gpu_device(
+    name: str = "NVIDIA A10", index: int = 0, total: int = 1000, used: int = 100, uuid: str | None = "GPU-uuid-0"
+) -> dict:
+    """Build a single device entry as it appears in the /gpu-usage response."""
+    return {"name": name, "index": index, "total_bytes": total, "used_bytes": used, "uuid": uuid}
+
+
 class TestParseK8sMemory:
     def test_binary_suffixes(self):
         """Ki / Mi / Gi / Ti map to 1024-based powers."""
@@ -228,16 +235,14 @@ class TestAttributeDetectorResources:
         """An active pod's RAM/VRAM lands in its detector's primary or oodd slot, and total_bytes sums both."""
         primary = _make_inference_pod("primary-pod")
         oodd = _make_inference_pod("oodd-pod", is_oodd=True)
-        inference_pods = [(primary, DET_A, False, True), (oodd, DET_A, True, True)]
-        active = {"primary-pod", "oodd-pod"}
-        gpu_responses = {
-            "primary-pod": {"pod": {"vram_bytes": 100}},
-            "oodd-pod": {"pod": {"vram_bytes": 50}},
-        }
-        ram_by_pod = {"primary-pod": 1000, "oodd-pod": 500}
-
         detectors, loading_vram, loading_ram = _attribute_detector_resources(
-            inference_pods, active, gpu_responses, ram_by_pod
+            inference_pods=[(primary, DET_A, False, True), (oodd, DET_A, True, True)],
+            active_pods={"primary-pod", "oodd-pod"},
+            gpu_responses={
+                "primary-pod": {"pod": {"vram_bytes": 100}},
+                "oodd-pod": {"pod": {"vram_bytes": 50}},
+            },
+            ram_by_pod={"primary-pod": 1000, "oodd-pod": 500},
         )
 
         assert loading_vram == 0 and loading_ram == 0
@@ -280,16 +285,14 @@ class TestAttributeDetectorResources:
         """A non-active pod's RAM/VRAM rolls into the loading totals, not into a detector slot."""
         active_pod = _make_inference_pod("active")
         loading_pod = _make_inference_pod("loading")
-        inference_pods = [(active_pod, DET_A, False, True), (loading_pod, DET_A, False, False)]
-        active = {"active"}
-        gpu_responses = {
-            "active": {"pod": {"vram_bytes": 100}},
-            "loading": {"pod": {"vram_bytes": 800}},
-        }
-        ram_by_pod = {"active": 1000, "loading": 5000}
-
         detectors, loading_vram, loading_ram = _attribute_detector_resources(
-            inference_pods, active, gpu_responses, ram_by_pod
+            inference_pods=[(active_pod, DET_A, False, True), (loading_pod, DET_A, False, False)],
+            active_pods={"active"},
+            gpu_responses={
+                "active": {"pod": {"vram_bytes": 100}},
+                "loading": {"pod": {"vram_bytes": 800}},
+            },
+            ram_by_pod={"active": 1000, "loading": 5000},
         )
 
         assert loading_vram == 800 and loading_ram == 5000
@@ -300,17 +303,14 @@ class TestAttributeDetectorResources:
     def test_missing_gpu_data_yields_zero_vram(self):
         """A pod with no GPU response contributes 0 VRAM but still picks up RAM from Metrics Server."""
         pod = _make_inference_pod("p")
-        inference_pods = [(pod, DET_A, False, True)]
-        detectors, _, _ = _attribute_detector_resources(inference_pods, {"p"}, gpu_responses={}, ram_by_pod={"p": 1000})
+        detectors, _, _ = _attribute_detector_resources(
+            inference_pods=[(pod, DET_A, False, True)],
+            active_pods={"p"},
+            gpu_responses={},
+            ram_by_pod={"p": 1000},
+        )
         assert detectors[0]["vram"]["primary_bytes"] == 0
         assert detectors[0]["ram"]["primary_bytes"] == 1000
-
-
-def _gpu_device(
-    name: str = "NVIDIA A10", index: int = 0, total: int = 1000, used: int = 100, uuid: str | None = "GPU-uuid-0"
-) -> dict:
-    """Build a single device entry as it appears in the /gpu-usage response."""
-    return {"name": name, "index": index, "total_bytes": total, "used_bytes": used, "uuid": uuid}
 
 
 class TestBuildGpuSummary:
@@ -328,7 +328,6 @@ class TestBuildGpuSummary:
             "pod-b": {"gpus": [_gpu_device(used=300, uuid="GPU-shared")]},
         }
         observed, total, used = _build_gpu_summary(responses)
-        # max-across-pods, not sum: total stays at 1000, used stays at 300 (the higher of the two).
         assert total == 1000 and used == 300
         assert len(observed) == 1
         assert observed[0]["used_bytes"] == 300
