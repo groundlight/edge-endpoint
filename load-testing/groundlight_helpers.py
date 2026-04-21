@@ -222,7 +222,7 @@ def get_or_create_multi_class_detector(
     edge_pipeline_config: str | None = None,
 ) -> Detector:
     """Create a multi-class detector or return an existing one with the same name."""
-    query_text = f"Which class is in the image? One of: {', '.join(class_names)}"
+    query_text = f"Classify this image."
     try:
         return gl.create_multiclass_detector(
             name,
@@ -311,7 +311,7 @@ def configure_edge_endpoint(
 
 
 def get_detector_mode_default_cardinality(detector_mode: str) -> int:
-    """Return the default cardinality used when the user does not specify one for the given mode."""
+    """Return the default cardinality for the provided detector mode."""
     if detector_mode == "BINARY":
         return 2
     if detector_mode == "COUNT":
@@ -324,7 +324,7 @@ def get_detector_mode_default_cardinality(detector_mode: str) -> int:
 
 
 def get_detector_cardinality(detector: Detector) -> int:
-    """Return the cardinality of an existing detector, read from its mode_configuration."""
+    """Return the cardinality of the provided detector."""
     mode = detector.mode
     if mode == "BINARY":
         return get_detector_mode_default_cardinality(mode)
@@ -358,11 +358,9 @@ def provision_detector(
     gl_cloud is used for priming because the edge endpoint may already be in NO_CLOUD mode
     from a previous run, preventing labels from reaching cloud for training.
 
-    cardinality is the user-provided override for the size of the detector's output/label space
-    (max_count for COUNT, max_num_bboxes for BOUNDING_BOX, num_classes for MULTI_CLASS). When None,
-    the per-mode default is used. BINARY's cardinality is fixed at 2; passing anything else for
-    BINARY is rejected. The resolved value is appended to the detector name so different
-    cardinalities create distinct detectors.
+    cardinality is the size of the detector's output/label space (max_count for COUNT,
+    max_num_bboxes for BOUNDING_BOX, num_classes for MULTI_CLASS, 2 for BINARY). If not
+    provided, a mode-specific default is applied.
     """
     default_cardinality = get_detector_mode_default_cardinality(detector_mode)
     if detector_mode == "BINARY" and cardinality is not None and cardinality != default_cardinality:
