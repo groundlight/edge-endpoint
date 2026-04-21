@@ -289,7 +289,7 @@ if __name__ == "__main__":
             "Size of the detector's output/label space. Maps to max_count for COUNT, "
             "max_num_bboxes for BOUNDING_BOX, and num_classes for MULTI_CLASS. "
             "For BINARY only 2 is accepted. "
-            "If omitted, a per-mode default is used."
+            "If omitted, a mode-specific default is used."
         ),
     )
     args = parser.parse_args()
