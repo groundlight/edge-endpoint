@@ -22,6 +22,10 @@ When enabled, the profiling middleware creates a trace per request. Functions de
 
 ```
 request                              <- middleware (full request lifecycle)
++-- validate_image_bytes             <- read image body from ASGI stream
++-- validate_query_params_for_edge   <- reject unsupported query params
++-- active                           <- load active edge config from disk (mtime-cached)
++-- detector_config                  <- look up per-detector inference config
 +-- get_detector_metadata            <- cache hit vs cloud API round-trip
 +-- inference_is_available           <- health check cache hit vs cold check
 +-- record_activity_for_metrics      <- per-activity disk counter write (called multiple times per request)

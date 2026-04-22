@@ -17,6 +17,10 @@ def _():
     # Deterministic color per span name; unknown spans fall back to FALLBACK_COLOR.
     SPAN_COLORS = {
         "request": "#636EFA",
+        "validate_image_bytes": "#1F77B4",
+        "validate_query_params_for_edge": "#17BECF",
+        "active": "#E377C2",
+        "detector_config": "#BCBD22",
         "get_detector_metadata": "#EF553B",
         "inference_is_available": "#00CC96",
         "_submit_primary_inference": "#AB63FA",
@@ -230,7 +234,7 @@ def _(go, mo, traces):
             title="Latency Distribution by Span",
             yaxis_title="Duration (ms)",
             xaxis_title="Span",
-            showlegend=False,
+            showlegend=True,
             height=450,
         )
 
@@ -252,12 +256,17 @@ def _(durations_by_span, go, make_subplots, mo, stats):
     if _ordered_names:
         _cols = 2
         _rows = (len(_ordered_names) + _cols - 1) // _cols
+        # vertical_spacing is a fraction of TOTAL plot height between each row pair,
+        # so a fixed value compounds with row count. Scale it so total padding
+        # (rows-1) * spacing stays bounded, capped so the very-small-grid case still
+        # has visible breathing room.
+        _vspacing = min(0.08, 0.2 / max(1, _rows - 1))
         _fig = make_subplots(
             rows=_rows,
             cols=_cols,
             subplot_titles=_ordered_names,
             horizontal_spacing=0.12,
-            vertical_spacing=0.14,
+            vertical_spacing=_vspacing,
         )
 
         _percentile_styles = [
@@ -602,36 +611,47 @@ def build_waterfall(detail, spans, go, mo, span_colors, fallback_color):
                 orientation="h",
                 marker_color=span_colors.get(name, fallback_color),
                 name=name,
-                hovertemplate="Start: %{base:.1f}ms<br>Duration: %{x:.1f}ms<extra></extra>",
+                customdata=[[start_ms + dur, dur]],
+                hovertemplate=(
+                    "Start: %{base:.1f}ms<br>"
+                    "End: %{customdata[0]:.1f}ms<br>"
+                    "Duration: %{customdata[1]:.1f}ms<extra></extra>"
+                ),
                 showlegend=False,
             )
         )
 
     fig.update_layout(
-        title=f"Trace {detail.get('trace_id', '')[:16]} | {detail.get('detector_id', '?')}",
         xaxis_title="Time from request start (ms)",
         height=max(200, 40 * len(bars) + 100),
         barmode="overlay",
         yaxis=dict(autorange="reversed"),
+        margin=dict(t=20, b=40),
     )
 
     span_table = []
     for s in spans:
         annotations = s.get("annotations") or {}
         annotation_str = ", ".join(f"{k}={v}" for k, v in sorted(annotations.items())) if annotations else ""
-        parent = s.get("parent_span_id")
+        start_ms = (s.get("start_time_ns", 0) - root_start) / 1_000_000
+        dur = s.get("duration_ms", 0) or 0
         span_table.append(
             {
                 "Span": s.get("name", "unknown"),
-                "Start (ms)": round((s.get("start_time_ns", 0) - root_start) / 1_000_000, 2),
-                "Duration (ms)": round(s.get("duration_ms", 0), 2),
-                "Parent": parent[:8] if parent else "(root)",
+                "Start (ms)": round(start_ms, 2),
+                "End (ms)": round(start_ms + dur, 2),
+                "Duration (ms)": round(dur, 2),
+                "Span ID": s.get("span_id", ""),
+                "Parent": s.get("parent_span_id") or "(root)",
                 "Annotations": annotation_str,
             }
         )
 
+    trace_id = detail.get("trace_id", "")
+    detector_id = detail.get("detector_id", "")
     return mo.vstack(
         [
+            mo.md(f"**Detector ID:** `{detector_id}`  \n**Trace ID:** `{trace_id}`"),
             mo.ui.plotly(fig),
             mo.ui.table(span_table, selection=None, label="Span details"),
         ]

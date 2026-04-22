@@ -4,6 +4,8 @@ import os
 import yaml
 from groundlight.edge import EdgeEndpointConfig, InferenceConfig
 
+from app.profiling.context import trace_span
+
 from .database import DatabaseManager
 from .file_paths import ACTIVE_EDGE_CONFIG_PATH
 from .naming import get_edge_inference_model_name
@@ -28,6 +30,7 @@ class EdgeConfigManager:
             yaml.dump(config.to_payload(), f, default_flow_style=False)
 
     @classmethod
+    @trace_span
     def active(cls) -> EdgeEndpointConfig:
         """Return the current active config, re-reading from disk only when the file changes."""
         try:
@@ -55,6 +58,7 @@ class EdgeConfigManager:
         return {d.detector_id: config.edge_inference_configs[d.edge_inference_config] for d in config.detectors}
 
     @staticmethod
+    @trace_span
     def detector_config(config: EdgeEndpointConfig, detector_id: str) -> InferenceConfig | None:
         """Return the InferenceConfig for a single detector, or None."""
         for d in config.detectors:
