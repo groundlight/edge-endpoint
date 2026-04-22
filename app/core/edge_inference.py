@@ -324,6 +324,28 @@ class EdgeInferenceManager:
 
         output_dict = get_inference_result(response, oodd_response, mode)
 
+        # Stamp the currently-loaded MLB KSUIDs into the result so that
+        # edge_result.mlb_key (and oodd_mlb_key when applicable) is persisted
+        # on Posicheck.metadata.edge_result for cloud-vs-edge debugging.
+        # Wrapped in try/except: stamping is purely diagnostic and must never
+        # take down inference if the model_id.txt is missing or unreadable.
+        try:
+            primary_version = get_current_model_version(self.MODEL_REPOSITORY, detector_id)
+            if primary_version is not None:
+                primary_dir = get_primary_edge_model_dir(self.MODEL_REPOSITORY, detector_id)
+                mlb_key = get_current_model_ksuid(primary_dir, primary_version)
+                if mlb_key is not None:
+                    output_dict["mlb_key"] = mlb_key
+            if self.separate_oodd_inference and oodd_response is not None:
+                oodd_version = get_current_model_version(self.MODEL_REPOSITORY, detector_id, is_oodd=True)
+                if oodd_version is not None:
+                    oodd_dir = get_oodd_model_dir(self.MODEL_REPOSITORY, detector_id)
+                    oodd_mlb_key = get_current_model_ksuid(oodd_dir, oodd_version)
+                    if oodd_mlb_key is not None:
+                        output_dict["oodd_mlb_key"] = oodd_mlb_key
+        except Exception as e:
+            logger.warning(f"Could not stamp MLB key into edge_result: {e}")
+
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         self.speedmon.update(detector_id, elapsed_ms)
         fps = self.speedmon.average_fps(detector_id)
