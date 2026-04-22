@@ -91,11 +91,11 @@ PROFILING_TRACES_DIR=/path/to/traces poetry run marimo run app/profiling/dashboa
 
 - **Summary stats** -- trace count, unique detectors, earliest/latest timestamp in the current filtered view
 - **Latency Summary Table** -- per-span p50/p95/p99/mean/min/max statistics
-- **Latency Distribution** -- box plots showing duration spread for each span type, followed by per-span histograms with p50/p95/p99 markers for finer-grained shape inspection
+- **Latency Distribution** -- box plots showing duration spread for each span type (click a legend entry to hide that span), followed by per-span histograms with p50/p95/p99 markers for finer-grained shape inspection
 - **Latency Over Time** -- scatterplot with one point per span per trace, colored by span name; click a legend entry to toggle that span. Reveals per-span outliers and bimodal patterns (e.g., cache hit vs miss) that bucketed aggregates would smooth over.
 - **Request Duration Scatter** -- one point per trace (x = wall time, y = full-request duration) grouped by detector for color; hover shows the trace ID so you can look up slow outliers in the waterfall selector below
 - **Request Throughput** -- bar chart of requests per 5-minute window
-- **Trace Waterfall** -- select an individual trace to see a Gantt-style timeline of all spans (showing parallel execution of primary + OODD inference) plus a span-details table with annotations
+- **Trace Waterfall** -- select an individual trace to see a Gantt-style timeline of all spans (showing parallel execution of primary + OODD inference). The full `Detector ID` and `Trace ID` appear above the chart in copyable code blocks; hover over any bar for start, end, and duration in ms. The span-details table below includes the full `Span ID` and `Parent` IDs (for correlating with logs) plus any annotations set on the span.
 
 ### Interactive Controls
 
