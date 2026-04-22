@@ -280,16 +280,12 @@ if __name__ == "__main__":
         description="Load test an Edge Endpoint by ramping up concurrent clients and requests per second.",
         formatter_class=argparse.RawTextHelpFormatter,
     )
-    parser.add_argument("detector_mode", choices=glh.SUPPORTED_DETECTOR_MODES, help="Detector mode to test.")
-    parser.add_argument("--max-clients", type=int, default=10, help="Number of processes to ramp up to.")
-    parser.add_argument("--step-size", type=int, default=1, help="Number of clients to add at each step.")
-    parser.add_argument("--time-between-ramp", type=int, default=30, help="Seconds to run each ramp step.")
-    parser.add_argument("--requests-per-second", type=int, default=10, help="Per-client request rate.")
-    parser.add_argument("--image-width", type=int, default=640)
-    parser.add_argument("--image-height", type=int, default=480)
-    parser.add_argument("--edge-pipeline-config", type=str, default=None, help="Edge pipeline configuration name.")
     parser.add_argument(
-        "--n", type=int, default=None,
+        "detector_mode", choices=glh.SUPPORTED_DETECTOR_MODES, metavar="detector_mode",
+        help=f"Detector mode to test. One of: {', '.join(sorted(glh.SUPPORTED_DETECTOR_MODES))}.",
+    )
+    parser.add_argument(
+        "n", type=int, nargs="?", default=None,
         help=(
             "Mode-specific integer knob.\n"
             "  COUNT:        sets max_count\n"
@@ -299,5 +295,12 @@ if __name__ == "__main__":
             "If omitted, a mode-specific default is used."
         ),
     )
+    parser.add_argument("--max-clients", type=int, default=10, help="Number of processes to ramp up to.")
+    parser.add_argument("--step-size", type=int, default=1, help="Number of clients to add at each step.")
+    parser.add_argument("--time-between-ramp", type=int, default=30, help="Seconds to run each ramp step.")
+    parser.add_argument("--requests-per-second", type=int, default=10, help="Per-client request rate.")
+    parser.add_argument("--image-width", type=int, default=640)
+    parser.add_argument("--image-height", type=int, default=480)
+    parser.add_argument("--edge-pipeline-config", type=str, default=None, help="Edge pipeline configuration name.")
     args = parser.parse_args()
     main(**vars(args))
