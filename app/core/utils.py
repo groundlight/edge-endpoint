@@ -197,8 +197,9 @@ def generate_metadata_dict(results: dict[str, Any] | None, is_edge_audit: bool =
     Includes `"is_edge_audit": True` if it is an edge audit.
     Includes `"edge_result": results` if including the results would not push the metadata over the size limit. If they
         would, includes the results without the ROIs if the resulting metadata does not exceed the limit.
-    Includes `"mlb_key": "mlb_value"` if the results include a "mlb_key" field. So we can identify the MLB key used for inference.
-    Includes `"oodd_mlb_key": "oodd_mlb_value"` if the results include a "oodd_mlb_key" field. So we can identify the OODD MLB key used for inference.
+    The `results` dict may carry `"mlb_key"` and `"oodd_mlb_key"` identifying the primary/OODD ML binary
+        used for inference; those are passed through as part of `edge_result` with no special handling,
+        so the cloud sees them at `metadata["edge_result"]["mlb_key"]` / `["oodd_mlb_key"]`.
     """
     metadata_dict = {}
 
