@@ -12,9 +12,10 @@ import {
 } from "@mantine/core";
 import { CodeHighlight } from "@mantine/code-highlight";
 import DetectorDetails from "./components/DetectorDetails";
-import VramUsage from "./components/VramUsage";
+import ResourceUsage from "./components/ResourceUsage";
 
-const REFRESH_MS = 10_000;
+// Faster polling in dev is helpful when iterating, slow down polling in prod
+const REFRESH_MS = import.meta.env.DEV ? 1_000 : 10_000;
 
 const parseIfJson = (value) => {
   if (typeof value === "string") {
@@ -73,7 +74,7 @@ function JsonSection({ title, data, loading }) {
 
 export default function App() {
   const [metrics, setMetrics] = useState(null);
-  const [gpu, setGpu] = useState(null);
+  const [resources, setResources] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const intervalRef = useRef(null);
@@ -95,10 +96,10 @@ export default function App() {
     }
 
     try {
-      const res = await fetch("/status/gpu.json");
-      if (res.ok) setGpu(await res.json());
+      const res = await fetch("/status/resources.json");
+      if (res.ok) setResources(await res.json());
     } catch {
-      // GPU data is optional
+      // Resource data is optional
     }
   }, []);
 
@@ -171,8 +172,8 @@ export default function App() {
           </Stack>
 
           <Stack gap="xs">
-            <Text style={SECTION_TITLE_STYLE}>VRAM Usage by Detector</Text>
-            <VramUsage gpuData={gpu} detectorDetails={detectorDetails} loading={loading} />
+            <Text style={SECTION_TITLE_STYLE}>Resource Usage by Detector</Text>
+            <ResourceUsage resourceData={resources} detectorDetails={detectorDetails} loading={loading} />
           </Stack>
 
           <JsonSection title="Activity Metrics" data={metrics?.activity_metrics} loading={loading} />

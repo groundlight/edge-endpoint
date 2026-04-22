@@ -86,6 +86,37 @@ spec:
         command: ["/bin/sh", "/etc/groundlight/edge-config/apply-edge-config.sh"]
 
       containers:
+      - name: mount-s3
+        image: *edgeEndpointImage
+        imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        resources:
+          requests:
+            memory: "50Mi"
+        securityContext:
+          privileged: true  # Required for FUSE mount
+        command: ["/bin/bash", "/groundlight-edge/deploy/bin/mount-s3.sh"]
+        livenessProbe:
+          exec:
+            command: ["mountpoint", "-q", "/host-root{{ .Values.s3Mount.mountPath }}"]
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          failureThreshold: 3
+        env:
+        - name: S3_BUCKET
+          value: "{{ .Values.s3Mount.bucket }}"
+        - name: S3_REGION
+          value: "{{ .Values.s3Mount.region }}"
+        - name: MOUNT_PATH
+          value: "{{ .Values.s3Mount.mountPath }}"
+        - name: CACHE_PATH
+          value: "{{ .Values.s3Mount.cachePath }}"
+        volumeMounts:
+        - name: host-root
+          mountPath: /host-root
+          mountPropagation: Bidirectional
+        - name: aws-credentials
+          mountPath: /root/.aws
+          readOnly: true
       - name: nginx
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
@@ -205,6 +236,13 @@ spec:
           value: "{{ .Values.namespace }}"
         - name: INFERENCE_FLAVOR
           value: "{{ .Values.inferenceFlavor }}"
+        # Inject the name of the node this pod is scheduled on so the resource
+        # metrics collector can report capacity for the correct node, even on
+        # a hypothetical multi-node cluster.
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
         volumeMounts:
           - name: edge-config-volume
             mountPath: /etc/groundlight/edge-config
@@ -319,3 +357,18 @@ spec:
         hostPath:
           path: /opt/groundlight/queue/{{ .Values.namespace }}
           type: DirectoryOrCreate
+      - name: pinamod-mount
+        hostPath:
+          path: {{ .Values.s3Mount.mountPath }}
+          type: DirectoryOrCreate
+      - name: pinamod-cache
+        hostPath:
+          path: {{ .Values.s3Mount.cachePath }}
+          type: DirectoryOrCreate
+      - name: aws-credentials
+        secret:
+          secretName: aws-credentials-file
+      - name: host-root
+        hostPath:
+          path: /
+          type: Directory

@@ -1,22 +1,22 @@
 from groundlight import Groundlight, ExperimentalApi, Detector
-from groundlight.edge import EdgeEndpointConfig, NO_CLOUD
 import subprocess
 import threading
 import types
 import time
-import os
 
 import groundlight_helpers as glh
 import image_helpers as imgh
 
-DETECTOR_NAME = 'Rollout Under Load Test'
-DETECTOR_GROUP_NAME = 'Edge Endpoint Load Testing'
 LABEL_INTERVAL_SEC = 30.0
 LABELS_PER_BATCH = 3
-MIN_STARTING_LABELS = 30
 CONFIDENCE_THRESHOLD = 0.0
 VICTORY_DURATION_SEC = 4 * 60
 MIN_ROLLOUTS = 2
+
+
+def disable_transport_retries(gl: ExperimentalApi) -> None:
+    """Disable urllib3 transport-level retries."""
+    gl.configuration.retries = 0
 
 
 def disable_sdk_retries(gl: ExperimentalApi) -> None:
@@ -56,58 +56,24 @@ def add_label(gl_cloud: Groundlight, detector: Detector) -> None:
 
 
 def main():
-    endpoint = os.environ.get('GROUNDLIGHT_ENDPOINT')
-    if endpoint is None:
-        raise ValueError(
-            'GROUNDLIGHT_ENDPOINT must be set. This test must run against an Edge Endpoint.'
-        )
+    gl = ExperimentalApi()
+    glh.error_if_endpoint_is_cloud(gl)
+    gl_cloud = Groundlight(endpoint=glh.CLOUD_ENDPOINT_PROD)
 
-    gl = ExperimentalApi(endpoint=endpoint)
-    gl_cloud = Groundlight(endpoint="https://api.groundlight.ai")
-    # Disable urllib3 transport-level retries
-    gl.configuration.retries = 0
-    # Disable the SDK's own 5xx retry decorator
+    # Disable internal retries in the python-sdk so that this test surfaces all errors, even if transient
+    disable_transport_retries(gl)
     disable_sdk_retries(gl)
 
-    detector = gl.get_or_create_detector(
-        DETECTOR_NAME,
-        query="Is the image completely black?",
-        group_name=DETECTOR_GROUP_NAME,
+    detector = glh.provision_detector(
+        gl, gl_cloud, "BINARY", "Rollout Under Load Test",
+        group_name="Edge Endpoint Load Testing",
     )
-    print(f'Using detector {detector.id}')
 
-    # Prime the detector if it hasn't been trained yet
-    stats = glh.get_detector_evaluation(gl, detector.id)
-    if stats['projected_ml_accuracy'] is None:
-        num_existing = stats['total_labels'] or 0
-        num_needed = max(0, MIN_STARTING_LABELS - num_existing)
-        if num_needed > 0:
-            print(f'Priming detector with {num_needed} labels...')
-            for i in range(num_needed):
-                _add_label_sync(gl_cloud, detector)
-                print(f'  [{i+1}/{num_needed}] primed')
+    glh.configure_edge_endpoint(gl, detector)
 
-        print('Waiting for model training...')
-        poll_timeout_sec = 120
-        start = time.time()
-        while True:
-            stats = glh.get_detector_evaluation(gl, detector.id)
-            if stats['projected_ml_accuracy'] is not None:
-                print(f'Training complete. Projected ML accuracy: {stats["projected_ml_accuracy"]:.2f}')
-                break
-            elapsed = time.time() - start
-            if elapsed > poll_timeout_sec:
-                raise RuntimeError(f'Model training did not complete within {poll_timeout_sec}s')
-            time.sleep(5)
-    else:
-        print(f'Detector already trained. Projected ML accuracy: {stats["projected_ml_accuracy"]:.2f}')
-
-    # Configure edge with NO_CLOUD
-    edge_config = EdgeEndpointConfig()
-    edge_config.add_detector(detector, NO_CLOUD)
-    print('Pushing edge config (NO_CLOUD)...')
-    gl.edge.set_config(edge_config)
-    print('Edge config applied, inference pod ready.')
+    # There is a bug where sometimes inference fails if the inference pod came online very recently. 
+    # We'll sleep here a bit so that bug doesn't ruin this test. 
+    time.sleep(3)
 
     # Record deployment revision before the test to verify rollouts occurred.
     revision_before = get_max_inference_revision()

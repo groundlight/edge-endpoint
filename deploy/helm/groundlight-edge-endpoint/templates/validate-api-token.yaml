@@ -19,6 +19,7 @@ spec:
       containers:
         - name: main
           image: amazon/aws-cli:latest
+          imagePullPolicy: IfNotPresent
           env:
             - name: GROUNDLIGHT_ENDPOINT
               value: "{{ .Values.upstreamEndpoint }}"
