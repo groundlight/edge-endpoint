@@ -48,9 +48,7 @@ class ProfilingMiddleware:
         finally:
             if response_sent_ns:
                 root = tracer.root_span
-                root.annotations["response_sent_ms"] = (
-                    f"{(response_sent_ns[0] - root.start_time_ns) / 1_000_000:.2f}"
-                )
+                root.annotations["response_sent_ms"] = f"{(response_sent_ns[0] - root.start_time_ns) / 1_000_000:.2f}"
             try:
                 record_trace(tracer.finish())
             except Exception:
