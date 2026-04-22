@@ -1,4 +1,4 @@
-from groundlight import ExperimentalApi, Detector, ApiException, ImageQuery
+from groundlight import ExperimentalApi, Groundlight, Detector, ApiException, ImageQuery
 from groundlight.edge import EdgeEndpointConfig, InferenceConfig, NO_CLOUD
 
 from concurrent.futures import ThreadPoolExecutor
@@ -310,8 +310,21 @@ def configure_edge_endpoint(
     print("Edge endpoint configured and inference ready.")
 
 
-def get_detector_mode_default_cardinality(detector_mode: str) -> int:
-    """Return the default cardinality for the provided detector mode."""
+def mode_configuration_key_for_n(detector_mode: str) -> str:
+    """Return the key in `Detector.mode_configuration` that `n` corresponds to for this mode."""
+    if detector_mode == "COUNT":
+        return "max_count"
+    if detector_mode == "BOUNDING_BOX":
+        return "max_num_bboxes"
+    if detector_mode == "MULTI_CLASS":
+        return "num_classes"
+    if detector_mode == "BINARY":
+        raise ValueError("BINARY has no mode_configuration; its label space is fixed at 2.")
+    raise ValueError(f"Unsupported detector mode: {detector_mode}")
+
+
+def default_n_for_mode(detector_mode: str) -> int:
+    """Return the default `n` value to use when none is provided for this mode."""
     if detector_mode == "BINARY":
         return 2
     if detector_mode == "COUNT":
@@ -323,27 +336,18 @@ def get_detector_mode_default_cardinality(detector_mode: str) -> int:
     raise ValueError(f"Unsupported detector mode: {detector_mode}")
 
 
-def get_detector_cardinality(detector: Detector) -> int:
-    """Return the cardinality of the provided detector."""
-    mode = detector.mode
-    if mode == "BINARY":
-        # BINARY's cardinality is structurally fixed at 2, so there's nothing to read from
-        # mode_configuration.
-        return get_detector_mode_default_cardinality(mode)
-
-    config = detector.mode_configuration
-    if mode == "COUNT":
-        return int(config["max_count"])
-    if mode == "BOUNDING_BOX":
-        return int(config["max_num_bboxes"])
-    if mode == "MULTI_CLASS":
-        return len(config["class_names"])
-    raise ValueError(f"Unsupported detector mode: {mode}")
+def validate_n_for_mode(detector_mode: str, n: int | None) -> None:
+    """Raise ValueError if `n` is incompatible with this detector mode. No-op when n is None."""
+    if n is None:
+        return
+    if n < 2:
+        raise ValueError(f"n must be >= 2 (got {n}).")
+    if detector_mode == "BINARY" and n != 2:
+        raise ValueError("n must be 2 for BINARY detectors (or omitted).")
 
 
 def provision_detector(
-    gl: ExperimentalApi,
-    gl_cloud: ExperimentalApi,
+    gl_cloud: Groundlight,
     detector_mode: str,
     detector_name_prefix: str,
     image_width: int = 640,
@@ -352,38 +356,35 @@ def provision_detector(
     edge_pipeline_config: str | None = None,
     num_labels: int = 30,
     training_timeout_sec: float = 60 * 20,
-    cardinality: int | None = None,
+    n: int | None = None,
 ) -> Detector:
-    """Create or fetch a detector, prime it if undertrained, and wait for training to finish.
+    """
+    Get or create a detector. If untrained, prime the detector with labels. Wait for training to finish and return the detector.
+
+    gl_cloud: a `Groundlight` client that points at Groundlight cloud (not at an Edge Endpoint)
 
     num_labels is the number of labels submitted during priming.
-    gl_cloud is used for priming because the edge endpoint may already be in NO_CLOUD mode
-    from a previous run, preventing labels from reaching cloud for training.
 
-    cardinality is the size of the detector's output/label space (max_count for COUNT,
-    max_num_bboxes for BOUNDING_BOX, num_classes for MULTI_CLASS, 2 for BINARY). If not
-    provided, a mode-specific default is applied.
+    n is a mode-specific integer knob:
+        COUNT:        sets max_count
+        BOUNDING_BOX: sets max_num_bboxes
+        MULTI_CLASS:  sets num_classes
+        BINARY:       number of classes, must be 2
+    If omitted, a mode-specific default is used.
     """
-    if cardinality is not None and cardinality < 2:
-        raise ValueError(f"cardinality must be >= 2 (got {cardinality}).")
-        
-    default_cardinality = get_detector_mode_default_cardinality(detector_mode)
-    if detector_mode == "BINARY" and cardinality is not None and cardinality != default_cardinality:
-        raise ValueError(
-            f"cardinality must be {default_cardinality} for BINARY detectors "
-            "(BINARY has 2 labels by definition and cannot be changed)."
-        )
-    resolved_cardinality = cardinality if cardinality is not None else default_cardinality
+    validate_n_for_mode(detector_mode, n)
+    if n is None:
+        n = default_n_for_mode(detector_mode)
 
     detector_name = f"{detector_name_prefix} {image_width} x {image_height} - {detector_mode}"
     if detector_mode != "BINARY":
-        detector_name += f" - n{resolved_cardinality}"
+        detector_name += f" - n{n}"
     if edge_pipeline_config is not None:
         config_hash = hash_pipeline_config(edge_pipeline_config)
         detector_name += f" - {config_hash}"
 
     if detector_mode == "BINARY":
-        detector = gl.get_or_create_detector(
+        detector = gl_cloud.get_or_create_detector(
             name=detector_name,
             query="Is the image background black?",
             group_name=group_name,
@@ -391,26 +392,26 @@ def provision_detector(
         )
     elif detector_mode == "COUNT":
         detector = get_or_create_count_detector(
-            gl,
+            gl_cloud,
             name=detector_name,
             class_name="circle",
-            max_count=resolved_cardinality,
+            max_count=n,
             group_name=group_name,
             edge_pipeline_config=edge_pipeline_config,
         )
     elif detector_mode == "BOUNDING_BOX":
         detector = get_or_create_bounding_box_detector(
-            gl,
+            gl_cloud,
             name=detector_name,
             class_name="circle",
-            max_num_bboxes=resolved_cardinality,
+            max_num_bboxes=n,
             group_name=group_name,
             edge_pipeline_config=edge_pipeline_config,
         )
     elif detector_mode == "MULTI_CLASS":
-        class_names = [str(i) for i in range(resolved_cardinality)]
+        class_names = [str(i) for i in range(n)]
         detector = get_or_create_multi_class_detector(
-            gl,
+            gl_cloud,
             name=detector_name,
             class_names=class_names,
             group_name=group_name,
@@ -420,13 +421,13 @@ def provision_detector(
         raise ValueError(f"Unsupported detector mode: {detector_mode}")
 
     if edge_pipeline_config is not None:
-        assert_configured_edge_pipeline_matches_provided(gl, detector.id, edge_pipeline_config)
+        assert_configured_edge_pipeline_matches_provided(gl_cloud, detector.id, edge_pipeline_config)
 
     # The pipeline may train before all submitted labels have been ingested,
     # so we accept a lower threshold when checking training completeness.
     min_training_labels = int(num_labels * 0.75)
 
-    pipeline_details = get_edge_pipeline_details(gl, detector.id)
+    pipeline_details = get_edge_pipeline_details(gl_cloud, detector.id)
     if not edge_pipeline_is_sufficiently_trained(pipeline_details, min_training_labels):
         print(
             f"Edge pipeline for {detector.id} is not sufficiently trained "
@@ -436,7 +437,7 @@ def provision_detector(
         prime_detector(gl_cloud, detector, num_labels, image_width, image_height)
         print(f"Waiting up to {training_timeout_sec}s for edge pipeline training for {detector.id}...")
         wait_for_edge_pipeline_trained(
-            gl, detector, min_training_labels, timeout_sec=training_timeout_sec
+            gl_cloud, detector, min_training_labels, timeout_sec=training_timeout_sec
         )
 
     return detector

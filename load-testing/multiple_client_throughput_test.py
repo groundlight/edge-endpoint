@@ -33,13 +33,16 @@ def _collect_run_metadata(
     test_timestamp = datetime.now(timezone.utc).isoformat()
 
     detector_payload = {
-        "detector_id": detector.id,
-        "detector_name": detector.name,
-        "detector_query": detector.query,
+        "id": detector.id,
+        "name": detector.name,
+        "query": detector.query,
         "mode": detector.mode,
-        "cardinality": glh.get_detector_cardinality(detector),
         "edge_pipeline_config": edge_pipeline_config,
     }
+    # BINARY has no mode_configuration; other modes each have a unique mode_configuration
+    if detector.mode != "BINARY":
+        key = glh.mode_configuration_key_for_n(detector.mode)
+        detector_payload[key] = detector.mode_configuration[key]
     return {
         "test_timestamp": test_timestamp,
         "endpoint": gl.endpoint,
@@ -199,7 +202,7 @@ def main(  # noqa: PLR0913
     image_width: int = 640,
     image_height: int = 480,
     edge_pipeline_config: str | None = None,
-    cardinality: int | None = None,
+    n: int | None = None,
 ) -> None:
     """Provision a detector for the requested mode and run the multi-client throughput ramp."""
     edge_pipeline_config = glh.normalize_edge_pipeline_config(edge_pipeline_config)
@@ -208,14 +211,13 @@ def main(  # noqa: PLR0913
     glh.error_if_endpoint_is_cloud(gl)
     gl_cloud = ExperimentalApi(endpoint=glh.CLOUD_ENDPOINT_PROD)
     detector = glh.provision_detector(
-        gl=gl,
         gl_cloud=gl_cloud,
         detector_mode=detector_mode,
         detector_name_prefix="Throughput Test",
         image_width=image_width,
         image_height=image_height,
         edge_pipeline_config=edge_pipeline_config,
-        cardinality=cardinality,
+        n=n,
     )
 
     glh.configure_edge_endpoint(gl, detector)
@@ -262,7 +264,7 @@ def main(  # noqa: PLR0913
         detector_mode=detector_mode, max_clients=max_clients, step_size=step_size,
         time_between_ramp=time_between_ramp, requests_per_second=requests_per_second,
         image_width=image_width, image_height=image_height, edge_pipeline_config=edge_pipeline_config,
-        cardinality=cardinality,
+        n=n,
     )
     write_load_test_results_to_file(
         log_file,
@@ -274,7 +276,10 @@ def main(  # noqa: PLR0913
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Load test an endpoint by submitting generated images.")
+    parser = argparse.ArgumentParser(
+        description="Load test an Edge Endpoint by ramping up concurrent clients and requests per second.",
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
     parser.add_argument("detector_mode", choices=glh.SUPPORTED_DETECTOR_MODES, help="Detector mode to test.")
     parser.add_argument("--max-clients", type=int, default=10, help="Number of processes to ramp up to.")
     parser.add_argument("--step-size", type=int, default=1, help="Number of clients to add at each step.")
@@ -284,11 +289,13 @@ if __name__ == "__main__":
     parser.add_argument("--image-height", type=int, default=480)
     parser.add_argument("--edge-pipeline-config", type=str, default=None, help="Edge pipeline configuration name.")
     parser.add_argument(
-        "--cardinality", type=int, default=None,
+        "--n", type=int, default=None,
         help=(
-            "Size of the detector's output/label space. Maps to max_count for COUNT, "
-            "max_num_bboxes for BOUNDING_BOX, and num_classes for MULTI_CLASS. "
-            "For BINARY only 2 is accepted. "
+            "Mode-specific integer knob.\n"
+            "  COUNT:        sets max_count\n"
+            "  BOUNDING_BOX: sets max_num_bboxes\n"
+            "  MULTI_CLASS:  sets num_classes\n"
+            "  BINARY:       number of classes, must be 2\n"
             "If omitted, a mode-specific default is used."
         ),
     )

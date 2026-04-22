@@ -22,9 +22,8 @@ def main(edge_pipeline_config: str | None = None) -> None:
     gl = ExperimentalApi()
     glh.error_if_endpoint_is_cloud(gl)
     gl_cloud = ExperimentalApi(endpoint=glh.CLOUD_ENDPOINT_PROD)
-
     detector = glh.provision_detector(
-        gl, gl_cloud, "COUNT", "Simple EE Test",
+        gl_cloud, "COUNT", "Simple EE Test",
         IMAGE_WIDTH, IMAGE_HEIGHT,
         group_name="Simple EE Test",
         edge_pipeline_config=requested_edge_pipeline_config,
