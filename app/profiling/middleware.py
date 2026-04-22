@@ -1,4 +1,5 @@
 import logging
+import time
 
 from app.profiling import PROFILING_ENABLED, record_trace, start_trace
 
@@ -27,9 +28,29 @@ class ProfilingMiddleware:
 
         tracer = start_trace("request", detector_id=detector_id)
         token = _current_tracer.set(tracer)
+
+        # Wrap `send` to capture the wall-clock time at which the response is fully flushed to the
+        # client. Anything in the request span past this point (e.g. BackgroundTasks) is "behind"
+        # the user-visible latency and should be analyzed separately.
+        response_sent_ns: list[int] = []
+
+        async def traced_send(message):
+            await send(message)
+            if (
+                not response_sent_ns
+                and message.get("type") == "http.response.body"
+                and not message.get("more_body", False)
+            ):
+                response_sent_ns.append(time.perf_counter_ns())
+
         try:
-            await self.app(scope, receive, send)
+            await self.app(scope, receive, traced_send)
         finally:
+            if response_sent_ns:
+                root = tracer.root_span
+                root.annotations["response_sent_ms"] = (
+                    f"{(response_sent_ns[0] - root.start_time_ns) / 1_000_000:.2f}"
+                )
             try:
                 record_trace(tracer.finish())
             except Exception:

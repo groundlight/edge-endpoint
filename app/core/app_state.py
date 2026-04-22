@@ -25,8 +25,10 @@ STALE_METADATA_THRESHOLD_SEC = 60  # 60 seconds
 USE_MINIMAL_IMAGE = os.environ.get("USE_MINIMAL_IMAGE", "false") == "true"
 
 
+@trace_span
 @lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
 def _get_groundlight_sdk_instance_internal(api_token: str):
+    """Build (or return a cached) Groundlight SDK instance keyed by API token."""
     # We set the HTTP transport retries to 0 to avoid stalling too long when experiencing network connectivity issues.
     # By default, urllib3 retries are only done for idempotent methods (which does not include POST). This configuration
     # therefore will not affect submission of image queries.
@@ -34,6 +36,7 @@ def _get_groundlight_sdk_instance_internal(api_token: str):
     return Groundlight(api_token=api_token, http_transport_retries=http_transport_retries)
 
 
+@trace_span
 def get_groundlight_sdk_instance(request: Request):
     """
     Returns a (cached) Groundlight SDK instance given an API token.
@@ -44,6 +47,7 @@ def get_groundlight_sdk_instance(request: Request):
     return _get_groundlight_sdk_instance_internal(api_token)
 
 
+@trace_span
 def refresh_detector_metadata_if_needed(detector_id: str, gl: Groundlight) -> None:
     """
     Check if detector metadata needs refreshing based on age of cached value and refresh it if it's too old.
@@ -107,7 +111,9 @@ class AppState:
         self.queue_writer = QueueWriter()
 
 
+@trace_span
 def get_app_state(request: Request) -> AppState:
+    """FastAPI dependency that returns the singleton AppState attached to the running app."""
     if not hasattr(request.app.state, "app_state"):
         raise RuntimeError("App state is not initialized.")
     return request.app.state.app_state
