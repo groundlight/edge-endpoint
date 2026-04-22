@@ -89,9 +89,9 @@ def generate_random_objects_image(
 
 def generate_random_multiclass_image(
     gl: ExperimentalApi,  # not used, but kept for consistency with other generators
+    class_names: list[str],
     image_width: int = 640,
     image_height: int = 480,
-    class_names: list[str] | None = None,
 ) -> tuple[np.ndarray, str, None]:
     """Generate an image containing one randomly-selected class string drawn at a random size, color, and position.
 
@@ -116,11 +116,18 @@ def generate_random_multiclass_image(
 
     (text_width, text_height), baseline = cv2.getTextSize(label, font, font_scale, thickness)
 
-    # Clamp positions so the rendered text stays fully inside the image.
-    max_x = max(0, image_width - text_width)
-    max_y_baseline = max(text_height, image_height - baseline)
-    x = random.randint(0, max_x)
-    y = random.randint(text_height, max_y_baseline)
+    # If the rendered text overflows either dimension (long label, small image, or a
+    # baseline that pushes the total height past image_height), shrink font_scale to fit.
+    shrink = min(1.0, image_width / text_width, image_height / (text_height + baseline))
+    if shrink < 1.0:
+        font_scale *= shrink
+        thickness = max(2, int(font_scale * 2))
+        (text_width, text_height), baseline = cv2.getTextSize(label, font, font_scale, thickness)
+
+    # Pick a random position that keeps the rendered text fully inside the image.
+    # The max() guards protect against any residual rounding from the shrink above.
+    x = random.randint(0, max(0, image_width - text_width))
+    y = random.randint(text_height, max(text_height, image_height - baseline))
 
     text_color = get_random_color()
     cv2.putText(image, label, (x, y), font, font_scale, text_color, thickness)
@@ -169,9 +176,9 @@ def generate_random_image(
         class_names = list(detector.mode_configuration["class_names"])
         image, label, rois = generate_random_multiclass_image(
             gl,
+            class_names,
             image_width=image_width,
             image_height=image_height,
-            class_names=class_names,
         )
     else:
         raise ValueError(
