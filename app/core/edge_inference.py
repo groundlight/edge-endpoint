@@ -294,10 +294,14 @@ class EdgeInferenceManager:
             content_type: The content type of the image
         Returns:
             Dictionary of inference results with keys:
-                - "score": float
-                - "confidence": float
-                - "probability": float
+                - "confidence": float — adjusted confidence when OODD is enabled, primary otherwise
                 - "label": int
+                - "rois": list[dict] | None — when the pipeline produces ROIs
+                - "text": str | None — when the pipeline produces a text prediction
+                - "raw_primary_confidence": float — only when OODD is enabled
+                - "raw_oodd_prediction": dict — only when OODD is enabled
+                - "mlb_key": str — primary MLB KSUID, when model_id.txt is readable
+                - "oodd_mlb_key": str — OODD MLB KSUID, when OODD is enabled and readable
         """
         logger.info(f"Submitting image to edge inference service. {detector_id=}")
         start_time = time.perf_counter()
@@ -323,6 +327,24 @@ class EdgeInferenceManager:
             oodd_response = None
 
         output_dict = get_inference_result(response, oodd_response, mode)
+
+        # Stamp the currently-loaded MLB KSUIDs into the result so that
+        # edge_result.mlb_key (and oodd_mlb_key when applicable) is persisted
+        # on Posicheck.metadata.edge_result for cloud-vs-edge debugging.
+        # Wrapped in try/except: stamping is purely diagnostic and must never
+        # take down inference if the model_id.txt is missing or unreadable.
+        try:
+            primary_version = get_current_model_version(self.MODEL_REPOSITORY, detector_id)
+            primary_dir = get_primary_edge_model_dir(self.MODEL_REPOSITORY, detector_id)
+            if mlb_key := get_current_model_ksuid(primary_dir, primary_version):
+                output_dict["mlb_key"] = mlb_key
+            if self.separate_oodd_inference and oodd_response is not None:
+                oodd_version = get_current_model_version(self.MODEL_REPOSITORY, detector_id, is_oodd=True)
+                oodd_dir = get_oodd_model_dir(self.MODEL_REPOSITORY, detector_id)
+                if oodd_mlb_key := get_current_model_ksuid(oodd_dir, oodd_version):
+                    output_dict["oodd_mlb_key"] = oodd_mlb_key
+        except Exception as e:
+            logger.warning(f"Could not stamp MLB key into edge_result: {e}")
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         self.speedmon.update(detector_id, elapsed_ms)

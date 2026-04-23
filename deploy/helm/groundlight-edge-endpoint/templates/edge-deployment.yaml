@@ -207,6 +207,10 @@ spec:
           mountPath: /opt/groundlight/edge/sqlite
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/config
+        # Needed by run_inference() to read {detector}/{primary,oodd}/{version}/model_id.txt
+        # and stamp the MLB KSUID into edge_result for cloud-side debugging.
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/serving/model-repo
         - name: device-info-volume
           mountPath: /opt/groundlight/device
         - name: escalation-queue-volume

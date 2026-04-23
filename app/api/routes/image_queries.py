@@ -197,6 +197,8 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 patience_time=patience_time,
                 rois=results["rois"],
                 text=results["text"],
+                mlb_key=results.get("mlb_key"),
+                oodd_mlb_key=results.get("oodd_mlb_key"),
             )
 
             # Skip cloud operations if escalation is disabled
