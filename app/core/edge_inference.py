@@ -294,10 +294,14 @@ class EdgeInferenceManager:
             content_type: The content type of the image
         Returns:
             Dictionary of inference results with keys:
-                - "score": float
-                - "confidence": float
-                - "probability": float
+                - "confidence": float — adjusted confidence when OODD is enabled, primary otherwise
                 - "label": int
+                - "rois": list[dict] | None — when the pipeline produces ROIs
+                - "text": str | None — when the pipeline produces a text prediction
+                - "raw_primary_confidence": float — only when OODD is enabled
+                - "raw_oodd_prediction": dict — only when OODD is enabled
+                - "mlb_key": str — primary MLB KSUID, when model_id.txt is readable
+                - "oodd_mlb_key": str — OODD MLB KSUID, when OODD is enabled and readable
         """
         logger.info(f"Submitting image to edge inference service. {detector_id=}")
         start_time = time.perf_counter()

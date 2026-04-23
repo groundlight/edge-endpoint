@@ -49,6 +49,8 @@ def create_iq(  # noqa: PLR0913
     patience_time: float | None = None,
     rois: list[ROI] | None = None,
     text: str | None = None,
+    mlb_key: str | None = None,
+    oodd_mlb_key: str | None = None,
 ) -> ImageQuery:
     """
     Creates an ImageQuery object for the appropriate detector with the given result.
@@ -63,6 +65,10 @@ def create_iq(  # noqa: PLR0913
     :param patience_time: The acceptable time to wait for a result.
     :param rois: The ROIs associated with the prediction, if applicable.
     :param text: The text associated with the prediction, if applicable.
+    :param mlb_key: KSUID of the primary MLB used for local inference. Stamped onto `metadata.mlb_key`
+        so callers of local/no-cloud detectors can identify which binary produced the result without
+        needing to escalate and re-fetch.
+    :param oodd_mlb_key: KSUID of the OODD MLB, same purpose as `mlb_key`.
 
     :return: The created ImageQuery.
     """
@@ -70,8 +76,14 @@ def create_iq(  # noqa: PLR0913
         patience_time = constants.DEFAULT_PATIENCE_TIME
     result_type, result = _mode_to_result_and_type(mode, mode_configuration, confidence, result_value)
 
+    metadata: dict[str, Any] = {"is_from_edge": True}
+    if mlb_key is not None:
+        metadata["mlb_key"] = mlb_key
+    if oodd_mlb_key is not None:
+        metadata["oodd_mlb_key"] = oodd_mlb_key
+
     return ImageQuery(
-        metadata={"is_from_edge": True},
+        metadata=metadata,
         id=generate_iq_id(),
         type=ImageQueryTypeEnum.image_query,
         created_at=datetime.now(timezone.utc),
