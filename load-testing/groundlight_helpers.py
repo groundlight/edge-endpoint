@@ -340,10 +340,15 @@ def validate_n_for_mode(detector_mode: str, n: int | None) -> None:
     """Raise ValueError if `n` is incompatible with this detector mode. No-op when n is None."""
     if n is None:
         return
-    if n < 2:
-        raise ValueError(f"n must be >= 2 (got {n}).")
-    if detector_mode == "BINARY" and n != 2:
-        raise ValueError("n must be 2 for BINARY detectors (or omitted).")
+    if detector_mode == "BINARY":
+        if n != 2:
+            raise ValueError("n must be 2 for BINARY detectors (or omitted).")
+    elif detector_mode == "MULTI_CLASS":
+        if n < 2:
+            raise ValueError(f"n must be >= 2 for MULTI_CLASS detectors (got {n}).")
+    elif detector_mode in ("COUNT", "BOUNDING_BOX"):
+        if n < 1:
+            raise ValueError(f"n must be >= 1 for {detector_mode} detectors (got {n}).")
 
 
 def provision_detector(
