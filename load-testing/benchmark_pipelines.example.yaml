@@ -1,0 +1,36 @@
+# Example input for measure_detector_resource_utilization.py.
+# See load-testing/edge-pipeline-configs.md for the full set of options per mode.
+#
+# For each mode, the script expands the cartesian product of `n` (where applicable)
+# x `image_sizes` x `pipelines` into one measurement per combination.
+
+BINARY:
+  image_sizes:
+    - [320, 240]
+    - [640, 480]
+  pipelines:
+    - generic-cached-timm-efficientnetv2s-calibrated-mlp
+    - generic-cached-timm-mobilenetv3_small_050-calibrated-smoothed-mlp
+
+MULTI_CLASS:
+  n: [2, 4, 8, 16]
+  image_sizes:
+    - [640, 480]
+  pipelines:
+    - multiclass-generic-cached-timm-efficientnetv2s-calibrated-mlp
+
+COUNT:
+  n: [1, 5, 10]
+  image_sizes:
+    - [320, 240]
+    - [640, 480]
+  pipelines:
+    - count-step-yolox
+    - count-step-centernet
+
+BOUNDING_BOX:
+  n: [1, 5, 10]
+  image_sizes:
+    - [640, 480]
+  pipelines:
+    - bounding-boxes-step-yolox
