@@ -65,9 +65,11 @@ def create_iq(  # noqa: PLR0913
     :param patience_time: The acceptable time to wait for a result.
     :param rois: The ROIs associated with the prediction, if applicable.
     :param text: The text associated with the prediction, if applicable.
-    :param mlb_key: KSUID of the primary MLB used for local inference. Stamped onto `metadata.mlb_key`
-        so callers of local/no-cloud detectors can identify which binary produced the result without
-        needing to escalate and re-fetch.
+    :param mlb_key: KSUID of the primary MLB used for local inference. Stamped onto
+        `metadata.edge_result.mlb_key` so callers of local/no-cloud detectors can identify which
+        binary produced the result without needing to escalate and re-fetch. The path mirrors the
+        cloud-side shape (see `generate_metadata_dict`), so consumers use the same
+        `metadata.edge_result.mlb_key` lookup regardless of whether the IQ escalated.
     :param oodd_mlb_key: KSUID of the OODD MLB, same purpose as `mlb_key`.
 
     :return: The created ImageQuery.
@@ -77,10 +79,13 @@ def create_iq(  # noqa: PLR0913
     result_type, result = _mode_to_result_and_type(mode, mode_configuration, confidence, result_value)
 
     metadata: dict[str, Any] = {"is_from_edge": True}
+    edge_result: dict[str, Any] = {}
     if mlb_key is not None:
-        metadata["mlb_key"] = mlb_key
+        edge_result["mlb_key"] = mlb_key
     if oodd_mlb_key is not None:
-        metadata["oodd_mlb_key"] = oodd_mlb_key
+        edge_result["oodd_mlb_key"] = oodd_mlb_key
+    if edge_result:
+        metadata["edge_result"] = edge_result
 
     return ImageQuery(
         metadata=metadata,
