@@ -24,27 +24,31 @@ from system_helpers import SystemMonitor
 def _collect_run_metadata(
     gl: ExperimentalApi,
     detector,
-    detector_mode: str,
     image_width: int,
     image_height: int,
 ) -> dict:
+    """Collect per-run metadata for the load test results JSON, derived from the live system and detector."""
     edge_pipeline_config = (glh.get_detector_edge_metrics(gl, detector.id) or {}).get("pipeline_config")
     edge_image, inference_image = glh.get_edge_and_inference_images(gl)
     test_timestamp = datetime.now(timezone.utc).isoformat()
 
     detector_payload = {
-        "detector_id": detector.id,
-        "detector_name": detector.name,
-        "detector_query": detector.query,
-        "pipeline_config": edge_pipeline_config,
+        "id": detector.id,
+        "name": detector.name,
+        "query": detector.query,
+        "mode": detector.mode,
+        "edge_pipeline_config": edge_pipeline_config,
     }
+    # BINARY has no mode_configuration; other modes each have a unique mode_configuration
+    if detector.mode != "BINARY":
+        key = glh.mode_configuration_key_for_n(detector.mode)
+        detector_payload[key] = detector.mode_configuration[key]
     return {
         "test_timestamp": test_timestamp,
         "endpoint": gl.endpoint,
         "edge_endpoint_image": edge_image,
         "inference_server_image": inference_image,
         "image_size": f"{image_width}x{image_height}",
-        "detector_mode": detector_mode,
         "detector": detector_payload,
     }
 
@@ -198,20 +202,22 @@ def main(  # noqa: PLR0913
     image_width: int = 640,
     image_height: int = 480,
     edge_pipeline_config: str | None = None,
+    n: int | None = None,
 ) -> None:
+    """Provision a detector for the requested mode and run the multi-client throughput ramp."""
     edge_pipeline_config = glh.normalize_edge_pipeline_config(edge_pipeline_config)
 
     gl = ExperimentalApi()
     glh.error_if_endpoint_is_cloud(gl)
     gl_cloud = ExperimentalApi(endpoint=glh.CLOUD_ENDPOINT_PROD)
     detector = glh.provision_detector(
-        gl=gl,
         gl_cloud=gl_cloud,
         detector_mode=detector_mode,
         detector_name_prefix="Throughput Test",
         image_width=image_width,
         image_height=image_height,
         edge_pipeline_config=edge_pipeline_config,
+        n=n,
     )
 
     glh.configure_edge_endpoint(gl, detector)
@@ -253,11 +259,12 @@ def main(  # noqa: PLR0913
         steady_rps=throughput_summary.maximum_steady_rps,
     )
 
-    metadata = _collect_run_metadata(gl, detector, detector_mode, image_width, image_height)
+    metadata = _collect_run_metadata(gl, detector, image_width, image_height)
     cli_args = argparse.Namespace(
         detector_mode=detector_mode, max_clients=max_clients, step_size=step_size,
         time_between_ramp=time_between_ramp, requests_per_second=requests_per_second,
         image_width=image_width, image_height=image_height, edge_pipeline_config=edge_pipeline_config,
+        n=n,
     )
     write_load_test_results_to_file(
         log_file,
@@ -269,8 +276,25 @@ def main(  # noqa: PLR0913
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Load test an endpoint by submitting generated images.")
-    parser.add_argument("detector_mode", choices=glh.SUPPORTED_DETECTOR_MODES, help="Detector mode to test.")
+    parser = argparse.ArgumentParser(
+        description="Load test an Edge Endpoint by ramping up concurrent clients and requests per second.",
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
+    parser.add_argument(
+        "detector_mode", choices=glh.SUPPORTED_DETECTOR_MODES, metavar="detector_mode",
+        help=f"Detector mode to test. One of: {', '.join(sorted(glh.SUPPORTED_DETECTOR_MODES))}.",
+    )
+    parser.add_argument(
+        "n", type=int, nargs="?", default=None,
+        help=(
+            "Mode-specific integer knob.\n"
+            "  COUNT:        sets max_count\n"
+            "  BOUNDING_BOX: sets max_num_bboxes\n"
+            "  MULTI_CLASS:  sets num_classes\n"
+            "  BINARY:       number of classes, must be 2\n"
+            "If omitted, a mode-specific default is used."
+        ),
+    )
     parser.add_argument("--max-clients", type=int, default=10, help="Number of processes to ramp up to.")
     parser.add_argument("--step-size", type=int, default=1, help="Number of clients to add at each step.")
     parser.add_argument("--time-between-ramp", type=int, default=30, help="Seconds to run each ramp step.")

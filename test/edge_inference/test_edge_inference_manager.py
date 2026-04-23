@@ -203,3 +203,72 @@ class TestEdgeInferenceManager:
             # Assert that the mock_submit was called only once for primary inference, never for OODD
             assert mock_submit.call_count == 1
             mock_submit.assert_called_once_with(primary_inference_client_url, b"test_image", "image/jpeg")
+
+    def _write_model_id(self, repository: str, detector_id: str, version: int, ksuid: str, is_oodd: bool = False):
+        sub = "oodd" if is_oodd else "primary"
+        version_dir = os.path.join(repository, detector_id, sub, str(version))
+        os.makedirs(version_dir, exist_ok=True)
+        with open(os.path.join(version_dir, "model_id.txt"), "w") as f:
+            f.write(ksuid)
+
+    def test_run_inference_stamps_mlb_keys(self):
+        """With OODD enabled and model_id.txt present for both, output_dict carries both keys."""
+        mock_response = {
+            "multi_predictions": None,
+            "predictions": {"confidences": [0.54], "labels": [0]},
+            "secondary_predictions": None,
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            detector_id = "test_detector"
+            self._write_model_id(temp_dir, detector_id, 1, "prim_ksuid_abc")
+            self._write_model_id(temp_dir, detector_id, 1, "oodd_ksuid_xyz", is_oodd=True)
+
+            with mock.patch("app.core.edge_inference.submit_image_for_inference") as mock_submit:
+                mock_submit.return_value = mock_response
+                edge_manager = EdgeInferenceManager()
+                edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
+                output = edge_manager.run_inference(detector_id, b"test_image", "image/jpeg", mode=ModeEnum.BINARY)
+
+                assert output["mlb_key"] == "prim_ksuid_abc"
+                assert output["oodd_mlb_key"] == "oodd_ksuid_xyz"
+
+    def test_run_inference_stamps_mlb_key_without_oodd(self):
+        """With separate_oodd_inference=False, only mlb_key is stamped."""
+        mock_response = {
+            "multi_predictions": None,
+            "predictions": {"confidences": [0.54], "labels": [0]},
+            "secondary_predictions": None,
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            detector_id = "test_detector"
+            self._write_model_id(temp_dir, detector_id, 1, "prim_ksuid_only")
+
+            with mock.patch("app.core.edge_inference.submit_image_for_inference") as mock_submit:
+                mock_submit.return_value = mock_response
+                edge_manager = EdgeInferenceManager(separate_oodd_inference=False)
+                edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
+                output = edge_manager.run_inference(detector_id, b"test_image", "image/jpeg", mode=ModeEnum.BINARY)
+
+                assert output["mlb_key"] == "prim_ksuid_only"
+                assert "oodd_mlb_key" not in output
+
+    def test_run_inference_missing_model_id_is_nonfatal(self):
+        """Missing model_id.txt should simply omit the keys without raising or affecting inference."""
+        mock_response = {
+            "multi_predictions": None,
+            "predictions": {"confidences": [0.54], "labels": [0]},
+            "secondary_predictions": None,
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # No model_id.txt written; repository is empty.
+            with mock.patch("app.core.edge_inference.submit_image_for_inference") as mock_submit:
+                mock_submit.return_value = mock_response
+                edge_manager = EdgeInferenceManager()
+                edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
+                output = edge_manager.run_inference("test_detector", b"test_image", "image/jpeg", mode=ModeEnum.BINARY)
+
+                assert "mlb_key" not in output
+                assert "oodd_mlb_key" not in output

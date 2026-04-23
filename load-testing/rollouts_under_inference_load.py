@@ -65,7 +65,7 @@ def main():
     disable_sdk_retries(gl)
 
     detector = glh.provision_detector(
-        gl, gl_cloud, "BINARY", "Rollout Under Load Test",
+        gl_cloud, "BINARY", "Rollout Under Load Test",
         group_name="Edge Endpoint Load Testing",
     )
 

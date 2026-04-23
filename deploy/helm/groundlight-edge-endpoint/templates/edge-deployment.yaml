@@ -207,6 +207,10 @@ spec:
           mountPath: /opt/groundlight/edge/sqlite
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/config
+        # Needed by run_inference() to read {detector}/{primary,oodd}/{version}/model_id.txt
+        # and stamp the MLB KSUID into edge_result for cloud-side debugging.
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/serving/model-repo
         - name: device-info-volume
           mountPath: /opt/groundlight/device
         - name: escalation-queue-volume
@@ -236,6 +240,13 @@ spec:
           value: "{{ .Values.namespace }}"
         - name: INFERENCE_FLAVOR
           value: "{{ .Values.inferenceFlavor }}"
+        # Inject the name of the node this pod is scheduled on so the resource
+        # metrics collector can report capacity for the correct node, even on
+        # a hypothetical multi-node cluster.
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
         volumeMounts:
           - name: edge-config-volume
             mountPath: /etc/groundlight/edge-config
