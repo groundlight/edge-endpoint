@@ -18,72 +18,47 @@ ENABLE_PROFILING=true
 
 When enabled, the profiling middleware creates a trace per request. Functions decorated with `@trace_span` automatically create child spans. Traces are written as JSONL to `/opt/groundlight/device/edge-profiling/` with 5-minute file rotation and 24-hour automatic cleanup.
 
-## Traced Spans
-
-```
-request                              <- middleware (full request lifecycle)
-+-- validate_image_bytes             <- read image body from ASGI stream
-+-- validate_query_params_for_edge   <- reject unsupported query params
-+-- active                           <- load active edge config from disk (mtime-cached)
-+-- detector_config                  <- look up per-detector inference config
-+-- get_detector_metadata            <- cache hit vs cloud API round-trip
-+-- inference_is_available           <- health check cache hit vs cold check
-+-- record_activity_for_metrics      <- per-activity disk counter write (called multiple times per request)
-+-- _submit_primary_inference        <- HTTP to primary inference pod
-+-- _submit_oodd_inference           <- HTTP to OODD inference pod (parallel)
-+-- get_inference_result             <- result parsing + OODD confidence adjustment
-|   +-- parse_inference_response     <- parse primary/OODD response dicts
-+-- record_confidence_for_metrics    <- confidence histogram disk write
-+-- create_iq                        <- build final ImageQuery pydantic model
-+-- write_escalation_to_queue        <- disk write for background/audit escalation (on request path)
-+-- safe_escalate_with_queue_write   <- synchronous cloud escalation (when triggered)
-```
-
 ## Profiling Dashboard
 
-A [Marimo](https://marimo.io/) notebook provides interactive visualization of trace data.
+A [Marimo](https://marimo.io/) notebook provides interactive visualization of trace data. Marimo and plotly live in an **optional** `profiling` dependency group, so they are **not** installed by default — you'll need to install them wherever you launch the dashboard.
 
-### Prerequisites
+### Running on an Edge Device
 
-Marimo and plotly live in an **optional** `profiling` dependency group, so they are **not** installed by default. To install them:
+SSH into the device with a local port forward so you can open the dashboard in your laptop's browser:
+
+```bash
+ssh -L 2718:localhost:2718 user@<device>
+```
+
+Then on the remote machine, install the dashboard dependencies and launch:
 
 ```bash
 poetry install --with profiling --no-root
-```
-
-This keeps the ~50MB of dashboard dependencies out of everyone else's environment while letting anyone who wants the dashboard opt in.
-
-> **Note**: The production Docker image is built with `--without dev --without lint` (and does not include the `profiling` group either), so marimo is **not** installed in the `edge-endpoint` container. To view traces from a device, copy the trace files to your workstation (see [Custom Trace Data Directory](#custom-trace-data-directory)) or run `poetry install --with profiling --no-root` inside the container before launching the dashboard.
-
-### Launching the Dashboard
-
-From the repo root:
-
-```bash
 poetry run marimo run app/profiling/dashboard.py
 ```
 
-Marimo starts a web server on port 2718 (or the next open port if that's in use) and prints the URL. The dashboard is **read-only** in `run` mode — to edit cells, use `marimo edit` (see [Editing the Notebook](#editing-the-notebook) below). Stop the server with `Ctrl+C`.
+Open `http://localhost:2718` in your laptop's browser. Marimo binds to localhost on the device by default; the SSH tunnel handles the rest. Stop with `Ctrl+C` on the remote; close the SSH session to tear the tunnel down.
 
-### On an Edge Device
+The dashboard is **read-only** in `run` mode — to edit cells, use `marimo edit` (see [Editing the Notebook](#editing-the-notebook) below).
 
-After installing dev dependencies (see Prerequisites), SSH into the device or exec into the `edge-endpoint` container, then:
+### Running on a Laptop
 
-```bash
-# --host 0.0.0.0 makes the dashboard reachable from outside the container.
-# --port is arbitrary; pick any free port.
-poetry run marimo run app/profiling/dashboard.py --host 0.0.0.0 --port 8124
-```
+A secondary workflow for offline analysis of trace files copied off a device.
 
-Then access `http://<device-ip>:8124` from your browser, or use `kubectl port-forward pod/<edge-endpoint-pod> 8124:8124` to tunnel through Kubernetes.
+1. Copy the JSONL trace files to your laptop with `kubectl cp` or `scp`, e.g.:
+   ```bash
+   kubectl cp <pod>:/opt/groundlight/device/edge-profiling/ ./traces/
+   ```
+2. Install the optional dashboard dependencies in your local repo checkout:
+   ```bash
+   poetry install --with profiling --no-root
+   ```
+3. Run the dashboard, pointing it at the copied trace directory:
+   ```bash
+   PROFILING_TRACES_DIR=./traces poetry run marimo run app/profiling/dashboard.py
+   ```
 
-### Custom Trace Data Directory
-
-To point the dashboard at a different directory (e.g., trace files copied off a device with `kubectl cp` or `scp`):
-
-```bash
-PROFILING_TRACES_DIR=/path/to/traces poetry run marimo run app/profiling/dashboard.py
-```
+Marimo starts a web server on port 2718 (or the next open port) and prints the URL.
 
 > The dashboard reads and displays whatever JSONL it finds in the configured directory. Only point it at trusted trace data.
 
@@ -123,6 +98,14 @@ Auto-refresh is off by default — click the refresh button in the top row, or p
 **Dashboard shows ModuleNotFoundError for marimo or plotly:**
 
 The optional `profiling` dependency group isn't installed. Run `poetry install --with profiling --no-root` from the repo root.
+
+**`poetry install` fails with `DBusErrorResponse`, `PromptDismissedException`, or "Failed to create the collection":**
+
+Common on headless devices with no keyring daemon. Disable the keyring backend:
+
+```bash
+PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring poetry install --with profiling --no-root
+```
 
 ### Editing the Notebook
 
