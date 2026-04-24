@@ -34,6 +34,8 @@ from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
 
+from app.profiling.context import trace_span
+
 logger = logging.getLogger(__name__)
 
 PER_CLASS_ACTIVITY_TYPES = ["escalations", "below_threshold_iqs"]
@@ -373,6 +375,7 @@ def _tracker() -> FilesystemActivityTrackingHelper:
     return FilesystemActivityTrackingHelper(base_dir="/opt/groundlight/device/edge-metrics")
 
 
+@trace_span
 def record_activity_for_metrics(detector_id: str, activity_type: str, class_index: int | None = None):
     """Records an activity from a detector.
 
@@ -418,6 +421,7 @@ def record_activity_for_metrics(detector_id: str, activity_type: str, class_inde
     f.touch()
 
 
+@trace_span
 def record_confidence_for_metrics(detector_id: str, confidence: float, class_index: int | None = None):
     """Records a confidence value from an image query for histogram tracking.
 

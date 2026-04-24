@@ -158,3 +158,6 @@ load-testing/load_tests/
 app/status_monitor/react-build/
 app/status_monitor/frontend/node_modules/
 .vite/
+
+# Marimo notebook session state (auto-created when running marimo edit/run)
+__marimo__/
