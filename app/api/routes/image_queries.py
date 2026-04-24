@@ -19,6 +19,7 @@ from app.core.utils import create_iq, generate_iq_id, generate_metadata_dict, ge
 from app.escalation_queue.models import SubmitImageQueryParams
 from app.escalation_queue.queue_utils import safe_escalate_with_queue_write, write_escalation_to_queue
 from app.metrics.iq_activity import record_activity_for_metrics, record_confidence_for_metrics
+from app.profiling.context import trace_span
 
 logger = logging.getLogger(__name__)
 
@@ -33,11 +34,13 @@ async def validate_content_type(request: Request) -> str:
     return request.headers.get("Content-Type", "")
 
 
+@trace_span
 async def validate_image_bytes(request: Request, content_type: str = Depends(validate_content_type)) -> bytes:
     image_bytes = await request.body()
     return image_bytes
 
 
+@trace_span
 async def validate_query_params_for_edge(request: Request):
     invalid_edge_params = {
         "inspection_id",  # inspection_id will not be supported on the edge
