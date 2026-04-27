@@ -64,7 +64,7 @@ jobs:
           # -n auto: one worker per CPU core. --dist loadfile keeps tests in the same
           # file on the same worker, avoiding cross-test state issues from module-scoped
           # fixtures (e.g. the in-memory SQLite test_client).
-          poetry run pytest -k "not _live" -n auto --dist loadfile
+          poetry run pytest -v -k "not _live" -n auto --dist loadfile
 
   test-integration-edge-endpoint:
     # Live tests that need a running edge-endpoint Docker container.
