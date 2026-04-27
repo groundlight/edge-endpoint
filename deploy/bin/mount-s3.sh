@@ -17,13 +17,14 @@ set -e
 MOUNT_POINT="/host-root${MOUNT_PATH}"
 CACHE_DIR="/host-root${CACHE_PATH}"
 
-mkdir -p "$MOUNT_POINT" "$CACHE_DIR"
-
-# Unmount if stale mount exists from a previous run
-if mountpoint -q "$MOUNT_POINT" 2>/dev/null; then
-    echo "Unmounting stale mount at $MOUNT_POINT"
-    umount "$MOUNT_POINT" || fusermount -u "$MOUNT_POINT" || true
+# Unmount any stale mount from a previous run before mkdir, since stat() on an
+# orphaned FUSE endpoint fails with ENOTCONN and would break `mkdir -p` below.
+if ! stat "$MOUNT_POINT" >/dev/null 2>&1 || mountpoint -q "$MOUNT_POINT" 2>/dev/null; then
+    echo "Cleaning up stale mount at $MOUNT_POINT"
+    umount "$MOUNT_POINT" 2>/dev/null || fusermount -u "$MOUNT_POINT" 2>/dev/null || true
 fi
+
+mkdir -p "$MOUNT_POINT" "$CACHE_DIR"
 
 echo "Mounting s3://$S3_BUCKET at $MOUNT_POINT (cache: $CACHE_DIR, region: $S3_REGION)"
 mount-s3 "$S3_BUCKET" "$MOUNT_POINT" \
