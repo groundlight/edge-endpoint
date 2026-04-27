@@ -68,7 +68,11 @@ jobs:
 
   test-integration-edge-endpoint:
     # Live tests that need a running edge-endpoint Docker container.
+    # Pulls the image already built+pushed by call-build-push-ee-image instead of
+    # rebuilding locally (the Dockerfile only changes once per commit).
     runs-on: ubuntu-22.04
+    needs:
+      - call-build-push-ee-image
     env:
       # This is the NGINX proxy endpoint
       GROUNDLIGHT_ENDPOINT: http://localhost:30101
@@ -99,18 +103,25 @@ jobs:
         run: |
           poetry install --no-interaction --no-root --with profiling
 
-      - name: Install Docker
-        run: |
-          sudo apt-get update
-          sudo apt-get remove moby-runc
-          sudo apt-get install apt-transport-https ca-certificates curl software-properties-common
-          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-          sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-          sudo apt-get update
-          sudo apt-get install docker-ce
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
 
-      - name: Build Docker Image
-        run: docker build --tag groundlight-edge .
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          mask-password: "true"
+
+      - name: Pull edge-endpoint image from ECR
+        run: |
+          EE_IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
+          ECR_IMAGE=${{ steps.login-ecr.outputs.registry }}/edge-endpoint:${EE_IMAGE_TAG}
+          docker pull ${ECR_IMAGE}
+          docker tag ${ECR_IMAGE} groundlight-edge
 
       - name: Start Docker Container
         id: start_container
@@ -147,7 +158,11 @@ jobs:
 
   # Run Groundlight SDK tests against the edge proxy endpoint
   test-sdk:
+    # Pulls the image already built+pushed by call-build-push-ee-image instead of
+    # rebuilding locally (the Dockerfile only changes once per commit).
     runs-on: ubuntu-22.04
+    needs:
+      - call-build-push-ee-image
     env:
       # This is the NGINX proxy endpoint
       GROUNDLIGHT_ENDPOINT: http://localhost:30101
@@ -160,18 +175,25 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install Docker
-        run: |
-          sudo apt-get update
-          sudo apt-get remove moby-runc
-          sudo apt-get install apt-transport-https ca-certificates curl software-properties-common
-          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-          sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-          sudo apt-get update
-          sudo apt-get install docker-ce
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
 
-      - name: Build Docker Image
-        run: docker build --tag groundlight-edge .
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          mask-password: "true"
+
+      - name: Pull edge-endpoint image from ECR
+        run: |
+          EE_IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
+          ECR_IMAGE=${{ steps.login-ecr.outputs.registry }}/edge-endpoint:${EE_IMAGE_TAG}
+          docker pull ${ECR_IMAGE}
+          docker tag ${ECR_IMAGE} groundlight-edge
 
       - name: Start Docker Container
         id: start_container
@@ -236,8 +258,11 @@ jobs:
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
   call-build-push-ee-image:
-    # We run this at the beginning of every PR so that the various full k3s tests
-    # can use this image
+    # Gated on the unit-test job so an obvious python regression fails fast in
+    # ~1min instead of after a 5min image build. All downstream integration jobs
+    # (helm tests, G4, test-sdk, test-integration) consume this image from ECR.
+    needs:
+      - test-unit-edge-endpoint
     uses: ./.github/workflows/build-push-ee-image.yaml
     with:
       repo: ${{ github.repository }}
