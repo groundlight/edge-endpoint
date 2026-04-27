@@ -348,9 +348,7 @@ def _(mo, traces):
                 _all_span_names.add(_n)
     _ordered = sorted(_all_span_names, key=span_sort_key)
 
-    _defaults = [
-        _n for _n in ("_submit_primary_inference", "_submit_oodd_inference") if _n in _all_span_names
-    ]
+    _defaults = [_n for _n in ("_submit_primary_inference", "_submit_oodd_inference") if _n in _all_span_names]
 
     latency_over_time_spans = mo.ui.multiselect(
         options=_ordered,
@@ -387,10 +385,26 @@ def _(SPAN_COLORS, go, latency_over_time_spans, mo, traces):
     # mapping when available, otherwise cycle through a qualitative palette so
     # spans without a predefined color still look distinct.
     _palette = [
-        "#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A",
-        "#19D3F3", "#FF6692", "#B6E880", "#FF97FF", "#FECB52",
-        "#1F77B4", "#FF7F0E", "#2CA02C", "#D62728", "#9467BD",
-        "#8C564B", "#E377C2", "#7F7F7F", "#BCBD22", "#17BECF",
+        "#636EFA",
+        "#EF553B",
+        "#00CC96",
+        "#AB63FA",
+        "#FFA15A",
+        "#19D3F3",
+        "#FF6692",
+        "#B6E880",
+        "#FF97FF",
+        "#FECB52",
+        "#1F77B4",
+        "#FF7F0E",
+        "#2CA02C",
+        "#D62728",
+        "#9467BD",
+        "#8C564B",
+        "#E377C2",
+        "#7F7F7F",
+        "#BCBD22",
+        "#17BECF",
     ]
     _unknowns = [_n for _n in _ordered_names if _n not in SPAN_COLORS]
     _auto_colors = {_n: _palette[_i % len(_palette)] for _i, _n in enumerate(_unknowns)}
