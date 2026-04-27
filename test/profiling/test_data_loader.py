@@ -488,6 +488,60 @@ class TestGetTraceDetail:
     def test_empty_traces(self):
         assert get_trace_detail([], "t1") is None
 
+    def test_merges_spans_across_records_with_same_trace_id(self):
+        edge_record = _make_trace_dict(
+            trace_id="t1",
+            spans=[
+                {
+                    "name": "request",
+                    "trace_id": "t1",
+                    "span_id": "edge1",
+                    "parent_span_id": None,
+                    "start_time_ns": 0,
+                    "end_time_ns": 100,
+                    "duration_ms": 0.0001,
+                    "annotations": {},
+                },
+            ],
+        )
+        inference_record = _make_trace_dict(
+            trace_id="t1",
+            spans=[
+                {
+                    "name": "model_forward",
+                    "trace_id": "t1",
+                    "span_id": "inf1",
+                    "parent_span_id": "edge1",
+                    "start_time_ns": 25,
+                    "end_time_ns": 75,
+                    "duration_ms": 0.00005,
+                    "annotations": {},
+                },
+            ],
+        )
+        result = get_trace_detail([edge_record, inference_record], "t1")
+        assert result is not None
+        names = [s["name"] for s in result["spans"]]
+        assert names == ["request", "model_forward"]
+
+    def test_dedupes_spans_by_span_id(self):
+        span = {
+            "name": "request",
+            "trace_id": "t1",
+            "span_id": "s1",
+            "parent_span_id": None,
+            "start_time_ns": 0,
+            "end_time_ns": 100,
+            "duration_ms": 0.0001,
+            "annotations": {},
+        }
+        traces = [
+            _make_trace_dict(trace_id="t1", spans=[span]),
+            _make_trace_dict(trace_id="t1", spans=[span]),
+        ]
+        result = get_trace_detail(traces, "t1")
+        assert len(result["spans"]) == 1
+
 
 class TestDashboardSmoke:
     """Smoke tests for the Marimo dashboard. Skipped when the `profiling` dependency
