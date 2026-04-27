@@ -13,10 +13,19 @@ spec:
     - name: wget
       image: busybox
       command: ['wget']
-      # Note that we use the constant port 30101 here because we're connecting to the service
-      # inside the k3s cluster and it's always 30101 with the k3s service name. This is
-      # different from when you call from outside the cluster and use the NodePort which
-      # is flexibly defined using the setting `.Values.edgeEndpointPort`. (Though by default
-      # the port numbers are the same.)
-      args: ['-O', '-', '{{ include "groundlight-edge-endpoint.fullname" . }}-service:30101/health/ready']
+      # Note that we use the constant port here because we're connecting to the service
+      # inside the k3s cluster with the k3s service name. When httpEnabled is true we use
+      # port 30101 (HTTP); when false we use port 443 (HTTPS) with --no-check-certificate
+      # since the edge endpoint uses a self-signed certificate.
+      args:
+      {{- if .Values.httpEnabled }}
+        - '-O'
+        - '-'
+        - '{{ include "groundlight-edge-endpoint.fullname" . }}-service:30101/health/ready'
+      {{- else }}
+        - '--no-check-certificate'
+        - '-O'
+        - '-'
+        - 'https://{{ include "groundlight-edge-endpoint.fullname" . }}-service:443/health/ready'
+      {{- end }}
   restartPolicy: Never

@@ -8,13 +8,9 @@ from kubernetes import client as kube_client
 from kubernetes import config
 from kubernetes.client import V1Deployment
 
-from .edge_inference import (
-    get_current_model_version,
-    get_edge_inference_deployment_name,
-    get_edge_inference_model_name,
-    get_edge_inference_service_name,
-)
+from .edge_inference import get_current_model_version
 from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH, MODEL_REPOSITORY_PATH
+from .naming import get_edge_inference_deployment_name, get_edge_inference_model_name, get_edge_inference_service_name
 
 logger = logging.getLogger(__name__)
 
@@ -220,13 +216,47 @@ class InferenceDeploymentManager:
         )
         return True
 
+    def delete_inference_deployment(self, detector_id: str, is_oodd: bool = False) -> None:
+        """Delete the K8s Deployment and Service for a detector. 404s are ignored."""
+        deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd)
+        service_name = get_edge_inference_service_name(detector_id, is_oodd)
+
+        for name, delete_fn in [
+            (deployment_name, lambda n: self._app_kube_client.delete_namespaced_deployment(n, self._target_namespace)),
+            (service_name, lambda n: self._core_kube_client.delete_namespaced_service(n, self._target_namespace)),
+        ]:
+            try:
+                delete_fn(name)
+                logger.info(f"Deleted {name} in namespace {self._target_namespace}")
+            except kube_client.rest.ApiException as e:
+                if e.status == status.HTTP_404_NOT_FOUND:
+                    logger.debug(f"{name} not found in namespace {self._target_namespace}, skipping deletion")
+                else:
+                    raise
+
+    def is_inference_deployment_fully_deleted(self, detector_id: str, is_oodd: bool = False) -> bool:
+        """Return True only when the Deployment is gone AND zero pods remain (RAM/VRAM freed)."""
+        deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd)
+        if self.get_inference_deployment(deployment_name) is not None:
+            return False
+
+        instance_label = f"instance-{get_edge_inference_model_name(detector_id, is_oodd).replace('/', '-')}"
+        label_str = f"app=inference-server,instance={instance_label}"
+        pod_list = self._core_kube_client.list_namespaced_pod(
+            namespace=self._target_namespace, label_selector=label_str
+        )
+        if len(pod_list.items) > 0:
+            logger.debug(f"Deployment {deployment_name} is gone but {len(pod_list.items)} pod(s) still running")
+            return False
+        return True
+
     def is_inference_deployment_rollout_complete(self, deployment_name: str) -> bool:
         """
         Checks if the rollout of the inference deployment for a given deployment name is complete.
 
         This method retrieves the deployment associated with the specified detector ID and compares
         the desired number of replicas with the updated and available replicas. If all these values
-        match, it indicates that the deployment rollout is complete.
+        match, AND there are no leftover terminating pods, the rollout is considered complete.
 
         Args:
             deployment_name (str): The name of the deployment whose rollout status needs to be
@@ -249,11 +279,23 @@ class InferenceDeploymentManager:
 
         replica_str = f"(replicas: total={total}, desired={desired}, updated={updated}, available={available})"
 
-        # Check that we have exactly as many available and updated pods as the spec defines
-        # If there are more or less, then a rollout is in progress
-        if desired == updated == available == total:
-            logger.info(f"Inference deployment rollout for {deployment_name} is complete. {replica_str}")
-            return True
-        else:
+        if desired != updated or desired != available or desired != total:
             logger.debug(f"Inference deployment rollout for {deployment_name} is not yet complete. {replica_str}")
             return False
+
+        # deployment.status.replicas excludes terminating pods, but they still
+        # hold GPU memory until their process fully exits. List actual pods to
+        # ensure none are lingering.
+        selector = deployment.spec.selector.match_labels or {}
+        label_str = ",".join(f"{k}={v}" for k, v in selector.items())
+        pod_list = self._core_kube_client.list_namespaced_pod(
+            namespace=self._target_namespace, label_selector=label_str
+        )
+        if len(pod_list.items) > desired:
+            logger.debug(
+                f"Rollout for {deployment_name} has correct replica counts {replica_str} "
+                f"but {len(pod_list.items)} pod(s) still exist (expected {desired})"
+            )
+            return False
+
+        return True

@@ -31,7 +31,9 @@ spec:
         app: inference-server
         instance: placeholder-inference-instance-name
     spec:
+      hostPID: true  # Allows pynvml to match this process's PID against nvidia-smi PIDs for accurate per-pod VRAM reporting
       runtimeClassName: nvidia  # Required for GPU use in k3s
+      serviceAccountName: edge-endpoint-service-account
       imagePullSecrets:
       - name: registry-credentials
       strategy:
@@ -41,6 +43,11 @@ spec:
           maxUnavailable: 0  # Aim for no downtime during rollout
 
       initContainers:
+      - name: wait-for-warmup
+        image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${IMAGE_TAG}
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/bash", "/groundlight-edge/deploy/bin/wait-for-warmup.sh"]
+
       # NOTE: the sync-pinamod container is duplicated in the warmup_inference_model.yaml Job
       # TODO: refactor to share code between the Job and the initContainer in the Deployment
       - name: sync-pinamod
@@ -90,19 +97,19 @@ spec:
           value: /opt/models/pinamod
         - name: LOAD_ALL_PIPELINES  # Load only the pipelines that are needed for edge inference.
           value: "false"
-        command:
-          [
-            "poetry", "run", "python3", "-m", "uvicorn", "serving.edge_inference_server.fastapi_server:app",
-            "--host", "0.0.0.0",
-            "--port", "8000",
-            "--workers", "1"
-          ]
+        - name: INFERENCE_FLAVOR
+          value: "gpu"
+        - name: WORKERS  # Number of uvicorn workers for the inference server
+          value: "1"
         volumeMounts:
         - name: edge-endpoint-persistent-volume
           mountPath: *modelRepository
         - name: pina-models
           mountPath: /opt/models
           readOnly: true
+        # Shared volume for profiling traces.
+        - name: device-info-volume
+          mountPath: /opt/groundlight/device
         ports:
         - containerPort: 8000
           name: http-fastapi
@@ -112,7 +119,7 @@ spec:
             port: 8000
           initialDelaySeconds: 10
           periodSeconds: 10
-          failureThreshold: 60  # Wait for up to 10 min
+          failureThreshold: 270  # Wait for up to 45 min
         readinessProbe:
           httpGet:
             path: /health/ready  # Checks if the server is ready to serve requests
@@ -139,3 +146,7 @@ spec:
         hostPath:
           path: /opt/groundlight/edge/pinamod-public
           type: Directory
+      - name: device-info-volume
+        hostPath:
+          path: /opt/groundlight/device
+          type: DirectoryOrCreate

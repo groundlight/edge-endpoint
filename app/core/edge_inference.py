@@ -1,3 +1,4 @@
+import contextvars
 import json
 import logging
 import os
@@ -10,13 +11,21 @@ import requests
 import yaml
 from cachetools import TTLCache, cached
 from fastapi import HTTPException, status
+from groundlight.edge import EdgeEndpointConfig, InferenceConfig
 from jinja2 import Template
 from model import ModeEnum
 
-from app.core.configs import EdgeInferenceConfig
+from app.core.edge_config_manager import EdgeConfigManager
 from app.core.file_paths import MODEL_REPOSITORY_PATH
+from app.core.naming import (
+    get_detector_models_dir,
+    get_edge_inference_service_name,
+    get_oodd_model_dir,
+    get_primary_edge_model_dir,
+)
 from app.core.speedmon import SpeedMonitor
 from app.core.utils import ModelInfoBase, ModelInfoWithBinary, parse_model_info
+from app.profiling.context import get_current_span, get_current_tracer, trace_span
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +48,12 @@ def is_edge_inference_ready(inference_client_url: str) -> bool:
 def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, content_type: str) -> dict:
     inference_url = f"http://{inference_client_url}/infer"
     headers = {"Content-Type": content_type}
+    tracer = get_current_tracer()
+    span = get_current_span()
+    if tracer is not None and span is not None:
+        # Consumed by the inference server's TracingMiddleware to create correlated child spans
+        headers["X-GL-Trace-Id"] = tracer.trace_id
+        headers["X-GL-Parent-Span-Id"] = span.span_id
     try:
         logger.debug(f"Submitting image for inference to {inference_url}")
         response = requests.post(inference_url, data=image_bytes, headers=headers)
@@ -51,6 +66,19 @@ def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, co
         raise RuntimeError("Failed to submit image for inference") from e
 
 
+@trace_span
+def _submit_primary_inference(inference_client_url: str, image_bytes: bytes, content_type: str) -> dict:
+    """Wrapper around submit_image_for_inference for separate tracing of primary inference."""
+    return submit_image_for_inference(inference_client_url, image_bytes, content_type)
+
+
+@trace_span
+def _submit_oodd_inference(inference_client_url: str, image_bytes: bytes, content_type: str) -> dict:
+    """Wrapper around submit_image_for_inference for separate tracing of OODD inference."""
+    return submit_image_for_inference(inference_client_url, image_bytes, content_type)
+
+
+@trace_span
 def get_inference_result(primary_response: dict, oodd_response: dict | None, mode: ModeEnum | None = None) -> str:
     """
     Get the final inference result from the primary and OODD responses. If the OODD response is None, we return the
@@ -155,6 +183,7 @@ def calculate_confidence_for_bounding_box_mode(multi_predictions: dict) -> float
     return min_predicted_roi_score * (1 - max_dropped_roi_score)
 
 
+@trace_span
 def parse_inference_response(response: dict, mode: ModeEnum) -> dict:
     if "predictions" not in response:
         logger.error(f"Invalid inference response: {response}")
@@ -229,104 +258,30 @@ class EdgeInferenceManager:
 
     def __init__(
         self,
-        detector_inference_configs: dict[str, EdgeInferenceConfig] | None,
         verbose: bool = False,
         separate_oodd_inference: bool = True,
     ) -> None:
-        """
-        Initializes the edge inference manager.
-        Args:
-            detector_inference_configs: Dictionary of detector IDs to EdgeInferenceConfig objects
-            edge_config: RootEdgeConfig object
-            verbose: Whether to print verbose logs from the inference server client
-            separate_oodd_inference: Whether to run inference separately for the OODD model
-        """
         self.verbose = verbose
-        self.detector_inference_configs, self.inference_client_urls, self.oodd_inference_client_urls = {}, {}, {}
         self.speedmon = SpeedMonitor()
         self.separate_oodd_inference = separate_oodd_inference
+        self.last_escalation_times: dict[str, float | None] = {}
 
-        if detector_inference_configs:
-            self.detector_inference_configs = detector_inference_configs
-            self.inference_client_urls = {
-                detector_id: get_edge_inference_service_name(detector_id) + ":8000"
-                for detector_id in self.detector_inference_configs.keys()
-                if self.detector_configured_for_edge_inference(detector_id)
-            }
-            if separate_oodd_inference:
-                self.oodd_inference_client_urls = {
-                    detector_id: get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
-                    for detector_id in self.detector_inference_configs.keys()
-                    if self.detector_configured_for_edge_inference(detector_id)
-                }
-        # Last time we escalated to cloud for each detector
-        self.last_escalation_times = {detector_id: None for detector_id in self.detector_inference_configs.keys()}
-        # Minimum time between escalations for each detector
-        self.min_times_between_escalations = {
-            detector_id: detector_inference_config.min_time_between_escalations
-            for detector_id, detector_inference_config in self.detector_inference_configs.items()
-        }
-
-    def update_inference_config(self, detector_id: str, api_token: str) -> None:
-        """
-        Adds a new detector to the inference config at runtime. This is useful when new
-        detectors are added to the database and we want to create an inference deployment for them.
-        Args:
-            detector_id: ID of the detector on which to run local edge inference
-            api_token: API token required to fetch inference models
-
-        """
-        if detector_id not in self.detector_inference_configs.keys():
-            self.detector_inference_configs[detector_id] = EdgeInferenceConfig(enabled=True, api_token=api_token)
-            self.inference_client_urls[detector_id] = get_edge_inference_service_name(detector_id) + ":8000"
-            if self.separate_oodd_inference:
-                logger.info(f"Performing separate OODD inference, updating OODD inference URL for {detector_id}")
-                self.oodd_inference_client_urls[detector_id] = (
-                    get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
-                )
-            logger.info(f"Set up edge inference for {detector_id}")
-
-    def detector_configured_for_edge_inference(self, detector_id: str) -> bool:
-        """
-        Checks if the detector is configured to run local inference.
-        Args:
-            detector_id: ID of the detector on which to run local edge inference
-        Returns:
-            True if the detector is configured to run local inference, False otherwise
-        """
-        if not self.detector_inference_configs:
-            return False
-
-        return (
-            detector_id in self.detector_inference_configs.keys()
-            and self.detector_inference_configs[detector_id].enabled
-        )
-
+    @trace_span
     def inference_is_available(self, detector_id: str) -> bool:
-        """
-        Queries the inference server to see if everything is ready to perform inference.
-        Args:
-            detector_id: ID of the detector on which to run local edge inference
-        Returns:
-            True if edge inference for the specified detector is available, False otherwise
-        """
-        try:
-            inference_client_url = self.inference_client_urls[detector_id]
-            oodd_inference_client_url = (
-                self.oodd_inference_client_urls[detector_id] if self.separate_oodd_inference else None
-            )
-        except KeyError:
-            logger.info(f"Failed to look up inference clients for {detector_id}")
-            return False
-
-        # primary inference client is ready, and if we're doing separate OODD inference, the OODD
-        # inference client is also ready
-        inference_clients_are_ready = is_edge_inference_ready(inference_client_url) and (
-            not self.separate_oodd_inference or is_edge_inference_ready(oodd_inference_client_url)
+        """Check whether inference pods for this detector are ready to serve."""
+        primary_url = get_edge_inference_service_name(detector_id) + ":8000"
+        oodd_url = (
+            get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
+            if self.separate_oodd_inference
+            else None
         )
-        if not inference_clients_are_ready:
+
+        ready = is_edge_inference_ready(primary_url) and (
+            not self.separate_oodd_inference or is_edge_inference_ready(oodd_url)
+        )
+        if not ready:
             logger.debug(
-                f"Edge inference server and/or OODD inference server is not ready. {inference_client_url=}, {oodd_inference_client_url=}"
+                f"Edge inference server and/or OODD inference server is not ready. {primary_url=}, {oodd_url=}"
             )
             return False
         return True
@@ -340,27 +295,57 @@ class EdgeInferenceManager:
             content_type: The content type of the image
         Returns:
             Dictionary of inference results with keys:
-                - "score": float
-                - "confidence": float
-                - "probability": float
-                - "label": str
+                - "confidence": float — adjusted confidence when OODD is enabled, primary otherwise
+                - "label": int
+                - "rois": list[dict] | None — when the pipeline produces ROIs
+                - "text": str | None — when the pipeline produces a text prediction
+                - "raw_primary_confidence": float — only when OODD is enabled
+                - "raw_oodd_prediction": dict — only when OODD is enabled
+                - "mlb_key": str — primary MLB KSUID, when model_id.txt is readable
+                - "oodd_mlb_key": str — OODD MLB KSUID, when OODD is enabled and readable
         """
         logger.info(f"Submitting image to edge inference service. {detector_id=}")
         start_time = time.perf_counter()
 
-        primary_url = self.inference_client_urls[detector_id]
+        primary_url = get_edge_inference_service_name(detector_id) + ":8000"
         if self.separate_oodd_inference:
-            oodd_url = self.oodd_inference_client_urls[detector_id]
+            oodd_url = get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
             with ThreadPoolExecutor(max_workers=2) as executor:
-                f_primary = executor.submit(submit_image_for_inference, primary_url, image_bytes, content_type)
-                f_oodd = executor.submit(submit_image_for_inference, oodd_url, image_bytes, content_type)
+                if get_current_tracer() is not None:
+                    ctx_primary = contextvars.copy_context()
+                    ctx_oodd = contextvars.copy_context()
+                    f_primary = executor.submit(
+                        ctx_primary.run, _submit_primary_inference, primary_url, image_bytes, content_type
+                    )
+                    f_oodd = executor.submit(ctx_oodd.run, _submit_oodd_inference, oodd_url, image_bytes, content_type)
+                else:
+                    f_primary = executor.submit(submit_image_for_inference, primary_url, image_bytes, content_type)
+                    f_oodd = executor.submit(submit_image_for_inference, oodd_url, image_bytes, content_type)
                 response = f_primary.result()
                 oodd_response = f_oodd.result()
         else:
-            response = submit_image_for_inference(primary_url, image_bytes, content_type)
+            response = _submit_primary_inference(primary_url, image_bytes, content_type)
             oodd_response = None
 
         output_dict = get_inference_result(response, oodd_response, mode)
+
+        # Stamp the currently-loaded MLB KSUIDs into the result so that
+        # edge_result.mlb_key (and oodd_mlb_key when applicable) is persisted
+        # on Posicheck.metadata.edge_result for cloud-vs-edge debugging.
+        # Wrapped in try/except: stamping is purely diagnostic and must never
+        # take down inference if the model_id.txt is missing or unreadable.
+        try:
+            primary_version = get_current_model_version(self.MODEL_REPOSITORY, detector_id)
+            primary_dir = get_primary_edge_model_dir(self.MODEL_REPOSITORY, detector_id)
+            if mlb_key := get_current_model_ksuid(primary_dir, primary_version):
+                output_dict["mlb_key"] = mlb_key
+            if self.separate_oodd_inference and oodd_response is not None:
+                oodd_version = get_current_model_version(self.MODEL_REPOSITORY, detector_id, is_oodd=True)
+                oodd_dir = get_oodd_model_dir(self.MODEL_REPOSITORY, detector_id)
+                if oodd_mlb_key := get_current_model_ksuid(oodd_dir, oodd_version):
+                    output_dict["oodd_mlb_key"] = oodd_mlb_key
+        except Exception as e:
+            logger.warning(f"Could not stamp MLB key into edge_result: {e}")
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         self.speedmon.update(detector_id, elapsed_ms)
@@ -377,13 +362,10 @@ class EdgeInferenceManager:
 
         Returns True if a new model was downloaded and saved, False otherwise.
         """
-        logger.info(f"Checking if there are new models available for {detector_id}")
+        logger.debug(f"Checking if there are new models available for {detector_id}")
 
-        api_token = (
-            self.detector_inference_configs[detector_id].api_token
-            if self.detector_configured_for_edge_inference(detector_id)
-            else None
-        )
+        det_config = EdgeConfigManager.detector_config(EdgeConfigManager.active(), detector_id)
+        api_token = det_config.api_token if det_config and det_config.enabled else None
 
         # fallback to env var if we don't have a token in the config
         api_token = api_token or os.environ.get("GROUNDLIGHT_API_TOKEN", None)
@@ -416,20 +398,24 @@ class EdgeInferenceManager:
         )
         return True
 
-    def escalation_cooldown_complete(self, detector_id: str) -> bool:
+    def escalation_cooldown_complete(self, detector_id: str, edge_config: EdgeEndpointConfig) -> bool:
         """
         Check if the time since the last escalation is long enough ago that we should escalate again.
         The minimum time between escalations for a detector is set by the `min_time_between_escalations` field in the
-        detector's config. If the field is not set, we use a default of 2 seconds.
+        detector's config. If the field is not set, we use the default defined in EdgeEndpointConfig.
 
         Args:
             detector_id: ID of the detector to check
+            edge_config: The active edge endpoint configuration.
         Returns:
             True if there hasn't been an escalation on this detector in the last `min_time_between_escalations` seconds,
               False otherwise.
         """
-        min_time_between_escalations = self.min_times_between_escalations.get(detector_id, 2)
-        last_escalation_time = self.last_escalation_times[detector_id]
+        det_config = EdgeConfigManager.detector_config(edge_config, detector_id)
+        min_time_between_escalations = (
+            det_config.min_time_between_escalations if det_config else InferenceConfig().min_time_between_escalations
+        )
+        last_escalation_time = self.last_escalation_times.get(detector_id)
 
         if last_escalation_time is None or (time.time() - last_escalation_time) > min_time_between_escalations:
             self.last_escalation_times[detector_id] = time.time()
@@ -471,7 +457,7 @@ def fetch_model_info(detector_id: str, api_token: Optional[str] = None) -> tuple
 
 def get_model_buffer(model_info: ModelInfoBase) -> bytes | None:
     if isinstance(model_info, ModelInfoWithBinary):
-        logger.info(f"New model binary available ({model_info.model_binary_id}), attemping to update model.")
+        logger.info(f"New model binary available ({model_info.model_binary_id}), attempting to update model.")
         model_buffer = get_object_using_presigned_url(model_info.model_binary_url)
     else:
         logger.info("Got a pipeline config but no model binary, attempting to update model.")
@@ -571,8 +557,8 @@ def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[i
     if isinstance(model_info, ModelInfoWithBinary):
         edge_binary_ksuid = get_current_model_ksuid(model_dir, version)
         if edge_binary_ksuid and model_info.model_binary_id == edge_binary_ksuid:
-            logger.info(
-                f"The edge binary in {model_dir} is the same as the cloud binary ({model_info.model_binary_id}), so we don't need to update the model."
+            logger.debug(
+                f"The edge binary in {model_dir} is the same as the cloud binary ({model_info.model_binary_id}), no update needed."
             )
             return False
         else:
@@ -583,9 +569,7 @@ def should_update(model_info: ModelInfoBase, model_dir: str, version: Optional[i
     else:
         current_pipeline_config = get_current_pipeline_config(model_dir, version)
         if current_pipeline_config and current_pipeline_config == yaml.safe_load(model_info.pipeline_config):
-            logger.info(
-                f"The current pipeline_config in {model_dir} is the same as the received pipeline_config and we have no model binary, so we don't need to update the model."
-            )
+            logger.debug(f"The pipeline_config in {model_dir} matches the cloud pipeline_config, no update needed.")
             return False
         else:
             logger.info(f"The model in {model_dir} needs to be updated: no binary, pipeline config differs")
@@ -732,33 +716,3 @@ def delete_model_version(model_dir: str, model_version: int) -> None:
     logger.info(f"Deleting model version {model_version} for {model_dir}")
     if os.path.exists(model_version_dir):
         shutil.rmtree(model_version_dir)
-
-
-def get_edge_inference_service_name(detector_id: str, is_oodd: bool = False) -> str:
-    """
-    Kubernetes service/deployment names have a strict naming convention.
-    They have to be alphanumeric, lower cased, and can only contain dashes.
-    We just use `inferencemodel-{'oodd' or 'primary'}-<detector_id>` as the deployment name and
-    `inference-service-{'oodd' or 'primary'}-<detector_id>` as the service name.
-    """
-    return f"inference-service-{'oodd' if is_oodd else 'primary'}-{detector_id.replace('_', '-').lower()}"
-
-
-def get_edge_inference_deployment_name(detector_id: str, is_oodd: bool = False) -> str:
-    return f"inferencemodel-{'oodd' if is_oodd else 'primary'}-{detector_id.replace('_', '-').lower()}"
-
-
-def get_edge_inference_model_name(detector_id: str, is_oodd: bool = False) -> str:
-    return os.path.join(detector_id, "primary" if not is_oodd else "oodd")
-
-
-def get_detector_models_dir(repository_root: str, detector_id: str) -> str:
-    return os.path.join(repository_root, detector_id)
-
-
-def get_primary_edge_model_dir(repository_root: str, detector_id: str) -> str:
-    return os.path.join(get_detector_models_dir(repository_root, detector_id), "primary")
-
-
-def get_oodd_model_dir(repository_root: str, detector_id: str) -> str:
-    return os.path.join(get_detector_models_dir(repository_root, detector_id), "oodd")

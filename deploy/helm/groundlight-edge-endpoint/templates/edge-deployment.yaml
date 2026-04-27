@@ -21,10 +21,18 @@ spec:
   selector:
     app: edge-logic-server
   ports:
-  - protocol: TCP
-    # Service port for NGINX
-    port: 30101
-    nodePort: {{ .Values.edgeEndpointPort }}
+    {{- if .Values.httpEnabled }}
+    - protocol: TCP
+      # Service port for NGINX
+      port: 30101
+      name: http
+      nodePort: {{ .Values.edgeEndpointPort }}
+    {{- end }}
+    - protocol: TCP
+      # HTTPS port for NGINX
+      port: 443
+      name: https
+      nodePort: {{ .Values.edgeEndpointHttpsPort }}
   type: NodePort
 ---
 apiVersion: apps/v1
@@ -51,15 +59,64 @@ spec:
       # from within the pod. See templates/service_account.yaml for more details
       serviceAccountName: edge-endpoint-service-account
       initContainers:
-      - name: database-prep
+      - name: generate-tls-cert
         image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
+        imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        volumeMounts:
+        - name: nginx-certs
+          mountPath: /etc/nginx/certs
+        command: ["/bin/bash", "/groundlight-edge/app/bin/generate-tls-cert.sh"]
+      - name: database-prep
+        image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
         volumeMounts:
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/sqlite
         command: ["/bin/bash", "/groundlight-edge/deploy/bin/setup_db.sh"]
+      - name: apply-edge-config
+        image: busybox:1.36
+        env:
+        - name: HELM_REVISION
+          value: "{{ .Release.Revision }}-{{ now | unixEpoch }}"
+        volumeMounts:
+        - name: edge-config-volume
+          mountPath: /etc/groundlight/edge-config
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/config
+        command: ["/bin/sh", "/etc/groundlight/edge-config/apply-edge-config.sh"]
 
       containers:
+      - name: mount-s3
+        image: *edgeEndpointImage
+        imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+        resources:
+          requests:
+            memory: "50Mi"
+        securityContext:
+          privileged: true  # Required for FUSE mount
+        command: ["/bin/bash", "/groundlight-edge/deploy/bin/mount-s3.sh"]
+        livenessProbe:
+          exec:
+            command: ["mountpoint", "-q", "/host-root{{ .Values.s3Mount.mountPath }}"]
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          failureThreshold: 3
+        env:
+        - name: S3_BUCKET
+          value: "{{ .Values.s3Mount.bucket }}"
+        - name: S3_REGION
+          value: "{{ .Values.s3Mount.region }}"
+        - name: MOUNT_PATH
+          value: "{{ .Values.s3Mount.mountPath }}"
+        - name: CACHE_PATH
+          value: "{{ .Values.s3Mount.cachePath }}"
+        volumeMounts:
+        - name: host-root
+          mountPath: /host-root
+          mountPropagation: Bidirectional
+        - name: aws-credentials
+          mountPath: /root/.aws
+          readOnly: true
       - name: nginx
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
@@ -70,29 +127,45 @@ spec:
             memory: "50Mi"
         command: ["/bin/bash", "-c", "./app/bin/launch-nginx.sh"]
         ports:
+        {{- if .Values.httpEnabled }}
         - containerPort: 30101
+          name: http
+        {{- end }}
+        - containerPort: 443
+          name: https
         volumeMounts:
         - name: nginx-config-volume
           mountPath: /opt/nginx/nginx.conf
           subPath: nginx.conf
+        - name: nginx-certs
+          mountPath: /etc/nginx/certs
         startupProbe:
           httpGet:
             path: /health/live  # Checks if the server is up
-            port: 30101
+            port: {{ if .Values.httpEnabled }}30101{{ else }}443{{ end }}
+            {{- if not .Values.httpEnabled }}
+            scheme: HTTPS
+            {{- end }}
           initialDelaySeconds: 10
           periodSeconds: 10
           failureThreshold: 6  # Wait for up to 1 min
         readinessProbe:
           httpGet:
             path: /health/ready  # Checks if the server is ready to serve requests
-            port: 30101
+            port: {{ if .Values.httpEnabled }}30101{{ else }}443{{ end }}
+            {{- if not .Values.httpEnabled }}
+            scheme: HTTPS
+            {{- end }}
           initialDelaySeconds: 10
           periodSeconds: 10
           failureThreshold: 2  # after 20 seconds of failure, stop sending traffic to the pod
         livenessProbe:
           httpGet:
             path: /health/ready
-            port: 30101
+            port: {{ if .Values.httpEnabled }}30101{{ else }}443{{ end }}
+            {{- if not .Values.httpEnabled }}
+            scheme: HTTPS
+            {{- end }}
           initialDelaySeconds: 10
           periodSeconds: 10
           failureThreshold: 4  # after 40 seconds of failure, restart the pod
@@ -121,6 +194,8 @@ spec:
           value: "{{ .Values.upstreamEndpoint }}"
         - name: USE_MINIMAL_IMAGE
           value: "{{ .Values.useMinimalImage }}"
+        - name: ENABLE_PROFILING
+          value: "{{ .Values.enableProfiling }}"
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
@@ -130,6 +205,12 @@ spec:
           subPath: dummy-nginx.conf
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/sqlite
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/config
+        # Needed by run_inference() to read {detector}/{primary,oodd}/{version}/model_id.txt
+        # and stamp the MLB KSUID into edge_result for cloud-side debugging.
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/serving/model-repo
         - name: device-info-volume
           mountPath: /opt/groundlight/device
         - name: escalation-queue-volume
@@ -159,6 +240,13 @@ spec:
           value: "{{ .Values.namespace }}"
         - name: INFERENCE_FLAVOR
           value: "{{ .Values.inferenceFlavor }}"
+        # Inject the name of the node this pod is scheduled on so the resource
+        # metrics collector can report capacity for the correct node, even on
+        # a hypothetical multi-node cluster.
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
         volumeMounts:
           - name: edge-config-volume
             mountPath: /etc/groundlight/edge-config
@@ -166,6 +254,10 @@ spec:
             mountPath: /opt/groundlight/device
           - name: edge-endpoint-persistent-volume
             mountPath: /opt/groundlight/edge/serving/model-repo
+          - name: edge-endpoint-persistent-volume
+            mountPath: /opt/groundlight/edge/config
+          - name: escalation-queue-volume
+            mountPath: /opt/groundlight/queue
       
       - name: escalation-queue-reader
         image: *edgeEndpointImage
@@ -234,6 +326,8 @@ spec:
 
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/serving/model-repo
+        - name: edge-endpoint-persistent-volume
+          mountPath: /opt/groundlight/edge/config
 
         - name: device-info-volume
           mountPath: /opt/groundlight/device
@@ -242,6 +336,8 @@ spec:
       - name: registry-credentials
 
       volumes:
+      - name: nginx-certs
+        emptyDir: {}
       - name: edge-config-volume
         configMap:
           name: edge-config
@@ -265,3 +361,18 @@ spec:
         hostPath:
           path: /opt/groundlight/queue/{{ .Values.namespace }}
           type: DirectoryOrCreate
+      - name: pinamod-mount
+        hostPath:
+          path: {{ .Values.s3Mount.mountPath }}
+          type: DirectoryOrCreate
+      - name: pinamod-cache
+        hostPath:
+          path: {{ .Values.s3Mount.cachePath }}
+          type: DirectoryOrCreate
+      - name: aws-credentials
+        secret:
+          secretName: aws-credentials-file
+      - name: host-root
+        hostPath:
+          path: /
+          type: Directory

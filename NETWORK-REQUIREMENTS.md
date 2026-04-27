@@ -16,14 +16,10 @@ Depending on the deployment methods, there may be additional networking requirem
 
 Groundlight edge endpoint requires the following outbound access:
 
-- `*.groundlight.ai`: Groundlight endpoint for receiving detector metadata
-- `*.us-west-2.amazonaws.com`: AWS access for inference image download
-- `*.s3.amazonaws.com`: AWS access for model binaries download
-- `*.sts.amazonaws.com`: AWS authentication
-- `*.huggingface.co`: Model download
-- `*.hf.co`: Hugging Face CDN
-- `*.docker.io`: Docker image download
-- `*.docker.com`: Docker image download
+- `*.groundlight.ai`: Groundlight endpoint for receiving detector metadata and temporary AWS credentials
+- `*.us-west-2.amazonaws.com`: AWS access for inference image download (ECR), model weights (S3), and credential refresh (STS)
+- `*.s3.amazonaws.com`: AWS S3 access for model weights via FUSE mount
+- `*.sts.amazonaws.com`: AWS STS for credential refresh
 
 The device must also be able to reach DNS and NTP servers either on the local network (provided by DHCP or Static assignment), or on the Internet (ports 53 and 123).
 
@@ -33,7 +29,7 @@ There may be additional network requirements based on the deployment methods, pl
 
 <img src="images/network-requirement-self-managed-separate-machine.excalidraw.png" alt="Self-Managed edge endpoint with separate client" width="800"/>
 
-For self managed edge servers where the client is not in the same machine as the edge endpoint, inbound port `30101` to the server is the default port for our SDK to communicate with the edge server.
+For self managed edge servers where the client is not in the same machine as the edge endpoint, inbound port `30101` (HTTP) and `30143` (HTTPS) to the server are the default ports for our SDK to communicate with the edge server.
 
 <img src="images/network-requirement-self-managed-all-in-one.excalidraw.png" alt="Self-Managed edge endpoint with client in the same machine" width="800"/>
 

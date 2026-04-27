@@ -1,74 +1,67 @@
+# CPU-only K3s server for balena deployment
+#
 # References:
 # https://k3d.io/v5.7.4/usage/advanced/cuda/#building-a-customized-k3s-image
 # https://github.com/k3s-io/k3s/blob/master/package/Dockerfile
 
-# Use this instead of, for example, balenalib/genericx86-64-ext-ubuntu:focal, because
-# it is cross-platform and can be used on any architecture / type of device.
+# -------------------------
+# Stage 1: Preload - download third-party images as tarballs for airgap/restricted network support
+# NOTE: Keep the preloaded image list in sync across Dockerfile, Dockerfile.gpu, and Dockerfile.jetson
+# -------------------------
+FROM alpine:3.20 AS preloader
+ARG K3S_TAG="v1.28.8+k3s1"
+
+# Install crane for pulling container images without a Docker daemon
+# Detect architecture via uname -m since Balena's legacy builder doesn't set TARGETARCH
+RUN apk add --no-cache curl tar && \
+    ARCH=$(uname -m) && \
+    if [ "$ARCH" = "aarch64" ]; then CRANE_ARCH="arm64"; else CRANE_ARCH="x86_64"; fi && \
+    curl -sL "https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Linux_${CRANE_ARCH}.tar.gz" | \
+    tar -xzf - -C /usr/local/bin crane
+
+# Download k3s airgap images (contains coredns, metrics-server, local-path-provisioner, etc.)
+# Note: k3s tags use '+' which is invalid in OCI references, so we replace with '-'
+RUN mkdir -p /preload && \
+    ARCH=$(uname -m) && \
+    if [ "$ARCH" = "aarch64" ]; then K3S_ARCH="arm64"; else K3S_ARCH="amd64"; fi && \
+    K3S_REF=$(echo "${K3S_TAG}" | sed 's/+/-/g') && \
+    crane export --platform "linux/${K3S_ARCH}" "docker.io/rancher/k3s:${K3S_REF}" - | tar -xf - -C /tmp bin/aux/k3s-airgap-images.tar.zst 2>/dev/null && \
+    mv /tmp/bin/aux/k3s-airgap-images.tar.zst /preload/ || \
+    echo "WARNING: Could not extract airgap images from k3s image, will download from GitHub" && \
+    K3S_VERSION=$(echo ${K3S_TAG} | sed 's/+/%2B/g') && \
+    wget -q "https://github.com/k3s-io/k3s/releases/download/${K3S_VERSION}/k3s-airgap-images-${K3S_ARCH}.tar.zst" \
+        -O /preload/k3s-airgap-images.tar.zst || true
+
+# Download app utility images used by the Helm chart
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "aarch64" ]; then PLAT="linux/arm64"; else PLAT="linux/amd64"; fi && \
+    crane pull --platform "$PLAT" docker.io/amazon/aws-cli:latest /preload/aws-cli-latest.tar && \
+    crane pull --platform "$PLAT" docker.io/bitnami/kubectl:latest /preload/kubectl-latest.tar && \
+    crane pull --platform "$PLAT" docker.io/alpine:3.20 /preload/alpine-3.20.tar && \
+    crane pull --platform "$PLAT" docker.io/busybox:1.36 /preload/busybox-1.36.tar
+
+# -------------------------
+# Stage 2: K3s server
+# -------------------------
 FROM ubuntu:22.04
 
-# NOTE: see https://www.nvidia.com/en-us/drivers/unix/ for
-# the latest driver version
-ARG NVIDIA_DRIVER_VERSION="570.133.07"
-
 ARG K3S_TAG="v1.28.8+k3s1"
-ARG ENABLE_GPU="false"
 
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 ENV K3S_TAG=${K3S_TAG}
-ENV ENABLE_GPU=${ENABLE_GPU}
-ENV NVIDIA_DRIVER_VERSION="570.133.07"
-ENV NVIDIA_DRIVER_VERSION=${NVIDIA_DRIVER_VERSION}
-ENV NVIDIA_DRIVER=NVIDIA-Linux-x86_64-${NVIDIA_DRIVER_VERSION}
 
-# Install base dependencies
-RUN apt-get update && \
-    apt install -y curl runc software-properties-common kmod && \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl runc systemd ca-certificates kmod procps gnupg iptables && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Nvidia driver only if GPU is enabled. Must match version in gpu container exactly
-RUN if [ "$ENABLE_GPU" = "true" ]; then \
-        curl -O https://us.download.nvidia.com/XFree86/Linux-x86_64/${NVIDIA_DRIVER_VERSION}/${NVIDIA_DRIVER}.run && \
-        chmod +x ./${NVIDIA_DRIVER}.run && \
-        ./${NVIDIA_DRIVER}.run \
-          --ui=none \
-          --no-questions \
-          --no-drm \
-          --no-x-check \
-          --no-systemd \
-          --no-kernel-module \
-          --no-distro-scripts \
-          --no-nouveau-check \
-          --no-rpms \
-          --no-backup \
-          --no-abi-note \
-          --no-check-for-alternate-installs \
-          --no-libglx-indirect && \
-        rm ${NVIDIA_DRIVER}.run; \
-    fi
-
-# Install K3s binary (also installs containerd - must be done before installing nvidia-container-toolkit)
 RUN curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_START=true INSTALL_K3S_SKIP_ENABLE=true INSTALL_K3S_VERSION=${K3S_TAG} sh
 
-# Install the NVIDIA container toolkit only if GPU is enabled
-RUN if [ "$ENABLE_GPU" = "true" ]; then \
-        curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg && \
-        curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
-        sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
-        tee /etc/apt/sources.list.d/nvidia-container-toolkit.list && \
-        apt-get update && \
-        apt-get install -y nvidia-container-toolkit && \
-        rm -rf /var/lib/apt/lists/* && \
-        nvidia-ctk runtime configure --runtime=containerd; \
-    fi
+# Copy preloaded images for airgap/restricted network support
+COPY --from=preloader /preload/ /opt/k3s/preload-images/
 
-# Add nvidia-gpu-operator manifest
-COPY manifests/nvidia-gpu-operator.yaml /opt/k3s/manifests/
-
-# Make pinamod-public directory for hostmapped volume
 RUN mkdir -p /opt/groundlight/edge/pinamod-public
 
 WORKDIR /workspace
-
 COPY server.sh ./server.sh
 
 CMD [ "bash", "server.sh" ]

@@ -1,0 +1,131 @@
+# Jetson Orin K3s server for balena deployment
+#
+# References:
+# https://github.com/balena-io-experimental/jetson-sample-new/blob/master/CUDA/Dockerfile.jetson-orin-nano-devkit-nvme
+# https://k3d.io/v5.7.4/usage/advanced/cuda/#building-a-customized-k3s-image
+# https://github.com/k3s-io/k3s/blob/master/package/Dockerfile
+
+# -------------------------
+# Stage 1: Preload - download third-party images as tarballs for airgap/restricted network support
+# NOTE: Keep the preloaded image list in sync across Dockerfile, Dockerfile.gpu, and Dockerfile.jetson
+# -------------------------
+FROM alpine:3.20 AS preloader
+ARG K3S_TAG="v1.28.8+k3s1"
+
+# Install crane for pulling container images without a Docker daemon
+# Detect architecture via uname -m since Balena's legacy builder doesn't set TARGETARCH
+RUN apk add --no-cache curl tar && \
+    ARCH=$(uname -m) && \
+    if [ "$ARCH" = "aarch64" ]; then CRANE_ARCH="arm64"; else CRANE_ARCH="x86_64"; fi && \
+    curl -sL "https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Linux_${CRANE_ARCH}.tar.gz" | \
+    tar -xzf - -C /usr/local/bin crane
+
+# Download k3s airgap images (contains coredns, metrics-server, local-path-provisioner, etc.)
+RUN mkdir -p /preload && \
+    ARCH=$(uname -m) && \
+    if [ "$ARCH" = "aarch64" ]; then K3S_ARCH="arm64"; else K3S_ARCH="amd64"; fi && \
+    K3S_REF=$(echo "${K3S_TAG}" | sed 's/+/-/g') && \
+    crane export --platform "linux/${K3S_ARCH}" "docker.io/rancher/k3s:${K3S_REF}" - | tar -xf - -C /tmp bin/aux/k3s-airgap-images.tar.zst 2>/dev/null && \
+    mv /tmp/bin/aux/k3s-airgap-images.tar.zst /preload/ || \
+    echo "WARNING: Could not extract airgap images from k3s image, will download from GitHub" && \
+    K3S_VERSION=$(echo ${K3S_TAG} | sed 's/+/%2B/g') && \
+    wget -q "https://github.com/k3s-io/k3s/releases/download/${K3S_VERSION}/k3s-airgap-images-${K3S_ARCH}.tar.zst" \
+        -O /preload/k3s-airgap-images.tar.zst || true
+
+# Download app utility images used by the Helm chart
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "aarch64" ]; then PLAT="linux/arm64"; else PLAT="linux/amd64"; fi && \
+    crane pull --platform "$PLAT" docker.io/amazon/aws-cli:latest /preload/aws-cli-latest.tar && \
+    crane pull --platform "$PLAT" docker.io/bitnami/kubectl:latest /preload/kubectl-latest.tar && \
+    crane pull --platform "$PLAT" docker.io/alpine:3.20 /preload/alpine-3.20.tar && \
+    crane pull --platform "$PLAT" docker.io/busybox:1.36 /preload/busybox-1.36.tar
+
+# -------------------------
+# Stage 2: Jetson Orin K3s server
+# -------------------------
+# Using Balena provided Jetson Orin image as base (Ubuntu 22.04)
+FROM balenalib/jetson-agx-orin-devkit-ubuntu:jammy-20240401
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN echo "deb https://repo.download.nvidia.com/jetson/common r36.3 main" >  /etc/apt/sources.list.d/nvidia.list \
+    && echo "deb https://repo.download.nvidia.com/jetson/t234 r36.3 main" >>  /etc/apt/sources.list.d/nvidia.list \
+    && apt-key adv --fetch-key http://repo.download.nvidia.com/jetson/jetson-ota-public.asc \
+    && mkdir -p /opt/nvidia/l4t-packages/ && touch /opt/nvidia/l4t-packages/.nv-l4t-disable-boot-fw-update-in-preinstall
+
+# Download and install BSP binaries for L4T 36.3 - Jetpack 6
+RUN \
+    apt-get update && apt-get install -y wget tar lbzip2 binutils xz-utils zstd qemu-user-static cpio git && cd /tmp/ && wget https://developer.nvidia.com/downloads/embedded/l4t/r36_release_v3.0/release/jetson_linux_r36.3.0_aarch64.tbz2 && \
+    tar xf jetson_linux_r36.3.0_aarch64.tbz2 && \
+    cd Linux_for_Tegra && \
+    mkdir -p /tmp/Linux_for_Tegra/rootfs/boot/ && \
+    mkdir -p /tmp/Linux_for_Tegra/rootfs/usr/bin && \
+    mkdir -p /tmp/Linux_for_Tegra/rootfs/etc && touch /tmp/Linux_for_Tegra/rootfs/etc/resolv.conf && \
+    sed -i 's/config.tbz2\"/config.tbz2\" --exclude=etc\/hosts --exclude=etc\/hostname/g' apply_binaries.sh && \
+    sed -i 's/CheckPackage qemu-user-static/#CheckPackage qemu-user-static/g' tools/l4t_update_initrd.sh && \
+    sed -i 's/trap CleanupVirEnv/#trap CleanupVirEnv/g' tools/l4t_update_initrd.sh&& \
+    sed -i 's|cp /usr/bin/qemu-aarch64-static|#cp /usr/bin/qemu-aarch64-static|g' tools/l4t_update_initrd.sh && \
+    sed -i 's|^UpdateInitrd|#UpdateInitrd|g' tools/l4t_update_initrd.sh && \
+    sed -i 's|^UpdateBackToBaseInitrd|#UpdateBackToBaseInitrd|g' tools/l4t_update_initrd.sh && \
+    sed -i 's|cp /etc/resolv.conf|#cp /etc/resolv.conf|g' tools/l4t_update_initrd.sh && \
+    sed -i 's|mv "${LDK_ROOTFS_DIR}/etc/resolv.conf"|cp "${LDK_ROOTFS_DIR}/etc/resolv.conf"|g' tools/l4t_update_initrd.sh && \
+    sed -i 's|  PrepareVirEnv|#PrepareVirEnv|g' tools/l4t_update_initrd.sh && \
+    sed -i 's/install --owner=root --group=root \"${QEMU_BIN}\" \"${L4T_ROOTFS_DIR}\/usr\/bin\/\"/#install --owner=root --group=root \"${QEMU_BIN}\" \"${L4T_ROOTFS_DIR}\/usr\/bin\/\"/g' nv_tegra/nv-apply-debs.sh && \
+    sed -i 's/chroot . \//  /g' nv_tegra/nv-apply-debs.sh && \
+    cd /tmp/Linux_for_Tegra/ && ./apply_binaries.sh -r / --target-overlay && cd .. && \
+    rm -rf Linux_for_Tegra && \
+    echo "/usr/lib/aarch64-linux-gnu/tegra" > /etc/ld.so.conf.d/nvidia-tegra.conf && ldconfig
+
+ARG K3S_TAG="v1.28.8+k3s1"
+
+ENV K3S_TAG=${K3S_TAG}
+ENV LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/tegra
+ENV UDEV=1
+
+# Install X for GUI support (in case monitor is plugged in)
+RUN apt-get install -y --no-install-recommends \
+    xserver-xorg-input-evdev \
+    xinit \
+    x11-xserver-utils \
+    dbus-x11 \
+    xterm
+
+# Prevent screen from turning off
+RUN echo "#!/bin/bash" > /etc/X11/xinit/xserverrc \
+    && echo "" >> /etc/X11/xinit/xserverrc \
+    && echo 'exec /usr/bin/X -s 0 dpms' >> /etc/X11/xinit/xserverrc && \
+    echo 'modules=("nvidia_drm"); for module in "${modules[@]}"; do if lsmod | grep -q ${module} ; then echo "Found $module"; rmmod $module; fi; done; startxfce4;' > /opt/startxfce.sh
+
+RUN \
+    echo "/usr/lib/aarch64-linux-gnu/tegra\n/usr/lib/aarch64-linux-gnu/tegra-egl" \
+    > /etc/ld.so.conf.d/000-nvidia-tegra-egl.conf \
+    && ldconfig
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl runc systemd ca-certificates kmod procps gnupg iptables && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_START=true INSTALL_K3S_SKIP_ENABLE=true INSTALL_K3S_VERSION=${K3S_TAG} sh
+
+RUN curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg && \
+    curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+        sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+        tee /etc/apt/sources.list.d/nvidia-container-toolkit.list && \
+    apt-get update && apt-get install -y --no-install-recommends nvidia-container-toolkit && \
+    rm -rf /var/lib/apt/lists/* && \
+    nvidia-ctk runtime configure --runtime=containerd || true
+
+COPY manifests/nvidia-gpu-operator.yaml /opt/k3s/manifests/
+
+# Copy preloaded images for airgap/restricted network support
+COPY --from=preloader /preload/ /opt/k3s/preload-images/
+
+RUN mkdir -p /opt/groundlight/edge/pinamod-public
+
+# DRM cleanup script for Jetson
+RUN printf 'modules=("nvidia_drm"); for module in "${modules[@]}"; do if lsmod | grep -q ${module} ; then echo "Found $module"; rmmod $module; fi; done;' > /usr/src/drm-script.sh && chmod +x /usr/src/drm-script.sh
+
+WORKDIR /workspace
+COPY server.sh ./server.sh
+
+CMD ["/bin/bash", "-c", "/usr/src/drm-script.sh && ./server.sh"]

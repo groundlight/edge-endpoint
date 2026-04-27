@@ -7,7 +7,9 @@ log() {
 
 CHECK_INTERVAL_SECONDS="${CHECK_INTERVAL_SECONDS:-5}"
 CHROOT="/bin/busybox chroot"
-KCTL="$CHROOT /host /usr/local/bin/kubectl"
+# Explicitly use the k3s kubeconfig so the healer always talks to the correct
+# cluster, even if the host has multiple kubeconfig contexts configured.
+KCTL="$CHROOT /host /usr/local/bin/kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml"
 API_VIP="${KUBERNETES_SERVICE_HOST:-10.43.0.1}"
 PERSIST_DIR="${PERSIST_DIR:-/opt/groundlight/edge/healer}"
 HOST_IP_FILE="${HOST_IP_FILE:-$PERSIST_DIR/host_ip}"

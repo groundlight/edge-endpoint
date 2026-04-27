@@ -8,9 +8,11 @@ import pytest
 
 from app.metrics.iq_activity import (
     ActivityRetriever,
+    ConfidenceHistogramConfig,
     FilesystemActivityTrackingHelper,
     clear_old_activity_files,
     record_activity_for_metrics,
+    record_confidence_for_metrics,
 )
 
 
@@ -75,6 +77,19 @@ def test_activity_tracking(monkeypatch, tmp_base_dir, _test_tracker):
             Path(tmp_base_dir, "detectors", "det_recordactivitytest", "audits_67890_2025-04-03_12").read_text() == "1"
         )
         assert Path(tmp_base_dir, "last_audits").exists()
+
+        # Record below_threshold_iqs, make sure the detector-specific files are created and have the correct values
+        record_activity_for_metrics("det_recordactivitytest", "below_threshold_iqs")
+        assert Path(
+            tmp_base_dir, "detectors", "det_recordactivitytest", "below_threshold_iqs_67890_2025-04-03_12"
+        ).exists()
+        assert (
+            Path(
+                tmp_base_dir, "detectors", "det_recordactivitytest", "below_threshold_iqs_67890_2025-04-03_12"
+            ).read_text()
+            == "1"
+        )
+        assert Path(tmp_base_dir, "last_below_threshold_iqs").exists()
 
 
 def test_wrong_activity_type():
@@ -150,26 +165,32 @@ def test_get_detector_activity_metrics(monkeypatch, tmp_base_dir, _test_tracker)
         mock_datetime.now.return_value = datetime(2025, 4, 3, 12, 0, 0)
         retriever = ActivityRetriever()
 
-        # Total iqs should be 28, total escalations should be 2, and total audits should be 1
+        # Total iqs should be 28, total escalations should be 2, total audits should be 1,
+        # and total below_threshold_iqs should be 5
         os.makedirs(Path(tmp_base_dir, "detectors", "det_123"), exist_ok=True)
         Path(tmp_base_dir, "detectors", "det_123", "iqs_10294_2025-04-03_11").write_text("10")
         Path(tmp_base_dir, "detectors", "det_123", "iqs_12323_2025-04-03_11").write_text("1")
         Path(tmp_base_dir, "detectors", "det_123", "iqs_12345_2025-04-03_11").write_text("17")
         Path(tmp_base_dir, "detectors", "det_123", "escalations_102394_2025-04-03_11").write_text("2")
         Path(tmp_base_dir, "detectors", "det_123", "audits_102394_2025-04-03_11").write_text("1")
+        Path(tmp_base_dir, "detectors", "det_123", "below_threshold_iqs_102394_2025-04-03_11").write_text("5")
         Path(tmp_base_dir, "detectors", "det_123", "last_iqs").touch()
         Path(tmp_base_dir, "detectors", "det_123", "last_escalations").touch()
         Path(tmp_base_dir, "detectors", "det_123", "last_audits").touch()
+        Path(tmp_base_dir, "detectors", "det_123", "last_below_threshold_iqs").touch()
         det_123_metrics = retriever.get_detector_activity_metrics("det_123")
         assert det_123_metrics["hourly_total_iqs"] == 28
         assert det_123_metrics["hourly_total_escalations"] == 2
         assert det_123_metrics["hourly_total_audits"] == 1
+        assert det_123_metrics["hourly_total_below_threshold_iqs"] == 5
         assert det_123_metrics["last_iq"] is not None
         assert det_123_metrics["last_escalation"] is not None
         assert det_123_metrics["last_audit"] is not None
+        assert det_123_metrics["last_below_threshold_iq"] is not None
 
         # Test that it's fine to have an activity type missing
-        # Total iqs should be 10, total escalations should be 1, and total audits should be 0
+        # Total iqs should be 10, total escalations should be 1, total audits should be 0,
+        # and total below_threshold_iqs should be 0
         os.makedirs(Path(tmp_base_dir, "detectors", "det_456"), exist_ok=True)
         Path(tmp_base_dir, "detectors", "det_456", "iqs_102394_2025-04-03_11").write_text("10")
         Path(tmp_base_dir, "detectors", "det_456", "escalations_12345_2025-04-03_11").write_text("1")
@@ -179,25 +200,30 @@ def test_get_detector_activity_metrics(monkeypatch, tmp_base_dir, _test_tracker)
         assert det_456_metrics["hourly_total_iqs"] == 10
         assert det_456_metrics["hourly_total_escalations"] == 1
         assert det_456_metrics["hourly_total_audits"] == 0
+        assert det_456_metrics["hourly_total_below_threshold_iqs"] == 0
         assert det_456_metrics["last_iq"] is not None
         assert det_456_metrics["last_escalation"] is not None
         assert det_456_metrics["last_audit"] is None
+        assert det_456_metrics["last_below_threshold_iq"] is None
 
         # Test that it's fine to have empty files or files that contain "0"
-        # Total iqs should be 80, total escalations and audits should both be 0
+        # Total iqs should be 80, total escalations, audits, and below_threshold_iqs should all be 0
         os.makedirs(Path(tmp_base_dir, "detectors", "det_789"), exist_ok=True)
         Path(tmp_base_dir, "detectors", "det_789", "iqs_10294_2025-04-03_11").write_text("80")
         Path(tmp_base_dir, "detectors", "det_789", "iqs_12345_2025-04-03_11").write_text("0")
         Path(tmp_base_dir, "detectors", "det_789", "iqs_12345_2025-04-03_11").write_text("")
         Path(tmp_base_dir, "detectors", "det_789", "escalations_102394_2025-04-03_11").write_text("0")
         Path(tmp_base_dir, "detectors", "det_789", "audits_102394_2025-04-03_11").write_text("")
+        Path(tmp_base_dir, "detectors", "det_789", "below_threshold_iqs_102394_2025-04-03_11").write_text("0")
         det_789_metrics = retriever.get_detector_activity_metrics("det_789")
         assert det_789_metrics["hourly_total_iqs"] == 80
         assert det_789_metrics["hourly_total_escalations"] == 0
         assert det_789_metrics["hourly_total_audits"] == 0
+        assert det_789_metrics["hourly_total_below_threshold_iqs"] == 0
         assert det_789_metrics["last_iq"] is None
         assert det_789_metrics["last_escalation"] is None
         assert det_789_metrics["last_audit"] is None
+        assert det_789_metrics["last_below_threshold_iq"] is None
 
 
 def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_tracker):
@@ -208,16 +234,21 @@ def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_t
         mock_datetime.fromtimestamp.return_value = datetime(2025, 4, 3, 11, 30, 0)
         retriever = ActivityRetriever()
 
-        # Total iqs should be 28, total escalations should be 2, and total audits should be 1
+        # Total iqs should be 28, total escalations should be 2, total audits should be 1,
+        # and total below_threshold_iqs should be 3
         os.makedirs(Path(tmp_base_dir, "detectors", "det_123"), exist_ok=True)
         Path(tmp_base_dir, "detectors", "det_123", "iqs_10294_2025-04-03_11").write_text("10")
         Path(tmp_base_dir, "detectors", "det_123", "iqs_12323_2025-04-03_11").write_text("1")
         Path(tmp_base_dir, "detectors", "det_123", "iqs_12345_2025-04-03_11").write_text("17")
         Path(tmp_base_dir, "detectors", "det_123", "escalations_102394_2025-04-03_11").write_text("2")
         Path(tmp_base_dir, "detectors", "det_123", "audits_102394_2025-04-03_11").write_text("1")
+        Path(tmp_base_dir, "detectors", "det_123", "below_threshold_iqs_102394_2025-04-03_11").write_text("3")
+        Path(tmp_base_dir, "detectors", "det_123", "confidence_v2_70-75_102394_2025-04-03_11").write_text("15")
+        Path(tmp_base_dir, "detectors", "det_123", "confidence_v2_95-100_102394_2025-04-03_11").write_text("10")
         Path(tmp_base_dir, "detectors", "det_123", "last_iqs").touch()
         Path(tmp_base_dir, "detectors", "det_123", "last_escalations").touch()
         Path(tmp_base_dir, "detectors", "det_123", "last_audits").touch()
+        Path(tmp_base_dir, "detectors", "det_123", "last_below_threshold_iqs").touch()
 
         # This detector has no iqs in the last hour, so it should not be included in the active detectors
         # It will still be included in the all detectors activity
@@ -233,15 +264,25 @@ def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_t
         assert all_detector_activity["det_123"]["hourly_total_iqs"] == 28
         assert all_detector_activity["det_123"]["hourly_total_escalations"] == 2
         assert all_detector_activity["det_123"]["hourly_total_audits"] == 1
+        assert all_detector_activity["det_123"]["hourly_total_below_threshold_iqs"] == 3
         assert all_detector_activity["det_123"]["last_iq"] is not None
         assert all_detector_activity["det_123"]["last_escalation"] is not None
         assert all_detector_activity["det_123"]["last_audit"] is not None
+        assert all_detector_activity["det_123"]["last_below_threshold_iq"] is not None
+        histogram = all_detector_activity["det_123"]["confidence_histogram"]
+        assert histogram["version"] == 2
+        assert histogram["bucket_width"] == 5
+        assert len(histogram["counts"]) == 20
+        assert histogram["counts"][14] == 15  # 70-75 bucket
+        assert histogram["counts"][19] == 10  # 95-100 bucket
         assert all_detector_activity["det_456"]["hourly_total_iqs"] == 0
         assert all_detector_activity["det_456"]["hourly_total_escalations"] == 0
         assert all_detector_activity["det_456"]["hourly_total_audits"] == 0
+        assert all_detector_activity["det_456"]["hourly_total_below_threshold_iqs"] == 0
         assert all_detector_activity["det_456"]["last_iq"] is not None
         assert all_detector_activity["det_456"]["last_escalation"] is not None
         assert all_detector_activity["det_456"]["last_audit"] is None
+        assert all_detector_activity["det_456"]["last_below_threshold_iq"] is None
 
         active_detector_activity = json.loads(retriever.get_active_detector_activity())
         assert "det_123" in active_detector_activity
@@ -249,6 +290,512 @@ def test_get_all_and_active_detector_activity(monkeypatch, tmp_base_dir, _test_t
         assert active_detector_activity["det_123"]["hourly_total_iqs"] == 28
         assert active_detector_activity["det_123"]["hourly_total_escalations"] == 2
         assert active_detector_activity["det_123"]["hourly_total_audits"] == 1
+        assert active_detector_activity["det_123"]["hourly_total_below_threshold_iqs"] == 3
         assert active_detector_activity["det_123"]["last_iq"] is not None
         assert active_detector_activity["det_123"]["last_escalation"] is not None
         assert active_detector_activity["det_123"]["last_audit"] is not None
+        assert active_detector_activity["det_123"]["last_below_threshold_iq"] is not None
+        active_histogram = active_detector_activity["det_123"]["confidence_histogram"]
+        assert active_histogram["version"] == 2
+        assert active_histogram["bucket_width"] == 5
+        assert len(active_histogram["counts"]) == 20
+        assert active_histogram["counts"][14] == 15  # 70-75 bucket
+        assert active_histogram["counts"][19] == 10  # 95-100 bucket
+
+
+def test_confidence_to_bucket():
+    """Test the confidence to bucket conversion."""
+    to_bucket = ConfidenceHistogramConfig.confidence_to_bucket
+    # Test standard buckets
+    assert to_bucket(0.0) == "0-5"
+    assert to_bucket(0.01) == "0-5"
+    assert to_bucket(0.04) == "0-5"
+    assert to_bucket(0.05) == "5-10"
+    assert to_bucket(0.10) == "10-15"
+    assert to_bucket(0.49) == "45-50"
+    assert to_bucket(0.50) == "50-55"
+    assert to_bucket(0.73) == "70-75"
+    assert to_bucket(0.95) == "95-100"
+    assert to_bucket(0.99) == "95-100"
+
+    # Test edge cases
+    assert to_bucket(0) == "0-5"
+    assert to_bucket(1) == "95-100"
+
+
+def test_bucket_name_to_index():
+    """Test bucket_name_to_index converts bucket name strings to array indices."""
+    to_index = ConfidenceHistogramConfig.bucket_name_to_index
+
+    assert to_index("0-5") == 0
+    assert to_index("50-55") == 10
+    assert to_index("70-75") == 14
+    assert to_index("95-100") == 19
+
+    # Out-of-range bucket_start raises ValueError
+    with pytest.raises(ValueError):
+        to_index("110-120")
+    with pytest.raises(ValueError):
+        to_index("100-105")
+
+    # Unparseable names raise ValueError
+    with pytest.raises(ValueError):
+        to_index("garbage")
+    with pytest.raises(ValueError):
+        to_index("")
+    with pytest.raises(ValueError):
+        to_index("abc-def")
+
+
+def test_record_confidence_for_metrics(monkeypatch, tmp_base_dir, _test_tracker):
+    """Test recording confidence values for histogram tracking."""
+    monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
+    monkeypatch.setattr(os, "getpid", lambda: 11111)
+
+    with patch("app.metrics.iq_activity.datetime") as mock_datetime:
+        mock_datetime.now.return_value = datetime(2025, 4, 3, 14, 0, 0)
+
+        # Record some confidence values (without class_index for backwards compat)
+        record_confidence_for_metrics("det_confidence_test", 0.73)
+        assert Path(
+            tmp_base_dir, "detectors", "det_confidence_test", "confidence_v2_70-75_11111_2025-04-03_14"
+        ).exists()
+        assert (
+            Path(
+                tmp_base_dir, "detectors", "det_confidence_test", "confidence_v2_70-75_11111_2025-04-03_14"
+            ).read_text()
+            == "1"
+        )
+
+        # Record another value in the same bucket
+        record_confidence_for_metrics("det_confidence_test", 0.71)
+        assert (
+            Path(
+                tmp_base_dir, "detectors", "det_confidence_test", "confidence_v2_70-75_11111_2025-04-03_14"
+            ).read_text()
+            == "2"
+        )
+
+        # Record in a different bucket
+        record_confidence_for_metrics("det_confidence_test", 0.95)
+        assert Path(
+            tmp_base_dir, "detectors", "det_confidence_test", "confidence_v2_95-100_11111_2025-04-03_14"
+        ).exists()
+        assert (
+            Path(
+                tmp_base_dir, "detectors", "det_confidence_test", "confidence_v2_95-100_11111_2025-04-03_14"
+            ).read_text()
+            == "1"
+        )
+
+        # Record from a different PID
+        monkeypatch.setattr(os, "getpid", lambda: 22222)
+        record_confidence_for_metrics("det_confidence_test", 0.72)
+        assert Path(
+            tmp_base_dir, "detectors", "det_confidence_test", "confidence_v2_70-75_22222_2025-04-03_14"
+        ).exists()
+        assert (
+            Path(
+                tmp_base_dir, "detectors", "det_confidence_test", "confidence_v2_70-75_22222_2025-04-03_14"
+            ).read_text()
+            == "1"
+        )
+
+        # Verify no per-class files were created when class_index was omitted
+        det_dir = Path(tmp_base_dir, "detectors", "det_confidence_test")
+        per_class_files = list(det_dir.glob("confidence_v2_class_*"))
+        assert per_class_files == [], f"Per-class files should not exist without class_index: {per_class_files}"
+
+
+def test_get_detector_confidence_histogram(monkeypatch, tmp_base_dir, _test_tracker):
+    """Test retrieving the confidence histogram for a detector."""
+    monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
+
+    with patch("app.metrics.iq_activity.datetime") as mock_datetime:
+        mock_datetime.now.return_value = datetime(2025, 4, 3, 15, 0, 0)
+        retriever = ActivityRetriever()
+
+        # Set up confidence histogram files for the previous hour (14:00)
+        os.makedirs(Path(tmp_base_dir, "detectors", "det_histogram_test"), exist_ok=True)
+        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_v2_70-75_11111_2025-04-03_14").write_text(
+            "10"
+        )
+        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_v2_70-75_22222_2025-04-03_14").write_text("5")
+        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_v2_95-100_11111_2025-04-03_14").write_text(
+            "20"
+        )
+        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_v2_0-5_33333_2025-04-03_14").write_text("2")
+        # This file is for a different hour and should not be included
+        Path(tmp_base_dir, "detectors", "det_histogram_test", "confidence_v2_50-55_11111_2025-04-03_13").write_text(
+            "100"
+        )
+
+        histogram = retriever.get_detector_confidence_histogram("det_histogram_test")
+
+        assert histogram["version"] == 2
+        assert histogram["bucket_width"] == 5
+        assert len(histogram["counts"]) == 20
+        # Should aggregate across PIDs
+        assert histogram["counts"][14] == 15  # 70-75: 10 + 5
+        assert histogram["counts"][19] == 20  # 95-100
+        assert histogram["counts"][0] == 2  # 0-5
+        # Should not include the different hour
+        assert histogram["counts"][10] == 0  # 50-55 (from different hour)
+
+
+def test_get_detector_confidence_histogram_empty(monkeypatch, tmp_base_dir, _test_tracker):
+    """Test that a detector with no confidence files returns an all-zero envelope."""
+    monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
+
+    with patch("app.metrics.iq_activity.datetime") as mock_datetime:
+        mock_datetime.now.return_value = datetime(2025, 4, 3, 21, 0, 0)
+        retriever = ActivityRetriever()
+
+        det = "det_no_confidence"
+        os.makedirs(Path(tmp_base_dir, "detectors", det), exist_ok=True)
+
+        histogram = retriever.get_detector_confidence_histogram(det)
+
+        assert histogram["version"] == 2
+        assert histogram["bucket_width"] == 5
+        assert len(histogram["counts"]) == 20
+        assert all(c == 0 for c in histogram["counts"])
+        assert histogram["by_class"] == {}
+
+
+def test_get_detector_confidence_histogram_lower_resolution_old_version(monkeypatch, tmp_base_dir, _test_tracker):
+    """Test that old-version files with lower resolution (wider buckets) are skipped."""
+    monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
+
+    with patch("app.metrics.iq_activity.datetime") as mock_datetime:
+        mock_datetime.now.return_value = datetime(2025, 4, 3, 18, 0, 0)
+        retriever = ActivityRetriever()
+
+        det = "det_lower_res"
+        det_dir = Path(tmp_base_dir, "detectors", det)
+        os.makedirs(det_dir, exist_ok=True)
+        hour = "2025-04-03_17"
+
+        # Current v2 files (width=5)
+        Path(det_dir, f"confidence_v2_70-75_11111_{hour}").write_text("10")
+        Path(det_dir, f"confidence_v2_0-5_11111_{hour}").write_text("4")
+
+        # Old v1 files — simulate a lower-resolution scheme (width=10).
+        # These should be ignored (present on disk but skipped).
+        Path(det_dir, f"confidence_v1_60-70_22222_{hour}").write_text("7")
+        Path(det_dir, f"confidence_v1_70-80_22222_{hour}").write_text("6")
+        Path(det_dir, f"confidence_v1_90-100_22222_{hour}").write_text("3")
+
+        histogram = retriever.get_detector_confidence_histogram(det)
+
+        assert histogram["version"] == 2
+        assert histogram["bucket_width"] == 5
+        assert len(histogram["counts"]) == 20
+
+        # Only v2 data should appear
+        assert histogram["counts"][0] == 4  # v2 0-5
+        assert histogram["counts"][14] == 10  # v2 70-75 only
+        # v1 buckets should NOT contribute
+        assert histogram["counts"][12] == 0  # v1 60-70 ignored
+        assert histogram["counts"][18] == 0  # v1 90-100 ignored
+        assert sum(histogram["counts"]) == 4 + 10
+
+
+def test_get_detector_confidence_histogram_higher_resolution_old_version(monkeypatch, tmp_base_dir, _test_tracker):
+    """Test that old-version files with higher resolution (narrower buckets) are skipped."""
+    monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
+
+    with patch("app.metrics.iq_activity.datetime") as mock_datetime:
+        mock_datetime.now.return_value = datetime(2025, 4, 3, 19, 0, 0)
+        retriever = ActivityRetriever()
+
+        det = "det_higher_res"
+        det_dir = Path(tmp_base_dir, "detectors", det)
+        os.makedirs(det_dir, exist_ok=True)
+        hour = "2025-04-03_18"
+
+        # Current v2 files (width=5)
+        Path(det_dir, f"confidence_v2_70-75_11111_{hour}").write_text("10")
+        Path(det_dir, f"confidence_v2_0-5_11111_{hour}").write_text("4")
+
+        # Old v1 files — simulate a higher-resolution scheme (width=2).
+        # These should be ignored (present on disk but skipped).
+        Path(det_dir, f"confidence_v1_0-2_33333_{hour}").write_text("3")
+        Path(det_dir, f"confidence_v1_70-72_33333_{hour}").write_text("2")
+        Path(det_dir, f"confidence_v1_72-74_33333_{hour}").write_text("1")
+        Path(det_dir, f"confidence_v1_50-52_33333_{hour}").write_text("5")
+
+        histogram = retriever.get_detector_confidence_histogram(det)
+
+        assert histogram["version"] == 2
+        assert histogram["bucket_width"] == 5
+        assert len(histogram["counts"]) == 20
+
+        # Only v2 data should appear
+        assert histogram["counts"][0] == 4  # v2 0-5 only
+        assert histogram["counts"][14] == 10  # v2 70-75 only
+        # v1 buckets should NOT contribute
+        assert histogram["counts"][10] == 0  # v1 50-52 ignored
+        assert sum(histogram["counts"]) == 4 + 10
+
+
+def test_get_detector_confidence_histogram_v1_same_width_included(monkeypatch, tmp_base_dir, _test_tracker):
+    """Test that v1 aggregate files with the same bucket width are included during a rolling deployment."""
+    monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
+
+    with patch("app.metrics.iq_activity.datetime") as mock_datetime:
+        mock_datetime.now.return_value = datetime(2025, 4, 3, 20, 0, 0)
+        retriever = ActivityRetriever()
+
+        det = "det_v1_same_width"
+        det_dir = Path(tmp_base_dir, "detectors", det)
+        os.makedirs(det_dir, exist_ok=True)
+        hour = "2025-04-03_19"
+
+        # v2 files (current version)
+        Path(det_dir, f"confidence_v2_70-75_11111_{hour}").write_text("10")
+        Path(det_dir, f"confidence_v2_0-5_11111_{hour}").write_text("4")
+
+        # v1 files with same bucket width=5 (from a worker that hasn't upgraded yet)
+        Path(det_dir, f"confidence_v1_70-75_22222_{hour}").write_text("5")
+        Path(det_dir, f"confidence_v1_95-100_22222_{hour}").write_text("3")
+
+        histogram = retriever.get_detector_confidence_histogram(det)
+
+        assert histogram["version"] == 2
+        assert histogram["bucket_width"] == 5
+        # v1 aggregate files with matching width should be included
+        assert histogram["counts"][0] == 4  # v2 only
+        assert histogram["counts"][14] == 15  # v2 10 + v1 5
+        assert histogram["counts"][19] == 3  # v1 only
+        assert sum(histogram["counts"]) == 4 + 10 + 5 + 3
+
+
+def test_detector_activity_metrics_includes_histogram(monkeypatch, tmp_base_dir, _test_tracker):
+    """Test that get_detector_activity_metrics includes the confidence histogram."""
+    monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
+
+    with patch("app.metrics.iq_activity.datetime") as mock_datetime:
+        mock_datetime.now.return_value = datetime(2025, 4, 3, 16, 0, 0)
+        retriever = ActivityRetriever()
+
+        # Set up activity files for the previous hour (15:00)
+        os.makedirs(Path(tmp_base_dir, "detectors", "det_full_metrics"), exist_ok=True)
+        Path(tmp_base_dir, "detectors", "det_full_metrics", "iqs_11111_2025-04-03_15").write_text("50")
+        Path(tmp_base_dir, "detectors", "det_full_metrics", "confidence_v2_80-85_11111_2025-04-03_15").write_text("30")
+        Path(tmp_base_dir, "detectors", "det_full_metrics", "confidence_v2_90-95_11111_2025-04-03_15").write_text("20")
+        Path(tmp_base_dir, "detectors", "det_full_metrics", "last_iqs").touch()
+
+        metrics = retriever.get_detector_activity_metrics("det_full_metrics")
+
+        assert metrics["hourly_total_iqs"] == 50
+        assert "confidence_histogram" in metrics
+        histogram = metrics["confidence_histogram"]
+        assert histogram["version"] == 2
+        assert histogram["bucket_width"] == 5
+        assert len(histogram["counts"]) == 20
+        assert histogram["counts"][16] == 30  # 80-85 bucket
+        assert histogram["counts"][18] == 20  # 90-95 bucket
+
+
+# ============== Per-Class Metrics Tests ==============
+
+
+def test_record_confidence_with_class_index(monkeypatch, tmp_base_dir, _test_tracker):
+    """Test recording confidence values with class_index creates per-class files."""
+    monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
+    monkeypatch.setattr(os, "getpid", lambda: 33333)
+
+    with patch("app.metrics.iq_activity.datetime") as mock_datetime:
+        mock_datetime.now.return_value = datetime(2025, 4, 3, 22, 0, 0)
+
+        # Record confidence with class_index=0
+        record_confidence_for_metrics("det_per_class_conf", 0.75, class_index=0)
+
+        # Check aggregate file exists
+        assert Path(tmp_base_dir, "detectors", "det_per_class_conf", "confidence_v2_75-80_33333_2025-04-03_22").exists()
+        assert (
+            Path(tmp_base_dir, "detectors", "det_per_class_conf", "confidence_v2_75-80_33333_2025-04-03_22").read_text()
+            == "1"
+        )
+
+        # Check per-class file exists
+        assert Path(
+            tmp_base_dir, "detectors", "det_per_class_conf", "confidence_v2_class_0_75-80_33333_2025-04-03_22"
+        ).exists()
+        assert (
+            Path(
+                tmp_base_dir, "detectors", "det_per_class_conf", "confidence_v2_class_0_75-80_33333_2025-04-03_22"
+            ).read_text()
+            == "1"
+        )
+
+        # Record with class_index=1
+        record_confidence_for_metrics("det_per_class_conf", 0.85, class_index=1)
+
+        assert Path(
+            tmp_base_dir, "detectors", "det_per_class_conf", "confidence_v2_class_1_85-90_33333_2025-04-03_22"
+        ).exists()
+
+        # Record another value for class_index=0
+        record_confidence_for_metrics("det_per_class_conf", 0.78, class_index=0)
+        assert (
+            Path(
+                tmp_base_dir, "detectors", "det_per_class_conf", "confidence_v2_class_0_75-80_33333_2025-04-03_22"
+            ).read_text()
+            == "2"
+        )
+
+
+def test_record_activity_with_class_index(monkeypatch, tmp_base_dir, _test_tracker):
+    """Test recording activity with class_index creates per-class files."""
+    monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
+    monkeypatch.setattr(os, "getpid", lambda: 44444)
+
+    with patch("app.metrics.iq_activity.datetime") as mock_datetime:
+        mock_datetime.now.return_value = datetime(2025, 4, 3, 23, 0, 0)
+
+        # Record below_threshold_iqs with class_index
+        record_activity_for_metrics("det_per_class_act", "below_threshold_iqs", class_index=0)
+
+        # Check aggregate file exists
+        assert Path(tmp_base_dir, "detectors", "det_per_class_act", "below_threshold_iqs_44444_2025-04-03_23").exists()
+
+        # Check per-class file exists
+        assert Path(
+            tmp_base_dir, "detectors", "det_per_class_act", "below_threshold_iqs_class_0_44444_2025-04-03_23"
+        ).exists()
+
+        # Record escalations with class_index
+        record_activity_for_metrics("det_per_class_act", "escalations", class_index=1)
+        assert Path(tmp_base_dir, "detectors", "det_per_class_act", "escalations_class_1_44444_2025-04-03_23").exists()
+
+        # Record iqs with class_index (should NOT create per-class file - iqs doesn't support per-class)
+        record_activity_for_metrics("det_per_class_act", "iqs", class_index=0)
+        assert Path(tmp_base_dir, "detectors", "det_per_class_act", "iqs_44444_2025-04-03_23").exists()
+        # No per-class file for iqs
+        assert not Path(tmp_base_dir, "detectors", "det_per_class_act", "iqs_class_0_44444_2025-04-03_23").exists()
+
+
+def test_get_confidence_histogram_with_per_class(monkeypatch, tmp_base_dir, _test_tracker):
+    """Test retrieving confidence histogram includes per-class data."""
+    monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
+
+    with patch("app.metrics.iq_activity.datetime") as mock_datetime:
+        mock_datetime.now.return_value = datetime(2025, 4, 4, 10, 0, 0)
+        retriever = ActivityRetriever()
+
+        det = "det_hist_per_class"
+        det_dir = Path(tmp_base_dir, "detectors", det)
+        os.makedirs(det_dir, exist_ok=True)
+        hour = "2025-04-04_09"
+
+        # Aggregate files
+        Path(det_dir, f"confidence_v2_70-75_11111_{hour}").write_text("15")
+        Path(det_dir, f"confidence_v2_80-85_11111_{hour}").write_text("10")
+
+        # Per-class files for class 0
+        Path(det_dir, f"confidence_v2_class_0_70-75_11111_{hour}").write_text("8")
+        Path(det_dir, f"confidence_v2_class_0_80-85_11111_{hour}").write_text("6")
+
+        # Per-class files for class 1
+        Path(det_dir, f"confidence_v2_class_1_70-75_11111_{hour}").write_text("7")
+        Path(det_dir, f"confidence_v2_class_1_80-85_11111_{hour}").write_text("4")
+
+        histogram = retriever.get_detector_confidence_histogram(det)
+
+        assert histogram["version"] == 2
+        assert histogram["counts"][14] == 15  # 70-75
+        assert histogram["counts"][16] == 10  # 80-85
+
+        assert "0" in histogram["by_class"]
+        assert "1" in histogram["by_class"]
+        assert histogram["by_class"]["0"][14] == 8
+        assert histogram["by_class"]["0"][16] == 6
+        assert histogram["by_class"]["1"][14] == 7
+        assert histogram["by_class"]["1"][16] == 4
+
+
+def test_get_per_class_activity(monkeypatch, tmp_base_dir, _test_tracker):
+    """Test retrieving per-class activity counts."""
+    monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
+
+    retriever = ActivityRetriever()
+
+    det = "det_per_class_activity"
+    det_dir = Path(tmp_base_dir, "detectors", det)
+    os.makedirs(det_dir, exist_ok=True)
+    hour = "2025-04-04_10"
+
+    # Per-class escalations
+    Path(det_dir, f"escalations_class_0_11111_{hour}").write_text("5")
+    Path(det_dir, f"escalations_class_0_22222_{hour}").write_text("3")
+    Path(det_dir, f"escalations_class_1_11111_{hour}").write_text("7")
+
+    # Per-class below_threshold_iqs
+    Path(det_dir, f"below_threshold_iqs_class_0_11111_{hour}").write_text("10")
+    Path(det_dir, f"below_threshold_iqs_class_1_11111_{hour}").write_text("15")
+
+    hourly_files = list(det_dir.glob(f"*_{hour}"))
+
+    escalations_by_class = retriever.get_per_class_activity(det, "escalations", hourly_files)
+    assert escalations_by_class["0"] == 8  # 5 + 3
+    assert escalations_by_class["1"] == 7
+
+    below_threshold_by_class = retriever.get_per_class_activity(det, "below_threshold_iqs", hourly_files)
+    assert below_threshold_by_class["0"] == 10
+    assert below_threshold_by_class["1"] == 15
+
+
+def test_get_detector_activity_metrics_with_per_class(monkeypatch, tmp_base_dir, _test_tracker):
+    """Test that get_detector_activity_metrics includes per-class breakdowns."""
+    monkeypatch.setattr("app.metrics.iq_activity._tracker", lambda: _test_tracker)
+
+    with patch("app.metrics.iq_activity.datetime") as mock_datetime:
+        mock_datetime.now.return_value = datetime(2025, 4, 4, 12, 0, 0)
+        retriever = ActivityRetriever()
+
+        det = "det_full_per_class"
+        det_dir = Path(tmp_base_dir, "detectors", det)
+        os.makedirs(det_dir, exist_ok=True)
+        hour = "2025-04-04_11"
+
+        # Aggregate files
+        Path(det_dir, f"iqs_11111_{hour}").write_text("100")
+        Path(det_dir, f"escalations_11111_{hour}").write_text("20")
+        Path(det_dir, f"below_threshold_iqs_11111_{hour}").write_text("30")
+        Path(det_dir, f"confidence_v2_70-75_11111_{hour}").write_text("50")
+
+        # Per-class files
+        Path(det_dir, f"escalations_class_0_11111_{hour}").write_text("12")
+        Path(det_dir, f"escalations_class_1_11111_{hour}").write_text("8")
+        Path(det_dir, f"below_threshold_iqs_class_0_11111_{hour}").write_text("18")
+        Path(det_dir, f"below_threshold_iqs_class_1_11111_{hour}").write_text("12")
+        Path(det_dir, f"confidence_v2_class_0_70-75_11111_{hour}").write_text("30")
+        Path(det_dir, f"confidence_v2_class_1_70-75_11111_{hour}").write_text("20")
+
+        Path(det_dir, "last_iqs").touch()
+        Path(det_dir, "last_escalations").touch()
+        Path(det_dir, "last_below_threshold_iqs").touch()
+
+        metrics = retriever.get_detector_activity_metrics(det)
+
+        # Check aggregate values
+        assert metrics["hourly_total_iqs"] == 100
+        assert metrics["hourly_total_escalations"] == 20
+        assert metrics["hourly_total_below_threshold_iqs"] == 30
+
+        # Check per-class values
+        assert "escalations_by_class" in metrics
+        assert metrics["escalations_by_class"]["0"] == 12
+        assert metrics["escalations_by_class"]["1"] == 8
+
+        assert "below_threshold_iqs_by_class" in metrics
+        assert metrics["below_threshold_iqs_by_class"]["0"] == 18
+        assert metrics["below_threshold_iqs_by_class"]["1"] == 12
+
+        # Check histogram has per-class data
+        histogram = metrics["confidence_histogram"]
+        assert histogram["counts"][14] == 50
+        assert histogram["by_class"]["0"][14] == 30
+        assert histogram["by_class"]["1"][14] == 20

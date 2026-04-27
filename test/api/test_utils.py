@@ -364,6 +364,55 @@ class TestCreateIQ:
                 query="Test query",
             )
 
+    def test_create_iq_stamps_mlb_keys_in_metadata(self):
+        """MLB keys should be stamped under iq.metadata.edge_result when passed in,
+        mirroring the cloud-side shape produced by generate_metadata_dict."""
+        iq = create_iq(
+            detector_id=prefixed_ksuid("det_"),
+            mode=ModeEnum.BINARY,
+            mode_configuration=None,
+            result_value=0,
+            confidence=0.8,
+            confidence_threshold=self.confidence_threshold,
+            is_done_processing=True,
+            query="Test query",
+            mlb_key="mlb_primary_abc",
+            oodd_mlb_key="mlb_oodd_xyz",
+        )
+        assert iq.metadata["is_from_edge"] is True
+        assert iq.metadata["edge_result"]["mlb_key"] == "mlb_primary_abc"
+        assert iq.metadata["edge_result"]["oodd_mlb_key"] == "mlb_oodd_xyz"
+
+    def test_create_iq_omits_edge_result_when_no_mlb_keys(self):
+        """When neither MLB key is passed, no edge_result sub-dict is written."""
+        iq = create_iq(
+            detector_id=prefixed_ksuid("det_"),
+            mode=ModeEnum.BINARY,
+            mode_configuration=None,
+            result_value=0,
+            confidence=0.8,
+            confidence_threshold=self.confidence_threshold,
+            is_done_processing=True,
+            query="Test query",
+        )
+        assert "edge_result" not in iq.metadata
+
+    def test_create_iq_stamps_only_primary_mlb_key(self):
+        """When OODD is disabled, only mlb_key is populated under edge_result."""
+        iq = create_iq(
+            detector_id=prefixed_ksuid("det_"),
+            mode=ModeEnum.BINARY,
+            mode_configuration=None,
+            result_value=0,
+            confidence=0.8,
+            confidence_threshold=self.confidence_threshold,
+            is_done_processing=True,
+            query="Test query",
+            mlb_key="mlb_primary_only",
+        )
+        assert iq.metadata["edge_result"]["mlb_key"] == "mlb_primary_only"
+        assert "oodd_mlb_key" not in iq.metadata["edge_result"]
+
 
 class TestParseModelInfo:
     def test_parse_with_binary(self):

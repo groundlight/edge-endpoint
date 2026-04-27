@@ -75,19 +75,13 @@ class DatabaseManager:
 
     def _handle_existing_detector(self, deployment: Dict[str, str]) -> None:
         """
-        Handles the case where a detector with the same ID already exists in the database.
-        If the API token has changed, it updates the record with the new API token.
+        Handles the case where a detector with the same model_name already exists in the database.
+        Always applies the incoming fields so that flags like pending_deletion and deployment_created
+        are reset when a detector is re-added.
         :param deployment: A dictionary containing the deployment details.
         """
         logger.debug(f"Model name {deployment['model_name']} already exists in the database.")
-        detectors = self.get_inference_deployment_records(model_name=deployment["model_name"])
-        if len(detectors) != 1:
-            raise AssertionError("Expected exactly one detector to be returned.")
-
-        existing_api_token = detectors[0].api_token
-        if existing_api_token != deployment["api_token"]:  # type: ignore
-            logger.info(f"Updating API token for model name {deployment['model_name']}.")
-            self.update_inference_deployment_record(model_name=deployment["model_name"], fields_to_update=deployment)
+        self.update_inference_deployment_record(model_name=deployment["model_name"], fields_to_update=deployment)
 
     def update_inference_deployment_record(self, model_name: str, fields_to_update: Dict[str, Any]):
         """
@@ -117,6 +111,32 @@ class DatabaseManager:
             query = select(InferenceDeployment).filter_by(**kwargs)
             query_results = session.execute(query)
             return query_results.scalars().all()
+
+    def mark_detector_pending_deletion(self, detector_id: str) -> None:
+        """Mark all records for a detector as pending deletion."""
+        with self.session_maker() as session:
+            query = select(InferenceDeployment).filter_by(detector_id=detector_id)
+            existing = session.execute(query).scalars().all()
+            if existing:
+                for record in existing:
+                    record.pending_deletion = True
+                session.commit()
+            else:
+                logger.error(f"No DB records found for detector {detector_id} when marking for deletion.")
+
+    def get_pending_deletions(self) -> list[str]:
+        """Return distinct detector_ids that are pending deletion."""
+        with self.session_maker() as session:
+            query = select(InferenceDeployment.detector_id).filter_by(pending_deletion=True).distinct()
+            return list(session.execute(query).scalars().all())
+
+    def delete_inference_deployment_records(self, detector_id: str) -> None:
+        """Delete all records for a given detector_id."""
+        with self.session_maker() as session:
+            query = select(InferenceDeployment).filter_by(detector_id=detector_id)
+            for record in session.execute(query).scalars().all():
+                session.delete(record)
+            session.commit()
 
     def create_tables(self) -> None:
         """Create the database tables, if they don't already exist."""

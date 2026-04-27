@@ -195,15 +195,22 @@ def check_k8_deployments(c):
 
 @task 
 def check_server_port(c):
-    """Checks that the server is listening on the service port."""
+    """Checks that the server is listening on the service ports."""
     # First check that it's visible from the EEUT's localhost
     conn = connect_server()
-    print(f"Checking that the server is listening on port 30101 from the EEUT's localhost...")
-    conn.run("nc -zv localhost 30101")
+    for port in [30101, 30143]:
+        print(f"Checking that the server is listening on port {port} from the EEUT's localhost...")
+        conn.run(f"nc -zv localhost {port}")
 
-    print(f"Checking that the server is reachable from here...")
+    print(f"Checking that HTTP (30101) is reachable from here...")
     eeut_ip = get_eeut_ip()
     local(f"nc -zv {eeut_ip} 30101")
+
+    # We don't check 30143 from outside because the CICD runner might not have
+    # permissions to open that port in the AWS security group.
+    # Instead, we verify HTTPS internally on the host.
+    print(f"Verifying HTTPS endpoint internally...")
+    conn.run("curl -vk https://localhost:30143/health/live")
 
     print("Server port check complete.")
 

@@ -112,15 +112,28 @@ Never
 {{- end -}}
 
 {{/*
-  Get the edge-config.yaml file. If the user supplies one via `--set-file configFile=...yaml`
-  then use that. Otherwise, use the default version in the `files/` directory. We define this
-  as a function so that we can use it as a nonce to restart the pod when the config changes.
+  Get the edge config. If the user supplies one via `--set-file configFile=...yaml`,
+  use that. Otherwise, fall back to an empty config; the EdgeEndpointConfig pydantic
+  model in the python-sdk provides all defaults. This helper is also used as a nonce
+  to restart the pod when the config changes.
 */}}
 {{- define "groundlight-edge-endpoint.edgeConfig" -}}
 {{- if .Values.configFile }}
 {{- .Values.configFile }}
 {{- else }}
-{{- .Files.Get "files/default-edge-config.yaml" }}
+{}
 {{- end }}
 {{- end }}
+
+{{/*
+  Validate that edge-config.yaml is parseable YAML at template-render time.
+  Structural/semantic validation is handled by the Pydantic models at app startup.
+*/}}
+{{- define "validate.edgeConfig" -}}
+{{- $raw := include "groundlight-edge-endpoint.edgeConfig" . -}}
+{{- $parsed := fromYaml $raw -}}
+{{- if and (kindIs "map" $parsed) (hasKey $parsed "Error") (eq (len $parsed) 1) (hasPrefix "error converting YAML to JSON:" (toString (index $parsed "Error"))) -}}
+  {{- fail (printf "edge-config.yaml contains invalid YAML:\n%s" (index $parsed "Error")) -}}
+{{- end -}}
+{{- end -}}
 

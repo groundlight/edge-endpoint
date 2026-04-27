@@ -24,17 +24,28 @@ inferenceTag: ""
 # an object detection or counting model. 
 useMinimalImage: false
 
+# Enable request-level tracing profiling for the edge endpoint.
+# When enabled, per-request trace data (span timings, annotations) is written to
+# /opt/groundlight/device/edge-profiling/ as JSONL files. Disabled by default.
+enableProfiling: false
+
 # The image pull policy for the containers.
 # The default value is "Always" which means that Kubernetes will always check to see if there's 
 # a new version of the image with the requested tag available when starting containers.
 imagePullPolicy: "Always"
 
-# The port that the Edge Endpoint will listen on on the host. 
-# Within the cluster, edge-endpoint always listens on port 30101 and can be addressed by 
+# Whether to enable the HTTP (non-TLS) port on the edge endpoint.
+# When set to false, only HTTPS access is available, and the HTTP port is fully disabled
+# (removed from the Kubernetes Service, NGINX listener, and container port).
+httpEnabled: true
+
+# The HTTP port that the Edge Endpoint will listen on on the host (only used when httpEnabled is true).
+# Within the cluster, edge-endpoint listens on port 30101 and can be addressed by
 # other services in the cluster on that port using
 # http://edge-endpoint-service.edge.svc.cluster.local:30101/ (or substitute the appropriate
-# namespace if you've overriden the default value).
+# namespace if you've overridden the default value).
 edgeEndpointPort: 30101
+edgeEndpointHttpsPort: 30143
 
 # This is used as the base of the name for the PersistentVolume. The full name of the volume is 
 # created by appending the namespace to this value. Generally, this should not be overridden.
@@ -57,6 +68,14 @@ upstreamEndpoint: "https://api.groundlight.ai"
 
 # Currently, all Groundlight services are deployed in the us-west-2 region
 awsRegion: "us-west-2"
+
+# S3 FUSE mount configuration for model weights (pinamod + pretrained weights)
+# mount-s3 mounts the S3 bucket as a local filesystem with local disk caching
+s3Mount:
+  bucket: "pinamod-artifacts-public"
+  region: "us-west-2"
+  mountPath: "/opt/groundlight/edge/pinamod-mount"
+  cachePath: "/opt/groundlight/edge/pinamod-cache"
 
 ecrRegistry: "767397850842.dkr.ecr.us-west-2.amazonaws.com"
 

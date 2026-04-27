@@ -38,6 +38,17 @@ export GROUNDLIGHT_API_TOKEN="<YOUR-GROUNDLIGHT-API-TOKEN>"
 export GROUNDLIGHT_ENDPOINT="http://<EDGE-ENDPOINT-IP>:30101"
 ```
 
+For each test script below, run it with `--help` to see all available CLI options.
+
+### Specifying a pipeline to test
+
+`multiple_client_throughput_test.py` and `simple_ee_test.py` both support `--edge-pipeline-config`.
+
+- **Named pipeline config**: pass `--edge-pipeline-config <pipeline_config_name>`.
+- **Custom YAML-defined pipeline**: do *not* pass `--edge-pipeline-config`. Run the script once to trigger detector creation, configure the detector pipeline in Admin, then run the script again.
+
+If `--edge-pipeline-config` is omitted, the detector's current/default edge pipeline is used.
+
 ### Multiple Client Throughput Test
 
 #### Purpose
@@ -48,19 +59,6 @@ Tests the Edge Endpoint's ability to handle concurrent client load by spawning m
 uv run python multiple_client_throughput_test.py DETECTOR_MODE [options]
 ```
 
-#### Options
-* `DETECTOR_MODE` (required, one of: `BINARY`, `COUNT`)
-* `--max-clients` (optional, default: 10)
-    * Specifies the maximum number of processes (clients) to ramp up to during the test.
-* `--step-size` (optional, default: 1)
-    * Sets the number of clients to add at each step in ramp-up mode. This will also be the starting number of clients.
-* `--time-between-ramp` (optional, default: 30)
-    * Seconds to run each ramp step.
-* `--requests-per-second` (optional, default: 10)
-    * Per-client request rate.
-* `--image-width` (optional, default: 640)
-* `--image-height` (optional, default: 480)
-
 #### Outputs
 After the load test finishes, it automatically parses the results and writes a timestamped directory under `load-testing/load_tests/` containing:
 * `load_test.log`: raw request + utilization events
@@ -68,29 +66,8 @@ After the load test finishes, it automatically parses the results and writes a t
 * `throughput_and_system_utilization_over_time.png`: throughput/errors/expected vs CPU/GPU/RAM/VRAM
 * `time_vs_latency.png`: latency over time vs number of clients
 
-`load-testing/load_tests/` is ignored by git by default.
-
 #### Evaluate
 Review the generated plots and `load_test_results.json`.
-
-### Single Client FPS Test
-
-#### Purpose
-Measures end-to-end single-client throughput (frames per second) for a single detector.
-
-#### Usage
-```
-uv run python single_client_fps_test.py DETECTOR_MODE [--image-width WIDTH] [--image-height HEIGHT]
-```
-
-#### Configuration
-By default, this script will evaluate using the default pipeline for the given detector type. If you wish to evaluate a different pipeline, you need to:
-1. Switch to the desired edge pipeline in Django admin
-1. Wait until the new pipelines trains and downloads to your Edge Endpoint. You can check the status of your detector's pipeline on `http://<EDGE-ENDPOINT-IP>:30101/status`.
-
-#### Evaluate
-After the script runs, you will see a print out of the detector's performance and other relevant details of the test. 
-
 
 ### Memory Pressure Test
 
@@ -119,26 +96,3 @@ Below are some commands that are commonly run to evaluate the performance of the
 1. GPU VRAM utilization: `nvtop`. Check that GPU VRAM utilization is evenly spread across all available GPUs. 
 1. Inference pod status: `watch kubectl get pods -n edge`. Check that all pods are online and that no restarts occurred.
 
-
-### Repeated Rollouts Test
-
-#### Purpose
-A test that validates the Edge Endpoint's ability to handle model rollouts by periodically submitting labels to multiple detectors to trigger model training in the cloud, and in turn, model download on the edge.
-
-If the Edge Endpoint is successful, it will be able to download an edge model and return an edge answer for each detector.
-
-This test is very similar to "Memory Pressure Test". It was created at a differet time to solve a different problem, but we could consider merging these tests.
-
-#### Setup
-1. Set your Groundlight Edge Endpoint URL: `export GROUNDLIGHT_ENDPOINT="http://<EDGE_ENDPOINT_IP>:30101"`
-1. Do a fresh helm install of your Edge Endpoint (for the script to function correctly, it needs to start with no inference pods rolled out)
-1. Optionally, you can edit `global_config/refresh_rate` in `configs/edge-config.yaml` to be lower than the default, something like 20. This makes the test more difficult for the Edge Endpoint, and quicker for you to test, so it's an all-around good idea to do this.
-
-#### Run
-1. Run the script: `uv run python generate_repeated_rollouts.py 3`
-1. In another window, run `watch kubectl get pods -n edge` to monitor the rollouts.
-1. In another window, run `kubectl logs -f -n edge -c inference-model-updater edge-endpoint-xxxxxx` to watch the `inference-model-updater` logs.
-
-#### Evaluate
-1. Within a reasonable amount of time, the script should report that all detectors have received edge answers. For 3 binary detectors, expect ~200-300 seconds.
-1. Inference pods should be updated in a single threaded fashion, one detector at a time.
