@@ -223,7 +223,11 @@ def _(go, mo, traces):
             if _name and _dur is not None and _dur >= 0:
                 durations_by_span.setdefault(_name, []).append(_dur)
 
-    _ordered_names = sorted(durations_by_span.keys(), key=span_sort_key)
+    _ordered_names = sorted(
+        durations_by_span.keys(),
+        key=lambda n: sum(durations_by_span[n]) / len(durations_by_span[n]),
+        reverse=True,
+    )
 
     if _ordered_names:
         _fig = go.Figure()
@@ -234,6 +238,7 @@ def _(go, mo, traces):
             title="Latency Distribution by Span",
             yaxis_title="Duration (ms)",
             xaxis_title="Span",
+            xaxis=dict(categoryorder="array", categoryarray=_ordered_names),
             showlegend=True,
             height=450,
         )
@@ -334,11 +339,32 @@ def _(durations_by_span, go, make_subplots, mo, stats):
 
 
 @app.cell
-def _(FALLBACK_COLOR, SPAN_COLORS, go, mo, traces):
-    # Scatterplot of every span's duration over time, colored by span name.
-    # Each trace contributes one point per span, so cache hits vs misses and
-    # individual outliers per span type are directly visible. Click a legend
-    # entry to toggle that span on/off.
+def _(mo, traces):
+    _all_span_names = set()
+    for _t in traces:
+        for _s in _t.get("spans", []):
+            _n = _s.get("name")
+            if _n:
+                _all_span_names.add(_n)
+    _ordered = sorted(_all_span_names, key=span_sort_key)
+
+    _defaults = [_n for _n in ("_submit_primary_inference", "_submit_oodd_inference") if _n in _all_span_names]
+
+    latency_over_time_spans = mo.ui.multiselect(
+        options=_ordered,
+        value=_defaults,
+        label="Spans to plot (re-run to apply)",
+    )
+    latency_over_time_spans
+    return (latency_over_time_spans,)
+
+
+@app.cell
+def _(SPAN_COLORS, go, latency_over_time_spans, mo, traces):
+    # Scatterplot of selected spans' durations over time, colored by span name.
+    # Only spans chosen in the multiselect are embedded in the plot payload —
+    # plotting every span can exceed marimo's output size limit.
+    _selected = set(latency_over_time_spans.value or [])
     _points_by_span: dict[str, list[tuple[str, float, str]]] = {}
     for _t in traces:
         _wall = _t.get("start_wall_time_iso", "")
@@ -347,18 +373,48 @@ def _(FALLBACK_COLOR, SPAN_COLORS, go, mo, traces):
             continue
         for _s in _t.get("spans", []):
             _name = _s.get("name")
+            if _name not in _selected:
+                continue
             _dur = _s.get("duration_ms")
-            if _name and _dur is not None and _dur >= 0:
+            if _dur is not None and _dur >= 0:
                 _points_by_span.setdefault(_name, []).append((_wall, _dur, _tid))
 
     _ordered_names = sorted(_points_by_span.keys(), key=span_sort_key)
+
+    # Assign a distinct color to every plotted span: use the explicit SPAN_COLORS
+    # mapping when available, otherwise cycle through a qualitative palette so
+    # spans without a predefined color still look distinct.
+    _palette = [
+        "#636EFA",
+        "#EF553B",
+        "#00CC96",
+        "#AB63FA",
+        "#FFA15A",
+        "#19D3F3",
+        "#FF6692",
+        "#B6E880",
+        "#FF97FF",
+        "#FECB52",
+        "#1F77B4",
+        "#FF7F0E",
+        "#2CA02C",
+        "#D62728",
+        "#9467BD",
+        "#8C564B",
+        "#E377C2",
+        "#7F7F7F",
+        "#BCBD22",
+        "#17BECF",
+    ]
+    _unknowns = [_n for _n in _ordered_names if _n not in SPAN_COLORS]
+    _auto_colors = {_n: _palette[_i % len(_palette)] for _i, _n in enumerate(_unknowns)}
 
     if _ordered_names:
         _fig = go.Figure()
         for _name in _ordered_names:
             _points = _points_by_span[_name]
             _fig.add_trace(
-                go.Scatter(
+                go.Scattergl(
                     x=[_p[0] for _p in _points],
                     y=[_p[1] for _p in _points],
                     mode="markers",
@@ -366,7 +422,7 @@ def _(FALLBACK_COLOR, SPAN_COLORS, go, mo, traces):
                     marker=dict(
                         size=5,
                         opacity=0.6,
-                        color=SPAN_COLORS.get(_name, FALLBACK_COLOR),
+                        color=SPAN_COLORS.get(_name, _auto_colors.get(_name)),
                     ),
                     customdata=[_p[2] for _p in _points],
                     hovertemplate=(
@@ -394,7 +450,7 @@ def _(FALLBACK_COLOR, SPAN_COLORS, go, mo, traces):
             ]
         )
     else:
-        _out = mo.md("## Latency Over Time\n\n*Not enough span data to plot.*")
+        _out = mo.md("## Latency Over Time\n\n*Select at least one span to plot.*")
 
     _out
 

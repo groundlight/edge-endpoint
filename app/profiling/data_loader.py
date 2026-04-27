@@ -167,13 +167,31 @@ def get_detector_ids(traces: list[dict]) -> list[str]:
 
 
 def get_trace_detail(traces: list[dict], trace_id: str) -> dict | None:
-    """Find a specific trace by ID and return it with spans sorted by start_time_ns."""
-    for trace in traces:
-        if trace.get("trace_id") == trace_id:
-            result = dict(trace)
-            result["spans"] = sorted(result.get("spans", []), key=lambda s: s.get("start_time_ns", 0))
-            return result
-    return None
+    """Find a specific trace by ID and return it with spans sorted by start_time_ns.
+
+    Spans for one trace_id can be split across multiple records — the edge endpoint
+    and the inference server each write their own record with the same trace_id but
+    a disjoint span set. Merge all matching records so the waterfall shows the full
+    cross-process tree. Spans are deduped by span_id (first record wins).
+    """
+    matches = [t for t in traces if t.get("trace_id") == trace_id]
+    if not matches:
+        return None
+
+    seen_span_ids: set[str] = set()
+    merged_spans: list[dict] = []
+    for t in matches:
+        for s in t.get("spans", []):
+            sid = s.get("span_id")
+            if sid is not None:
+                if sid in seen_span_ids:
+                    continue
+                seen_span_ids.add(sid)
+            merged_spans.append(s)
+
+    result = dict(matches[0])
+    result["spans"] = sorted(merged_spans, key=lambda s: s.get("start_time_ns", 0))
+    return result
 
 
 def _stats_dict(durations: list[float]) -> dict:
