@@ -286,6 +286,7 @@ class EdgeInferenceManager:
             return False
         return True
 
+    @trace_span
     def run_inference(self, detector_id: str, image_bytes: bytes, content_type: str, mode: ModeEnum) -> dict:
         """
         Submit an image to the inference server, route to a specific model, and return the results.
@@ -398,6 +399,7 @@ class EdgeInferenceManager:
         )
         return True
 
+    @trace_span
     def escalation_cooldown_complete(self, detector_id: str, edge_config: EdgeEndpointConfig) -> bool:
         """
         Check if the time since the last escalation is long enough ago that we should escalate again.

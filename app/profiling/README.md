@@ -18,6 +18,49 @@ ENABLE_PROFILING=true
 
 When enabled, the profiling middleware creates a trace per request. Functions decorated with `@trace_span` automatically create child spans. Traces are written as JSONL to `/opt/groundlight/device/edge-profiling/` with 5-minute file rotation and 24-hour automatic cleanup.
 
+## Traced Spans
+
+```
+request                                          <- middleware (full request lifecycle)
++-- validate_content_type                        <- FastAPI dep: reject non-image Content-Type
++-- run_in_threadpool[get_groundlight_sdk_instance]  <- anyio-pool wait + execute (sync dep)
+|   +-- get_groundlight_sdk_instance             <- FastAPI dep: SDK instance lookup
+|       +-- _get_groundlight_sdk_instance_internal   <- lru_cache hit vs cold SDK construction
++-- run_in_threadpool[get_app_state]             <- anyio-pool wait + execute (sync dep)
+|   +-- get_app_state                            <- FastAPI dep: app singleton lookup
++-- validate_image_bytes                         <- FastAPI dep: read image body from ASGI stream
++-- post_image_query                             <- handler body (everything from here is in-handler)
+    +-- validate_query_params_for_edge           <- reject unsupported query params
+    +-- active                                   <- load active edge config from disk (mtime-cached)
+    +-- detector_config                          <- look up per-detector inference config
+    +-- record_activity_for_metrics              <- per-activity disk counter write (called multiple times per request)
+    +-- get_detector_metadata                    <- cache hit vs cloud API round-trip
+    +-- inference_is_available                   <- health check cache hit vs cold check
+    +-- run_inference                            <- end-to-end primary+OODD orchestration
+    |   +-- _submit_primary_inference            <- HTTP to primary inference pod
+    |   +-- _submit_oodd_inference               <- HTTP to OODD inference pod (parallel)
+    |   +-- get_inference_result                 <- result parsing + OODD confidence adjustment
+    |       +-- parse_inference_response         <- parse primary/OODD response dicts
+    +-- record_confidence_for_metrics            <- confidence histogram disk write
+    +-- create_iq                                <- build final ImageQuery pydantic model
+    +-- escalation_cooldown_complete             <- per-detector rate-limit check
+    +-- write_escalation_to_queue                <- disk write for background/audit escalation (on request path)
+    +-- safe_escalate_with_queue_write           <- synchronous cloud escalation (when triggered)
++-- run_in_threadpool[refresh_detector_metadata_if_needed]  <- background-task dispatch (after response)
+    +-- refresh_detector_metadata_if_needed      <- background task (runs after response is sent)
+```
+
+The `run_in_threadpool[...]` parents wrap every synchronous FastAPI dependency and synchronous Starlette
+BackgroundTask. Their duration includes both the wait for an `anyio` worker thread (default pool size 40
+per process) AND the function's execution. The inner span (the function's own `@trace_span`) covers only
+the execution. The difference between the two is **anyio threadpool wait time**, which under load can
+account for the bulk of pre-handler latency.
+
+The root `request` span carries a `response_sent_ms` annotation marking when the last response byte was
+flushed to the client. Anything in the trace past that timestamp (e.g. the
+`refresh_detector_metadata_if_needed` background task) is "behind" the user-visible latency and should be
+treated separately when interpreting waterfall gaps.
+
 ## Profiling Dashboard
 
 A [Marimo](https://marimo.io/) notebook provides interactive visualization of trace data. Marimo and plotly live in an **optional** `profiling` dependency group, so they are **not** installed by default — you'll need to install them wherever you launch the dashboard.
