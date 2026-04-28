@@ -216,6 +216,34 @@ def check_server_port(c):
 
 
 @task
+def diagnose_inference(c):
+    """Dump everything an oncall would need to triage why an inference pod
+    isn't becoming Ready. Safe to call even if no detector is configured.
+    """
+    conn = connect_server()
+    print("=== nodes ===")
+    conn.run("kubectl get nodes -o wide", warn=True)
+    print("=== all pods in edge namespace ===")
+    conn.run("kubectl get pods -n edge -o wide", warn=True)
+    print("=== all deployments in edge namespace ===")
+    conn.run("kubectl get deployments -n edge", warn=True)
+    print("=== events in edge namespace (last 30) ===")
+    conn.run("kubectl get events -n edge --sort-by=.lastTimestamp | tail -n 30", warn=True)
+    print("=== inferencemodel deployments (describe) ===")
+    conn.run("kubectl describe deployments -n edge -l app.kubernetes.io/component=inferencemodel "
+             "2>/dev/null || kubectl get deployments -n edge -o name | grep inferencemodel "
+             "| xargs -I{} kubectl describe {} -n edge", warn=True)
+    print("=== inferencemodel pods (describe) ===")
+    conn.run("kubectl get pods -n edge -o name | grep inferencemodel "
+             "| xargs -I{} kubectl describe {} -n edge", warn=True)
+    print("=== edge-endpoint model_updater logs (last 200) ===")
+    conn.run("kubectl logs deployment/edge-endpoint -c inference-model-updater "
+             "-n edge --tail=200", warn=True)
+    print("=== edge-endpoint logs (last 200) ===")
+    conn.run("kubectl logs deployment/edge-endpoint -c edge-endpoint -n edge --tail=200", warn=True)
+
+
+@task
 def check_gpu(c, detector_id):
     """Verify nvidia-smi works on the host AND the primary inference pod for
     `detector_id` has a GPU resource allocated and visible inside the container.

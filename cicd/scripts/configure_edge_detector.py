@@ -16,7 +16,7 @@ from groundlight.edge import NO_CLOUD, EdgeEndpointConfig
 
 DETECTOR_NAME = "g4-cicd-edge-test-cat"
 DETECTOR_QUERY = "Is this a cat?"
-SET_CONFIG_TIMEOUT_SEC = 600
+SET_CONFIG_TIMEOUT_SEC = 900  # cold-start g4dn pulls a GPU inference image + downloads model from S3
 
 
 def log(msg: str) -> None:

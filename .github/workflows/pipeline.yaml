@@ -451,6 +451,11 @@ jobs:
             python cicd/scripts/submit_edge_iq.py \
             --detector-id=${{ steps.configure.outputs.detector_id }}
 
+      - name: Diagnose EEUT on failure
+        if: failure()
+        run: |
+          uv run fab diagnose-inference || true
+
       - name: Thank the worker and shut down
         # if: always()
         # Only turn it off if the tests all pass.  If not, leave the failed machine up to debug.
