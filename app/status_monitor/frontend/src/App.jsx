@@ -134,6 +134,7 @@ export default function App() {
   }, [fetchAll]);
 
   const detectorDetails = metrics ? parseIfJson(metrics.detector_details) : null;
+  const dashboardUrl = metrics?.device_info?.dashboard_url;
 
   return (
     <>
@@ -168,7 +169,7 @@ export default function App() {
 
           <Stack gap="xs">
             <Text style={SECTION_TITLE_STYLE}>Detector Details</Text>
-            <DetectorDetails details={detectorDetails} loading={loading} />
+            <DetectorDetails details={detectorDetails} loading={loading} dashboardUrl={dashboardUrl} />
           </Stack>
 
           <Stack gap="xs">

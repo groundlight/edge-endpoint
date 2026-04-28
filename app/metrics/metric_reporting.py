@@ -62,6 +62,7 @@ class MetricsReporter:
         device_info.add("now", lambda: datetime.now().isoformat())
         device_info.add("cpucores", lambda: os.cpu_count())
         device_info.add("inference_flavor", lambda: system_metrics.get_inference_flavor())
+        device_info.add("dashboard_url", lambda: _groundlight_client().edge_base_url())
         device_info.add("cpu_utilization", lambda: system_metrics.get_cpu_utilization())
         device_info.add("memory_utilization", lambda: system_metrics.get_memory_utilization())
         device_info.add("memory_available_bytes", lambda: system_metrics.get_memory_available_bytes())
