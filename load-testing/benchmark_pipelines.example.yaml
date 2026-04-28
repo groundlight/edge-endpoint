@@ -23,13 +23,13 @@ MULTI_CLASS:
   pipelines:
     - groundlight-default-multiclass-current  # cloud default
 
-COUNT:
-  n: [1, 10, 20]
-  image_sizes:
-    - [640, 480]
-    - [1920, 1080]
-  pipelines:
-    - count-step-groundingdino  # cloud default (heavy)
+# COUNT:
+#   n: [1, 10, 20]
+#   image_sizes:
+#     - [640, 480]
+#     - [1920, 1080]
+#   pipelines:
+#     - count-step-groundingdino  # cloud default (heavy)
 
 BOUNDING_BOX:
   n: [1, 5, 10]

@@ -3,7 +3,6 @@
 import argparse
 import csv
 import json
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
@@ -12,6 +11,7 @@ import yaml
 from groundlight import Detector, ExperimentalApi
 
 import groundlight_helpers as glh
+import image_helpers as imgh
 import plot_ram_and_vram_usage
 
 NAME_PREFIX: str = "edge-bench"
@@ -27,11 +27,7 @@ CSV_FIELDS: list[str] = [
     "system_vram_used_bytes", "system_vram_total_bytes",
     "system_ram_used_bytes", "system_ram_total_bytes",
 ]
-# Fixed delay after configuring a batch before sampling. Lets the inference pod
-# finish lazy-loading the model into RAM/VRAM. Empirically, readiness flips well
-# before the model is fully resident, and per-process RAM kept reading low even
-# after a sample-until-stable loop, so we just dumb-wait a fixed amount.
-SETTLE_SEC: float = 15.0
+DEFAULT_WARMUP_QUERIES: int = 100
 
 
 def _parse_image_sizes(raw: Any, mode: str) -> list[tuple[int, int]]:
@@ -288,6 +284,8 @@ def parse_args() -> argparse.Namespace:
                         help="Path to an existing run directory; already-recorded measurements are skipped. Mutually exclusive with the YAML, --device-name, --notes.")
     parser.add_argument("--batch-size", type=int, default=1,
                         help="Detectors configured on the edge endpoint per measurement batch.")
+    parser.add_argument("--warmup-queries", type=int, default=DEFAULT_WARMUP_QUERIES,
+                        help="Number of inference requests to send to each detector before measuring.")
     parser.add_argument("--training-timeout-sec", type=float, default=60 * 20,
                         help="Per-detector training timeout. Cloud trains concurrently, so total wall-time is bounded by the slowest single detector.")
     args = parser.parse_args()
@@ -354,18 +352,20 @@ def measure_batch(
     gl: ExperimentalApi,
     batch_specs: list[dict],
     batch_detectors: list[Detector],
+    warmup_queries: int,
 ) -> list[dict]:
-    """Configure the Edge Endpoint with this batch, wait SETTLE_SEC, sample once, and return CSV rows.
+    """Configure the Edge Endpoint with this batch, send warmup inference requests, sample once, and return CSV rows.
 
-    `ready` is recorded but not gated on -- HTTP readiness is informational only;
-    the SETTLE_SEC sleep is what actually buys time for lazy model loading.
+    Warmup queries force the model to be fully loaded into RAM/VRAM before the measurement snapshot.
+    `ready` is recorded but not gated on; it is informational only.
     """
-
     glh.configure_edge_endpoint(gl, batch_detectors)
 
-
-    print(f"  Sleeping {SETTLE_SEC:.0f}s for the pod to finish loading the model...")
-    time.sleep(SETTLE_SEC)
+    for spec, detector in zip(batch_specs, batch_detectors):
+        print(f"  Sending {warmup_queries} warmup query/queries to {detector.id}...")
+        for _ in range(warmup_queries):
+            image, _, _ = imgh.generate_random_image(gl, detector, spec["image_width"], spec["image_height"])
+            gl.submit_image_query(detector, image, **glh.IQ_KWARGS_FOR_NO_ESCALATION)
 
     readiness_map = gl.edge.get_detector_readiness()
     readiness_by_id = {d.id: bool(readiness_map.get(d.id, False)) for d in batch_detectors}
@@ -442,7 +442,7 @@ def main() -> None:
         batch_specs = specs[i : i + args.batch_size]
         batch_detectors = detectors[i : i + args.batch_size]
         print(f"\n--- Batch {i // args.batch_size + 1} ({len(batch_detectors)} detector(s)) ---")
-        rows = measure_batch(gl, batch_specs, batch_detectors)
+        rows = measure_batch(gl, batch_specs, batch_detectors, args.warmup_queries)
         with open(results_file, "a", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
             for row in rows:
