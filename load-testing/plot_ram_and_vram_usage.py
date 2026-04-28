@@ -1,16 +1,18 @@
-"""Plot per-(pipeline, n, image-size) resource usage from a benchmark CSV.
+"""Plot per-(pipeline, n, image-size) RAM and VRAM usage from a benchmark run.
 
 Two side-by-side horizontal-bar panels (VRAM, RAM) on a tall portrait figure.
 Pipelines are grouped by detector mode along the left edge; within each pipeline
 group there is one bar per (n, image-size) combination, colored by image size.
 
 Usage:
-    uv run python plot_resource_breakdown.py results.csv
-    uv run python plot_resource_breakdown.py results.csv -o results_breakdown.png
+    # Either a run directory (preferred) or a results.csv path works.
+    uv run python plot_ram_and_vram_usage.py benchmark_results/2026-04-28_10-32-14
+    uv run python plot_ram_and_vram_usage.py results.csv -o results_ram_and_vram_usage.png
 """
 
 import argparse
 import csv
+import json
 from collections import defaultdict
 from pathlib import Path
 
@@ -26,12 +28,10 @@ BAR_DY = 1.0
 
 
 def load_rows(path: Path) -> list[dict]:
-    """Read the benchmark CSV and coerce numeric/boolean columns. Drops not-ready rows."""
+    """Read the benchmark CSV and coerce numeric columns."""
     rows: list[dict] = []
     with open(path, newline="") as f:
         for r in csv.DictReader(f):
-            if r.get("ready", "").strip().lower() != "true":
-                continue
             r["n"] = int(r["n"]) if r["n"] not in ("", None) else None
             r["image_width"] = int(r["image_width"])
             r["image_height"] = int(r["image_height"])
@@ -200,41 +200,120 @@ def add_size_legend(fig, palette: dict[tuple[int, int], tuple]) -> None:
     fig.legend(handles=handles, title="image size", loc="upper right", fontsize=9, title_fontsize=9)
 
 
+def resolve_csv_and_meta(input_path: Path) -> tuple[Path, dict]:
+    """Accept either a run directory or a results.csv path; return (csv_path, run_metadata).
+
+    `run_metadata` is the parsed run_metadata.json dict if present alongside the CSV,
+    otherwise an empty dict.
+    """
+    if input_path.is_dir():
+        csv_path = input_path / "results.csv"
+        if not csv_path.exists():
+            raise SystemExit(f"No results.csv in {input_path}")
+    else:
+        csv_path = input_path
+    meta_path = csv_path.parent / "run_metadata.json"
+    metadata: dict = {}
+    if meta_path.exists():
+        with open(meta_path) as f:
+            metadata = json.load(f)
+    return csv_path, metadata
+
+
+MAIN_TITLE: str = "Edge Endpoint RAM and VRAM usage"
+
+
+def _short_sha(image_id: str | None) -> str:
+    """Return the 7-char digest from either a bare `sha256:...` or a full `repo@sha256:...` ref."""
+    if not image_id:
+        return ""
+    if "@sha256:" in image_id:
+        return image_id.split("@sha256:", 1)[1][:7]
+    if image_id.startswith("sha256:"):
+        return image_id[len("sha256:") :][:7]
+    return image_id[:7]
+
+
+def subtitle_from_metadata(meta: dict, csv_path: Path) -> str:
+    """Build a one-line subtitle from `run_metadata.json` (device, time, image digests)."""
+    if not meta:
+        return csv_path.name
+    parts: list[str] = []
+    if meta.get("device_name"):
+        parts.append(meta["device_name"])
+    if meta.get("run_started_at"):
+        parts.append(meta["run_started_at"][:16].replace("T", " "))
+    edge_sha = _short_sha(meta.get("edge_endpoint_image_id"))
+    if edge_sha:
+        parts.append(f"edge-endpoint @ {edge_sha}")
+    inf_sha = _short_sha(meta.get("inference_server_image_id"))
+    if inf_sha:
+        parts.append(f"inference-server @ {inf_sha}")
+    return "  \u2022  ".join(parts) or csv_path.name
+
+
+def default_output_path(input_path: Path, csv_path: Path) -> Path:
+    """Pick an output PNG location -- inside the run dir if input was a dir, next to the CSV otherwise."""
+    if input_path.is_dir():
+        return input_path / "ram_and_vram_usage.png"
+    return csv_path.with_name(csv_path.stem + "_ram_and_vram_usage.png")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("csv", type=Path, help="Path to a resource-benchmark CSV.")
+    parser.add_argument("input", type=Path,
+                        help="Path to a benchmark run directory or directly to a results.csv.")
     parser.add_argument("-o", "--output", type=Path, default=None,
-                        help="Path to save the figure. Defaults to <csv-stem>_breakdown.png next to the input.")
+                        help="Path to save the figure. Defaults to <run-dir>/ram_and_vram_usage.png (or <csv-stem>_ram_and_vram_usage.png next to a CSV).")
     parser.add_argument("--show", action="store_true",
                         help="Open the figure in an interactive window instead of saving it (requires a display).")
     return parser.parse_args()
 
 
-def main() -> None:
-    args = parse_args()
-    rows = load_rows(args.csv)
+def render(input_path: Path, output: Path | None = None, show: bool = False) -> Path | None:
+    """Render the figure from a run directory or results.csv. Returns the saved PNG path
+    (or None when `show=True`). Importable so other scripts (e.g. the measurement script)
+    can plot without shelling out.
+    """
+    csv_path, metadata = resolve_csv_and_meta(input_path)
+    rows = load_rows(csv_path)
     if not rows:
-        raise SystemExit(f"No ready=True rows in {args.csv}")
+        raise SystemExit(f"No data rows in {csv_path}")
     layout = build_layout(rows)
 
     n_bars = len(layout["bars"])
-    height = max(6.0, 0.40 * n_bars + 1.5)
+    height = max(6.0, 0.40 * n_bars + 1.8)
     fig, axes = plt.subplots(1, 2, figsize=(14, height), sharey=True)
     plot_panel(axes[0], layout, "vram")
     plot_panel(axes[1], layout, "ram")
     annotate_section_headers(axes[0], layout, axes)
     add_size_legend(fig, layout["palette"])
 
-    fig.suptitle(args.csv.name, fontsize=11)
-    fig.tight_layout(rect=(0, 0, 1, 0.96))
+    fig.suptitle(MAIN_TITLE, fontsize=15, fontweight="bold", y=0.985)
+    fig.text(0.5, 0.955, subtitle_from_metadata(metadata, csv_path),
+             ha="center", va="top", fontsize=10, color="#444")
+    notes = (metadata.get("notes") or "").strip()
+    top = 0.92
+    if notes:
+        fig.text(0.5, 0.928, f"Notes: {notes}", ha="center", va="top",
+                 fontsize=9, color="#666", style="italic")
+        top = 0.905
+    fig.tight_layout(rect=(0, 0, 1, top))
     fig.subplots_adjust(left=0.30, wspace=0.06)
 
-    if args.show:
+    if show:
         plt.show()
-    else:
-        out = args.output or args.csv.with_name(args.csv.stem + "_breakdown.png")
-        fig.savefig(out, dpi=120)
-        print(f"Saved to {out}")
+        return None
+    out = output or default_output_path(input_path, csv_path)
+    fig.savefig(out, dpi=120)
+    plt.close(fig)
+    print(f"Saved to {out}")
+    return out
+
+
+def main() -> None:
+    args = parse_args()
+    render(args.input, args.output, args.show)
 
 
 if __name__ == "__main__":

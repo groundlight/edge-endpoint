@@ -1,4 +1,4 @@
-# Example input for measure_detector_resource_utilization.py.
+# Example input for measure_ram_and_vram_usage.py.
 # See load-testing/edge-pipeline-configs.md for the full set of options per mode.
 #
 # For each mode, the script expands the cartesian product of `n` (where applicable)
@@ -8,29 +8,35 @@ BINARY:
   image_sizes:
     - [320, 240]
     - [640, 480]
+    - [1920, 1080]
   pipelines:
-    - generic-cached-timm-efficientnetv2s-calibrated-mlp
-    - generic-cached-timm-mobilenetv3_small_050-calibrated-smoothed-mlp
+    - groundlight-default-current  # cloud default (MinorityClassCountSwitchingPipeline)
+    - fence-climbing-dinov2-zeroshot  # zero-shot DINOv2 ViT-L + pretrained MLP head
+    - generic-cached-timm-squash-vit_reg4_dinov2-calibrated-smoothed-mlp  # DINOv2 ViT-L + calibrated smoothed MLP
 
 MULTI_CLASS:
-  n: [2, 4, 8, 16]
-  image_sizes:
-    - [640, 480]
-  pipelines:
-    - multiclass-generic-cached-timm-efficientnetv2s-calibrated-mlp
-
-COUNT:
-  n: [1, 5, 10]
+  n: [2, 10, 20]
   image_sizes:
     - [320, 240]
     - [640, 480]
+    - [1920, 1080]
   pipelines:
-    - count-step-yolox
-    - count-step-centernet
+    - groundlight-default-multiclass-current  # cloud default
+
+COUNT:
+  n: [1, 10, 20]
+  image_sizes:
+    - [640, 480]
+    - [1920, 1080]
+  pipelines:
+    - count-step-groundingdino  # cloud default (heavy)
 
 BOUNDING_BOX:
   n: [1, 5, 10]
   image_sizes:
     - [640, 480]
+    - [1920, 1080]
   pipelines:
-    - bounding-boxes-step-yolox
+    - groundlight-default-bounding-boxes-current  # cloud default (resolves to bounding-boxes-step-groundingdino, heavy)
+    - zero-shot-rfdetr-object
+    - bounding-boxes-step-rfdetr
