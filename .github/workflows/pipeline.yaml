@@ -427,12 +427,29 @@ jobs:
           uv run fab check-k8-deployments
           uv run fab check-server-port
 
-      - name: Use groundlight sdk through EE
+      - name: Configure edge detector and wait for inference pod ready
+        id: configure
         run: |
           EEUT_IP=$(uv run pulumi stack output eeut_private_ip)
           export GROUNDLIGHT_ENDPOINT=http://${EEUT_IP}:30101
-          uv run groundlight whoami
-          uv run groundlight list-detectors
+          # Use --no-project so we ignore cicd/pulumi's older groundlight pin and
+          # pull a version that has groundlight.edge.api.EdgeEndpointApi (>=0.26.0).
+          DETECTOR_ID=$(uv run --no-project --with "groundlight>=0.26.0,<0.27.0" \
+            python ${GITHUB_WORKSPACE}/cicd/scripts/configure_edge_detector.py)
+          echo "detector_id=${DETECTOR_ID}" >> $GITHUB_OUTPUT
+
+      - name: Verify GPU is allocated to inference pod
+        run: |
+          uv run fab check-gpu --detector-id=${{ steps.configure.outputs.detector_id }}
+
+      - name: Submit image query and assert it came from edge
+        run: |
+          EEUT_IP=$(uv run pulumi stack output eeut_private_ip)
+          export GROUNDLIGHT_ENDPOINT=http://${EEUT_IP}:30101
+          cd ${GITHUB_WORKSPACE}
+          uv run --no-project --with "groundlight>=0.26.0,<0.27.0" \
+            python cicd/scripts/submit_edge_iq.py \
+            --detector-id=${{ steps.configure.outputs.detector_id }}
 
       - name: Thank the worker and shut down
         # if: always()

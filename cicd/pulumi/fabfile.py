@@ -216,6 +216,46 @@ def check_server_port(c):
 
 
 @task
+def check_gpu(c, detector_id):
+    """Verify nvidia-smi works on the host AND the primary inference pod for
+    `detector_id` has a GPU resource allocated and visible inside the container.
+    Catches the case where everything else is fine but inference silently
+    fell back to CPU.
+    """
+    conn = connect_server()
+    print("Checking host-level NVIDIA driver...")
+    conn.run("nvidia-smi --query-gpu=name,driver_version --format=csv")
+
+    detector_id_with_dashes = detector_id.replace("_", "-").lower()
+    pod_label = f"app=inferencemodel-primary-{detector_id_with_dashes}"
+    print(f"Looking up inference pod with label {pod_label}...")
+    pod = conn.run(
+        f"kubectl get pod -l {pod_label} -n edge "
+        "-o jsonpath='{.items[0].metadata.name}'", hide=True,
+    ).stdout.strip()
+    if not pod:
+        raise RuntimeError(f"No pod found with label {pod_label}")
+    print(f"Found inference pod: {pod}")
+
+    print("Verifying nvidia.com/gpu is allocated to the pod...")
+    out = conn.run(
+        f"kubectl get pod {pod} -n edge "
+        "-o jsonpath='{.spec.containers[*].resources.limits.nvidia\\.com/gpu}'",
+        hide=True,
+    )
+    if "1" not in out.stdout:
+        conn.run(f"kubectl describe pod {pod} -n edge")
+        raise RuntimeError(
+            f"Inference pod {pod} has no nvidia.com/gpu limit. Inference is on CPU!"
+        )
+    print(f"Pod {pod} has nvidia.com/gpu allocated.")
+
+    print("Verifying GPU is visible inside the container...")
+    conn.run(f"kubectl exec -n edge {pod} -- nvidia-smi -L")
+    print("GPU check passed.")
+
+
+@task
 def full_check(c):
     """Runs all the checks in order."""
     connect(c)
