@@ -432,10 +432,7 @@ jobs:
         run: |
           EEUT_IP=$(uv run pulumi stack output eeut_private_ip)
           export GROUNDLIGHT_ENDPOINT=http://${EEUT_IP}:30101
-          # Use --no-project so we ignore cicd/pulumi's older groundlight pin and
-          # pull a version that has groundlight.edge.api.EdgeEndpointApi (>=0.26.0).
-          DETECTOR_ID=$(uv run --no-project --with "groundlight>=0.26.0,<0.27.0" \
-            python ${GITHUB_WORKSPACE}/cicd/scripts/configure_edge_detector.py)
+          DETECTOR_ID=$(uv run python ${GITHUB_WORKSPACE}/cicd/scripts/configure_edge_detector.py)
           echo "detector_id=${DETECTOR_ID}" >> $GITHUB_OUTPUT
 
       - name: Verify GPU is allocated to inference pod
@@ -446,9 +443,7 @@ jobs:
         run: |
           EEUT_IP=$(uv run pulumi stack output eeut_private_ip)
           export GROUNDLIGHT_ENDPOINT=http://${EEUT_IP}:30101
-          cd ${GITHUB_WORKSPACE}
-          uv run --no-project --with "groundlight>=0.26.0,<0.27.0" \
-            python cicd/scripts/submit_edge_iq.py \
+          uv run python ${GITHUB_WORKSPACE}/cicd/scripts/submit_edge_iq.py \
             --detector-id=${{ steps.configure.outputs.detector_id }}
 
       - name: Diagnose EEUT on failure
