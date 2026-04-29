@@ -102,8 +102,6 @@ function CheckIcon() {
   );
 }
 
-const CODE_BG = "#f6f6f6";
-
 // Single code-block widget used for every "view this dict as code" section on
 // the page. Renders a slim dark header (yaml/json SegmentedControl on the
 // left, copy button on the right) above a borderless CodeHighlight using the
@@ -134,8 +132,8 @@ function CodeSection({ title, data, languages, defaultLanguage, loading }) {
         <Paper
           withBorder
           radius="sm"
-          className="theme-stackoverflow-light"
-          style={{ overflow: "hidden", background: CODE_BG }}
+          className="theme-code"
+          style={{ overflow: "hidden" }}
         >
           <Group justify="space-between" align="center" px="xs" py={6} style={DARK_HEADER_STYLE}>
             {languages.length > 1 ? (
@@ -169,7 +167,7 @@ function CodeSection({ title, data, languages, defaultLanguage, loading }) {
               )}
             </CopyButton>
           </Group>
-          <CodeHighlight code={codes[lang]} language={lang} withCopyButton={false} background={CODE_BG} />
+          <CodeHighlight code={codes[lang]} language={lang} withCopyButton={false} />
         </Paper>
       )}
     </Stack>

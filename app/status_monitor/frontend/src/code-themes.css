@@ -1,47 +1,49 @@
 /*
- * Scoped highlight.js theme for code-block sections (CodeSection).
+ * Syntax highlighting theme for all CodeSection blocks on the status page.
  *
- * Rules below are ported verbatim from highlight.js/styles/stackoverflow-light.css
- * and prefixed with .theme-stackoverflow-light so the theme only applies to
- * opted-in code blocks (and never bleeds into the rest of the page).
+ * Color rules are adapted from the highlight.js light theme. The wrapper
+ * class .theme-code scopes every rule so the theme only applies to opted-in
+ * code blocks and never bleeds into the rest of the page.
+ *
+ * --ch-background is the Mantine CodeHighlight CSS variable that controls the
+ * background of both the container and the pre element.
  */
-
-.theme-stackoverflow-light .hljs {
-  color: #2f3337;
-  background: #f6f6f6;
+.theme-code {
+  --ch-background: #ffffff;
 }
-.theme-stackoverflow-light .hljs-subst { color: #2f3337; }
-.theme-stackoverflow-light .hljs-comment { color: #656e77; }
-.theme-stackoverflow-light .hljs-keyword,
-.theme-stackoverflow-light .hljs-selector-tag,
-.theme-stackoverflow-light .hljs-meta .hljs-keyword,
-.theme-stackoverflow-light .hljs-doctag,
-.theme-stackoverflow-light .hljs-section { color: #015692; }
-.theme-stackoverflow-light .hljs-attr { color: #015692; }
-.theme-stackoverflow-light .hljs-attribute { color: #803378; }
-.theme-stackoverflow-light .hljs-name,
-.theme-stackoverflow-light .hljs-type,
-.theme-stackoverflow-light .hljs-number,
-.theme-stackoverflow-light .hljs-selector-id,
-.theme-stackoverflow-light .hljs-quote,
-.theme-stackoverflow-light .hljs-template-tag { color: #b75501; }
-.theme-stackoverflow-light .hljs-selector-class { color: #015692; }
-.theme-stackoverflow-light .hljs-string,
-.theme-stackoverflow-light .hljs-regexp,
-.theme-stackoverflow-light .hljs-symbol,
-.theme-stackoverflow-light .hljs-variable,
-.theme-stackoverflow-light .hljs-template-variable,
-.theme-stackoverflow-light .hljs-link,
-.theme-stackoverflow-light .hljs-selector-attr { color: #54790d; }
-.theme-stackoverflow-light .hljs-meta,
-.theme-stackoverflow-light .hljs-selector-pseudo { color: #015692; }
-.theme-stackoverflow-light .hljs-built_in,
-.theme-stackoverflow-light .hljs-title,
-.theme-stackoverflow-light .hljs-literal { color: #b75501; }
-.theme-stackoverflow-light .hljs-bullet,
-.theme-stackoverflow-light .hljs-code { color: #535a60; }
-.theme-stackoverflow-light .hljs-meta .hljs-string { color: #54790d; }
-.theme-stackoverflow-light .hljs-deletion { color: #c02d2e; }
-.theme-stackoverflow-light .hljs-addition { color: #2f6f44; }
-.theme-stackoverflow-light .hljs-emphasis { font-style: italic; }
-.theme-stackoverflow-light .hljs-strong { font-weight: bold; }
+.theme-code .hljs { color: #2f3337; }
+.theme-code .hljs-subst { color: #2f3337; }
+.theme-code .hljs-comment { color: #656e77; }
+.theme-code .hljs-keyword,
+.theme-code .hljs-selector-tag,
+.theme-code .hljs-meta .hljs-keyword,
+.theme-code .hljs-doctag,
+.theme-code .hljs-section { color: #015692; }
+.theme-code .hljs-attr { color: #015692; }
+.theme-code .hljs-attribute { color: #803378; }
+.theme-code .hljs-name,
+.theme-code .hljs-type,
+.theme-code .hljs-number,
+.theme-code .hljs-selector-id,
+.theme-code .hljs-quote,
+.theme-code .hljs-template-tag { color: #b75501; }
+.theme-code .hljs-selector-class { color: #015692; }
+.theme-code .hljs-string,
+.theme-code .hljs-regexp,
+.theme-code .hljs-symbol,
+.theme-code .hljs-variable,
+.theme-code .hljs-template-variable,
+.theme-code .hljs-link,
+.theme-code .hljs-selector-attr { color: #54790d; }
+.theme-code .hljs-meta,
+.theme-code .hljs-selector-pseudo { color: #015692; }
+.theme-code .hljs-built_in,
+.theme-code .hljs-title,
+.theme-code .hljs-literal { color: #b75501; }
+.theme-code .hljs-bullet,
+.theme-code .hljs-code { color: #535a60; }
+.theme-code .hljs-meta .hljs-string { color: #54790d; }
+.theme-code .hljs-deletion { color: #c02d2e; }
+.theme-code .hljs-addition { color: #2f6f44; }
+.theme-code .hljs-emphasis { font-style: italic; }
+.theme-code .hljs-strong { font-weight: bold; }
