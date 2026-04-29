@@ -37,6 +37,35 @@ const parseSection = (section) => {
   return parsed;
 };
 
+// Pretty-print JSON like JSON.stringify(value, null, indent), but keep arrays
+// of pure primitives on a single line so e.g. histogram counts don't take up
+// an entire vertical column.
+const stringifyCompactArrays = (value, indent = 2) => {
+  const pad = (depth) => " ".repeat(depth * indent);
+  const isPrimitive = (v) =>
+    v === null || ["string", "number", "boolean"].includes(typeof v);
+  const fmt = (v, depth) => {
+    if (Array.isArray(v) && v.every(isPrimitive)) {
+      return `[${v.map((x) => JSON.stringify(x)).join(", ")}]`;
+    }
+    if (Array.isArray(v)) {
+      if (v.length === 0) return "[]";
+      const inner = v.map((x) => pad(depth + 1) + fmt(x, depth + 1));
+      return `[\n${inner.join(",\n")}\n${pad(depth)}]`;
+    }
+    if (v && typeof v === "object") {
+      const entries = Object.entries(v);
+      if (entries.length === 0) return "{}";
+      const lines = entries.map(
+        ([k, x]) => `${pad(depth + 1)}${JSON.stringify(k)}: ${fmt(x, depth + 1)}`
+      );
+      return `{\n${lines.join(",\n")}\n${pad(depth)}}`;
+    }
+    return JSON.stringify(v);
+  };
+  return fmt(value, 0);
+};
+
 const SECTION_TITLE_STYLE = { fontSize: "1.25em", fontWeight: 500, color: "#1F1D23" };
 
 function GenericSectionSkeleton() {
@@ -52,7 +81,7 @@ function GenericSectionSkeleton() {
 }
 
 function JsonSection({ title, data, loading }) {
-  const code = data ? JSON.stringify(parseSection(data), null, 2) : "";
+  const code = data ? stringifyCompactArrays(parseSection(data)) : "";
   return (
     <Stack gap="xs">
       <Text style={SECTION_TITLE_STYLE}>{title}</Text>
@@ -75,6 +104,7 @@ function JsonSection({ title, data, loading }) {
 export default function App() {
   const [metrics, setMetrics] = useState(null);
   const [resources, setResources] = useState(null);
+  const [edgeConfig, setEdgeConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const intervalRef = useRef(null);
@@ -100,6 +130,13 @@ export default function App() {
       if (res.ok) setResources(await res.json());
     } catch {
       // Resource data is optional
+    }
+
+    try {
+      const res = await fetch("/edge-config");
+      if (res.ok) setEdgeConfig(await res.json());
+    } catch {
+      // Edge config is optional
     }
   }, []);
 
@@ -164,8 +201,6 @@ export default function App() {
         )}
 
         <Stack gap="xl">
-          <JsonSection title="Device Information" data={metrics?.device_info} loading={loading} />
-
           <Stack gap="xs">
             <Text style={SECTION_TITLE_STYLE}>Detector Details</Text>
             <DetectorDetails details={detectorDetails} loading={loading} />
@@ -175,6 +210,10 @@ export default function App() {
             <Text style={SECTION_TITLE_STYLE}>Resource Usage by Detector</Text>
             <ResourceUsage resourceData={resources} detectorDetails={detectorDetails} loading={loading} />
           </Stack>
+
+          <JsonSection title="Device Information" data={metrics?.device_info} loading={loading} />
+
+          <JsonSection title="Edge Endpoint Configuration" data={edgeConfig} loading={loading} />
 
           <JsonSection title="Activity Metrics" data={metrics?.activity_metrics} loading={loading} />
           <JsonSection title="Kubernetes Stats" data={metrics?.k3s_stats} loading={loading} />

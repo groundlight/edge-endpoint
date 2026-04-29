@@ -180,10 +180,41 @@ def build_metrics(state):
         }
     return {
         "device_info": {"hostname": "mock-device", "ip": "10.0.0.1"},
-        "activity_metrics": {},
+        "activity_metrics": {
+            "activity_hour": "2026-04-29_19",
+            "num_detectors_lifetime": state["num_detectors"],
+            "num_detectors_active_1h": state["num_detectors"],
+            "confidence_histogram": {
+                "version": 2,
+                "bucket_width": 5,
+                "counts": [61, 0, 0, 0, 0, 0, 0, 1, 0, 0, 2, 0, 9, 48, 269, 131, 4],
+            },
+        },
         "failed_escalations": {},
         "detector_details": json.dumps(detector_details),
         "k3s_stats": {},
+    }
+
+
+def build_edge_config(state):
+    """Build a synthetic /edge-config payload mirroring EdgeConfigManager.active().to_payload()."""
+    detectors = []
+    for i in range(state["num_detectors"]):
+        d = _make_detector(i)
+        detectors.append({"detector_id": d["id"], "edge_inference_config": "default"})
+    return {
+        "global_config": {
+            "confident_audit_rate": 0.01,
+            "refresh_rate": 60,
+        },
+        "edge_inference_configs": {
+            "default": {
+                "enabled": True,
+                "always_return_edge_prediction": True,
+                "min_time_between_escalations": 2.0,
+            },
+        },
+        "detectors": detectors,
     }
 
 
@@ -196,6 +227,8 @@ class MockHandler(BaseHTTPRequestHandler):
                 data = build_resources(state)
             elif self.path == "/status/metrics.json":
                 data = build_metrics(state)
+            elif self.path == "/edge-config":
+                data = build_edge_config(state)
             else:
                 self.send_error(404)
                 return
