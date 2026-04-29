@@ -266,7 +266,7 @@ def prime_detector(
 
     def _prime_one() -> None:
         """Generate one sample, submit it, and attach the synthetic label."""
-        image, label, rois = imgh.generate_random_image(gl, detector, image_width, image_height)
+        image, label, rois = imgh.generate_random_image(detector, image_width, image_height)
         iq = gl.submit_image_query(detector, image, **IQ_KWARGS_FOR_NO_ESCALATION)
         gl.add_label(iq, label, rois)
 
@@ -399,7 +399,7 @@ def provision_detector(
         detector = get_or_create_count_detector(
             gl_cloud,
             name=detector_name,
-            class_name="circle",
+            class_name="dog",
             max_count=n,
             group_name=group_name,
             edge_pipeline_config=edge_pipeline_config,
@@ -408,7 +408,7 @@ def provision_detector(
         detector = get_or_create_bounding_box_detector(
             gl_cloud,
             name=detector_name,
-            class_name="circle",
+            class_name="dog",
             max_num_bboxes=n,
             group_name=group_name,
             edge_pipeline_config=edge_pipeline_config,

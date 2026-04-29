@@ -190,11 +190,11 @@ def main(num_detectors: int, get_or_create_detectors: Callable, generate_random_
         for n, d in enumerate(detectors):
             image_width = 640
             image_height = 480
+            image_gen_kwargs = {k: v for k, v in kwargs.items() if k != 'class_name'}
             image, label, rois = generate_random_image(
-                gl=gl,
                 image_width=image_width,
                 image_height=image_height,
-                **kwargs,
+                **image_gen_kwargs,
             )
             print(f'{n}:', end=' ', flush=True)
             try:

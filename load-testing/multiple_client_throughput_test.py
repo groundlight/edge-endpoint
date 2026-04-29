@@ -91,7 +91,7 @@ def send_image_requests(  # noqa: PLR0913
         request_start_time = time.time()
 
         try:
-            image, _, _ = imgh.generate_random_image(gl, detector, image_width, image_height)
+            image, _, _ = imgh.generate_random_image(detector, image_width, image_height)
             iq = gl.submit_image_query(detector, image, **glh.IQ_KWARGS_FOR_NO_ESCALATION)
             glh.error_if_not_from_edge(iq)
             success = True
