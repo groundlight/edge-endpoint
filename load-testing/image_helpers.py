@@ -6,6 +6,8 @@ from model import ROI, BBoxGeometry
 import cv2
 from pathlib import Path
 
+from constants import OBJECT_DETECTION_CLASS_NAME
+
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 
@@ -87,7 +89,7 @@ def generate_random_objects_image(
 
         canvas[y:y + dh, x:x + dw] = resized
         placed.append((x, y, x + dw, y + dh))
-        rois.append(_make_roi('dog', x, y, dw, dh, image_width, image_height))
+        rois.append(_make_roi(OBJECT_DETECTION_CLASS_NAME, x, y, dw, dh, image_width, image_height))
 
     return canvas, len(rois), rois
 

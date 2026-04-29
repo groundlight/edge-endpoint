@@ -9,11 +9,10 @@ from threading import Thread
 
 import groundlight_helpers as glh
 import image_helpers as imgh
+from constants import SUPPORTED_DETECTOR_MODES
 
-SUPPORTED_DETECTOR_MODES = (
-    'BINARY',
-    'COUNT',
-)
+# Modes implemented by this script's load-generation path (subset of SUPPORTED_DETECTOR_MODES).
+MEMORY_PRESSURE_DETECTOR_MODES = ('BINARY', 'COUNT')
 
 # The number of image queries that this script will attempt to submit to the Edge Endpoint, per detector
 # This is an arbitrarily high number. In practice the script can be stopped once memory usage stabilizes
@@ -65,7 +64,7 @@ def parse_arguments():
     )
     parser.add_argument(
         'detector_mode',
-        choices=SUPPORTED_DETECTOR_MODES,
+        choices=MEMORY_PRESSURE_DETECTOR_MODES,
         help=f'Detector mode'
     )
 

@@ -11,10 +11,10 @@ import yaml
 from tqdm import trange
 
 import image_helpers as imgh
+from constants import OBJECT_DETECTION_CLASS_NAME
 from urllib.parse import urlparse
 
 CLOUD_ENDPOINT_PROD = 'https://api.groundlight.ai/device-api'
-SUPPORTED_DETECTOR_MODES = {"BINARY", "COUNT", "BOUNDING_BOX", "MULTI_CLASS"}
 
 # Image query submission args that will ensure a query is never escalated to the cloud, 
 # unless an inference pod doesn't exist for the detector, in which case we have no choice but to escalate
@@ -399,7 +399,7 @@ def provision_detector(
         detector = get_or_create_count_detector(
             gl_cloud,
             name=detector_name,
-            class_name="dog",
+            class_name=OBJECT_DETECTION_CLASS_NAME,
             max_count=n,
             group_name=group_name,
             edge_pipeline_config=edge_pipeline_config,
@@ -408,7 +408,7 @@ def provision_detector(
         detector = get_or_create_bounding_box_detector(
             gl_cloud,
             name=detector_name,
-            class_name="dog",
+            class_name=OBJECT_DETECTION_CLASS_NAME,
             max_num_bboxes=n,
             group_name=group_name,
             edge_pipeline_config=edge_pipeline_config,
