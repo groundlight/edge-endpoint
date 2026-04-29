@@ -71,17 +71,20 @@ def get_namespace() -> str:
 
 
 def get_deployments() -> str:
-    """Return a string listing all deployment names in the edge namespace."""
+    """Return a JSON string listing all deployment names in the edge namespace.
+
+    Emitted as a single string (rather than a list) to keep OpenSearch from
+    indexing one field per deployment. Use json.dumps so consumers (incl. the
+    status page) can JSON.parse it back into a real list for display.
+    """
     config.load_incluster_config()
     v1_apps = client.AppsV1Api()
 
     namespace = get_namespace()
     deployments = v1_apps.list_namespaced_deployment(namespace=namespace)
 
-    deployment_names = []
-    for dep in deployments.items:
-        deployment_names.append(f"{dep.metadata.namespace}/{dep.metadata.name}")
-    return str(deployment_names)
+    deployment_names = [f"{dep.metadata.namespace}/{dep.metadata.name}" for dep in deployments.items]
+    return json.dumps(deployment_names)
 
 
 def get_pods() -> str:

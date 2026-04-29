@@ -6,3 +6,12 @@ export const DARK_HEADER_STYLE = {
   backgroundColor: "#3a383c",
   color: "#fff",
 };
+
+// Style for the heading above each top-level section on the status page.
+// Owned by CollapsibleSection so every section reads as the same visual
+// element.
+export const SECTION_TITLE_STYLE = {
+  fontSize: "1.25em",
+  fontWeight: 500,
+  color: "#1F1D23",
+};

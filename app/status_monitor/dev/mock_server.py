@@ -192,7 +192,24 @@ def build_metrics(state):
         },
         "failed_escalations": {},
         "detector_details": json.dumps(detector_details),
-        "k3s_stats": {},
+        "k3s_stats": {
+            "deployments": json.dumps(["edge/edge-endpoint", "edge/edge-endpoint-network-healer"]),
+            "pod_statuses": json.dumps(
+                {
+                    "edge-endpoint-5755bcc876-2z6cq": "Running",
+                    "edge-endpoint-network-healer-5c9f996f4f-zzlk5": "Running",
+                    "create-ecr-creds-f9jhn": "Failed",
+                }
+            ),
+            "container_images": json.dumps(
+                {
+                    "edge-endpoint-5755bcc876-2z6cq": {
+                        "edge-endpoint": "ecr.amazonaws.com/edge-endpoint:dev@sha256:abc123",
+                        "nginx": "docker.io/library/nginx@sha256:def456",
+                    },
+                }
+            ),
+        },
     }
 
 

@@ -64,6 +64,20 @@ body {
   font-size: 0.8em;
 }
 
+/* CollapsibleSection title row. Slight padding + negative margin so the
+   hover background doesn't shift the layout, and a subtle tint on hover so
+   the click target reads as interactive. */
+.collapsible-section-trigger {
+  border-radius: 4px;
+  padding: 4px 6px;
+  margin: -4px -6px;
+  width: fit-content;
+  transition: background-color 100ms ease;
+}
+.collapsible-section-trigger:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
 /* SegmentedControl styling for the yaml/json toggle inside the dark gray
    Configuration header bar. Solid dark monochrome pill with a mid-gray
    active indicator. */

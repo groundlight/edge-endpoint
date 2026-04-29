@@ -18,6 +18,7 @@ import { CodeHighlight } from "@mantine/code-highlight";
 import yaml from "yaml";
 import DetectorDetails from "./components/DetectorDetails";
 import ResourceUsage from "./components/ResourceUsage";
+import CollapsibleSection from "./components/CollapsibleSection";
 import { DARK_HEADER_STYLE } from "./sharedStyles";
 
 // Faster polling in dev is helpful when iterating, slow down polling in prod
@@ -32,6 +33,22 @@ const parseIfJson = (value) => {
     }
   }
   return value;
+};
+
+// Walk a section's top-level keys and JSON.parse any string value that
+// happens to be valid JSON. Some metrics fields are deliberately stringified
+// on the backend (via json.dumps) to keep OpenSearch from exploding nested
+// objects into thousands of indexed fields. For human display we want to
+// undo that so the data renders as nested JSON instead of a wall of
+// backslash-escaped quotes. Strings that aren't valid JSON (e.g. plain
+// timestamps, Python repr lists) are passed through unchanged.
+const rehydrateSection = (section) => {
+  if (!section || typeof section !== "object") return section;
+  const parsed = { ...section };
+  for (const [key, value] of Object.entries(parsed)) {
+    parsed[key] = parseIfJson(value);
+  }
+  return parsed;
 };
 
 // Pretty-print JSON like JSON.stringify(value, null, indent), but keep arrays
@@ -62,8 +79,6 @@ const stringifyCompactArrays = (value, indent = 2) => {
   };
   return fmt(value, 0);
 };
-
-const SECTION_TITLE_STYLE = { fontSize: "1.25em", fontWeight: 500, color: "#1F1D23" };
 
 // Stable references for CodeSection's `languages` prop so memoization isn't
 // invalidated by fresh array literals on every render.
@@ -105,11 +120,12 @@ function CheckIcon() {
   );
 }
 
-// Single code-block widget used for every "view this dict as code" section on
-// the page. Renders a slim dark header (yaml/json SegmentedControl on the
-// left when there is more than one language, copy button on the right) above
-// a borderless CodeHighlight whose syntax colors come from the .theme-code
-// class in code-themes.css.
+// Body widget for "view this dict as code" sections. Renders a slim dark
+// header (yaml/json SegmentedControl on the left when there is more than one
+// language, copy button on the right) above a borderless CodeHighlight whose
+// syntax colors come from the .theme-code class in code-themes.css. The
+// section title and surrounding chrome (collapse trigger, gap) are owned by
+// the wrapping CollapsibleSection.
 //
 //   languages  - non-empty ordered array containing "yaml", "json", or both.
 //                The first entry is the initially-selected tab. Single-
@@ -117,13 +133,17 @@ function CheckIcon() {
 //                button), since the language is implicit.
 //   error      - if true and data is missing, render a "Failed to load"
 //                message instead of the perpetual skeleton.
-function CodeSection({ title, data, languages, loading, error = false }) {
+//   rehydrate  - if true, JSON.parse top-level string values that look like
+//                JSON before serializing. Use this for sections whose backend
+//                deliberately stringifies subfields to dodge OpenSearch field
+//                explosion (e.g. Kubernetes Stats, Activity Metrics).
+function CodeSection({ data, languages, loading, error = false, rehydrate = false }) {
   // Each serializer is wrapped individually so a failure in one language tab
   // (e.g. an exotic value yaml.stringify can't handle) doesn't take down the
   // others. Only the requested languages are computed -- skipping the unused
   // serializer for single-language sections.
   const codes = useMemo(() => {
-    const parsed = data ?? {};
+    const parsed = (rehydrate ? rehydrateSection(data) : data) ?? {};
     return Object.fromEntries(
       languages.map((l) => {
         try {
@@ -133,68 +153,65 @@ function CodeSection({ title, data, languages, loading, error = false }) {
         }
       })
     );
-  }, [data, languages]);
+  }, [data, languages, rehydrate]);
   const [lang, setLang] = useState(languages[0]);
   const showError = error && data == null && !loading;
   const showSkeleton = !showError && (loading || data == null);
   const multipleLanguages = languages.length > 1;
+  if (showSkeleton) return <GenericSectionSkeleton />;
+  if (showError) {
+    return (
+      <Alert color="red" variant="light">
+        Failed to load.
+      </Alert>
+    );
+  }
   return (
-    <Stack gap="xs">
-      <Text style={SECTION_TITLE_STYLE}>{title}</Text>
-      {showSkeleton && <GenericSectionSkeleton />}
-      {showError && (
-        <Alert color="red" variant="light">
-          Failed to load.
-        </Alert>
-      )}
-      {!showSkeleton && !showError && (
-        <Paper
-          withBorder
-          radius="sm"
-          className="theme-code"
-          style={{ overflow: "hidden" }}
-        >
-          <Group
-            justify={multipleLanguages ? "space-between" : "flex-end"}
-            align="center"
-            px="xs"
-            py={6}
-            style={DARK_HEADER_STYLE}
-          >
-            {multipleLanguages && (
-              <SegmentedControl
-                size="xs"
-                value={lang}
-                onChange={setLang}
-                aria-label="Code format"
-                classNames={{
-                  root: "dark-pill-toggle-root",
-                  indicator: "dark-pill-toggle-indicator",
-                  label: "dark-pill-toggle-label",
-                }}
-                data={languages.map((l) => ({ label: l, value: l }))}
-              />
-            )}
-            <CopyButton value={codes[lang]} timeout={1500}>
-              {({ copied, copy }) => (
-                <Tooltip label={copied ? "Copied" : "Copy"} withArrow position="left">
-                  <ActionIcon
-                    variant="subtle"
-                    size="sm"
-                    onClick={copy}
-                    aria-label="Copy"
-                    style={{ color: "rgba(255,255,255,0.7)" }}
-                  >
-                    {copied ? <CheckIcon /> : <CopyIcon />}
-                  </ActionIcon>
-                </Tooltip>
-              )}
-            </CopyButton>
-          </Group>
-          <CodeHighlight code={codes[lang]} language={lang} withCopyButton={false} />
-        </Paper>
-      )}
-    </Stack>
+    <Paper
+      withBorder
+      radius="sm"
+      className="theme-code"
+      style={{ overflow: "hidden" }}
+    >
+      <Group
+        justify={multipleLanguages ? "space-between" : "flex-end"}
+        align="center"
+        px="xs"
+        py={6}
+        style={DARK_HEADER_STYLE}
+      >
+        {multipleLanguages && (
+          <SegmentedControl
+            size="xs"
+            value={lang}
+            onChange={setLang}
+            aria-label="Code format"
+            classNames={{
+              root: "dark-pill-toggle-root",
+              indicator: "dark-pill-toggle-indicator",
+              label: "dark-pill-toggle-label",
+            }}
+            data={languages.map((l) => ({ label: l, value: l }))}
+          />
+        )}
+        <CopyButton value={codes[lang]} timeout={1500}>
+          {({ copied, copy }) => (
+            <Tooltip label={copied ? "Copied" : "Copy"} withArrow position="left">
+              <ActionIcon
+                variant="subtle"
+                size="sm"
+                onClick={copy}
+                aria-label="Copy"
+                style={{ color: "rgba(255,255,255,0.7)" }}
+              >
+                {copied ? <CheckIcon /> : <CopyIcon />}
+              </ActionIcon>
+            </Tooltip>
+          )}
+        </CopyButton>
+      </Group>
+      <CodeHighlight code={codes[lang]} language={lang} withCopyButton={false} />
+    </Paper>
   );
 }
 
@@ -304,49 +321,38 @@ export default function App() {
         )}
 
         <Stack gap="xl">
-          <Stack gap="xs">
-            <Text style={SECTION_TITLE_STYLE}>Detector Details</Text>
+          <CollapsibleSection title="Detector Details">
             <DetectorDetails details={detectorDetails} loading={loading} />
-          </Stack>
+          </CollapsibleSection>
 
-          <Stack gap="xs">
-            <Text style={SECTION_TITLE_STYLE}>Resource Usage by Detector</Text>
+          <CollapsibleSection title="Resource Usage by Detector">
             <ResourceUsage resourceData={resources} detectorDetails={detectorDetails} loading={loading} />
-          </Stack>
+          </CollapsibleSection>
 
-          <CodeSection
-            title="Device Information"
-            data={metrics?.device_info}
-            languages={JSON_ONLY}
-            loading={loading}
-          />
+          <CollapsibleSection title="Device Information">
+            <CodeSection data={metrics?.device_info} languages={JSON_ONLY} loading={loading} />
+          </CollapsibleSection>
 
-          <CodeSection
-            title="Configuration"
-            data={edgeConfig}
-            languages={YAML_OR_JSON}
-            loading={loading}
-            error={edgeConfigError}
-          />
+          <CollapsibleSection title="Configuration">
+            <CodeSection
+              data={edgeConfig}
+              languages={YAML_OR_JSON}
+              loading={loading}
+              error={edgeConfigError}
+            />
+          </CollapsibleSection>
 
-          <CodeSection
-            title="Activity Metrics"
-            data={metrics?.activity_metrics}
-            languages={JSON_ONLY}
-            loading={loading}
-          />
-          <CodeSection
-            title="Kubernetes Stats"
-            data={metrics?.k3s_stats}
-            languages={JSON_ONLY}
-            loading={loading}
-          />
-          <CodeSection
-            title="Failed Escalations"
-            data={metrics?.failed_escalations}
-            languages={JSON_ONLY}
-            loading={loading}
-          />
+          <CollapsibleSection title="Activity Metrics">
+            <CodeSection data={metrics?.activity_metrics} languages={JSON_ONLY} loading={loading} rehydrate />
+          </CollapsibleSection>
+
+          <CollapsibleSection title="Kubernetes Stats">
+            <CodeSection data={metrics?.k3s_stats} languages={JSON_ONLY} loading={loading} rehydrate />
+          </CollapsibleSection>
+
+          <CollapsibleSection title="Failed Escalations">
+            <CodeSection data={metrics?.failed_escalations} languages={JSON_ONLY} loading={loading} />
+          </CollapsibleSection>
         </Stack>
       </Container>
     </>

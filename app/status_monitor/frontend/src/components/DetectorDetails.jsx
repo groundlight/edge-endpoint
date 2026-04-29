@@ -100,7 +100,6 @@ function PipelineCell({ yaml }) {
     <div>
       <div style={{ position: "relative" }}>
         <div
-          className="theme-code"
           style={{
             maxHeight: expanded || !needsCollapse ? "none" : YAML_COLLAPSED_HEIGHT,
             overflow: "hidden",
