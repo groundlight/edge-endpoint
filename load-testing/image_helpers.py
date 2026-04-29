@@ -48,7 +48,7 @@ def _boxes_overlap(
     return False
 
 
-_DOG_IMAGE: np.ndarray = cv2.imread(str(Path(__file__).parent / "images" / "dog.jpeg"))
+OBJECT_DETECTION_IMAGE: np.ndarray = cv2.imread(str(Path(__file__).parent / "images" / "dog.jpeg"))
 
 
 def generate_random_objects_image(
@@ -56,8 +56,8 @@ def generate_random_objects_image(
     image_height: int = 480,
     max_count: int = 10,
 ) -> tuple[np.ndarray, int, list[ROI]]:
-    """Generate a white canvas with a random number of non-overlapping dog images placed on it, with per-dog ROIs."""
-    dog_h, dog_w = _DOG_IMAGE.shape[:2]
+    """Generate a white canvas with a random number of non-overlapping object images placed on it, with per-object ROIs."""
+    h, w = OBJECT_DETECTION_IMAGE.shape[:2]
 
     count = random.randint(0, max_count)
     canvas = generate_color_canvas(image_width, image_height, WHITE)
@@ -70,14 +70,14 @@ def generate_random_objects_image(
     rois: list[ROI] = []
     for _ in range(count):
         target_size = random.randint(min_size, max_size)
-        scale = target_size / max(dog_w, dog_h)
-        dw = max(1, int(dog_w * scale))
-        dh = max(1, int(dog_h * scale))
+        scale = target_size / max(w, h)
+        dw = max(1, int(w * scale))
+        dh = max(1, int(h * scale))
 
         if dw > image_width or dh > image_height:
             continue
 
-        resized = cv2.resize(_DOG_IMAGE, (dw, dh), interpolation=cv2.INTER_AREA)
+        resized = cv2.resize(OBJECT_DETECTION_IMAGE, (dw, dh), interpolation=cv2.INTER_AREA)
 
         for _ in range(50):
             x = random.randint(0, max(0, image_width - dw))
@@ -85,7 +85,7 @@ def generate_random_objects_image(
             if not _boxes_overlap(placed, x, y, dw, dh):
                 break
         else:
-            continue  # no non-overlapping position found; skip this dog
+            continue  # no non-overlapping position found; skip this object
 
         canvas[y:y + dh, x:x + dw] = resized
         placed.append((x, y, x + dw, y + dh))
