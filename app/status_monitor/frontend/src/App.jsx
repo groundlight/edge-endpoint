@@ -70,6 +70,13 @@ const SECTION_TITLE_STYLE = { fontSize: "1.25em", fontWeight: 500, color: "#1F1D
 const JSON_ONLY = ["json"];
 const YAML_OR_JSON = ["yaml", "json"];
 
+// Serializer for each supported CodeSection language. Each entry must accept
+// the parsed payload object and return a string.
+const LANGUAGE_SERIALIZERS = {
+  yaml: (parsed) => yaml.stringify(parsed),
+  json: (parsed) => stringifyCompactArrays(parsed),
+};
+
 function GenericSectionSkeleton() {
   return (
     <Paper shadow="xs" p="md" radius="sm">
@@ -111,13 +118,22 @@ function CheckIcon() {
 //   error      - if true and data is missing, render a "Failed to load"
 //                message instead of the perpetual skeleton.
 function CodeSection({ title, data, languages, loading, error = false }) {
+  // Each serializer is wrapped individually so a failure in one language tab
+  // (e.g. an exotic value yaml.stringify can't handle) doesn't take down the
+  // others. Only the requested languages are computed -- skipping the unused
+  // serializer for single-language sections.
   const codes = useMemo(() => {
     const parsed = data ?? {};
-    return {
-      yaml: yaml.stringify(parsed),
-      json: stringifyCompactArrays(parsed),
-    };
-  }, [data]);
+    return Object.fromEntries(
+      languages.map((l) => {
+        try {
+          return [l, LANGUAGE_SERIALIZERS[l](parsed)];
+        } catch (e) {
+          return [l, `// Failed to render as ${l}: ${e.message}`];
+        }
+      })
+    );
+  }, [data, languages]);
   const [lang, setLang] = useState(languages[0]);
   const showError = error && data == null && !loading;
   const showSkeleton = !showError && (loading || data == null);

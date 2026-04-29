@@ -1,9 +1,12 @@
 /*
  * Syntax highlighting theme for all CodeSection blocks on the status page.
  *
- * Color rules are adapted from the highlight.js light theme. The wrapper
- * class .theme-code scopes every rule so the theme only applies to opted-in
- * code blocks and never bleeds into the rest of the page.
+ * Color rules are adapted from the highlight.js light theme, plus one
+ * deliberate addition: `#6f42c1` (purple) on `.hljs-literal` so JSON / YAML
+ * booleans and `null` are visually distinct from numbers. Don't "restore"
+ * that color to the upstream value -- the divergence is intentional. The
+ * wrapper class .theme-code scopes every rule so the theme only applies to
+ * opted-in code blocks and never bleeds into the rest of the page.
  *
  * --ch-background is the Mantine CodeHighlight CSS variable that controls the
  * background of both the container and the pre element.
