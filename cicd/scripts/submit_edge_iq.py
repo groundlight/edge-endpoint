@@ -7,10 +7,14 @@ not have that field.
 """
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 
 from groundlight import ExperimentalApi
+
+logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stderr)
+logger = logging.getLogger(__name__)
 
 # Repo-relative — this script lives at <repo>/cicd/scripts/submit_edge_iq.py
 IMAGE_PATH = str(Path(__file__).resolve().parents[2] / "test" / "assets" / "cat.jpeg")
@@ -29,13 +33,13 @@ def main() -> None:
         image=IMAGE_PATH,
         confidence_threshold=0.5,
     )
-    print(f"IQ {iq.id}: label={iq.result.label} confidence={iq.result.confidence}")
-    print(f"Metadata: {iq.metadata}")
+    logger.info("IQ %s: label=%s confidence=%s", iq.id, iq.result.label, iq.result.confidence)
+    logger.info("Metadata: %s", iq.metadata)
 
     if iq.metadata is None or not iq.metadata.get("is_from_edge"):
         sys.exit(f"FAIL: expected 'is_from_edge: True' in metadata, got {iq.metadata}")
 
-    print("PASS: image query was answered by edge inference")
+    logger.info("PASS: image query was answered by edge inference")
 
 
 if __name__ == "__main__":
