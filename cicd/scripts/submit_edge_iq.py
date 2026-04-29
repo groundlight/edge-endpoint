@@ -8,10 +8,12 @@ not have that field.
 
 import argparse
 import sys
+from pathlib import Path
 
 from groundlight import ExperimentalApi
 
-IMAGE_PATH = "test/assets/cat.jpeg"
+# Repo-relative — this script lives at <repo>/cicd/scripts/submit_edge_iq.py
+IMAGE_PATH = str(Path(__file__).resolve().parents[2] / "test" / "assets" / "cat.jpeg")
 
 
 def main() -> None:
