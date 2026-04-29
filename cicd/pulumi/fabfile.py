@@ -269,20 +269,23 @@ def check_gpu(c, detector_id):
         raise RuntimeError(f"No pod found with label {pod_label}")
     print(f"Found inference pod: {pod}")
 
-    print("Verifying nvidia.com/gpu is allocated to the pod...")
-    out = conn.run(
-        f"kubectl get pod {pod} -n edge "
-        "-o jsonpath='{.spec.containers[*].resources.limits.nvidia\\.com/gpu}'",
+    # The chart relies on `runtimeClassName: nvidia` (set when inferenceFlavor=gpu) for GPU
+    # access, not on a `nvidia.com/gpu` resource limit. Verify the runtime class first, then
+    # that the GPU is actually visible inside the running container.
+    print("Verifying pod uses the nvidia runtime class...")
+    runtime = conn.run(
+        f"kubectl get pod {pod} -n edge -o jsonpath='{{.spec.runtimeClassName}}'",
         hide=True,
-    )
-    if "1" not in out.stdout:
+    ).stdout.strip()
+    if runtime != "nvidia":
         conn.run(f"kubectl describe pod {pod} -n edge")
         raise RuntimeError(
-            f"Inference pod {pod} has no nvidia.com/gpu limit. Inference is on CPU!"
+            f"Inference pod {pod} runtimeClassName is '{runtime}', expected 'nvidia'. "
+            "Inference will run on CPU!"
         )
-    print(f"Pod {pod} has nvidia.com/gpu allocated.")
+    print(f"Pod {pod} runtimeClassName=nvidia.")
 
-    print("Verifying GPU is visible inside the container...")
+    print("Verifying GPU is visible inside the container (nvidia-smi -L)...")
     conn.run(f"kubectl exec -n edge {pod} -- nvidia-smi -L")
     print("GPU check passed.")
 
