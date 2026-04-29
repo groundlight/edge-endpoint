@@ -164,10 +164,41 @@ def build_resources(state):
     }
 
 
+_PIPELINE_CONFIG_BASIC = "generic-cached-timm\ncalibrated-mlp"
+
+# Realistic-looking multi-stage pipeline used to exercise YAML syntax
+# highlighting in the Pipeline column. Stages have nested keys, strings,
+# numbers, and booleans so every token type renders.
+_PIPELINE_CONFIG_RICH = """\
+stages:
+  - name: preprocess
+    type: image-resize
+    params:
+      target_height: 224
+      target_width: 224
+      interpolation: bilinear
+  - name: backbone
+    type: generic-cached-timm
+    params:
+      model: tf_efficientnet_b0
+      pretrained: true
+      cache_features: true
+  - name: head
+    type: calibrated-mlp
+    params:
+      hidden_dim: 256
+      dropout: 0.1
+      temperature: 1.4
+"""
+
+
 def build_metrics(state):
     detector_details = {}
     for i in range(state["num_detectors"]):
         d = _make_detector(i)
+        # Give the first detector a richer multi-stage pipeline so the
+        # Pipeline column actually exercises YAML syntax highlighting in dev.
+        pipeline_config = _PIPELINE_CONFIG_RICH if i == 0 else _PIPELINE_CONFIG_BASIC
         detector_details[d["id"]] = {
             "detector_name": d["name"],
             "status": "ready",
@@ -175,7 +206,7 @@ def build_metrics(state):
             "mode": "BINARY",
             "deploy_time": f"2026-04-10T10:{i:02d}:00Z",
             "last_updated_time": "2026-04-10T19:30:00Z",
-            "pipeline_config": "generic-cached-timm\ncalibrated-mlp",
+            "pipeline_config": pipeline_config,
             "edge_inference_config": {"enabled": True, "always_return_edge_prediction": True},
         }
     return {
@@ -189,6 +220,16 @@ def build_metrics(state):
                 "bucket_width": 5,
                 "counts": [61, 0, 0, 0, 0, 0, 0, 1, 0, 0, 2, 0, 9, 48, 269, 131, 4],
             },
+            "detector_activity_previous_hour": json.dumps(
+                {
+                    _make_detector(i)["id"]: {
+                        "hourly_total_iqs": 240 - 30 * i,
+                        "below_threshold_iqs": {"YES": 4, "NO": 1},
+                        "escalations": {"YES": 1},
+                    }
+                    for i in range(min(state["num_detectors"], 3))
+                }
+            ),
         },
         "failed_escalations": {},
         "detector_details": json.dumps(detector_details),

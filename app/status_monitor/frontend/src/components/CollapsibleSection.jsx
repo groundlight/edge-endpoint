@@ -8,9 +8,15 @@ import { SECTION_TITLE_STYLE } from "../sharedStyles";
 // feedback for the open/closed state. Per-instance state, so each section
 // remembers its own open/closed independently across the polling refresh.
 //
+// Note: Mantine's <Collapse> hides children but does NOT unmount them, so
+// any expensive work in the body (e.g. CodeSection's serializer useMemo)
+// continues to run on every poll while the section is collapsed. Trivial
+// for our payloads; revisit if a future child becomes truly expensive.
+//
 //   title       - heading text shown next to the chevron.
 //   defaultOpen - initial open state. Defaults to true; set false for
-//                 noisy / rarely-interesting sections.
+//                 noisy / rarely-interesting sections. Only used on first
+//                 mount; later changes to the prop are ignored.
 //   children    - section body. Rendered inside the Collapse, with the
 //                 standard "xs" gap between title row and body.
 function ChevronIcon({ open }) {
