@@ -21,17 +21,21 @@ env:
   GROUNDLIGHT_API_TOKEN: ${{ secrets.GROUNDLIGHT_API_TOKEN }}
 
 jobs:
-  test-general-edge-endpoint:
+  test-unit-edge-endpoint:
+    # Unit tests that don't need Docker. Split out from the integration job so
+    # that a plain unit-test failure surfaces in ~45s instead of ~3min.
     runs-on: ubuntu-22.04
     env:
-      # This is the NGINX proxy endpoint
-      GROUNDLIGHT_ENDPOINT: http://localhost:30101
+      # Point these tests to the cloud endpoint, because to test the edge-endpoint, they
+      # dont actually issue requests. They interally setup a test client and server.
+      # The cloud endpoint is needed so that the /me endpoint succeeds and we can actually
+      # use the GL client.
+      GROUNDLIGHT_ENDPOINT: https://api.groundlight.ai/
     steps:
       - name: Check out code
         uses: actions/checkout@v4
 
       - name: Set up python
-        id: setup_python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -45,7 +49,6 @@ jobs:
           installer-parallel: true
 
       - name: Load Cached venv
-        id: cached-poetry-dependencies
         uses: actions/cache@v3
         with:
           path: .venv
@@ -57,26 +60,68 @@ jobs:
 
       - name: Run Unit Tests (that dont require docker)
         run: |
-          # Point these tests to the cloud endpoint, because to test the edge-endpoint, they
-          # dont actually issue requests. They interally setup a test client and server.
-          # The cloud endpoint is needed so that the /me endpoint succeeds and we can actually
-          # use the GL client.
-          GROUNDLIGHT_ENDPOINT="https://api.groundlight.ai/"
           source test/setup_plain_test_env.sh
-          poetry run pytest -vs -k "not _live"
+          # -n auto: one worker per CPU core. --dist loadfile keeps tests in the same
+          # file on the same worker, avoiding cross-test state issues from module-scoped
+          # fixtures (e.g. the in-memory SQLite test_client).
+          poetry run pytest -v -k "not _live" -n auto --dist loadfile
 
-      - name: Install Docker
+  test-integration-edge-endpoint:
+    # Live tests that need a running edge-endpoint Docker container.
+    # Pulls the image already built+pushed by call-build-push-ee-image instead of
+    # rebuilding locally (the Dockerfile only changes once per commit).
+    runs-on: ubuntu-22.04
+    needs:
+      - call-build-push-ee-image
+    env:
+      # This is the NGINX proxy endpoint
+      GROUNDLIGHT_ENDPOINT: http://localhost:30101
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: ${{ env.POETRY_VERSION }}
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: true
+
+      - name: Load Cached venv
+        uses: actions/cache@v3
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Install edge-endpoint's python dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get remove moby-runc
-          sudo apt-get install apt-transport-https ca-certificates curl software-properties-common
-          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-          sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-          sudo apt-get update
-          sudo apt-get install docker-ce
+          poetry install --no-interaction --no-root --with profiling
 
-      - name: Build Docker Image
-        run: docker build --tag groundlight-edge .
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          mask-password: "true"
+
+      - name: Pull edge-endpoint image from ECR
+        run: |
+          EE_IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
+          ECR_IMAGE=${{ steps.login-ecr.outputs.registry }}/edge-endpoint:${EE_IMAGE_TAG}
+          docker pull ${ECR_IMAGE}
+          docker tag ${ECR_IMAGE} groundlight-edge
 
       - name: Start Docker Container
         id: start_container
@@ -96,9 +141,8 @@ jobs:
           sleep 5
           curl -vk https://localhost:30143/health/live
 
-      - name: Run Unit Tests (that do require docker)
+      - name: Run Live Tests (that do require docker)
         run: |
-          GROUNDLIGHT_ENDPOINT=http://localhost:30101
           source test/setup_plain_test_env.sh
           poetry run pytest -k "_live"
 
@@ -114,7 +158,11 @@ jobs:
 
   # Run Groundlight SDK tests against the edge proxy endpoint
   test-sdk:
+    # Pulls the image already built+pushed by call-build-push-ee-image instead of
+    # rebuilding locally (the Dockerfile only changes once per commit).
     runs-on: ubuntu-22.04
+    needs:
+      - call-build-push-ee-image
     env:
       # This is the NGINX proxy endpoint
       GROUNDLIGHT_ENDPOINT: http://localhost:30101
@@ -127,18 +175,25 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install Docker
-        run: |
-          sudo apt-get update
-          sudo apt-get remove moby-runc
-          sudo apt-get install apt-transport-https ca-certificates curl software-properties-common
-          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-          sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-          sudo apt-get update
-          sudo apt-get install docker-ce
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
 
-      - name: Build Docker Image
-        run: docker build --tag groundlight-edge .
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          mask-password: "true"
+
+      - name: Pull edge-endpoint image from ECR
+        run: |
+          EE_IMAGE_TAG=$(./deploy/bin/git-tag-name.sh)
+          ECR_IMAGE=${{ steps.login-ecr.outputs.registry }}/edge-endpoint:${EE_IMAGE_TAG}
+          docker pull ${ECR_IMAGE}
+          docker tag ${ECR_IMAGE} groundlight-edge
 
       - name: Start Docker Container
         id: start_container
@@ -203,8 +258,11 @@ jobs:
         run: docker stop ${{ steps.start_container.outputs.container_id }}
 
   call-build-push-ee-image:
-    # We run this at the beginning of every PR so that the various full k3s tests
-    # can use this image
+    # Gated on the unit-test job so an obvious python regression fails fast in
+    # ~1min instead of after a 5min image build. All downstream integration jobs
+    # (helm tests, G4, test-sdk, test-integration) consume this image from ECR.
+    needs:
+      - test-unit-edge-endpoint
     uses: ./.github/workflows/build-push-ee-image.yaml
     with:
       repo: ${{ github.repository }}
@@ -369,12 +427,29 @@ jobs:
           uv run fab check-k8-deployments
           uv run fab check-server-port
 
-      - name: Use groundlight sdk through EE
+      - name: Configure edge detector and wait for inference pod ready
+        id: configure
         run: |
           EEUT_IP=$(uv run pulumi stack output eeut_private_ip)
           export GROUNDLIGHT_ENDPOINT=http://${EEUT_IP}:30101
-          uv run groundlight whoami
-          uv run groundlight list-detectors
+          DETECTOR_ID=$(uv run python ${GITHUB_WORKSPACE}/cicd/scripts/configure_edge_detector.py)
+          echo "detector_id=${DETECTOR_ID}" >> $GITHUB_OUTPUT
+
+      - name: Verify GPU is allocated to inference pod
+        run: |
+          uv run fab check-gpu --detector-id=${{ steps.configure.outputs.detector_id }}
+
+      - name: Submit image query and assert it came from edge
+        run: |
+          EEUT_IP=$(uv run pulumi stack output eeut_private_ip)
+          export GROUNDLIGHT_ENDPOINT=http://${EEUT_IP}:30101
+          uv run python ${GITHUB_WORKSPACE}/cicd/scripts/submit_edge_iq.py \
+            --detector-id=${{ steps.configure.outputs.detector_id }}
+
+      - name: Diagnose EEUT on failure
+        if: failure()
+        run: |
+          uv run fab diagnose-inference || true
 
       - name: Thank the worker and shut down
         # if: always()
@@ -397,7 +472,8 @@ jobs:
     runs-on: ubuntu-latest
     # This is a dummy step to avoid repeating the list of tests
     needs:
-      - test-general-edge-endpoint
+      - test-unit-edge-endpoint
+      - test-integration-edge-endpoint
       - test-sdk
       - call-test-with-k3s-helm
       - validate-setup-helm
