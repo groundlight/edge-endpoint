@@ -254,10 +254,11 @@ def check_gpu(c, detector_id):
     print("Checking host-level NVIDIA driver...")
     conn.run("nvidia-smi --query-gpu=name,driver_version --format=csv")
 
-    # Inference pods are labeled `app=inference-server, instance=<deployment-name>`
-    # per inference-deployment-template.yaml; the deployment name encodes the detector ID.
-    detector_id_with_dashes = detector_id.replace("_", "-").lower()
-    instance = f"inferencemodel-primary-{detector_id_with_dashes}"
+    # Inference pods are labeled `app=inference-server,instance=instance-<detector_id>-primary`.
+    # Per app/core/kubernetes_management.py:91, the instance label preserves the original
+    # detector ID (case + underscores intact) — unlike the deployment name which lowercases
+    # and dashifies it.
+    instance = f"instance-{detector_id}-primary"
     pod_label = f"app=inference-server,instance={instance}"
     print(f"Looking up inference pod with label {pod_label}...")
     pod = conn.run(
