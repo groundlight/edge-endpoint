@@ -38,8 +38,14 @@
 .theme-code .hljs-meta,
 .theme-code .hljs-selector-pseudo { color: #015692; }
 .theme-code .hljs-built_in,
-.theme-code .hljs-title,
-.theme-code .hljs-literal { color: #b75501; }
+.theme-code .hljs-title { color: #b75501; }
+/* JSON / YAML booleans (true/false) and null. Split off from numbers so each
+   value type renders in a distinct color. The nested `.hljs-keyword` selector
+   is needed because the JSON grammar wraps booleans/null as
+   `<span class="hljs-literal"><span class="hljs-keyword">true</span></span>`,
+   so without it the inner span wins and inherits the blue keyword color. */
+.theme-code .hljs-literal,
+.theme-code .hljs-literal .hljs-keyword { color: #6f42c1; }
 .theme-code .hljs-bullet,
 .theme-code .hljs-code { color: #535a60; }
 .theme-code .hljs-meta .hljs-string { color: #54790d; }

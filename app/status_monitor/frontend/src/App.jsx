@@ -34,15 +34,6 @@ const parseIfJson = (value) => {
   return value;
 };
 
-const parseSection = (section) => {
-  if (!section) return section;
-  const parsed = { ...section };
-  for (const [key, value] of Object.entries(parsed)) {
-    parsed[key] = parseIfJson(value);
-  }
-  return parsed;
-};
-
 // Pretty-print JSON like JSON.stringify(value, null, indent), but keep arrays
 // of pure primitives on a single line so e.g. histogram counts don't take up
 // an entire vertical column.
@@ -74,6 +65,11 @@ const stringifyCompactArrays = (value, indent = 2) => {
 
 const SECTION_TITLE_STYLE = { fontSize: "1.25em", fontWeight: 500, color: "#1F1D23" };
 
+// Stable references for CodeSection's `languages` prop so memoization isn't
+// invalidated by fresh array literals on every render.
+const JSON_ONLY = ["json"];
+const YAML_OR_JSON = ["yaml", "json"];
+
 function GenericSectionSkeleton() {
   return (
     <Paper shadow="xs" p="md" radius="sm">
@@ -104,43 +100,57 @@ function CheckIcon() {
 
 // Single code-block widget used for every "view this dict as code" section on
 // the page. Renders a slim dark header (yaml/json SegmentedControl on the
-// left, copy button on the right) above a borderless CodeHighlight using the
-// Stack Overflow Light syntax theme.
+// left when there is more than one language, copy button on the right) above
+// a borderless CodeHighlight whose syntax colors come from the .theme-code
+// class in code-themes.css.
 //
-//   languages        - non-empty array containing "yaml", "json", or both,
-//                      in the order tabs should appear. Single-language
-//                      sections still get the same header so the language is
-//                      labeled (Mantine renders a single-item SegmentedControl
-//                      as a non-interactive label).
-//   defaultLanguage  - which tab is selected first. Must be one of `languages`.
-function CodeSection({ title, data, languages, defaultLanguage, loading }) {
+//   languages  - non-empty ordered array containing "yaml", "json", or both.
+//                The first entry is the initially-selected tab. Single-
+//                language sections render with no toggle (just the copy
+//                button), since the language is implicit.
+//   error      - if true and data is missing, render a "Failed to load"
+//                message instead of the perpetual skeleton.
+function CodeSection({ title, data, languages, loading, error = false }) {
   const codes = useMemo(() => {
-    const parsed = parseSection(data) ?? {};
+    const parsed = data ?? {};
     return {
       yaml: yaml.stringify(parsed),
       json: stringifyCompactArrays(parsed),
     };
   }, [data]);
-  const [lang, setLang] = useState(defaultLanguage);
-  const isLoading = loading || data == null;
+  const [lang, setLang] = useState(languages[0]);
+  const showError = error && data == null && !loading;
+  const showSkeleton = !showError && (loading || data == null);
+  const multipleLanguages = languages.length > 1;
   return (
     <Stack gap="xs">
       <Text style={SECTION_TITLE_STYLE}>{title}</Text>
-      {isLoading ? (
-        <GenericSectionSkeleton />
-      ) : (
+      {showSkeleton && <GenericSectionSkeleton />}
+      {showError && (
+        <Alert color="red" variant="light">
+          Failed to load.
+        </Alert>
+      )}
+      {!showSkeleton && !showError && (
         <Paper
           withBorder
           radius="sm"
           className="theme-code"
           style={{ overflow: "hidden" }}
         >
-          <Group justify="space-between" align="center" px="xs" py={6} style={DARK_HEADER_STYLE}>
-            {languages.length > 1 ? (
+          <Group
+            justify={multipleLanguages ? "space-between" : "flex-end"}
+            align="center"
+            px="xs"
+            py={6}
+            style={DARK_HEADER_STYLE}
+          >
+            {multipleLanguages && (
               <SegmentedControl
                 size="xs"
                 value={lang}
                 onChange={setLang}
+                aria-label="Code format"
                 classNames={{
                   root: "dark-pill-toggle-root",
                   indicator: "dark-pill-toggle-indicator",
@@ -148,8 +158,6 @@ function CodeSection({ title, data, languages, defaultLanguage, loading }) {
                 }}
                 data={languages.map((l) => ({ label: l, value: l }))}
               />
-            ) : (
-              <div />
             )}
             <CopyButton value={codes[lang]} timeout={1500}>
               {({ copied, copy }) => (
@@ -178,6 +186,7 @@ export default function App() {
   const [metrics, setMetrics] = useState(null);
   const [resources, setResources] = useState(null);
   const [edgeConfig, setEdgeConfig] = useState(null);
+  const [edgeConfigError, setEdgeConfigError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const intervalRef = useRef(null);
@@ -207,9 +216,14 @@ export default function App() {
 
     try {
       const res = await fetch("/edge-config");
-      if (res.ok) setEdgeConfig(await res.json());
+      if (res.ok) {
+        setEdgeConfig(await res.json());
+        setEdgeConfigError(false);
+      } else {
+        setEdgeConfigError(true);
+      }
     } catch {
-      // Edge config is optional
+      setEdgeConfigError(true);
     }
   }, []);
 
@@ -287,38 +301,34 @@ export default function App() {
           <CodeSection
             title="Device Information"
             data={metrics?.device_info}
-            languages={["json"]}
-            defaultLanguage="json"
+            languages={JSON_ONLY}
             loading={loading}
           />
 
           <CodeSection
             title="Configuration"
             data={edgeConfig}
-            languages={["yaml", "json"]}
-            defaultLanguage="yaml"
+            languages={YAML_OR_JSON}
             loading={loading}
+            error={edgeConfigError}
           />
 
           <CodeSection
             title="Activity Metrics"
             data={metrics?.activity_metrics}
-            languages={["json"]}
-            defaultLanguage="json"
+            languages={JSON_ONLY}
             loading={loading}
           />
           <CodeSection
             title="Kubernetes Stats"
             data={metrics?.k3s_stats}
-            languages={["json"]}
-            defaultLanguage="json"
+            languages={JSON_ONLY}
             loading={loading}
           />
           <CodeSection
             title="Failed Escalations"
             data={metrics?.failed_escalations}
-            languages={["json"]}
-            defaultLanguage="json"
+            languages={JSON_ONLY}
             loading={loading}
           />
         </Stack>
