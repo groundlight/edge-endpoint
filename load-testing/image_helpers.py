@@ -22,10 +22,10 @@ def generate_color_canvas(width: int, height: int, color: tuple[int, int, int]) 
 
 
 def _make_roi(label: str, x: int, y: int, dw: int, dh: int, image_width: int, image_height: int) -> ROI:
-    """Construct an ROI from pixel coordinates, normalising to [0, 1]."""
-    left   = x / image_width
-    top    = y / image_height
-    right  = (x + dw) / image_width
+    """Construct an ROI from pixel coordinates, normalizing to [0, 1]."""
+    left = x / image_width
+    top = y / image_height
+    right = (x + dw) / image_width
     bottom = (y + dh) / image_height
     return ROI(
         label=label,
@@ -49,6 +49,7 @@ def _boxes_overlap(
 
 
 OBJECT_DETECTION_IMAGE: np.ndarray = cv2.imread(str(Path(__file__).parent / "images" / "dog.jpeg"))
+assert OBJECT_DETECTION_IMAGE is not None, "Failed to load dog.jpeg -- check that load-testing/images/dog.jpeg exists"
 
 
 def generate_random_objects_image(
