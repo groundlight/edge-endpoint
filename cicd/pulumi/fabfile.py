@@ -254,11 +254,14 @@ def check_gpu(c, detector_id):
     print("Checking host-level NVIDIA driver...")
     conn.run("nvidia-smi --query-gpu=name,driver_version --format=csv")
 
+    # Inference pods are labeled `app=inference-server, instance=<deployment-name>`
+    # per inference-deployment-template.yaml; the deployment name encodes the detector ID.
     detector_id_with_dashes = detector_id.replace("_", "-").lower()
-    pod_label = f"app=inferencemodel-primary-{detector_id_with_dashes}"
+    instance = f"inferencemodel-primary-{detector_id_with_dashes}"
+    pod_label = f"app=inference-server,instance={instance}"
     print(f"Looking up inference pod with label {pod_label}...")
     pod = conn.run(
-        f"kubectl get pod -l {pod_label} -n edge "
+        f"kubectl get pod -l '{pod_label}' -n edge "
         "-o jsonpath='{.items[0].metadata.name}'", hide=True,
     ).stdout.strip()
     if not pod:
