@@ -217,7 +217,7 @@ def check_server_port(c):
 
 @task
 def diagnose_inference(c):
-    """Dump everything an oncall would need to triage why an inference pod
+    """Dump everything CI would need to triage why an inference pod
     isn't becoming Ready. Safe to call even if no detector is configured.
     """
     conn = connect_server()
