@@ -64,6 +64,20 @@ body {
   font-size: 0.8em;
 }
 
+/* SegmentedControl styling for the yaml/json toggle inside the dark gray
+   Configuration header bar. Solid dark monochrome pill with a mid-gray
+   active indicator. */
+.dark-pill-toggle-root {
+  background-color: #1f1d20;
+  border: none;
+}
+.dark-pill-toggle-indicator {
+  background-color: #5a585c;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+.dark-pill-toggle-label { color: rgba(255, 255, 255, 0.55); }
+.dark-pill-toggle-label[data-active] { color: #fff; }
+
 /* Recharts donut tooltip -- z-index ensures it renders above the center label */
 .recharts-tooltip-wrapper {
   z-index: 10 !important;

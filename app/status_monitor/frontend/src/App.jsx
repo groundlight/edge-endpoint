@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Container,
   Title,
@@ -9,10 +9,16 @@ import {
   Stack,
   Paper,
   Skeleton,
+  SegmentedControl,
+  CopyButton,
+  ActionIcon,
+  Tooltip,
 } from "@mantine/core";
 import { CodeHighlight } from "@mantine/code-highlight";
+import yaml from "yaml";
 import DetectorDetails from "./components/DetectorDetails";
 import ResourceUsage from "./components/ResourceUsage";
+import { DARK_HEADER_STYLE } from "./sharedStyles";
 
 // Faster polling in dev is helpful when iterating, slow down polling in prod
 const REFRESH_MS = import.meta.env.DEV ? 1_000 : 10_000;
@@ -80,22 +86,91 @@ function GenericSectionSkeleton() {
   );
 }
 
-function JsonSection({ title, data, loading }) {
-  const code = data ? stringifyCompactArrays(parseSection(data)) : "";
+function CopyIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+function CheckIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+const CODE_BG = "#f6f6f6";
+
+// Single code-block widget used for every "view this dict as code" section on
+// the page. Renders a slim dark header (yaml/json SegmentedControl on the
+// left, copy button on the right) above a borderless CodeHighlight using the
+// Stack Overflow Light syntax theme.
+//
+//   languages        - non-empty array containing "yaml", "json", or both,
+//                      in the order tabs should appear. Single-language
+//                      sections still get the same header so the language is
+//                      labeled (Mantine renders a single-item SegmentedControl
+//                      as a non-interactive label).
+//   defaultLanguage  - which tab is selected first. Must be one of `languages`.
+function CodeSection({ title, data, languages, defaultLanguage, loading }) {
+  const codes = useMemo(() => {
+    const parsed = parseSection(data) ?? {};
+    return {
+      yaml: yaml.stringify(parsed),
+      json: stringifyCompactArrays(parsed),
+    };
+  }, [data]);
+  const [lang, setLang] = useState(defaultLanguage);
+  const isLoading = loading || data == null;
   return (
     <Stack gap="xs">
       <Text style={SECTION_TITLE_STYLE}>{title}</Text>
-      {loading ? (
+      {isLoading ? (
         <GenericSectionSkeleton />
       ) : (
-        <CodeHighlight
-          code={code}
-          language="json"
-          copyLabel="Copy"
-          copiedLabel="Copied"
-          radius="sm"
+        <Paper
           withBorder
-        />
+          radius="sm"
+          className="theme-stackoverflow-light"
+          style={{ overflow: "hidden", background: CODE_BG }}
+        >
+          <Group justify="space-between" align="center" px="xs" py={6} style={DARK_HEADER_STYLE}>
+            {languages.length > 1 ? (
+              <SegmentedControl
+                size="xs"
+                value={lang}
+                onChange={setLang}
+                classNames={{
+                  root: "dark-pill-toggle-root",
+                  indicator: "dark-pill-toggle-indicator",
+                  label: "dark-pill-toggle-label",
+                }}
+                data={languages.map((l) => ({ label: l, value: l }))}
+              />
+            ) : (
+              <div />
+            )}
+            <CopyButton value={codes[lang]} timeout={1500}>
+              {({ copied, copy }) => (
+                <Tooltip label={copied ? "Copied" : "Copy"} withArrow position="left">
+                  <ActionIcon
+                    variant="subtle"
+                    size="sm"
+                    onClick={copy}
+                    aria-label="Copy"
+                    style={{ color: "rgba(255,255,255,0.7)" }}
+                  >
+                    {copied ? <CheckIcon /> : <CopyIcon />}
+                  </ActionIcon>
+                </Tooltip>
+              )}
+            </CopyButton>
+          </Group>
+          <CodeHighlight code={codes[lang]} language={lang} withCopyButton={false} background={CODE_BG} />
+        </Paper>
       )}
     </Stack>
   );
@@ -211,13 +286,43 @@ export default function App() {
             <ResourceUsage resourceData={resources} detectorDetails={detectorDetails} loading={loading} />
           </Stack>
 
-          <JsonSection title="Device Information" data={metrics?.device_info} loading={loading} />
+          <CodeSection
+            title="Device Information"
+            data={metrics?.device_info}
+            languages={["json"]}
+            defaultLanguage="json"
+            loading={loading}
+          />
 
-          <JsonSection title="Edge Endpoint Configuration" data={edgeConfig} loading={loading} />
+          <CodeSection
+            title="Configuration"
+            data={edgeConfig}
+            languages={["yaml", "json"]}
+            defaultLanguage="yaml"
+            loading={loading}
+          />
 
-          <JsonSection title="Activity Metrics" data={metrics?.activity_metrics} loading={loading} />
-          <JsonSection title="Kubernetes Stats" data={metrics?.k3s_stats} loading={loading} />
-          <JsonSection title="Failed Escalations" data={metrics?.failed_escalations} loading={loading} />
+          <CodeSection
+            title="Activity Metrics"
+            data={metrics?.activity_metrics}
+            languages={["json"]}
+            defaultLanguage="json"
+            loading={loading}
+          />
+          <CodeSection
+            title="Kubernetes Stats"
+            data={metrics?.k3s_stats}
+            languages={["json"]}
+            defaultLanguage="json"
+            loading={loading}
+          />
+          <CodeSection
+            title="Failed Escalations"
+            data={metrics?.failed_escalations}
+            languages={["json"]}
+            defaultLanguage="json"
+            loading={loading}
+          />
         </Stack>
       </Container>
     </>

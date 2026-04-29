@@ -12,10 +12,10 @@ import {
   Group,
 } from "@mantine/core";
 import { CodeHighlight } from "@mantine/code-highlight";
+import { DARK_HEADER_STYLE } from "../sharedStyles";
 
 const TH_STYLE = {
-  backgroundColor: "#3a383c",
-  color: "#fff",
+  ...DARK_HEADER_STYLE,
   whiteSpace: "nowrap",
 };
 
