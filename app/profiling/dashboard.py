@@ -35,10 +35,34 @@ def _():
     }
     FALLBACK_COLOR = "#B6B6B6"
 
+    # Qualitative palette used to auto-color spans that aren't in SPAN_COLORS.
+    AUTO_PALETTE = [
+        "#636EFA",
+        "#EF553B",
+        "#00CC96",
+        "#AB63FA",
+        "#FFA15A",
+        "#19D3F3",
+        "#FF6692",
+        "#B6E880",
+        "#FF97FF",
+        "#FECB52",
+        "#1F77B4",
+        "#FF7F0E",
+        "#2CA02C",
+        "#D62728",
+        "#9467BD",
+        "#8C564B",
+        "#E377C2",
+        "#7F7F7F",
+        "#BCBD22",
+        "#17BECF",
+    ]
+
     # How many recent traces to offer in the waterfall selector.
     MAX_TRACES_IN_SELECTOR = 50
 
-    return FALLBACK_COLOR, MAX_TRACES_IN_SELECTOR, SPAN_COLORS, mo
+    return AUTO_PALETTE, FALLBACK_COLOR, MAX_TRACES_IN_SELECTOR, SPAN_COLORS, mo
 
 
 @app.cell
@@ -350,14 +374,14 @@ def _(mo, traces):
     latency_over_time_spans = mo.ui.multiselect(
         options=_ordered,
         value=_defaults,
-        label="Spans to plot (re-run to apply)",
+        label="Spans to plot",
     )
     latency_over_time_spans
     return (latency_over_time_spans,)
 
 
 @app.cell
-def _(SPAN_COLORS, go, latency_over_time_spans, mo, traces):
+def _(AUTO_PALETTE, SPAN_COLORS, go, latency_over_time_spans, mo, traces):
     # Scatterplot of selected spans' durations over time, colored by span name.
     # Only spans chosen in the multiselect are embedded in the plot payload —
     # plotting every span can exceed marimo's output size limit.
@@ -379,32 +403,10 @@ def _(SPAN_COLORS, go, latency_over_time_spans, mo, traces):
     _ordered_names = sorted(_points_by_span.keys(), key=span_sort_key)
 
     # Assign a distinct color to every plotted span: use the explicit SPAN_COLORS
-    # mapping when available, otherwise cycle through a qualitative palette so
-    # spans without a predefined color still look distinct.
-    _palette = [
-        "#636EFA",
-        "#EF553B",
-        "#00CC96",
-        "#AB63FA",
-        "#FFA15A",
-        "#19D3F3",
-        "#FF6692",
-        "#B6E880",
-        "#FF97FF",
-        "#FECB52",
-        "#1F77B4",
-        "#FF7F0E",
-        "#2CA02C",
-        "#D62728",
-        "#9467BD",
-        "#8C564B",
-        "#E377C2",
-        "#7F7F7F",
-        "#BCBD22",
-        "#17BECF",
-    ]
+    # mapping when available, otherwise cycle through AUTO_PALETTE so spans
+    # without a predefined color still look distinct.
     _unknowns = [_n for _n in _ordered_names if _n not in SPAN_COLORS]
-    _auto_colors = {_n: _palette[_i % len(_palette)] for _i, _n in enumerate(_unknowns)}
+    _auto_colors = {_n: AUTO_PALETTE[_i % len(AUTO_PALETTE)] for _i, _n in enumerate(_unknowns)}
 
     if _ordered_names:
         _fig = go.Figure()
@@ -673,9 +675,12 @@ def build_waterfall(detail, spans, go, mo, span_colors, fallback_color):
         for child in reversed(children):
             stack.append((child, depth + 1))
 
-    placed_ids = {s.get("span_id") for s, _ in ordered}
+    # Track placed spans by object identity rather than span_id so that spans
+    # without a span_id don't all collapse onto a single "already placed"
+    # sentinel and get silently dropped by the orphan-fallback loop.
+    placed = {id(s) for s, _ in ordered}
     for s in spans:
-        if s.get("span_id") not in placed_ids:
+        if id(s) not in placed:
             ordered.append((s, 0))
 
     # Tint every descendant of a primary/OODD inference wrapper with the wrapper's

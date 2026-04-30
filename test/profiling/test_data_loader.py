@@ -10,6 +10,7 @@ from app.profiling.data_loader import (
     get_detector_ids,
     get_trace_detail,
     load_traces,
+    merge_traces_by_id,
 )
 
 
@@ -541,6 +542,109 @@ class TestGetTraceDetail:
         ]
         result = get_trace_detail(traces, "t1")
         assert len(result["spans"]) == 1
+
+
+class TestMergeTracesById:
+    def test_groups_multiple_trace_ids(self):
+        a1 = _make_trace_dict(trace_id="a")
+        a2 = _make_trace_dict(trace_id="a", detector_id="", spans=[])
+        b1 = _make_trace_dict(trace_id="b")
+        merged = merge_traces_by_id([a1, a2, b1])
+        assert {t["trace_id"] for t in merged} == {"a", "b"}
+
+    def test_drops_records_without_trace_id(self):
+        good = _make_trace_dict(trace_id="t1")
+        bad = _make_trace_dict(trace_id="t1")
+        bad["trace_id"] = None
+        merged = merge_traces_by_id([good, bad])
+        assert len(merged) == 1
+        assert merged[0]["trace_id"] == "t1"
+
+    def test_metadata_prefers_real_detector_id_over_more_spans(self):
+        # Edge record carries the real detector_id but only one span.
+        edge_record = _make_trace_dict(
+            trace_id="t1",
+            detector_id="det_real",
+            spans=[
+                {
+                    "name": "request",
+                    "trace_id": "t1",
+                    "span_id": "edge1",
+                    "parent_span_id": None,
+                    "start_time_ns": 0,
+                    "end_time_ns": 100,
+                    "duration_ms": 0.0001,
+                    "annotations": {},
+                },
+            ],
+        )
+        # Inference record has empty detector_id but more spans — should NOT
+        # win the metadata tug-of-war: real detector_id beats span count.
+        inference_record = _make_trace_dict(
+            trace_id="t1",
+            detector_id="",
+            spans=[
+                {
+                    "name": f"inf_{i}",
+                    "trace_id": "t1",
+                    "span_id": f"inf{i}",
+                    "parent_span_id": "edge1",
+                    "start_time_ns": 10 + i,
+                    "end_time_ns": 20 + i,
+                    "duration_ms": 0.00001,
+                    "annotations": {},
+                }
+                for i in range(5)
+            ],
+        )
+        merged = merge_traces_by_id([inference_record, edge_record])
+        assert len(merged) == 1
+        assert merged[0]["detector_id"] == "det_real"
+        # Spans from both records are still unioned.
+        assert len(merged[0]["spans"]) == 6
+
+    def test_metadata_breaks_tie_by_span_count_when_detector_score_matches(self):
+        # Both records have empty detector_id (det_score=0). The one with more
+        # spans should win the metadata tie-break.
+        small = _make_trace_dict(
+            trace_id="t1",
+            detector_id="",
+            start_wall_time_iso="2026-01-01T00:00:00+00:00",
+            spans=[
+                {
+                    "name": "a",
+                    "trace_id": "t1",
+                    "span_id": "a1",
+                    "parent_span_id": None,
+                    "start_time_ns": 0,
+                    "end_time_ns": 1,
+                    "duration_ms": 0.000001,
+                    "annotations": {},
+                },
+            ],
+        )
+        big = _make_trace_dict(
+            trace_id="t1",
+            detector_id="",
+            start_wall_time_iso="2026-02-02T00:00:00+00:00",
+            spans=[
+                {
+                    "name": f"b{i}",
+                    "trace_id": "t1",
+                    "span_id": f"b{i}",
+                    "parent_span_id": None,
+                    "start_time_ns": i,
+                    "end_time_ns": i + 1,
+                    "duration_ms": 0.000001,
+                    "annotations": {},
+                }
+                for i in range(3)
+            ],
+        )
+        merged = merge_traces_by_id([small, big])
+        assert len(merged) == 1
+        # Wall time comes from `big` since it has more spans.
+        assert merged[0]["start_wall_time_iso"] == "2026-02-02T00:00:00+00:00"
 
 
 class TestDashboardSmoke:
