@@ -37,19 +37,20 @@ def _make_roi(label: str, x: int, y: int, dw: int, dh: int, image_width: int, im
     )
 
 
-def _boxes_overlap(
-    placed: list[tuple[int, int, int, int]],
-    x: int, y: int, dw: int, dh: int,
-) -> bool:
-    """Return True if the box (x, y, x+dw, y+dh) overlaps any box in placed."""
-    for px, py, px2, py2 in placed:
-        if x < px2 and x + dw > px and y < py2 and y + dh > py:
-            return True
-    return False
-
-
 OBJECT_DETECTION_IMAGE: np.ndarray = cv2.imread(str(Path(__file__).parent / "images" / "dog.jpeg"))
 assert OBJECT_DETECTION_IMAGE is not None, "Failed to load dog.jpeg -- check that load-testing/images/dog.jpeg exists"
+
+# Pixels at or above this value (per channel) are treated as background and masked out during compositing.
+# Set below 255 to absorb near-white JPEG compression artifacts at the edges of the image.
+_BACKGROUND_COLOR_THRESHOLD = 240
+_OBJECT_DETECTION_MASK: np.ndarray = ~np.all(OBJECT_DETECTION_IMAGE >= _BACKGROUND_COLOR_THRESHOLD, axis=2)
+
+
+def _place_object(canvas: np.ndarray, x: int, y: int, dw: int, dh: int) -> None:
+    """Resize OBJECT_DETECTION_IMAGE to (dw, dh) and place it onto canvas at (x, y), masking near-white pixels."""
+    resized = cv2.resize(OBJECT_DETECTION_IMAGE, (dw, dh), interpolation=cv2.INTER_AREA)
+    mask = cv2.resize(_OBJECT_DETECTION_MASK.astype(np.uint8), (dw, dh), interpolation=cv2.INTER_NEAREST).astype(bool)
+    canvas[y:y + dh, x:x + dw][mask] = resized[mask]
 
 
 def generate_random_objects_image(
@@ -57,7 +58,10 @@ def generate_random_objects_image(
     image_height: int = 480,
     max_count: int = 10,
 ) -> tuple[np.ndarray, int, list[ROI]]:
-    """Generate a white canvas with a random number of non-overlapping object images placed on it, with per-object ROIs."""
+    """Generate a white canvas with a random number of object images placed at random positions, with per-object ROIs.
+
+    Dogs are composited with a near-white transparency mask so their backgrounds don't occlude one another.
+    """
     h, w = OBJECT_DETECTION_IMAGE.shape[:2]
 
     count = random.randint(0, max_count)
@@ -67,7 +71,6 @@ def generate_random_objects_image(
     min_size = max(1, int(short_side * 0.10))
     max_size = max(min_size, int(short_side * 0.25))
 
-    placed: list[tuple[int, int, int, int]] = []
     rois: list[ROI] = []
     for _ in range(count):
         target_size = random.randint(min_size, max_size)
@@ -78,18 +81,10 @@ def generate_random_objects_image(
         if dw > image_width or dh > image_height:
             continue
 
-        resized = cv2.resize(OBJECT_DETECTION_IMAGE, (dw, dh), interpolation=cv2.INTER_AREA)
+        x = random.randint(0, max(0, image_width - dw))
+        y = random.randint(0, max(0, image_height - dh))
 
-        for _ in range(50):
-            x = random.randint(0, max(0, image_width - dw))
-            y = random.randint(0, max(0, image_height - dh))
-            if not _boxes_overlap(placed, x, y, dw, dh):
-                break
-        else:
-            continue  # no non-overlapping position found; skip this object
-
-        canvas[y:y + dh, x:x + dw] = resized
-        placed.append((x, y, x + dw, y + dh))
+        _place_object(canvas, x, y, dw, dh)
         rois.append(_make_roi(OBJECT_DETECTION_CLASS_NAME, x, y, dw, dh, image_width, image_height))
 
     return canvas, len(rois), rois
@@ -179,7 +174,7 @@ def generate_random_image(
             max_count=max_count,
         )
     elif detector_mode == 'BOUNDING_BOX':
-        max_num_bboxes = int(detector.mode_configuration.get("max_num_bboxes", 10))
+        max_num_bboxes = int(detector.mode_configuration["max_num_bboxes"])
         image, _, rois = generate_random_objects_image(
             image_width=image_width,
             image_height=image_height,
