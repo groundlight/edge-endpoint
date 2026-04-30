@@ -1,9 +1,12 @@
 import numpy as np
 import random
 from datetime import datetime
-from groundlight import ExperimentalApi, ROI, Detector
-import math
+from groundlight import Detector
+from model import ROI, BBoxGeometry
 import cv2
+from pathlib import Path
+
+from constants import OBJECT_DETECTION_CLASS_NAME
 
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
@@ -18,8 +21,81 @@ def generate_color_canvas(width: int, height: int, color: tuple[int, int, int]) 
     return np.full((height, width, 3), color, dtype=np.uint8)
 
 
+def _make_roi(label: str, x: int, y: int, dw: int, dh: int, image_width: int, image_height: int) -> ROI:
+    """Construct an ROI from pixel coordinates, normalizing to [0, 1]."""
+    left = x / image_width
+    top = y / image_height
+    right = (x + dw) / image_width
+    bottom = (y + dh) / image_height
+    return ROI(
+        label=label,
+        score=1.0,
+        geometry=BBoxGeometry(
+            left=left, top=top, right=right, bottom=bottom,
+            x=(left + right) / 2, y=(top + bottom) / 2,
+        ),
+    )
+
+
+def _boxes_overlap(
+    placed: list[tuple[int, int, int, int]],
+    x: int, y: int, dw: int, dh: int,
+) -> bool:
+    """Return True if the box (x, y, x+dw, y+dh) overlaps any box in placed."""
+    for px, py, px2, py2 in placed:
+        if x < px2 and x + dw > px and y < py2 and y + dh > py:
+            return True
+    return False
+
+
+OBJECT_DETECTION_IMAGE: np.ndarray = cv2.imread(str(Path(__file__).parent / "images" / "dog.jpeg"))
+assert OBJECT_DETECTION_IMAGE is not None, "Failed to load dog.jpeg -- check that load-testing/images/dog.jpeg exists"
+
+
+def generate_random_objects_image(
+    image_width: int = 640,
+    image_height: int = 480,
+    max_count: int = 10,
+) -> tuple[np.ndarray, int, list[ROI]]:
+    """Generate a white canvas with a random number of non-overlapping object images placed on it, with per-object ROIs."""
+    h, w = OBJECT_DETECTION_IMAGE.shape[:2]
+
+    count = random.randint(0, max_count)
+    canvas = generate_color_canvas(image_width, image_height, WHITE)
+
+    short_side = min(image_width, image_height)
+    min_size = max(1, int(short_side * 0.10))
+    max_size = max(min_size, int(short_side * 0.25))
+
+    placed: list[tuple[int, int, int, int]] = []
+    rois: list[ROI] = []
+    for _ in range(count):
+        target_size = random.randint(min_size, max_size)
+        scale = target_size / max(w, h)
+        dw = max(1, int(w * scale))
+        dh = max(1, int(h * scale))
+
+        if dw > image_width or dh > image_height:
+            continue
+
+        resized = cv2.resize(OBJECT_DETECTION_IMAGE, (dw, dh), interpolation=cv2.INTER_AREA)
+
+        for _ in range(50):
+            x = random.randint(0, max(0, image_width - dw))
+            y = random.randint(0, max(0, image_height - dh))
+            if not _boxes_overlap(placed, x, y, dw, dh):
+                break
+        else:
+            continue  # no non-overlapping position found; skip this object
+
+        canvas[y:y + dh, x:x + dw] = resized
+        placed.append((x, y, x + dw, y + dh))
+        rois.append(_make_roi(OBJECT_DETECTION_CLASS_NAME, x, y, dw, dh, image_width, image_height))
+
+    return canvas, len(rois), rois
+
+
 def generate_random_binary_image(
-    gl: ExperimentalApi,  # not used, but kept for consistency with other generators
     image_width: int = 640,
     image_height: int = 480,
 ) -> tuple[np.ndarray, str, None]:
@@ -41,54 +117,7 @@ def generate_random_binary_image(
     return image, label, None
 
 
-def generate_random_objects_image(
-    gl: ExperimentalApi,
-    image_width: int = 640,
-    image_height: int = 480,
-    class_name: str = 'object',
-    max_count: int = 10,
-) -> tuple[np.ndarray, int, list[ROI]]:
-    """Generate an image containing a random number of objects (drawn as circles), with the object count and per-object ROIs."""
-    count = random.randint(0, max_count)
-
-    image_diagonal = math.sqrt(image_width ** 2 + image_height ** 2)
-    min_circle_radius = int(image_diagonal * 0.05)
-    max_circle_radius = int(image_diagonal * 0.07)
-
-    canvas_color = get_random_color()
-    image = generate_color_canvas(image_width, image_height, canvas_color)
-
-    rois: list[ROI] = []
-    for _ in range(count):
-        circle_color = get_random_color()
-        circle_radius = random.randint(min_circle_radius, max_circle_radius)
-        circle_x = random.randint(circle_radius, image_width - circle_radius)
-        circle_y = random.randint(circle_radius, image_height - circle_radius)
-
-        cv2.circle(image, (circle_x, circle_y), circle_radius, circle_color, -1)
-
-        top_left = (
-            (circle_x - circle_radius) / image_width,
-            (circle_y - circle_radius) / image_height,
-        )
-        bottom_right = (
-            (circle_x + circle_radius) / image_width,
-            (circle_y + circle_radius) / image_height,
-        )
-
-        roi = gl.create_roi(
-            label=class_name,
-            top_left=top_left,
-            bottom_right=bottom_right,
-        )
-        rois.append(roi)
-
-    label = len(rois)
-    return image, label, rois
-
-
 def generate_random_multiclass_image(
-    gl: ExperimentalApi,  # not used, but kept for consistency with other generators
     class_names: list[str],
     image_width: int = 640,
     image_height: int = 480,
@@ -136,7 +165,6 @@ def generate_random_multiclass_image(
 
 
 def generate_random_image(
-    gl: ExperimentalApi,
     detector: Detector,
     image_width: int,
     image_height: int,
@@ -144,38 +172,28 @@ def generate_random_image(
     """Dispatch to the appropriate image generator based on the detector's mode."""
     detector_mode = detector.mode
     if detector_mode == 'COUNT':
-        detector_mode_configuration = detector.mode_configuration
-        class_name = detector_mode_configuration["class_name"]
-        max_count = int(detector_mode_configuration["max_count"])
+        max_count = int(detector.mode_configuration["max_count"])
         image, label, rois = generate_random_objects_image(
-            gl,
             image_width=image_width,
             image_height=image_height,
-            class_name=class_name,
             max_count=max_count,
         )
     elif detector_mode == 'BOUNDING_BOX':
-        config = detector.mode_configuration
-        class_name = config["class_name"]
-        max_num_bboxes = int(config.get("max_num_bboxes", 10))
+        max_num_bboxes = int(detector.mode_configuration.get("max_num_bboxes", 10))
         image, _, rois = generate_random_objects_image(
-            gl,
             image_width=image_width,
             image_height=image_height,
-            class_name=class_name,
             max_count=max_num_bboxes,
         )
         label = "BOUNDING_BOX" if rois else "NO_OBJECTS"
     elif detector_mode == 'BINARY':
         image, label, rois = generate_random_binary_image(
-            gl,
             image_width=image_width,
             image_height=image_height,
         )
     elif detector_mode == 'MULTI_CLASS':
         class_names = list(detector.mode_configuration["class_names"])
         image, label, rois = generate_random_multiclass_image(
-            gl,
             class_names,
             image_width=image_width,
             image_height=image_height,
@@ -186,5 +204,3 @@ def generate_random_image(
         )
 
     return image, label, rois
-
-
