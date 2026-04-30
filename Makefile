@@ -5,7 +5,7 @@ install:
 	uv sync --no-install-project
 
 install-lint:  ## Install the linter dependencies
-	uv sync --no-install-project --group lint
+	uv sync --no-install-project --only-group lint
 
 install-pre-commit: install  ## Install pre-commit hooks. Requires .pre-commit-config.yaml at the root
 	uv run pre-commit install

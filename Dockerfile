@@ -90,7 +90,7 @@ COPY ./pyproject.toml ./uv.lock ${APP_ROOT}/
 WORKDIR ${APP_ROOT}
 
 # Install production dependencies only
-RUN uv sync --frozen --no-install-project --no-default-groups && \
+RUN uv sync --frozen --no-install-project --no-group dev --no-group lint && \
     uv cache clean
 
 # Create /etc/groundlight directory where edge-config.yaml and inference_deployment.yaml will be mounted
