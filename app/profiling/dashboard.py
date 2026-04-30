@@ -52,7 +52,6 @@ def _():
         sys.path.insert(0, _repo_root)
 
     import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
 
     from app.profiling.data_loader import (
         compute_span_stats,
@@ -60,6 +59,7 @@ def _():
         get_detector_ids,
         get_trace_detail,
         load_traces,
+        merge_traces_by_id,
     )
     from app.profiling.manager import PROFILING_DIR
 
@@ -71,7 +71,7 @@ def _():
         get_trace_detail,
         go,
         load_traces,
-        make_subplots,
+        merge_traces_by_id,
     )
 
 
@@ -141,14 +141,20 @@ def _(detector_filter, mo, refresh, time_range):
 
 
 @app.cell
-def _(detector_filter, get_detector_ids, load_traces, mo, refresh, time_range, traces_dir):
+def _(detector_filter, get_detector_ids, load_traces, merge_traces_by_id, mo, refresh, time_range, traces_dir):
     # Reactive: re-runs when controls change or auto-refresh fires.
     _ = refresh
 
     _since_val = time_range.value  # mapped int from dict options; 0 means "all"
     _since = int(_since_val) if _since_val else None
     _det = detector_filter.value or None
-    traces = load_traces(traces_dir, since_minutes=_since, detector_id=_det)
+    # Load all records (no detector filter at load time) so that cross-process
+    # records sharing a trace_id can be merged. The inference-side records carry
+    # an empty detector_id and would otherwise be dropped before merge. Apply
+    # the detector filter to the merged trace set.
+    traces = merge_traces_by_id(load_traces(traces_dir, since_minutes=_since))
+    if _det:
+        traces = [t for t in traces if t.get("detector_id") == _det]
 
     if not traces:
         _summary = mo.callout(
@@ -252,26 +258,43 @@ def _(go, mo, traces):
 
 
 @app.cell
-def _(durations_by_span, go, make_subplots, mo, stats):
-    # Histograms: one subplot per span, with p50/p95/p99 shown as vertical lines.
-    # Each subplot gets its own x-axis so wildly different timescales (e.g. 2ms
-    # vs 300ms spans) each remain readable.
+def _(durations_by_span, mo):
+    # Dropdown to pick a single span for the histogram below. Default to "request"
+    # so the full per-request distribution is what you see first.
     _ordered_names = sorted(durations_by_span.keys(), key=span_sort_key)
-
     if _ordered_names:
-        _cols = 2
-        _rows = (len(_ordered_names) + _cols - 1) // _cols
-        # vertical_spacing is a fraction of TOTAL plot height between each row pair,
-        # so a fixed value compounds with row count. Scale it so total padding
-        # (rows-1) * spacing stays bounded, capped so the very-small-grid case still
-        # has visible breathing room.
-        _vspacing = min(0.08, 0.2 / max(1, _rows - 1))
-        _fig = make_subplots(
-            rows=_rows,
-            cols=_cols,
-            subplot_titles=_ordered_names,
-            horizontal_spacing=0.12,
-            vertical_spacing=_vspacing,
+        _options = {_n: _n for _n in _ordered_names}
+        _default = "request" if "request" in _options else _ordered_names[0]
+        histogram_span = mo.ui.dropdown(options=_options, value=_default, label="Histogram span")
+    else:
+        histogram_span = mo.ui.dropdown(options={}, label="Histogram span")
+    return (histogram_span,)
+
+
+@app.cell
+def _(durations_by_span, go, histogram_span, mo, stats):
+    # Render a single histogram for the selected span, with p50/p95/p99 vlines.
+    _name = histogram_span.value
+    _samples = durations_by_span.get(_name) if _name else None
+
+    if not _samples:
+        _out = mo.vstack(
+            [
+                mo.md("### Histograms _(p50 green, p95 orange, p99 red)_"),
+                histogram_span,
+                mo.md("*No span data to plot.*"),
+            ]
+        )
+    else:
+        _fig = go.Figure()
+        _fig.add_trace(
+            go.Histogram(
+                x=_samples,
+                nbinsx=40,
+                showlegend=False,
+                marker_color="#AAB6FB",
+                hovertemplate="%{x:.1f}ms: %{y} samples<extra></extra>",
+            )
         )
 
         _percentile_styles = [
@@ -279,61 +302,35 @@ def _(durations_by_span, go, make_subplots, mo, stats):
             ("p95", "#FFA15A"),
             ("p99", "#EF553B"),
         ]
-
-        for _i, _name in enumerate(_ordered_names):
-            _row = (_i // _cols) + 1
-            _col = (_i % _cols) + 1
-
-            _fig.add_trace(
-                go.Histogram(
-                    x=durations_by_span[_name],
-                    nbinsx=40,
-                    showlegend=False,
-                    marker_color="#AAB6FB",
-                    hovertemplate="%{x:.1f}ms: %{y} samples<extra></extra>",
-                ),
-                row=_row,
-                col=_col,
+        _s = stats.get(_name, {})
+        for _label, _color in _percentile_styles:
+            _val = _s.get(_label)
+            if _val is None:
+                continue
+            _fig.add_vline(
+                x=_val,
+                line=dict(color=_color, dash="dash", width=1.5),
+                annotation_text=_label,
+                annotation_position="top",
+                annotation_font_color=_color,
             )
 
-            # Overlay percentile lines; label only the first subplot to act as a legend.
-            # Any annotation_* kwarg (even with annotation_text=None) triggers plotly's
-            # default "new text" label, so we only pass annotation kwargs when we want one.
-            _s = stats.get(_name, {})
-            _label_this_subplot = _i == 0
-            for _label, _color in _percentile_styles:
-                _val = _s.get(_label)
-                if _val is None:
-                    continue
-                _vline_kwargs = dict(
-                    x=_val,
-                    line=dict(color=_color, dash="dash", width=1.5),
-                    row=_row,
-                    col=_col,
-                )
-                if _label_this_subplot:
-                    _vline_kwargs["annotation_text"] = _label
-                    _vline_kwargs["annotation_position"] = "top"
-                    _vline_kwargs["annotation_font_color"] = _color
-                _fig.add_vline(**_vline_kwargs)
-
-            _fig.update_xaxes(title_text="Duration (ms)", row=_row, col=_col)
-            _fig.update_yaxes(title_text="Count", row=_row, col=_col)
-
         _fig.update_layout(
-            height=320 * _rows,
+            xaxis_title="Duration (ms)",
+            yaxis_title="Count",
+            height=400,
             showlegend=False,
-            margin=dict(t=50, b=40),
+            margin=dict(t=40, b=40),
+            title=_name,
         )
 
         _out = mo.vstack(
             [
                 mo.md("### Histograms _(p50 green, p95 orange, p99 red)_"),
+                histogram_span,
                 mo.ui.plotly(_fig),
             ]
         )
-    else:
-        _out = mo.md("### Histograms\n\n*No span data to plot.*")
 
     _out
 
@@ -645,27 +642,78 @@ def _(FALLBACK_COLOR, SPAN_COLORS, get_trace_detail, go, mo, trace_selector, tra
 
 @app.function
 def build_waterfall(detail, spans, go, mo, span_colors, fallback_color):
-    """Build a Gantt-style waterfall figure and span table for a single trace."""
+    """Build a Gantt-style waterfall figure and span table for a single trace.
+
+    Spans are ordered by depth-first pre-order traversal of the parent/child tree
+    so children sit directly under their parent, and y-axis labels are indented by
+    depth. Each span gets its own row (indexed by an integer y-position) so spans
+    that share a name — e.g. an inference-server span emitted under both the
+    primary and OODD wrappers — don't collide on the same row.
+    """
     root_start = min(s.get("start_time_ns", 0) for s in spans)
 
-    bars = []
+    span_by_id = {s.get("span_id"): s for s in spans if s.get("span_id")}
+    children_by_parent: dict = {}
     for s in spans:
+        pid = s.get("parent_span_id")
+        if pid not in span_by_id:
+            pid = None  # treat orphans (parent missing from merged set) as roots
+        children_by_parent.setdefault(pid, []).append(s)
+    for kids in children_by_parent.values():
+        kids.sort(key=lambda s: s.get("start_time_ns", 0))
+
+    ordered: list = []  # list of (span, depth) in DFS pre-order
+    # Iterative DFS: marimo rewrites function names with cell-local prefixes,
+    # which breaks self-recursion inside nested helpers.
+    stack: list = [(s, 0) for s in reversed(children_by_parent.get(None, []))]
+    while stack:
+        node, depth = stack.pop()
+        ordered.append((node, depth))
+        children = children_by_parent.get(node.get("span_id"), [])
+        for child in reversed(children):
+            stack.append((child, depth + 1))
+
+    placed_ids = {s.get("span_id") for s, _ in ordered}
+    for s in spans:
+        if s.get("span_id") not in placed_ids:
+            ordered.append((s, 0))
+
+    # Tint every descendant of a primary/OODD inference wrapper with the wrapper's
+    # color so it's visually obvious which branch a given inference-pod span ran
+    # under. Walks the subtree under each wrapper span using the same iterative DFS.
+    inherited_color: dict = {}
+    for s in spans:
+        if s.get("name") in ("_submit_primary_inference", "_submit_oodd_inference"):
+            wrapper_color = span_colors.get(s.get("name"), fallback_color)
+            sub_stack: list = [s.get("span_id")]
+            while sub_stack:
+                pid = sub_stack.pop()
+                for child in children_by_parent.get(pid, []):
+                    cid = child.get("span_id")
+                    if cid is not None and cid not in inherited_color:
+                        inherited_color[cid] = wrapper_color
+                        sub_stack.append(cid)
+
+    fig = go.Figure()
+    tickvals: list = []
+    ticktext: list = []
+    for idx, (s, depth) in enumerate(ordered):
         dur = s.get("duration_ms", 0)
         if dur is None or dur < 0:
             continue
         name = s.get("name", "unknown")
         start_ms = (s.get("start_time_ns", 0) - root_start) / 1_000_000
-        bars.append((name, start_ms, dur))
-
-    fig = go.Figure()
-    for name, start_ms, dur in bars:
+        label = ("    " * depth) + name
+        tickvals.append(idx)
+        ticktext.append(label)
+        bar_color = inherited_color.get(s.get("span_id")) or span_colors.get(name, fallback_color)
         fig.add_trace(
             go.Bar(
-                y=[name],
+                y=[idx],
                 x=[dur],
                 base=[start_ms],
                 orientation="h",
-                marker_color=span_colors.get(name, fallback_color),
+                marker_color=bar_color,
                 name=name,
                 customdata=[[start_ms + dur, dur]],
                 hovertemplate=(
@@ -679,21 +727,26 @@ def build_waterfall(detail, spans, go, mo, span_colors, fallback_color):
 
     fig.update_layout(
         xaxis_title="Time from request start (ms)",
-        height=max(200, 40 * len(bars) + 100),
+        height=max(200, 28 * len(ordered) + 100),
         barmode="overlay",
-        yaxis=dict(autorange="reversed"),
-        margin=dict(t=20, b=40),
+        yaxis=dict(
+            tickmode="array",
+            tickvals=tickvals,
+            ticktext=ticktext,
+            autorange="reversed",
+        ),
+        margin=dict(t=20, b=40, l=320),
     )
 
     span_table = []
-    for s in spans:
+    for s, depth in ordered:
         annotations = s.get("annotations") or {}
         annotation_str = ", ".join(f"{k}={v}" for k, v in sorted(annotations.items())) if annotations else ""
         start_ms = (s.get("start_time_ns", 0) - root_start) / 1_000_000
         dur = s.get("duration_ms", 0) or 0
         span_table.append(
             {
-                "Span": s.get("name", "unknown"),
+                "Span": ("    " * depth) + s.get("name", "unknown"),
                 "Start (ms)": round(start_ms, 2),
                 "End (ms)": round(start_ms + dur, 2),
                 "Duration (ms)": round(dur, 2),
