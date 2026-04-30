@@ -234,7 +234,11 @@ def build_metrics(state):
         "failed_escalations": {},
         "detector_details": json.dumps(detector_details),
         "k3s_stats": {
-            "deployments": json.dumps(["edge/edge-endpoint", "edge/edge-endpoint-network-healer"]),
+            # Mirror production: get_deployments() in system_metrics.py uses
+            # str(list) (Python repr with single quotes), not json.dumps. The
+            # frontend rehydrate path leaves it as a string since it's not
+            # valid JSON.
+            "deployments": str(["edge/edge-endpoint", "edge/edge-endpoint-network-healer"]),
             "pod_statuses": json.dumps(
                 {
                     "edge-endpoint-5755bcc876-2z6cq": "Running",
