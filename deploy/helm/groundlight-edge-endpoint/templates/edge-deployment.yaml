@@ -290,7 +290,7 @@ spec:
           requests:
             memory: "200Mi"
         command: ["/bin/bash", "-c"]
-        args: ["poetry run python -m app.model_updater.update_models"]
+        args: ["uv run --no-sync python -m app.model_updater.update_models"]
         env:
         - name: LOG_LEVEL
           value: {{ .Values.logLevel | quote }}

@@ -15,7 +15,7 @@ fi
 
 nginx 
 
-poetry run uvicorn \
+uv run --no-sync uvicorn \
     --workers 8 \
     --host 0.0.0.0 \
     --port ${APP_PORT} \

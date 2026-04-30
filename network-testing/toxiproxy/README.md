@@ -51,13 +51,13 @@ To test the behavior of the edge endpoint with an impairment, follow this basic 
 To enable Toxiproxy in your namespace (deploys resources, creates/updates the proxy, patches the deployment):
 
 ```bash
-poetry run python enable_toxiproxy.py
+uv run python enable_toxiproxy.py
 ```
 
 To disable Toxiproxy (deleting the created resources) and restore normal routing:
 
 ```bash
-poetry run python disable_toxiproxy.py
+uv run python disable_toxiproxy.py
 ```
 
 Notes:
@@ -69,7 +69,7 @@ Notes:
 To check the status, which includes whether the proxy is enabled and any active toxics:
 
 ```bash
-poetry run python status.py
+uv run python status.py
 ```
 
 ## Currently supported toxics
@@ -85,19 +85,19 @@ Examples:
 
 ```bash
 # Add 1500ms upstream latency (default direction is 'up')
-poetry run python enable_latency.py 1500
+uv run python enable_latency.py 1500
 
 # Add 1000ms upstream latency with 200ms jitter
-poetry run python enable_latency.py 1000 --jitter 200 --direction up
+uv run python enable_latency.py 1000 --jitter 200 --direction up
 
 # Add bidirectional latency of 2000ms
-poetry run python enable_latency.py 2000 --direction both
+uv run python enable_latency.py 2000 --direction both
 ```
 
 Remove latency toxics:
 
 ```bash
-poetry run python disable_latency.py
+uv run python disable_latency.py
 ```
 
 Behavior details:
@@ -111,16 +111,16 @@ Examples:
 
 ```bash
 # Enable 30s timeout on both streams (default)
-poetry run python enable_timeout.py --timeout-ms 30000 --timeout-stream both
+uv run python enable_timeout.py --timeout-ms 30000 --timeout-stream both
 
 # Enable 10s timeout only on upstream traffic
-poetry run python enable_timeout.py --timeout-ms 10000 --timeout-stream up
+uv run python enable_timeout.py --timeout-ms 10000 --timeout-stream up
 ```
 
 Disable timeout (re-enable proxy and remove timeout toxics):
 
 ```bash
-poetry run python disable_timeout.py
+uv run python disable_timeout.py
 ```
 
 Behavior details:
@@ -134,13 +134,13 @@ Examples:
 
 ```bash
 # Refuse connections (disable the proxy)
-poetry run python enable_outage.py
+uv run python enable_outage.py
 ```
 
 Disable outage (re-enable proxy):
 
 ```bash
-poetry run python disable_outage.py
+uv run python disable_outage.py
 ```
 
 ### Flap impairment
@@ -161,11 +161,11 @@ Examples:
 
 ```bash
 # Flap timeout: 10s up, 5s down, 20s timeout, upstream only
-poetry run python flap_impairment.py \
+uv run python flap_impairment.py \
   --mode timeout --up-ms 10000 --down-ms 5000 --timeout-ms 20000 --timeout-stream up
 
 # Flap refuse for 5 cycles, 5s up / 5s down
-poetry run python flap_impairment.py \
+uv run python flap_impairment.py \
   --mode refuse --up-ms 5000 --down-ms 5000 --iterations 5
 ```
 
@@ -187,5 +187,4 @@ Behavior details:
 
 - Local port-forward conflicts
   - If port 8474 is in use locally, close the process or modify the scripts to use a different local port.
-
 
