@@ -164,10 +164,41 @@ def build_resources(state):
     }
 
 
+_PIPELINE_CONFIG_BASIC = "generic-cached-timm\ncalibrated-mlp"
+
+# Realistic-looking multi-stage pipeline used to exercise YAML syntax
+# highlighting in the Pipeline column. Stages have nested keys, strings,
+# numbers, and booleans so every token type renders.
+_PIPELINE_CONFIG_RICH = """\
+stages:
+  - name: preprocess
+    type: image-resize
+    params:
+      target_height: 224
+      target_width: 224
+      interpolation: bilinear
+  - name: backbone
+    type: generic-cached-timm
+    params:
+      model: tf_efficientnet_b0
+      pretrained: true
+      cache_features: true
+  - name: head
+    type: calibrated-mlp
+    params:
+      hidden_dim: 256
+      dropout: 0.1
+      temperature: 1.4
+"""
+
+
 def build_metrics(state):
     detector_details = {}
     for i in range(state["num_detectors"]):
         d = _make_detector(i)
+        # Give the first detector a richer multi-stage pipeline so the
+        # Pipeline column actually exercises YAML syntax highlighting in dev.
+        pipeline_config = _PIPELINE_CONFIG_RICH if i == 0 else _PIPELINE_CONFIG_BASIC
         detector_details[d["id"]] = {
             "detector_name": d["name"],
             "status": "ready",
@@ -175,15 +206,77 @@ def build_metrics(state):
             "mode": "BINARY",
             "deploy_time": f"2026-04-10T10:{i:02d}:00Z",
             "last_updated_time": "2026-04-10T19:30:00Z",
-            "pipeline_config": "generic-cached-timm\ncalibrated-mlp",
+            "pipeline_config": pipeline_config,
             "edge_inference_config": {"enabled": True, "always_return_edge_prediction": True},
         }
     return {
         "device_info": {"hostname": "mock-device", "ip": "10.0.0.1"},
-        "activity_metrics": {},
+        "activity_metrics": {
+            "activity_hour": "2026-04-29_19",
+            "num_detectors_lifetime": state["num_detectors"],
+            "num_detectors_active_1h": state["num_detectors"],
+            "confidence_histogram": {
+                "version": 2,
+                "bucket_width": 5,
+                "counts": [61, 0, 0, 0, 0, 0, 0, 1, 0, 0, 2, 0, 9, 48, 269, 131, 4],
+            },
+            "detector_activity_previous_hour": json.dumps(
+                {
+                    _make_detector(i)["id"]: {
+                        "hourly_total_iqs": 240 - 30 * i,
+                        "below_threshold_iqs": {"YES": 4, "NO": 1},
+                        "escalations": {"YES": 1},
+                    }
+                    for i in range(min(state["num_detectors"], 3))
+                }
+            ),
+        },
         "failed_escalations": {},
         "detector_details": json.dumps(detector_details),
-        "k3s_stats": {},
+        "k3s_stats": {
+            # Mirror production: get_deployments() in system_metrics.py uses
+            # str(list) (Python repr with single quotes), not json.dumps. The
+            # frontend rehydrate path leaves it as a string since it's not
+            # valid JSON.
+            "deployments": str(["edge/edge-endpoint", "edge/edge-endpoint-network-healer"]),
+            "pod_statuses": json.dumps(
+                {
+                    "edge-endpoint-5755bcc876-2z6cq": "Running",
+                    "edge-endpoint-network-healer-5c9f996f4f-zzlk5": "Running",
+                    "create-ecr-creds-f9jhn": "Failed",
+                }
+            ),
+            "container_images": json.dumps(
+                {
+                    "edge-endpoint-5755bcc876-2z6cq": {
+                        "edge-endpoint": "ecr.amazonaws.com/edge-endpoint:dev@sha256:abc123",
+                        "nginx": "docker.io/library/nginx@sha256:def456",
+                    },
+                }
+            ),
+        },
+    }
+
+
+def build_edge_config(state):
+    """Build a synthetic /edge-config payload mirroring EdgeConfigManager.active().to_payload()."""
+    detectors = []
+    for i in range(state["num_detectors"]):
+        d = _make_detector(i)
+        detectors.append({"detector_id": d["id"], "edge_inference_config": "default"})
+    return {
+        "global_config": {
+            "confident_audit_rate": 0.01,
+            "refresh_rate": 60,
+        },
+        "edge_inference_configs": {
+            "default": {
+                "enabled": True,
+                "always_return_edge_prediction": True,
+                "min_time_between_escalations": 2.0,
+            },
+        },
+        "detectors": detectors,
     }
 
 
@@ -196,6 +289,8 @@ class MockHandler(BaseHTTPRequestHandler):
                 data = build_resources(state)
             elif self.path == "/status/metrics.json":
                 data = build_metrics(state)
+            elif self.path == "/edge-config":
+                data = build_edge_config(state)
             else:
                 self.send_error(404)
                 return

@@ -33,20 +33,20 @@ def main(edge_pipeline_config: str | None = None) -> None:
     glh.configure_edge_endpoint(gl, detector, edge_inference_config=DEFAULT)
 
     print(f'Adding a label to {detector.id}...')
-    image, label, rois = imgh.generate_random_image(gl, detector, IMAGE_WIDTH, IMAGE_HEIGHT)
+    image, label, rois = imgh.generate_random_image(detector, IMAGE_WIDTH, IMAGE_HEIGHT)
     iq = gl.submit_image_query(detector, image, **glh.IQ_KWARGS_NON_HUMAN_CLOUD_ESCALATION)
     gl.add_label(iq, label, rois)
     print(f'Successfully added a label to {detector.id}.')
 
     print(f'Submitting {NUM_QUERIES} edge queries...')
     for _ in range(NUM_QUERIES):
-        image, label, rois = imgh.generate_random_image(gl, detector, IMAGE_WIDTH, IMAGE_HEIGHT)
+        image, label, rois = imgh.generate_random_image(detector, IMAGE_WIDTH, IMAGE_HEIGHT)
         iq = gl.submit_image_query(detector, image, **glh.IQ_KWARGS_FOR_NO_ESCALATION)
         glh.error_if_not_from_edge(iq)
     print(f'Successfully submitted {NUM_QUERIES} edge queries.')
 
     print('Attempting ask_async (should reroute to cloud)...')
-    image, label, rois = imgh.generate_random_image(gl, detector, IMAGE_WIDTH, IMAGE_HEIGHT)
+    image, label, rois = imgh.generate_random_image(detector, IMAGE_WIDTH, IMAGE_HEIGHT)
     iq = gl.ask_async(detector, image, human_review="NEVER")
     print(f'Successfully got {iq.id} from ask_async.')
 
