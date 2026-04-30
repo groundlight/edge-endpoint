@@ -10,6 +10,7 @@ from typing import Any, Optional
 import yaml
 from groundlight import Detector, ExperimentalApi
 
+from constants import SUPPORTED_DETECTOR_MODES
 import groundlight_helpers as glh
 import image_helpers as imgh
 import plot_ram_and_vram_usage
@@ -61,8 +62,8 @@ def load_detector_specs(path: Path) -> list[dict]:
     specs: list[dict] = []
 
     for mode, block in data.items():
-        if mode not in glh.SUPPORTED_DETECTOR_MODES:
-            raise ValueError(f"Unsupported detector mode: {mode}. Supported: {sorted(glh.SUPPORTED_DETECTOR_MODES)}")
+        if mode not in SUPPORTED_DETECTOR_MODES:
+            raise ValueError(f"Unsupported detector mode: {mode}. Supported: {sorted(SUPPORTED_DETECTOR_MODES)}")
 
         # Bare list of pipeline names is shorthand for {pipelines: [...]}; image_sizes still required at script level.
         if isinstance(block, list):
@@ -364,7 +365,7 @@ def measure_batch(
     for spec, detector in zip(batch_specs, batch_detectors):
         print(f"  Sending {warmup_queries} warmup query/queries to {detector.id}...")
         for _ in range(warmup_queries):
-            image, _, _ = imgh.generate_random_image(gl, detector, spec["image_width"], spec["image_height"])
+            image, _, _ = imgh.generate_random_image(detector, spec["image_width"], spec["image_height"])
             gl.submit_image_query(detector, image, **glh.IQ_KWARGS_FOR_NO_ESCALATION)
 
     readiness_map = gl.edge.get_detector_readiness()
