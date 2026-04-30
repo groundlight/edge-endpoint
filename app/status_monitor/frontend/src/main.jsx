@@ -11,9 +11,9 @@ import yaml from "highlight.js/lib/languages/yaml";
 import plaintext from "highlight.js/lib/languages/plaintext";
 import "@mantine/core/styles.css";
 import "@mantine/code-highlight/styles.css";
-import "highlight.js/styles/github.css";
 import App from "./App";
 import "./App.css";
+import "./code-themes.css";
 
 hljs.registerLanguage("json", json);
 hljs.registerLanguage("yaml", yaml);
