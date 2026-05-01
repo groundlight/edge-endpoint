@@ -316,18 +316,20 @@ class TestAttributeDetectorResources:
         """An active pod's RAM/VRAM lands in its detector's primary or OODD slot, and totals sum both."""
         primary = _make_inference_pod("primary-pod")
         oodd = _make_inference_pod("oodd-pod", is_oodd=True)
-        detectors, loading_vram, loading_ram, loading_gpu_compute, loading_gpu_memory, loading_cpu = _attribute_detector_resources(
-            inference_pods=[(primary, DET_A, False, True), (oodd, DET_A, True, True)],
-            active_pods={"primary-pod", "oodd-pod"},
-            gpu_responses={
-                "primary-pod": _gpu_process(100, compute_pct=10, memory_bw_pct=8),
-                "oodd-pod": _gpu_process(50, compute_pct=5, memory_bw_pct=3),
-            },
-            pod_resources={
-                "primary-pod": {"ram_bytes": 1000, "cpu_millicores": 100},
-                "oodd-pod": {"ram_bytes": 500, "cpu_millicores": 50},
-            },
-            total_cpu_millicores=1000,
+        detectors, loading_vram, loading_ram, loading_gpu_compute, loading_gpu_memory, loading_cpu = (
+            _attribute_detector_resources(
+                inference_pods=[(primary, DET_A, False, True), (oodd, DET_A, True, True)],
+                active_pods={"primary-pod", "oodd-pod"},
+                gpu_responses={
+                    "primary-pod": _gpu_process(100, compute_pct=10, memory_bw_pct=8),
+                    "oodd-pod": _gpu_process(50, compute_pct=5, memory_bw_pct=3),
+                },
+                pod_resources={
+                    "primary-pod": {"ram_bytes": 1000, "cpu_millicores": 100},
+                    "oodd-pod": {"ram_bytes": 500, "cpu_millicores": 50},
+                },
+                total_cpu_millicores=1000,
+            )
         )
 
         assert loading_vram == 0 and loading_ram == 0
@@ -368,7 +370,10 @@ class TestAttributeDetectorResources:
             inference_pods,
             active_pods={"a", "b"},
             gpu_responses={"a": _gpu_process(100), "b": _gpu_process(200)},
-            pod_resources={"a": {"ram_bytes": 1000, "cpu_millicores": 0}, "b": {"ram_bytes": 2000, "cpu_millicores": 0}},
+            pod_resources={
+                "a": {"ram_bytes": 1000, "cpu_millicores": 0},
+                "b": {"ram_bytes": 2000, "cpu_millicores": 0},
+            },
             total_cpu_millicores=1000,
         )
         by_id = {d["detector_id"]: d for d in detectors}
@@ -380,18 +385,20 @@ class TestAttributeDetectorResources:
         """A non-active pod's RAM/VRAM rolls into the loading totals, not into a detector slot."""
         active_pod = _make_inference_pod("active")
         loading_pod = _make_inference_pod("loading")
-        detectors, loading_vram, loading_ram, loading_gpu_compute, loading_gpu_memory, loading_cpu = _attribute_detector_resources(
-            inference_pods=[(active_pod, DET_A, False, True), (loading_pod, DET_A, False, False)],
-            active_pods={"active"},
-            gpu_responses={
-                "active": _gpu_process(100),
-                "loading": _gpu_process(800, compute_pct=30, memory_bw_pct=12),
-            },
-            pod_resources={
-                "active": {"ram_bytes": 1000, "cpu_millicores": 100},
-                "loading": {"ram_bytes": 5000, "cpu_millicores": 250},
-            },
-            total_cpu_millicores=1000,
+        detectors, loading_vram, loading_ram, loading_gpu_compute, loading_gpu_memory, loading_cpu = (
+            _attribute_detector_resources(
+                inference_pods=[(active_pod, DET_A, False, True), (loading_pod, DET_A, False, False)],
+                active_pods={"active"},
+                gpu_responses={
+                    "active": _gpu_process(100),
+                    "loading": _gpu_process(800, compute_pct=30, memory_bw_pct=12),
+                },
+                pod_resources={
+                    "active": {"ram_bytes": 1000, "cpu_millicores": 100},
+                    "loading": {"ram_bytes": 5000, "cpu_millicores": 250},
+                },
+                total_cpu_millicores=1000,
+            )
         )
 
         assert loading_vram == 800 and loading_ram == 5000

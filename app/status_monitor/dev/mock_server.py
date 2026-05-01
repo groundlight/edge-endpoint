@@ -197,22 +197,24 @@ def build_resources(state):
                     "detectors": sum(d["gpu"]["memory_bandwidth_pct"]["total"] for d in detectors),
                     "loading_detectors": loading_gpu_memory,
                 },
-                "devices": [
-                    {
-                        "index": 0,
-                        "uuid": "GPU-mock-0",
-                        "name": "Mock GPU",
-                        "vram_bytes": {
-                            "total": vram_total_bytes,
-                            "used": vram_used_bytes,
-                            "free": max(vram_total_bytes - vram_used_bytes, 0),
-                        },
-                        "compute_utilization_pct": gpu_compute,
-                        "memory_bandwidth_pct": gpu_memory,
-                    }
-                ]
-                if has_gpu
-                else [],
+                "devices": (
+                    [
+                        {
+                            "index": 0,
+                            "uuid": "GPU-mock-0",
+                            "name": "Mock GPU",
+                            "vram_bytes": {
+                                "total": vram_total_bytes,
+                                "used": vram_used_bytes,
+                                "free": max(vram_total_bytes - vram_used_bytes, 0),
+                            },
+                            "compute_utilization_pct": gpu_compute,
+                            "memory_bandwidth_pct": gpu_memory,
+                        }
+                    ]
+                    if has_gpu
+                    else []
+                ),
             },
         },
         "detectors": detectors,
