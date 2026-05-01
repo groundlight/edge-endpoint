@@ -113,23 +113,32 @@ def build_resources(state):
         detectors.append(
             {
                 "detector_id": d["id"],
-                "ram": {
-                    "primary_bytes": d["primary_ram"],
-                    "oodd_bytes": d["oodd_ram"],
-                    "total_bytes": det_ram,
+                "cpu_utilization_pct": {
+                    "primary": 1.0 + i,
+                    "oodd": 0.5 + i,
+                    "total": 1.5 + i * 2,
                 },
-                "vram": {
-                    "primary_bytes": d["primary_vram"],
-                    "oodd_bytes": d["oodd_vram"],
-                    "total_bytes": det_vram,
+                "ram_bytes": {
+                    "primary": d["primary_ram"],
+                    "oodd": d["oodd_ram"],
+                    "total": det_ram,
                 },
                 "gpu": {
-                    "primary_compute_utilization_pct": primary_gpu_compute,
-                    "oodd_compute_utilization_pct": oodd_gpu_compute,
-                    "total_compute_utilization_pct": min(primary_gpu_compute + oodd_gpu_compute, 100.0),
-                    "primary_memory_bandwidth_pct": primary_gpu_memory,
-                    "oodd_memory_bandwidth_pct": oodd_gpu_memory,
-                    "total_memory_bandwidth_pct": min(primary_gpu_memory + oodd_gpu_memory, 100.0),
+                    "vram_bytes": {
+                        "primary": d["primary_vram"],
+                        "oodd": d["oodd_vram"],
+                        "total": det_vram,
+                    },
+                    "compute_utilization_pct": {
+                        "primary": primary_gpu_compute,
+                        "oodd": oodd_gpu_compute,
+                        "total": min(primary_gpu_compute + oodd_gpu_compute, 100.0),
+                    },
+                    "memory_bandwidth_pct": {
+                        "primary": primary_gpu_memory,
+                        "oodd": oodd_gpu_memory,
+                        "total": min(primary_gpu_memory + oodd_gpu_memory, 100.0),
+                    },
                 },
             }
         )
@@ -149,50 +158,55 @@ def build_resources(state):
     vram_used_bytes = min(used_vram, total_vram) if has_gpu else 0
     gpu_compute = min((num_detectors * 12.0) + loading_gpu_compute, 100.0) if has_gpu else 0.0
     gpu_memory = min((num_detectors * 7.0) + loading_gpu_memory, 100.0) if has_gpu else 0.0
-    observed_gpus = (
-        [
-            {
-                "name": "Mock GPU",
-                "index": 0,
-                "used_bytes": vram_used_bytes,
-                "total_bytes": vram_total_bytes,
-            }
-        ]
-        if has_gpu
-        else []
-    )
+    detector_ram = sum(d["ram_bytes"]["total"] for d in detectors)
+    detector_vram = sum(d["gpu"]["vram_bytes"]["total"] for d in detectors)
     return {
         "system": {
-            "cpu": {
-                "utilization_pct": min(15.0 + num_detectors * 6.0 + (10.0 if loading else 0.0), 100.0),
+            "cpu_utilization_pct": {
+                "total": min(15.0 + num_detectors * 6.0 + (10.0 if loading else 0.0), 100.0),
+                "detectors": num_detectors * 1.5,
+                "loading_detectors": 2.0 if loading else 0.0,
+                "edge_endpoint": 5.0,
+                "other": max(0.0, 10.0 + num_detectors * 4.5 + (8.0 if loading else 0.0)),
             },
-            "ram": {
-                "used_bytes": min(used_ram, total_ram),
-                "total_bytes": total_ram,
-                "loading_detectors_bytes": loading_ram,
-                "edge_endpoint_bytes": EDGE_ENDPOINT_RAM_BYTES,
+            "ram_bytes": {
+                "total": total_ram,
+                "used": min(used_ram, total_ram),
+                "detectors": detector_ram,
+                "loading_detectors": loading_ram,
+                "edge_endpoint": EDGE_ENDPOINT_RAM_BYTES,
+                "other": OTHER_RAM_BASELINE_BYTES,
                 "eviction_threshold_pct": state["eviction"],
             },
-            "vram": {
-                "used_bytes": vram_used_bytes,
-                "total_bytes": vram_total_bytes,
-                "loading_detectors_bytes": loading_vram,
-                "edge_endpoint_bytes": 0,
-                "observed_gpus": observed_gpus,
-            },
             "gpu": {
-                "compute_utilization_pct": gpu_compute,
-                "memory_bandwidth_pct": gpu_memory,
-                "loading_detectors_compute_utilization_pct": loading_gpu_compute,
-                "loading_detectors_memory_bandwidth_pct": loading_gpu_memory,
+                "vram_bytes": {
+                    "total": vram_total_bytes,
+                    "used": vram_used_bytes,
+                    "detectors": detector_vram,
+                    "loading_detectors": loading_vram,
+                    "edge_endpoint": 0,
+                    "other": max(0, vram_used_bytes - detector_vram - loading_vram),
+                },
+                "compute_utilization_pct": {
+                    "total": gpu_compute,
+                    "detectors": sum(d["gpu"]["compute_utilization_pct"]["total"] for d in detectors),
+                    "loading_detectors": loading_gpu_compute,
+                },
+                "memory_bandwidth_pct": {
+                    "total": gpu_memory,
+                    "detectors": sum(d["gpu"]["memory_bandwidth_pct"]["total"] for d in detectors),
+                    "loading_detectors": loading_gpu_memory,
+                },
                 "devices": [
                     {
                         "index": 0,
                         "uuid": "GPU-mock-0",
                         "name": "Mock GPU",
-                        "vram_total_bytes": vram_total_bytes,
-                        "vram_used_bytes": vram_used_bytes,
-                        "vram_free_bytes": max(vram_total_bytes - vram_used_bytes, 0),
+                        "vram_bytes": {
+                            "total": vram_total_bytes,
+                            "used": vram_used_bytes,
+                            "free": max(vram_total_bytes - vram_used_bytes, 0),
+                        },
                         "compute_utilization_pct": gpu_compute,
                         "memory_bandwidth_pct": gpu_memory,
                     }

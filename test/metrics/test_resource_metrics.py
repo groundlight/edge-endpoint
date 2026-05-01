@@ -211,7 +211,11 @@ class TestGetNodeResources:
 
         assert result["ram"]["total"] == 4 * 1024**3
         assert result["ram"]["used"] == 2 * 1024**3
-        assert result["cpu"] == {"utilization_pct": 25.0}
+        assert result["cpu"] == {
+            "utilization_pct": 25.0,
+            "used_millicores": 1000.0,
+            "total_millicores": 4000.0,
+        }
 
 
 class TestFindInferencePods:
@@ -309,95 +313,106 @@ class TestPickActivePods:
 
 class TestAttributeDetectorResources:
     def test_active_pod_routes_to_detector_slot(self):
-        """An active pod's RAM/VRAM lands in its detector's primary or oodd slot, and total_bytes sums both."""
+        """An active pod's RAM/VRAM lands in its detector's primary or OODD slot, and totals sum both."""
         primary = _make_inference_pod("primary-pod")
         oodd = _make_inference_pod("oodd-pod", is_oodd=True)
-        detectors, loading_vram, loading_ram, loading_gpu_compute, loading_gpu_memory = _attribute_detector_resources(
+        detectors, loading_vram, loading_ram, loading_gpu_compute, loading_gpu_memory, loading_cpu = _attribute_detector_resources(
             inference_pods=[(primary, DET_A, False, True), (oodd, DET_A, True, True)],
             active_pods={"primary-pod", "oodd-pod"},
             gpu_responses={
                 "primary-pod": _gpu_process(100, compute_pct=10, memory_bw_pct=8),
                 "oodd-pod": _gpu_process(50, compute_pct=5, memory_bw_pct=3),
             },
-            ram_by_pod={"primary-pod": 1000, "oodd-pod": 500},
+            pod_resources={
+                "primary-pod": {"ram_bytes": 1000, "cpu_millicores": 100},
+                "oodd-pod": {"ram_bytes": 500, "cpu_millicores": 50},
+            },
+            total_cpu_millicores=1000,
         )
 
         assert loading_vram == 0 and loading_ram == 0
         assert loading_gpu_compute == 0.0 and loading_gpu_memory == 0.0
+        assert loading_cpu == 0.0
         assert len(detectors) == 1
         det = detectors[0]
         assert det["detector_id"] == DET_A
-        assert det["vram"] == {"primary_bytes": 100, "oodd_bytes": 50, "total_bytes": 150}
-        assert det["ram"] == {"primary_bytes": 1000, "oodd_bytes": 500, "total_bytes": 1500}
+        assert det["cpu_utilization_pct"] == {"primary": 10.0, "oodd": 5.0, "total": 15.0}
+        assert det["gpu"]["vram_bytes"] == {"primary": 100, "oodd": 50, "total": 150}
+        assert det["ram_bytes"] == {"primary": 1000, "oodd": 500, "total": 1500}
         assert det["gpu"] == {
-            "primary_compute_utilization_pct": 10.0,
-            "oodd_compute_utilization_pct": 5.0,
-            "total_compute_utilization_pct": 15.0,
-            "primary_memory_bandwidth_pct": 8.0,
-            "oodd_memory_bandwidth_pct": 3.0,
-            "total_memory_bandwidth_pct": 11.0,
+            "vram_bytes": {"primary": 100, "oodd": 50, "total": 150},
+            "compute_utilization_pct": {"primary": 10.0, "oodd": 5.0, "total": 15.0},
+            "memory_bandwidth_pct": {"primary": 8.0, "oodd": 3.0, "total": 11.0},
         }
 
     def test_only_primary_leaves_oodd_slot_none(self):
         """A detector with only a primary pod has oodd_bytes=None and total_bytes equal to primary."""
         primary = _make_inference_pod("primary-pod")
         inference_pods = [(primary, DET_A, False, True)]
-        detectors, _, _, _, _ = _attribute_detector_resources(
+        detectors, _, _, _, _, _ = _attribute_detector_resources(
             inference_pods,
             active_pods={"primary-pod"},
             gpu_responses={"primary-pod": _gpu_process(100)},
-            ram_by_pod={"primary-pod": 1000},
+            pod_resources={"primary-pod": {"ram_bytes": 1000, "cpu_millicores": 0}},
+            total_cpu_millicores=1000,
         )
-        assert detectors[0]["vram"] == {"primary_bytes": 100, "oodd_bytes": None, "total_bytes": 100}
-        assert detectors[0]["ram"] == {"primary_bytes": 1000, "oodd_bytes": None, "total_bytes": 1000}
+        assert detectors[0]["gpu"]["vram_bytes"] == {"primary": 100, "oodd": None, "total": 100}
+        assert detectors[0]["ram_bytes"] == {"primary": 1000, "oodd": None, "total": 1000}
 
     def test_multiple_detectors_produce_separate_entries(self):
         """Pods belonging to different detectors get their own entries in the output."""
         a = _make_inference_pod("a")
         b = _make_inference_pod("b")
         inference_pods = [(a, DET_A, False, True), (b, DET_B, False, True)]
-        detectors, _, _, _, _ = _attribute_detector_resources(
+        detectors, _, _, _, _, _ = _attribute_detector_resources(
             inference_pods,
             active_pods={"a", "b"},
             gpu_responses={"a": _gpu_process(100), "b": _gpu_process(200)},
-            ram_by_pod={"a": 1000, "b": 2000},
+            pod_resources={"a": {"ram_bytes": 1000, "cpu_millicores": 0}, "b": {"ram_bytes": 2000, "cpu_millicores": 0}},
+            total_cpu_millicores=1000,
         )
         by_id = {d["detector_id"]: d for d in detectors}
         assert set(by_id) == {DET_A, DET_B}
-        assert by_id[DET_A]["vram"]["total_bytes"] == 100
-        assert by_id[DET_B]["vram"]["total_bytes"] == 200
+        assert by_id[DET_A]["gpu"]["vram_bytes"]["total"] == 100
+        assert by_id[DET_B]["gpu"]["vram_bytes"]["total"] == 200
 
     def test_inactive_pod_routes_to_loading(self):
         """A non-active pod's RAM/VRAM rolls into the loading totals, not into a detector slot."""
         active_pod = _make_inference_pod("active")
         loading_pod = _make_inference_pod("loading")
-        detectors, loading_vram, loading_ram, loading_gpu_compute, loading_gpu_memory = _attribute_detector_resources(
+        detectors, loading_vram, loading_ram, loading_gpu_compute, loading_gpu_memory, loading_cpu = _attribute_detector_resources(
             inference_pods=[(active_pod, DET_A, False, True), (loading_pod, DET_A, False, False)],
             active_pods={"active"},
             gpu_responses={
                 "active": _gpu_process(100),
                 "loading": _gpu_process(800, compute_pct=30, memory_bw_pct=12),
             },
-            ram_by_pod={"active": 1000, "loading": 5000},
+            pod_resources={
+                "active": {"ram_bytes": 1000, "cpu_millicores": 100},
+                "loading": {"ram_bytes": 5000, "cpu_millicores": 250},
+            },
+            total_cpu_millicores=1000,
         )
 
         assert loading_vram == 800 and loading_ram == 5000
         assert loading_gpu_compute == 30.0 and loading_gpu_memory == 12.0
+        assert loading_cpu == 250.0
         assert len(detectors) == 1
-        assert detectors[0]["vram"]["primary_bytes"] == 100
-        assert detectors[0]["ram"]["primary_bytes"] == 1000
+        assert detectors[0]["gpu"]["vram_bytes"]["primary"] == 100
+        assert detectors[0]["ram_bytes"]["primary"] == 1000
 
     def test_missing_gpu_data_yields_zero_vram(self):
         """A pod with no GPU response contributes 0 VRAM but still picks up RAM from Metrics Server."""
         pod = _make_inference_pod("p")
-        detectors, _, _, _, _ = _attribute_detector_resources(
+        detectors, _, _, _, _, _ = _attribute_detector_resources(
             inference_pods=[(pod, DET_A, False, True)],
             active_pods={"p"},
             gpu_responses={},
-            ram_by_pod={"p": 1000},
+            pod_resources={"p": {"ram_bytes": 1000, "cpu_millicores": 0}},
+            total_cpu_millicores=1000,
         )
-        assert detectors[0]["vram"]["primary_bytes"] == 0
-        assert detectors[0]["ram"]["primary_bytes"] == 1000
+        assert detectors[0]["gpu"]["vram_bytes"]["primary"] == 0
+        assert detectors[0]["ram_bytes"]["primary"] == 1000
 
 
 class TestBuildGpuSummary:
@@ -407,7 +422,7 @@ class TestBuildGpuSummary:
         observed, devices, total, used, compute_pct, memory_bw_pct = _build_gpu_summary(responses)
         assert total == 1000 and used == 200
         assert observed == [{"name": "NVIDIA A10", "index": 0, "used_bytes": 200, "total_bytes": 1000}]
-        assert devices[0]["vram_used_bytes"] == 200
+        assert devices[0]["vram_bytes"]["used"] == 200
         assert compute_pct == 20.0 and memory_bw_pct == 10.0
 
     def test_two_pods_same_gpu_dedupes_by_uuid(self):

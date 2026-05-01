@@ -120,12 +120,12 @@ class ResourceMetricsCollector:
         pod_list = v1.list_namespaced_pod(namespace=namespace)
         inference_pods = _find_inference_pods(pod_list)
         node_resources = _get_node_resources(v1)
-        ram_by_pod = _get_pod_ram_metrics(namespace)
+        pod_resources = _get_pod_resource_metrics(namespace)
 
         if inference_pods:
             active_pods = _pick_active_pods(inference_pods)
             gpu_responses = _query_all_pod_gpus(inference_pods)
-            observed_gpus, gpu_devices, total_vram, used_vram, gpu_compute_pct, gpu_memory_bw_pct = _build_gpu_summary(
+            _, gpu_devices, total_vram, used_vram, gpu_compute_pct, gpu_memory_bw_pct = _build_gpu_summary(
                 gpu_responses
             )
             (
@@ -134,17 +134,20 @@ class ResourceMetricsCollector:
                 loading_ram,
                 loading_gpu_compute_pct,
                 loading_gpu_memory_bw_pct,
+                loading_cpu_millicores,
             ) = _attribute_detector_resources(
                 inference_pods,
                 active_pods,
                 gpu_responses,
-                ram_by_pod,
+                pod_resources,
+                node_resources["cpu"]["total_millicores"],
             )
         else:
-            observed_gpus, gpu_devices, total_vram, used_vram = [], [], 0, 0
+            gpu_devices, total_vram, used_vram = [], 0, 0
             gpu_compute_pct, gpu_memory_bw_pct = 0.0, 0.0
             detectors, loading_vram, loading_ram = [], 0, 0
             loading_gpu_compute_pct, loading_gpu_memory_bw_pct = 0.0, 0.0
+            loading_cpu_millicores = 0.0
 
         # Anything in the namespace that isn't a recognised Running inference
         # pod counts as "edge-endpoint platform overhead": the edge-endpoint
@@ -154,31 +157,60 @@ class ResourceMetricsCollector:
         # since the namespace is chart-owned and unlikely to host foreign pods.
         inference_pod_names = {pod.metadata.name for pod, _, _, _ in inference_pods}
         edge_endpoint_ram = sum(
-            bytes_used for name, bytes_used in ram_by_pod.items() if name not in inference_pod_names
+            resource["ram_bytes"] for name, resource in pod_resources.items() if name not in inference_pod_names
+        )
+        edge_endpoint_cpu_millicores = sum(
+            resource["cpu_millicores"] for name, resource in pod_resources.items() if name not in inference_pod_names
+        )
+        detector_ram = sum(det["ram_bytes"]["total"] for det in detectors)
+        detector_vram = sum(det["gpu"]["vram_bytes"]["total"] for det in detectors)
+        detector_cpu_pct = sum(det["cpu_utilization_pct"]["total"] for det in detectors)
+        detector_gpu_compute_pct = sum(det["gpu"]["compute_utilization_pct"]["total"] for det in detectors)
+        detector_gpu_memory_bw_pct = sum(det["gpu"]["memory_bandwidth_pct"]["total"] for det in detectors)
+        edge_endpoint_cpu_pct = _percentage(edge_endpoint_cpu_millicores, node_resources["cpu"]["total_millicores"])
+        loading_cpu_pct = _percentage(loading_cpu_millicores, node_resources["cpu"]["total_millicores"])
+        other_cpu_pct = max(
+            0.0,
+            node_resources["cpu"]["utilization_pct"] - detector_cpu_pct - loading_cpu_pct - edge_endpoint_cpu_pct,
         )
 
         return {
             "system": {
-                "cpu": node_resources["cpu"],
-                "ram": {
-                    "used_bytes": node_resources["ram"]["used"],
-                    "total_bytes": node_resources["ram"]["total"],
-                    "loading_detectors_bytes": loading_ram,
-                    "edge_endpoint_bytes": edge_endpoint_ram,
+                "cpu_utilization_pct": {
+                    "total": node_resources["cpu"]["utilization_pct"],
+                    "detectors": detector_cpu_pct,
+                    "loading_detectors": loading_cpu_pct,
+                    "edge_endpoint": edge_endpoint_cpu_pct,
+                    "other": other_cpu_pct,
+                },
+                "ram_bytes": {
+                    "total": node_resources["ram"]["total"],
+                    "used": node_resources["ram"]["used"],
+                    "detectors": detector_ram,
+                    "loading_detectors": loading_ram,
+                    "edge_endpoint": edge_endpoint_ram,
+                    "other": max(0, node_resources["ram"]["used"] - detector_ram - loading_ram - edge_endpoint_ram),
                     "eviction_threshold_pct": node_resources["ram"]["eviction_threshold_pct"],
                 },
-                "vram": {
-                    "used_bytes": used_vram,
-                    "total_bytes": total_vram,
-                    "loading_detectors_bytes": loading_vram,
-                    "edge_endpoint_bytes": 0,  # Only inference pods consume VRAM
-                    "observed_gpus": observed_gpus,
-                },
                 "gpu": {
-                    "compute_utilization_pct": gpu_compute_pct,
-                    "memory_bandwidth_pct": gpu_memory_bw_pct,
-                    "loading_detectors_compute_utilization_pct": loading_gpu_compute_pct,
-                    "loading_detectors_memory_bandwidth_pct": loading_gpu_memory_bw_pct,
+                    "vram_bytes": {
+                        "total": total_vram,
+                        "used": used_vram,
+                        "detectors": detector_vram,
+                        "loading_detectors": loading_vram,
+                        "edge_endpoint": 0,
+                        "other": max(0, used_vram - detector_vram - loading_vram),
+                    },
+                    "compute_utilization_pct": {
+                        "total": gpu_compute_pct,
+                        "detectors": detector_gpu_compute_pct,
+                        "loading_detectors": loading_gpu_compute_pct,
+                    },
+                    "memory_bandwidth_pct": {
+                        "total": gpu_memory_bw_pct,
+                        "detectors": detector_gpu_memory_bw_pct,
+                        "loading_detectors": loading_gpu_memory_bw_pct,
+                    },
                     "devices": gpu_devices,
                 },
             },
@@ -224,13 +256,17 @@ def _get_node_resources(v1: "client.CoreV1Api") -> dict:
 
         return {
             "ram": {"total": total_ram, "used": used_ram, "eviction_threshold_pct": eviction_pct},
-            "cpu": {"utilization_pct": cpu_utilization_pct},
+            "cpu": {
+                "utilization_pct": cpu_utilization_pct,
+                "used_millicores": used_cpu_millicores,
+                "total_millicores": total_cpu_millicores,
+            },
         }
     except Exception:
         logger.error("Failed to get node resources from Kubernetes APIs", exc_info=True)
         return {
             "ram": {"total": 0, "used": 0, "eviction_threshold_pct": None},
-            "cpu": {"utilization_pct": 0.0},
+            "cpu": {"utilization_pct": 0.0, "used_millicores": 0.0, "total_millicores": 0.0},
         }
 
 
@@ -342,7 +378,7 @@ def _query_all_pod_gpus(inference_pods: list[tuple]) -> dict[str, dict | None]:
 def _build_gpu_summary(gpu_responses: dict[str, dict | None]) -> tuple[list, list, int, int, float, float]:
     """Aggregate GPU device observations across all queried pods.
 
-    Returns compatibility VRAM device entries, v2-style GPU device entries,
+    Returns compatibility VRAM device entries, nested GPU device entries,
     aggregate VRAM bytes, and average device-wide GPU utilization.
     """
     devices_by_key: dict[str, dict] = {}
@@ -375,16 +411,19 @@ def _build_gpu_summary(gpu_responses: dict[str, dict | None]) -> tuple[list, lis
                     "index": gpu_index,
                     "uuid": gpu_uuid,
                     "name": gpu_name,
-                    "vram_total_bytes": gpu_total,
-                    "vram_used_bytes": gpu_used,
-                    "vram_free_bytes": gpu_free,
+                    "vram_bytes": {
+                        "total": gpu_total,
+                        "used": gpu_used,
+                        "free": gpu_free,
+                    },
                     "compute_utilization_pct": compute_pct,
                     "memory_bandwidth_pct": memory_bw_pct,
                 }
             else:
-                existing["vram_total_bytes"] = max(existing.get("vram_total_bytes", 0), gpu_total)
-                existing["vram_used_bytes"] = max(existing.get("vram_used_bytes", 0), gpu_used)
-                existing["vram_free_bytes"] = max(existing.get("vram_free_bytes", 0), gpu_free)
+                existing_vram = existing["vram_bytes"]
+                existing_vram["total"] = max(existing_vram.get("total", 0), gpu_total)
+                existing_vram["used"] = max(existing_vram.get("used", 0), gpu_used)
+                existing_vram["free"] = max(existing_vram.get("free", 0), gpu_free)
                 existing["compute_utilization_pct"] = max(existing.get("compute_utilization_pct", 0.0), compute_pct)
                 existing["memory_bandwidth_pct"] = max(existing.get("memory_bandwidth_pct", 0.0), memory_bw_pct)
 
@@ -407,8 +446,8 @@ def _build_gpu_summary(gpu_responses: dict[str, dict | None]) -> tuple[list, lis
         {
             "name": device["name"],
             "index": device["index"],
-            "used_bytes": device["vram_used_bytes"],
-            "total_bytes": device["vram_total_bytes"],
+            "used_bytes": device["vram_bytes"]["used"],
+            "total_bytes": device["vram_bytes"]["total"],
         }
         for device in sorted_devices
     ]
@@ -425,8 +464,9 @@ def _attribute_detector_resources(
     inference_pods: list[tuple],
     active_pods: set[str],
     gpu_responses: dict[str, dict | None],
-    ram_by_pod: dict[str, int],
-) -> tuple[list, int, int, float, float]:
+    pod_resources: dict[str, dict[str, float]],
+    total_cpu_millicores: float,
+) -> tuple[list, int, int, float, float, float]:
     """Attribute VRAM, GPU utilization, and RAM to individual detectors or loading totals.
 
     Returns detector entries, loading VRAM/RAM, and loading GPU utilization
@@ -438,18 +478,16 @@ def _attribute_detector_resources(
     loading_ram_bytes = 0
     loading_gpu_compute_pct = 0.0
     loading_gpu_memory_bw_pct = 0.0
+    loading_cpu_millicores = 0.0
 
     def _blank_resource() -> dict:
-        return {"primary_bytes": None, "oodd_bytes": None, "total_bytes": 0}
+        return {"primary": None, "oodd": None, "total": 0}
 
     def _blank_gpu() -> dict:
         return {
-            "primary_compute_utilization_pct": None,
-            "oodd_compute_utilization_pct": None,
-            "total_compute_utilization_pct": 0.0,
-            "primary_memory_bandwidth_pct": None,
-            "oodd_memory_bandwidth_pct": None,
-            "total_memory_bandwidth_pct": 0.0,
+            "vram_bytes": _blank_resource(),
+            "compute_utilization_pct": _blank_resource(),
+            "memory_bandwidth_pct": _blank_resource(),
         }
 
     for pod, det_id, is_oodd, _is_ready in inference_pods:
@@ -458,11 +496,15 @@ def _attribute_detector_resources(
         process_vram = process_info.get("vram_used_bytes") or 0
         process_compute_pct = float(process_info.get("compute_utilization_pct") or 0.0)
         process_memory_bw_pct = float(process_info.get("memory_bandwidth_pct") or 0.0)
-        process_ram = ram_by_pod.get(pod.metadata.name, 0)
+        pod_resource = pod_resources.get(pod.metadata.name, {})
+        process_ram = int(pod_resource.get("ram_bytes", 0))
+        process_cpu_millicores = float(pod_resource.get("cpu_millicores", 0.0))
+        process_cpu_pct = _percentage(process_cpu_millicores, total_cpu_millicores)
 
         if pod.metadata.name not in active_pods:
             loading_vram_bytes += process_vram
             loading_ram_bytes += process_ram
+            loading_cpu_millicores += process_cpu_millicores
             loading_gpu_compute_pct = min(loading_gpu_compute_pct + process_compute_pct, 100.0)
             loading_gpu_memory_bw_pct = min(loading_gpu_memory_bw_pct + process_memory_bw_pct, 100.0)
             continue
@@ -470,28 +512,38 @@ def _attribute_detector_resources(
         if det_id not in detectors:
             detectors[det_id] = {
                 "detector_id": det_id,
-                "ram": _blank_resource(),
-                "vram": _blank_resource(),
+                "cpu_utilization_pct": _blank_resource(),
+                "ram_bytes": _blank_resource(),
                 "gpu": _blank_gpu(),
             }
         det = detectors[det_id]
-        bytes_slot = "oodd_bytes" if is_oodd else "primary_bytes"
-        compute_slot = "oodd_compute_utilization_pct" if is_oodd else "primary_compute_utilization_pct"
-        memory_slot = "oodd_memory_bandwidth_pct" if is_oodd else "primary_memory_bandwidth_pct"
-        det["vram"][bytes_slot] = (det["vram"][bytes_slot] or 0) + process_vram
-        det["ram"][bytes_slot] = (det["ram"][bytes_slot] or 0) + process_ram
-        det["gpu"][compute_slot] = min((det["gpu"][compute_slot] or 0.0) + process_compute_pct, 100.0)
-        det["gpu"][memory_slot] = min((det["gpu"][memory_slot] or 0.0) + process_memory_bw_pct, 100.0)
-        det["vram"]["total_bytes"] = (det["vram"]["primary_bytes"] or 0) + (det["vram"]["oodd_bytes"] or 0)
-        det["ram"]["total_bytes"] = (det["ram"]["primary_bytes"] or 0) + (det["ram"]["oodd_bytes"] or 0)
-        det["gpu"]["total_compute_utilization_pct"] = min(
-            (det["gpu"]["primary_compute_utilization_pct"] or 0.0)
-            + (det["gpu"]["oodd_compute_utilization_pct"] or 0.0),
+        slot = "oodd" if is_oodd else "primary"
+        det["cpu_utilization_pct"][slot] = (det["cpu_utilization_pct"][slot] or 0.0) + process_cpu_pct
+        det["ram_bytes"][slot] = (det["ram_bytes"][slot] or 0) + process_ram
+        det["gpu"]["vram_bytes"][slot] = (det["gpu"]["vram_bytes"][slot] or 0) + process_vram
+        det["gpu"]["compute_utilization_pct"][slot] = min(
+            (det["gpu"]["compute_utilization_pct"][slot] or 0.0) + process_compute_pct,
             100.0,
         )
-        det["gpu"]["total_memory_bandwidth_pct"] = min(
-            (det["gpu"]["primary_memory_bandwidth_pct"] or 0.0)
-            + (det["gpu"]["oodd_memory_bandwidth_pct"] or 0.0),
+        det["gpu"]["memory_bandwidth_pct"][slot] = min(
+            (det["gpu"]["memory_bandwidth_pct"][slot] or 0.0) + process_memory_bw_pct,
+            100.0,
+        )
+        det["cpu_utilization_pct"]["total"] = (det["cpu_utilization_pct"]["primary"] or 0.0) + (
+            det["cpu_utilization_pct"]["oodd"] or 0.0
+        )
+        det["ram_bytes"]["total"] = (det["ram_bytes"]["primary"] or 0) + (det["ram_bytes"]["oodd"] or 0)
+        det["gpu"]["vram_bytes"]["total"] = (det["gpu"]["vram_bytes"]["primary"] or 0) + (
+            det["gpu"]["vram_bytes"]["oodd"] or 0
+        )
+        det["gpu"]["compute_utilization_pct"]["total"] = min(
+            (det["gpu"]["compute_utilization_pct"]["primary"] or 0.0)
+            + (det["gpu"]["compute_utilization_pct"]["oodd"] or 0.0),
+            100.0,
+        )
+        det["gpu"]["memory_bandwidth_pct"]["total"] = min(
+            (det["gpu"]["memory_bandwidth_pct"]["primary"] or 0.0)
+            + (det["gpu"]["memory_bandwidth_pct"]["oodd"] or 0.0),
             100.0,
         )
 
@@ -501,14 +553,15 @@ def _attribute_detector_resources(
         loading_ram_bytes,
         loading_gpu_compute_pct,
         loading_gpu_memory_bw_pct,
+        loading_cpu_millicores,
     )
 
 
-def _get_pod_ram_metrics(namespace: str) -> dict[str, int]:
-    """Query the Kubernetes Metrics Server for per-pod RAM usage.
+def _get_pod_resource_metrics(namespace: str) -> dict[str, dict[str, float]]:
+    """Query the Kubernetes Metrics Server for per-pod RAM and CPU usage.
 
-    Returns {pod_name: total_ram_bytes}. Returns an empty dict if the
-    Metrics Server is unavailable.
+    Returns {pod_name: {"ram_bytes": ..., "cpu_millicores": ...}}. Returns an
+    empty dict if the Metrics Server is unavailable.
     """
     try:
         custom = client.CustomObjectsApi()
@@ -519,15 +572,17 @@ def _get_pod_ram_metrics(namespace: str) -> dict[str, int]:
             plural="pods",
         )
     except Exception:
-        logger.debug("Metrics Server unavailable, skipping RAM metrics")
+        logger.debug("Metrics Server unavailable, skipping pod resource metrics")
         return {}
 
-    ram_by_pod: dict[str, int] = {}
+    resources_by_pod: dict[str, dict[str, float]] = {}
     for item in result.get("items", []):
         pod_name = item.get("metadata", {}).get("name", "")
-        total = 0
+        ram_total = 0
+        cpu_total = 0.0
         for container in item.get("containers", []):
             usage = container.get("usage", {})
-            total += _parse_k8s_memory(usage.get("memory", "0"))
-        ram_by_pod[pod_name] = total
-    return ram_by_pod
+            ram_total += _parse_k8s_memory(usage.get("memory", "0"))
+            cpu_total += _parse_k8s_cpu(usage.get("cpu", "0"))
+        resources_by_pod[pod_name] = {"ram_bytes": ram_total, "cpu_millicores": cpu_total}
+    return resources_by_pod

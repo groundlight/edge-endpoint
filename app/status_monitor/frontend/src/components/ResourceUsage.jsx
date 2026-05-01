@@ -53,8 +53,8 @@ function prepareDetectors(resourceData, detectorDetails) {
  */
 function buildLegendRows({ detectors, nameMap, colorMap, vram, ram }) {
   const detectorRows = detectors.map((det) => {
-    const detVram = det.vram?.total_bytes || 0;
-    const detRam = det.ram?.total_bytes || 0;
+    const detVram = det.gpu?.vram_bytes?.total || 0;
+    const detRam = det.ram_bytes?.total || 0;
     return {
       sliceKey: `det:${det.detector_id}`,
       detectorId: det.detector_id,
@@ -213,23 +213,24 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
     );
   }
 
-  const systemVram = resourceData.system?.vram || {};
-  const systemRam = resourceData.system?.ram || {};
-  const observedGpus = systemVram.observed_gpus || [];
+  const systemGpu = resourceData.system?.gpu || {};
+  const systemVram = systemGpu.vram_bytes || {};
+  const systemRam = resourceData.system?.ram_bytes || {};
+  const observedGpus = systemGpu.devices || [];
   const hasVram = observedGpus.length > 0;
-  const hasRam = (systemRam.total_bytes || 0) > 0;
+  const hasRam = (systemRam.total || 0) > 0;
 
   const vram = {
-    total: systemVram.total_bytes || 0,
-    used: systemVram.used_bytes || 0,
-    loading: systemVram.loading_detectors_bytes || 0,
-    edgeEndpoint: systemVram.edge_endpoint_bytes || 0,
+    total: systemVram.total || 0,
+    used: systemVram.used || 0,
+    loading: systemVram.loading_detectors || 0,
+    edgeEndpoint: systemVram.edge_endpoint || 0,
   };
   const ram = {
-    total: systemRam.total_bytes || 0,
-    used: systemRam.used_bytes || 0,
-    loading: systemRam.loading_detectors_bytes || 0,
-    edgeEndpoint: systemRam.edge_endpoint_bytes || 0,
+    total: systemRam.total || 0,
+    used: systemRam.used || 0,
+    loading: systemRam.loading_detectors || 0,
+    edgeEndpoint: systemRam.edge_endpoint || 0,
     evictionPct: systemRam.eviction_threshold_pct ?? null,
   };
 
@@ -246,7 +247,7 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
     loadingBytes: hasVram ? vram.loading : 0,
     edgeEndpointBytes: hasVram ? vram.edgeEndpoint : 0,
     colorMap,
-    resourceKey: "vram",
+    resourceKey: "gpu.vram_bytes",
     resourceLabel: "VRAM",
   });
 
@@ -259,7 +260,7 @@ export default function ResourceUsage({ resourceData, detectorDetails, loading }
         loadingBytes: ram.loading,
         edgeEndpointBytes: ram.edgeEndpoint,
         colorMap,
-        resourceKey: "ram",
+        resourceKey: "ram_bytes",
         resourceLabel: "RAM",
       })
     : null;
