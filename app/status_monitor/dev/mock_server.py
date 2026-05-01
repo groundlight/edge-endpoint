@@ -185,20 +185,22 @@ def build_resources(state):
                 "memory_bandwidth_pct": gpu_memory,
                 "loading_detectors_compute_utilization_pct": loading_gpu_compute,
                 "loading_detectors_memory_bandwidth_pct": loading_gpu_memory,
-                "devices": [
-                    {
-                        "index": 0,
-                        "uuid": "GPU-mock-0",
-                        "name": "Mock GPU",
-                        "vram_total_bytes": vram_total_bytes,
-                        "vram_used_bytes": vram_used_bytes,
-                        "vram_free_bytes": max(vram_total_bytes - vram_used_bytes, 0),
-                        "compute_utilization_pct": gpu_compute,
-                        "memory_bandwidth_pct": gpu_memory,
-                    }
-                ]
-                if has_gpu
-                else [],
+                "devices": (
+                    [
+                        {
+                            "index": 0,
+                            "uuid": "GPU-mock-0",
+                            "name": "Mock GPU",
+                            "vram_total_bytes": vram_total_bytes,
+                            "vram_used_bytes": vram_used_bytes,
+                            "vram_free_bytes": max(vram_total_bytes - vram_used_bytes, 0),
+                            "compute_utilization_pct": gpu_compute,
+                            "memory_bandwidth_pct": gpu_memory,
+                        }
+                    ]
+                    if has_gpu
+                    else []
+                ),
             },
         },
         "detectors": detectors,

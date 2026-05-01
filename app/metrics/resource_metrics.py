@@ -490,8 +490,7 @@ def _attribute_detector_resources(
             100.0,
         )
         det["gpu"]["total_memory_bandwidth_pct"] = min(
-            (det["gpu"]["primary_memory_bandwidth_pct"] or 0.0)
-            + (det["gpu"]["oodd_memory_bandwidth_pct"] or 0.0),
+            (det["gpu"]["primary_memory_bandwidth_pct"] or 0.0) + (det["gpu"]["oodd_memory_bandwidth_pct"] or 0.0),
             100.0,
         )
 
