@@ -45,4 +45,29 @@ mount-s3 "$S3_BUCKET" "$MOUNT_POINT" \
     --read-only \
     --cache "$CACHE_DIR" \
     --allow-other \
-    --foreground
+    --foreground &
+MOUNT_PID=$!
+
+# Verify the mount comes up healthy within 30s. Catches subtle failures like
+# mount-s3 starting against the wrong bucket (empty listing) or a FUSE mount
+# that established but isn't actually serving content. mount-s3 normally
+# completes its initial mount within a few seconds.
+verified=0
+for _ in $(seq 1 30); do
+    if mountpoint -q "$MOUNT_POINT" 2>/dev/null \
+       && [ -n "$(ls -A "$MOUNT_POINT" 2>/dev/null)" ]; then
+        verified=1
+        break
+    fi
+    sleep 1
+done
+
+if [ "$verified" -ne 1 ]; then
+    echo "ERROR: mount verification failed for $MOUNT_POINT (mount-s3 PID $MOUNT_PID)" >&2
+    kill -TERM "$MOUNT_PID" 2>/dev/null || true
+    wait "$MOUNT_PID" 2>/dev/null || true
+    exit 1
+fi
+
+echo "Mount verified at $MOUNT_POINT"
+wait "$MOUNT_PID"
