@@ -99,11 +99,17 @@ def build_resources(state):
     used_ram = EDGE_ENDPOINT_RAM_BYTES + OTHER_RAM_BASELINE_BYTES
     loading_vram = 0
     loading_ram = 0
+    loading_gpu_compute = 0.0
+    loading_gpu_memory = 0.0
 
     for i in range(num_detectors):
         d = _make_detector(i)
         det_vram = d["primary_vram"] + d["oodd_vram"]
         det_ram = d["primary_ram"] + d["oodd_ram"]
+        primary_gpu_compute = 8.0 + i * 3.0
+        oodd_gpu_compute = 3.0 + i
+        primary_gpu_memory = 5.0 + i * 2.0
+        oodd_gpu_memory = 2.0 + i
         detectors.append(
             {
                 "detector_id": d["id"],
@@ -117,6 +123,14 @@ def build_resources(state):
                     "oodd_bytes": d["oodd_vram"],
                     "total_bytes": det_vram,
                 },
+                "gpu": {
+                    "primary_compute_utilization_pct": primary_gpu_compute,
+                    "oodd_compute_utilization_pct": oodd_gpu_compute,
+                    "total_compute_utilization_pct": min(primary_gpu_compute + oodd_gpu_compute, 100.0),
+                    "primary_memory_bandwidth_pct": primary_gpu_memory,
+                    "oodd_memory_bandwidth_pct": oodd_gpu_memory,
+                    "total_memory_bandwidth_pct": min(primary_gpu_memory + oodd_gpu_memory, 100.0),
+                },
             }
         )
         used_vram += det_vram
@@ -125,12 +139,16 @@ def build_resources(state):
     if loading:
         loading_vram = 800_000_000
         loading_ram = 1_600_000_000
+        loading_gpu_compute = 12.0
+        loading_gpu_memory = 8.0
         used_vram += loading_vram
         used_ram += loading_ram
 
     has_gpu = num_detectors > 0 or loading
     vram_total_bytes = total_vram if has_gpu else 0
     vram_used_bytes = min(used_vram, total_vram) if has_gpu else 0
+    gpu_compute = min((num_detectors * 12.0) + loading_gpu_compute, 100.0) if has_gpu else 0.0
+    gpu_memory = min((num_detectors * 7.0) + loading_gpu_memory, 100.0) if has_gpu else 0.0
     observed_gpus = (
         [
             {
@@ -145,6 +163,9 @@ def build_resources(state):
     )
     return {
         "system": {
+            "cpu": {
+                "utilization_pct": min(15.0 + num_detectors * 6.0 + (10.0 if loading else 0.0), 100.0),
+            },
             "ram": {
                 "used_bytes": min(used_ram, total_ram),
                 "total_bytes": total_ram,
@@ -158,6 +179,26 @@ def build_resources(state):
                 "loading_detectors_bytes": loading_vram,
                 "edge_endpoint_bytes": 0,
                 "observed_gpus": observed_gpus,
+            },
+            "gpu": {
+                "compute_utilization_pct": gpu_compute,
+                "memory_bandwidth_pct": gpu_memory,
+                "loading_detectors_compute_utilization_pct": loading_gpu_compute,
+                "loading_detectors_memory_bandwidth_pct": loading_gpu_memory,
+                "devices": [
+                    {
+                        "index": 0,
+                        "uuid": "GPU-mock-0",
+                        "name": "Mock GPU",
+                        "vram_total_bytes": vram_total_bytes,
+                        "vram_used_bytes": vram_used_bytes,
+                        "vram_free_bytes": max(vram_total_bytes - vram_used_bytes, 0),
+                        "compute_utilization_pct": gpu_compute,
+                        "memory_bandwidth_pct": gpu_memory,
+                    }
+                ]
+                if has_gpu
+                else [],
             },
         },
         "detectors": detectors,
