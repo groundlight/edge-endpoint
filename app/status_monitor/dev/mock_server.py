@@ -161,14 +161,18 @@ def build_resources(state):
     detector_ram = sum(d["ram_bytes"]["total"] for d in detectors)
     detector_vram = sum(d["gpu"]["vram_bytes"]["total"] for d in detectors)
     detector_cpu = sum(d["cpu_utilization_pct"]["total"] for d in detectors)
+    loading_cpu = 2.0 if loading else 0.0
+    edge_endpoint_cpu = 5.0
+    other_cpu = max(0.0, 10.0 + num_detectors * 6.0 + (8.0 if loading else 0.0) - detector_cpu)
+    total_cpu = min(detector_cpu + loading_cpu + edge_endpoint_cpu + other_cpu, 100.0)
     return {
         "system": {
             "cpu_utilization_pct": {
-                "total": min(15.0 + num_detectors * 6.0 + (10.0 if loading else 0.0), 100.0),
+                "total": total_cpu,
                 "detectors": detector_cpu,
-                "loading_detectors": 2.0 if loading else 0.0,
-                "edge_endpoint": 5.0,
-                "other": max(0.0, 10.0 + num_detectors * 6.0 + (8.0 if loading else 0.0) - detector_cpu),
+                "loading_detectors": loading_cpu,
+                "edge_endpoint": edge_endpoint_cpu,
+                "other": other_cpu,
             },
             "ram_bytes": {
                 "total": total_ram,
@@ -192,11 +196,17 @@ def build_resources(state):
                     "total": gpu_compute,
                     "detectors": sum(d["gpu"]["compute_utilization_pct"]["total"] for d in detectors),
                     "loading_detectors": loading_gpu_compute,
+                    # Only inference pods are expected to consume GPU compute in the mock edge namespace.
+                    "edge_endpoint": 0.0,
+                    "other": 0.0,
                 },
                 "memory_bandwidth_pct": {
                     "total": gpu_memory,
                     "detectors": sum(d["gpu"]["memory_bandwidth_pct"]["total"] for d in detectors),
                     "loading_detectors": loading_gpu_memory,
+                    # Only inference pods are expected to consume GPU memory bandwidth in the mock edge namespace.
+                    "edge_endpoint": 0.0,
+                    "other": 0.0,
                 },
                 "devices": (
                     [

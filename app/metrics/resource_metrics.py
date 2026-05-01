@@ -204,11 +204,17 @@ class ResourceMetricsCollector:
                         "total": gpu_compute_pct,
                         "detectors": detector_gpu_compute_pct,
                         "loading_detectors": loading_gpu_compute_pct,
+                        # Only inference pods are expected to consume GPU resources
+                        "edge_endpoint": 0.0,
+                        "other": 0.0,
                     },
                     "memory_bandwidth_pct": {
                         "total": gpu_memory_bw_pct,
                         "detectors": detector_gpu_memory_bw_pct,
                         "loading_detectors": loading_gpu_memory_bw_pct,
+                        # Only inference pods are expected to consume GPU resources
+                        "edge_endpoint": 0.0,
+                        "other": 0.0,
                     },
                     "devices": gpu_devices,
                 },
@@ -422,7 +428,7 @@ def _build_gpu_summary(gpu_responses: dict[str, dict | None]) -> tuple[list, int
                 existing_vram = existing["vram_bytes"]
                 existing_vram["total"] = max(existing_vram.get("total", 0), gpu_total)
                 existing_vram["used"] = max(existing_vram.get("used", 0), gpu_used)
-                existing_vram["free"] = max(existing_vram.get("free", 0), gpu_free)
+                existing_vram["free"] = max(0, existing_vram["total"] - existing_vram["used"])
                 existing["compute_utilization_pct"] = max(existing.get("compute_utilization_pct", 0.0), compute_pct)
                 existing["memory_bandwidth_pct"] = max(existing.get("memory_bandwidth_pct", 0.0), memory_bw_pct)
 

@@ -441,6 +441,7 @@ class TestBuildGpuSummary:
         assert total == 1000 and used == 300
         assert len(devices) == 1
         assert devices[0]["vram_bytes"]["used"] == 300
+        assert devices[0]["vram_bytes"]["free"] == 700
         assert devices[0]["compute_utilization_pct"] == 30.0
         assert compute_pct == 30.0
 
