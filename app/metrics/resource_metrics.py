@@ -124,9 +124,7 @@ class ResourceMetricsCollector:
         if inference_pods:
             active_pods = _pick_active_pods(inference_pods)
             gpu_responses = _query_all_pod_gpus(inference_pods)
-            gpu_devices, total_vram, used_vram, gpu_compute_pct, gpu_memory_bw_pct = _build_gpu_summary(
-                gpu_responses
-            )
+            gpu_devices, total_vram, used_vram, gpu_compute_pct, gpu_memory_bw_pct = _build_gpu_summary(gpu_responses)
             (
                 detectors,
                 loading_vram,
