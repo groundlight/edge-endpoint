@@ -54,7 +54,12 @@ MOUNT_PID=$!
 # completes its initial mount within a few seconds.
 verified=0
 for _ in $(seq 1 30); do
-    if mountpoint -q "$MOUNT_POINT" 2>/dev/null \
+    # Require the mount-s3 process we just spawned to still be alive: during a
+    # rolling deploy, the previous pod's mount can still be propagated to the
+    # host and pass the mountpoint+ls check even though our new mount-s3 has
+    # already failed (e.g. "mountpoint is not empty").
+    if kill -0 "$MOUNT_PID" 2>/dev/null \
+       && mountpoint -q "$MOUNT_POINT" 2>/dev/null \
        && [ -n "$(ls -A "$MOUNT_POINT" 2>/dev/null)" ]; then
         verified=1
         break
