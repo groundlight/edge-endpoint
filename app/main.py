@@ -18,6 +18,7 @@ from app.core.app_state import AppState
 from app.core.edge_config_manager import EdgeConfigManager, reconcile_config
 from app.core.file_paths import ACTIVE_EDGE_CONFIG_PATH, HELM_CONFIGMAP_PATH
 from app.profiling import PROFILING_ENABLED
+from app.profiling.instrumentation import install_threadpool_tracing
 from app.profiling.middleware import ProfilingMiddleware
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -28,6 +29,7 @@ logging.basicConfig(
 
 app = FastAPI(title="edge-endpoint")
 if PROFILING_ENABLED:
+    install_threadpool_tracing()
     app.add_middleware(ProfilingMiddleware)
 app.include_router(router=api_router, prefix=API_BASE_PATH)
 app.include_router(router=ping_router)

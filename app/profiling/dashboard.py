@@ -17,12 +17,19 @@ def _():
     # Deterministic color per span name; unknown spans fall back to FALLBACK_COLOR.
     SPAN_COLORS = {
         "request": "#636EFA",
+        "post_image_query": "#7F7FFF",
+        "get_groundlight_sdk_instance": "#A5A5DD",
+        "_get_groundlight_sdk_instance_internal": "#C5C5E8",
+        "get_app_state": "#D6D6F0",
+        "validate_content_type": "#9EDAE5",
         "validate_image_bytes": "#1F77B4",
         "validate_query_params_for_edge": "#17BECF",
         "active": "#E377C2",
         "detector_config": "#BCBD22",
         "get_detector_metadata": "#EF553B",
+        "refresh_detector_metadata_if_needed": "#D62728",
         "inference_is_available": "#00CC96",
+        "run_inference": "#3CB371",
         "_submit_primary_inference": "#AB63FA",
         "_submit_oodd_inference": "#FFA15A",
         "parse_inference_response": "#2CA02C",
@@ -30,6 +37,7 @@ def _():
         "create_iq": "#FECB52",
         "record_activity_for_metrics": "#9467BD",
         "record_confidence_for_metrics": "#8C564B",
+        "escalation_cooldown_complete": "#C49C94",
         "safe_escalate_with_queue_write": "#FF6692",
         "write_escalation_to_queue": "#B6E880",
     }

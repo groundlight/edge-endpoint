@@ -26,7 +26,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@trace_span
 async def validate_content_type(request: Request) -> str:
+    """Reject requests whose Content-Type isn't an image/* MIME type."""
     if not request.headers.get("Content-Type", "").startswith("image/"):
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Request body must be image bytes"
@@ -56,6 +58,7 @@ async def validate_query_params_for_edge(request: Request):
 
 
 @router.post("", response_model=ImageQuery)
+@trace_span
 async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     request: Request,
     background_tasks: BackgroundTasks,
