@@ -381,8 +381,9 @@ def _query_all_pod_gpus(inference_pods: list[tuple]) -> dict[str, dict | None]:
 def _build_gpu_summary(gpu_responses: dict[str, dict | None]) -> tuple[list, int, int, float, float]:
     """Aggregate GPU device observations across all queried pods.
 
-    Returns nested GPU device entries, aggregate VRAM bytes, and average
-    device-wide GPU utilization.
+    Returns (sorted_devices, total_vram_bytes, used_vram_bytes, avg_compute_pct,
+    avg_memory_bw_pct). The utilization averages are simple averages across
+    observed devices.
     """
     devices_by_key: dict[str, dict] = {}
     all_gpus_total = 0

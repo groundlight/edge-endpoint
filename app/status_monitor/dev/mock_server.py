@@ -156,11 +156,13 @@ def build_resources(state):
     has_gpu = num_detectors > 0 or loading
     vram_total_bytes = total_vram if has_gpu else 0
     vram_used_bytes = min(used_vram, total_vram) if has_gpu else 0
-    gpu_compute = min((num_detectors * 12.0) + loading_gpu_compute, 100.0) if has_gpu else 0.0
-    gpu_memory = min((num_detectors * 7.0) + loading_gpu_memory, 100.0) if has_gpu else 0.0
     detector_ram = sum(d["ram_bytes"]["total"] for d in detectors)
     detector_vram = sum(d["gpu"]["vram_bytes"]["total"] for d in detectors)
     detector_cpu = sum(d["cpu_utilization_pct"]["total"] for d in detectors)
+    detector_gpu_compute = sum(d["gpu"]["compute_utilization_pct"]["total"] for d in detectors)
+    detector_gpu_memory = sum(d["gpu"]["memory_bandwidth_pct"]["total"] for d in detectors)
+    gpu_compute = min(detector_gpu_compute + loading_gpu_compute, 100.0) if has_gpu else 0.0
+    gpu_memory = min(detector_gpu_memory + loading_gpu_memory, 100.0) if has_gpu else 0.0
     loading_cpu = 2.0 if loading else 0.0
     edge_endpoint_cpu = 5.0
     other_cpu = max(0.0, 10.0 + num_detectors * 6.0 + (8.0 if loading else 0.0) - detector_cpu)
@@ -194,7 +196,7 @@ def build_resources(state):
                 },
                 "compute_utilization_pct": {
                     "total": gpu_compute,
-                    "detectors": sum(d["gpu"]["compute_utilization_pct"]["total"] for d in detectors),
+                    "detectors": detector_gpu_compute,
                     "loading_detectors": loading_gpu_compute,
                     # Only inference pods are expected to consume GPU compute in the mock edge namespace.
                     "edge_endpoint": 0.0,
@@ -202,7 +204,7 @@ def build_resources(state):
                 },
                 "memory_bandwidth_pct": {
                     "total": gpu_memory,
-                    "detectors": sum(d["gpu"]["memory_bandwidth_pct"]["total"] for d in detectors),
+                    "detectors": detector_gpu_memory,
                     "loading_detectors": loading_gpu_memory,
                     # Only inference pods are expected to consume GPU memory bandwidth in the mock edge namespace.
                     "edge_endpoint": 0.0,
