@@ -1,13 +1,12 @@
 """Collects per-detector GPU, VRAM, RAM, and CPU usage for the status page.
 
 GPU and VRAM data comes from each inference pod's /v2/gpu-usage HTTP endpoint.
-RAM data comes from the Kubernetes Metrics Server (metrics.k8s.io/v1beta1).
-System-level RAM and CPU use the Kubernetes Node API so that the numbers match
-the kubelet's view of memory (which drives eviction decisions).
+RAM and CPU data come from the Kubernetes Metrics Server (metrics.k8s.io/v1beta1).
+System-level RAM and CPU capacity use the Kubernetes Node API.
 
 RAM used by non-inference pods in the edge namespace (the edge-endpoint
 server itself plus sidecars like splunk, opentelemetry-collector, etc.) is
-reported as a single `edge_endpoint_bytes` bucket on `system.ram`.
+reported as a single `edge_endpoint` bucket on `system.ram_bytes`.
 """
 
 import json
@@ -92,20 +91,20 @@ def _percentage(numerator: float, denominator: float) -> float:
 class ResourceMetricsCollector:
     """Collects GPU, VRAM, RAM, and CPU usage for status reporting.
 
-    The emitted payload is grouped by resource type at the system level and
-    per-detector so existing RAM/VRAM consumers remain stable while newer GPU
-    and CPU utilization metrics can be added.
+    The emitted payload uses explicit unit-bearing keys such as `ram_bytes`,
+    `vram_bytes`, and `cpu_utilization_pct`, with matching attribution buckets
+    at the system and detector levels.
     """
 
     def collect(self) -> dict:
         """Build the `/status/resources.json` payload.
 
         Returns a dict with two top-level keys:
-            - `system`: node-wide `cpu`, `ram`, `vram`, and `gpu` totals, plus
-              aggregate buckets for currently-loading detectors, edge-endpoint
-              platform overhead, and the list of observed GPU devices.
+            - `system`: node-wide CPU, RAM, and GPU resource buckets, including
+              currently-loading detectors, edge-endpoint platform overhead, and
+              GPU device inventory.
             - `detectors`: a list of per-detector entries, each with nested
-              `ram`, `vram`, and `gpu` objects.
+              CPU utilization, RAM bytes, and GPU resource objects.
 
         If called outside a Kubernetes cluster, returns `{"error": "..."}`.
         """
@@ -125,7 +124,7 @@ class ResourceMetricsCollector:
         if inference_pods:
             active_pods = _pick_active_pods(inference_pods)
             gpu_responses = _query_all_pod_gpus(inference_pods)
-            _, gpu_devices, total_vram, used_vram, gpu_compute_pct, gpu_memory_bw_pct = _build_gpu_summary(
+            gpu_devices, total_vram, used_vram, gpu_compute_pct, gpu_memory_bw_pct = _build_gpu_summary(
                 gpu_responses
             )
             (
@@ -222,8 +221,8 @@ def _get_node_resources(v1: "client.CoreV1Api") -> dict:
     """Get node RAM details and overall CPU utilization from Kubernetes APIs.
 
     Uses node capacity for RAM and CPU totals, and Metrics Server for current
-    usage. RAM keeps the existing detailed shape, while CPU is exposed as an
-    overall utilization percentage.
+    usage. CPU usage is stored internally as millicores so pod-level CPU can be
+    attributed as a percentage of node capacity.
     """
     try:
         node_name = os.environ.get("NODE_NAME")
@@ -375,11 +374,11 @@ def _query_all_pod_gpus(inference_pods: list[tuple]) -> dict[str, dict | None]:
     return {pod.metadata.name: data for pod, data in zip(pods, results)}
 
 
-def _build_gpu_summary(gpu_responses: dict[str, dict | None]) -> tuple[list, list, int, int, float, float]:
+def _build_gpu_summary(gpu_responses: dict[str, dict | None]) -> tuple[list, int, int, float, float]:
     """Aggregate GPU device observations across all queried pods.
 
-    Returns compatibility VRAM device entries, nested GPU device entries,
-    aggregate VRAM bytes, and average device-wide GPU utilization.
+    Returns nested GPU device entries, aggregate VRAM bytes, and average
+    device-wide GPU utilization.
     """
     devices_by_key: dict[str, dict] = {}
     all_gpus_total = 0
@@ -442,22 +441,13 @@ def _build_gpu_summary(gpu_responses: dict[str, dict | None]) -> tuple[list, lis
             g.get("name") or "",
         ),
     )
-    observed_gpus = [
-        {
-            "name": device["name"],
-            "index": device["index"],
-            "used_bytes": device["vram_bytes"]["used"],
-            "total_bytes": device["vram_bytes"]["total"],
-        }
-        for device in sorted_devices
-    ]
     if sorted_devices:
         compute_pct = sum(device["compute_utilization_pct"] for device in sorted_devices) / len(sorted_devices)
         memory_bw_pct = sum(device["memory_bandwidth_pct"] for device in sorted_devices) / len(sorted_devices)
     else:
         compute_pct = 0.0
         memory_bw_pct = 0.0
-    return observed_gpus, sorted_devices, all_gpus_total, all_gpus_used, compute_pct, memory_bw_pct
+    return sorted_devices, all_gpus_total, all_gpus_used, compute_pct, memory_bw_pct
 
 
 def _attribute_detector_resources(
@@ -467,11 +457,11 @@ def _attribute_detector_resources(
     pod_resources: dict[str, dict[str, float]],
     total_cpu_millicores: float,
 ) -> tuple[list, int, int, float, float, float]:
-    """Attribute VRAM, GPU utilization, and RAM to individual detectors or loading totals.
+    """Attribute CPU, RAM, and GPU resources to individual detectors or loading totals.
 
-    Returns detector entries, loading VRAM/RAM, and loading GPU utilization
-    totals. RAM/VRAM objects have primary, OODD, and total byte fields; GPU
-    objects have primary, OODD, and total utilization fields.
+    Returns detector entries, loading VRAM/RAM bytes, loading GPU utilization,
+    and loading CPU millicores. Detector resources are split into `primary`,
+    `oodd`, and `total` buckets.
     """
     detectors: dict[str, dict] = {}
     loading_vram_bytes = 0

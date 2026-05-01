@@ -160,14 +160,15 @@ def build_resources(state):
     gpu_memory = min((num_detectors * 7.0) + loading_gpu_memory, 100.0) if has_gpu else 0.0
     detector_ram = sum(d["ram_bytes"]["total"] for d in detectors)
     detector_vram = sum(d["gpu"]["vram_bytes"]["total"] for d in detectors)
+    detector_cpu = sum(d["cpu_utilization_pct"]["total"] for d in detectors)
     return {
         "system": {
             "cpu_utilization_pct": {
                 "total": min(15.0 + num_detectors * 6.0 + (10.0 if loading else 0.0), 100.0),
-                "detectors": num_detectors * 1.5,
+                "detectors": detector_cpu,
                 "loading_detectors": 2.0 if loading else 0.0,
                 "edge_endpoint": 5.0,
-                "other": max(0.0, 10.0 + num_detectors * 4.5 + (8.0 if loading else 0.0)),
+                "other": max(0.0, 10.0 + num_detectors * 6.0 + (8.0 if loading else 0.0) - detector_cpu),
             },
             "ram_bytes": {
                 "total": total_ram,

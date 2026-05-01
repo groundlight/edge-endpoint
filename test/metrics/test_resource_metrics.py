@@ -419,9 +419,8 @@ class TestBuildGpuSummary:
     def test_single_pod_single_gpu(self):
         """Happy path: one pod, one device, totals match the device."""
         responses = {"pod-a": {"devices": [_gpu_device(used=200, compute_pct=20, memory_bw_pct=10)]}}
-        observed, devices, total, used, compute_pct, memory_bw_pct = _build_gpu_summary(responses)
+        devices, total, used, compute_pct, memory_bw_pct = _build_gpu_summary(responses)
         assert total == 1000 and used == 200
-        assert observed == [{"name": "NVIDIA A10", "index": 0, "used_bytes": 200, "total_bytes": 1000}]
         assert devices[0]["vram_bytes"]["used"] == 200
         assert compute_pct == 20.0 and memory_bw_pct == 10.0
 
@@ -431,10 +430,10 @@ class TestBuildGpuSummary:
             "pod-a": {"devices": [_gpu_device(used=200, uuid="GPU-shared", compute_pct=20)]},
             "pod-b": {"devices": [_gpu_device(used=300, uuid="GPU-shared", compute_pct=30)]},
         }
-        observed, devices, total, used, compute_pct, _ = _build_gpu_summary(responses)
+        devices, total, used, compute_pct, _ = _build_gpu_summary(responses)
         assert total == 1000 and used == 300
-        assert len(observed) == 1
-        assert observed[0]["used_bytes"] == 300
+        assert len(devices) == 1
+        assert devices[0]["vram_bytes"]["used"] == 300
         assert devices[0]["compute_utilization_pct"] == 30.0
         assert compute_pct == 30.0
 
@@ -444,9 +443,9 @@ class TestBuildGpuSummary:
             "pod-a": {"devices": [_gpu_device(used=200, uuid=None)]},
             "pod-b": {"devices": [_gpu_device(used=300, uuid=None)]},
         }
-        observed, _, total, used, _, _ = _build_gpu_summary(responses)
+        devices, total, used, _, _ = _build_gpu_summary(responses)
         assert total == 1000 and used == 300
-        assert len(observed) == 1
+        assert len(devices) == 1
 
     def test_multiple_distinct_gpus_sorted_by_index(self):
         """Different GPUs (different uuids) are kept separate and sorted by index."""
@@ -458,8 +457,7 @@ class TestBuildGpuSummary:
                 ]
             }
         }
-        observed, devices, total, used, compute_pct, _ = _build_gpu_summary(responses)
-        assert [g["index"] for g in observed] == [0, 1]
+        devices, total, used, compute_pct, _ = _build_gpu_summary(responses)
         assert [g["index"] for g in devices] == [0, 1]
         assert total == 3000 and used == 300
         assert compute_pct == 30.0
@@ -470,12 +468,12 @@ class TestBuildGpuSummary:
             "pod-down": None,
             "pod-up": {"devices": [_gpu_device(used=200)]},
         }
-        observed, _, total, used, _, _ = _build_gpu_summary(responses)
+        devices, total, used, _, _ = _build_gpu_summary(responses)
         assert total == 1000 and used == 200
-        assert len(observed) == 1
+        assert len(devices) == 1
 
     def test_unnamed_device_excluded_from_observed_but_still_counted_in_totals(self):
-        """A device with no `name` is dropped from observed_gpus but its bytes still flow into pod totals.
+        """A device with no `name` is dropped from devices but its bytes still flow into pod totals.
 
         Pinning current behavior so a future refactor doesn't silently change it.
         """
@@ -487,6 +485,6 @@ class TestBuildGpuSummary:
                 ]
             }
         }
-        observed, _, total, used, _, _ = _build_gpu_summary(responses)
-        assert [g["name"] for g in observed] == ["NVIDIA A10"]
+        devices, total, used, _, _ = _build_gpu_summary(responses)
+        assert [g["name"] for g in devices] == ["NVIDIA A10"]
         assert total == 1500 and used == 250
