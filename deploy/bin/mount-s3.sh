@@ -52,6 +52,12 @@ MOUNT_PID=$!
 # mount-s3 starting against the wrong bucket (empty listing) or a FUSE mount
 # that established but isn't actually serving content. mount-s3 normally
 # completes its initial mount within a few seconds.
+#
+# Note: this assumes the configured bucket is non-empty. A legitimately empty
+# bucket would fail verification and the container would crash-loop with a
+# misleading "mount verification failed" error. pinamod-artifacts-public is
+# always populated in practice, so this tradeoff catches misconfigurations
+# (typo'd bucket name, wrong region) at the cost of a hypothetical edge case.
 verified=0
 for _ in $(seq 1 30); do
     # Require the mount-s3 process we just spawned to still be alive: during a
