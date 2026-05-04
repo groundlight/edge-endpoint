@@ -106,7 +106,7 @@ def generate_random_binary_image(
         text_color = BLACK
         label = "NO"
 
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
     cv2.putText(image, timestamp, (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, text_color, 2)
 
     return image, label, None
