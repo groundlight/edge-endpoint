@@ -4,25 +4,25 @@
 # For each mode, the script expands the cartesian product of `n` (where applicable)
 # x `image_sizes` x `pipelines` into one measurement per combination.
 
-BINARY:
-  image_sizes:
-    # - [320, 240]
-    - [640, 480]
-    # - [1920, 1080]
-  pipelines:
-    - groundlight-default-current  # cloud default (MinorityClassCountSwitchingPipeline)
-    - fence-climbing-dinov2-zeroshot  # zero-shot DINOv2 ViT-L + pretrained MLP head
-    - generic-cached-timm-squash-vit_reg4_dinov2-calibrated-smoothed-mlp  # DINOv2 ViT-L + calibrated smoothed MLP
+# BINARY:
+#   image_sizes:
+#     # - [320, 240]
+#     - [640, 480]
+#     # - [1920, 1080]
+#   pipelines:
+#     - groundlight-default-current  # cloud default (MinorityClassCountSwitchingPipeline)
+#     - fence-climbing-dinov2-zeroshot  # zero-shot DINOv2 ViT-L + pretrained MLP head
+#     - generic-cached-timm-squash-vit_reg4_dinov2-calibrated-smoothed-mlp  # DINOv2 ViT-L + calibrated smoothed MLP
 
-MULTI_CLASS:
-  n: [2, 20]
-  image_sizes:
-    # - [320, 240]
-    - [640, 480]
-    # - [1920, 1080]
-  pipelines:
-    - groundlight-default-multiclass-current  # cloud default
-    - multiclass-generic-cached-timm-squash-vit_reg4_dinov2-calibrated-smoothed-mlp  # DINOv2 ViT-L + calibrated smoothed MLP
+# MULTI_CLASS:
+#   n: [2, 20]
+#   image_sizes:
+#     # - [320, 240]
+#     - [640, 480]
+#     # - [1920, 1080]
+#   pipelines:
+#     - groundlight-default-multiclass-current  # cloud default
+#     - multiclass-generic-cached-timm-squash-vit_reg4_dinov2-calibrated-smoothed-mlp  # DINOv2 ViT-L + calibrated smoothed MLP
 
 
 # COUNT:

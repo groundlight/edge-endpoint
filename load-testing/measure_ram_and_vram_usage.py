@@ -3,6 +3,7 @@
 import argparse
 import csv
 import json
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
@@ -28,7 +29,7 @@ CSV_FIELDS: list[str] = [
     "system_vram_used_bytes", "system_vram_total_bytes",
     "system_ram_used_bytes", "system_ram_total_bytes",
 ]
-DEFAULT_WARMUP_QUERIES: int = 100
+DEFAULT_WARMUP_DURATION_SEC: float = 60.0
 
 
 def _parse_image_sizes(raw: Any, mode: str) -> list[tuple[int, int]]:
@@ -285,8 +286,8 @@ def parse_args() -> argparse.Namespace:
                         help="Path to an existing run directory; already-recorded measurements are skipped. Mutually exclusive with the YAML, --device-name, --notes.")
     parser.add_argument("--batch-size", type=int, default=1,
                         help="Detectors configured on the edge endpoint per measurement batch.")
-    parser.add_argument("--warmup-queries", type=int, default=DEFAULT_WARMUP_QUERIES,
-                        help="Number of inference requests to send to each detector before measuring.")
+    parser.add_argument("--warmup-duration-sec", type=float, default=DEFAULT_WARMUP_DURATION_SEC,
+                        help="How long to send inference requests to all batch detectors before measuring (seconds).")
     parser.add_argument("--training-timeout-sec", type=float, default=60 * 20,
                         help="Per-detector training timeout. Cloud trains concurrently, so total wall-time is bounded by the slowest single detector.")
     args = parser.parse_args()
@@ -353,18 +354,19 @@ def measure_batch(
     gl: ExperimentalApi,
     batch_specs: list[dict],
     batch_detectors: list[Detector],
-    warmup_queries: int,
+    warmup_duration_sec: float,
 ) -> list[dict]:
     """Configure the Edge Endpoint with this batch, send warmup inference requests, sample once, and return CSV rows.
 
-    Warmup queries force the model to be fully loaded into RAM/VRAM before the measurement snapshot.
-    `ready` is recorded but not gated on; it is informational only.
+    Warmup sends queries to all detectors in round-robin until the duration elapses, ensuring
+    the allocator has settled before the snapshot is taken. `ready` is recorded but not gated on.
     """
     glh.configure_edge_endpoint(gl, batch_detectors)
 
-    for spec, detector in zip(batch_specs, batch_detectors):
-        print(f"  Sending {warmup_queries} warmup query/queries to {detector.id}...")
-        for _ in range(warmup_queries):
+    print(f"  Warming up for {warmup_duration_sec:.0f}s...")
+    end_at = time.time() + warmup_duration_sec
+    while time.time() < end_at:
+        for spec, detector in zip(batch_specs, batch_detectors):
             image, _, _ = imgh.generate_random_image(detector, spec["image_width"], spec["image_height"])
             gl.submit_image_query(detector, image, **glh.IQ_KWARGS_FOR_NO_ESCALATION)
 
@@ -403,6 +405,7 @@ def measure_batch(
 
 
 def main() -> None:
+    """Run the benchmark end-to-end (or resume an existing run dir, when --resume is set)."""
     args = parse_args()
 
     if args.resume:
@@ -442,8 +445,9 @@ def main() -> None:
     for i in range(0, len(detectors), args.batch_size):
         batch_specs = specs[i : i + args.batch_size]
         batch_detectors = detectors[i : i + args.batch_size]
-        print(f"\n--- Batch {i // args.batch_size + 1} ({len(batch_detectors)} detector(s)) ---")
-        rows = measure_batch(gl, batch_specs, batch_detectors, args.warmup_queries)
+        batch_idx = i // args.batch_size + 1
+        print(f"\n--- Batch {batch_idx} ({len(batch_detectors)} detector(s)) ---")
+        rows = measure_batch(gl, batch_specs, batch_detectors, args.warmup_duration_sec)
         with open(results_file, "a", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
             for row in rows:
