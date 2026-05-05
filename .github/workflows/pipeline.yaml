@@ -483,20 +483,42 @@ jobs:
         run: echo "Main suite of tests all pass."
   
   preview-release-notes:
-    # Cheap and informational: shows what the release notes would look like if main were released now.
-    if: github.ref == 'refs/heads/main'
+    # Cheap and informational: shows commits on this ref since the image currently
+    # tagged `release` in ECR was built (i.e. since the last tag-release run).
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # Full history needed so we can find the latest tag.
+          # Full history needed so we can walk back to the released commit.
           fetch-depth: 0
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
       - name: Preview what release notes would be
         run: |
-          latest_tag=$(git tag | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+$' | sort -V | tail -1)
-          release_notes=$(git log --pretty=format:'- %s (%h)' "$latest_tag"..HEAD)
-          echo -e "If released, the release notes would be:\n$release_notes"
+          # The image currently tagged `release` was also tagged "<sha9>-main"
+          # by tag-edge-endpoint-image.sh / git-tag-name.sh, so we can recover
+          # the released commit from ECR's tag list.
+          tags=$(aws ecr describe-images \
+            --repository-name edge-endpoint \
+            --image-ids imageTag=release \
+            --query 'imageDetails[0].imageTags' \
+            --output text)
+          last_release_sha=$(echo "$tags" | tr '\t' '\n' | grep -E '^[0-9a-f]{9}-main$' | head -1 | cut -d- -f1)
+          if [[ -z "$last_release_sha" ]]; then
+            echo "Could not find a <sha>-main tag on the current 'release' image."
+            echo "Tags found: $tags"
+            exit 0
+          fi
+          echo "Last released commit: $last_release_sha"
+          release_notes=$(git log --pretty=format:'- %s (%h)' "$last_release_sha"..HEAD)
+          echo -e "If released now, the release notes would be:\n$release_notes"
 
   tag-pre-release:
     if: github.ref == 'refs/heads/main'
