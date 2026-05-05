@@ -483,8 +483,9 @@ jobs:
         run: echo "Main suite of tests all pass."
   
   preview-release-notes:
-    # Cheap and informational: shows commits on this ref since the image currently
+    # Cheap and informational: shows commits on main since the image currently
     # tagged `release` in ECR was built (i.e. since the last tag-release run).
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
