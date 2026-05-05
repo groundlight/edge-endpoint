@@ -482,6 +482,22 @@ jobs:
       - name: declare success
         run: echo "Main suite of tests all pass."
   
+  preview-release-notes:
+    # Cheap and informational: shows what the release notes would look like if main were released now.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Full history needed so we can find the latest tag.
+          fetch-depth: 0
+      - name: Preview what release notes would be
+        run: |
+          latest_tag=$(git tag | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+$' | sort -V | tail -1)
+          release_notes=$(git log --pretty=format:'- %s (%h)' "$latest_tag"..HEAD)
+          echo -e "If released, the release notes would be:\n$release_notes"
+
   tag-pre-release:
     if: github.ref == 'refs/heads/main'
     needs:
