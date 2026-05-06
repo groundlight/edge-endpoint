@@ -11,14 +11,14 @@ set -e
 
 # first do basic pytest integration style tests
 # we skip the async test because we're setup for edge answers
-if ! poetry run pytest -m live -k "not test_post_image_query_via_sdk_want_async"; then
+if ! uv run pytest -m live -k "not test_post_image_query_via_sdk_want_async"; then
     echo "Error: pytest integration tests failed."
     exit 1
 fi
 
 echo "Submitting initial iqs, ensuring we get low confidence at first"
 # submit initial tests that we get low confidence answers at first
-poetry run python test/integration/integration.py -m initial -d $DETECTOR_ID
+uv run python test/integration/integration.py -m initial -d $DETECTOR_ID
 
 echo "Getting current inference pod creation time before training in the cloud..."
 # Get the creation time of the current inference pod before training
@@ -28,7 +28,7 @@ pod_creation_time_seconds_before_training=$(date -d "$pod_creation_time_before_t
 
 echo "Training detector in the cloud"
 # now we improve the model by submitting many iqs and labels
-poetry run python test/integration/integration.py -m improve_model -d $DETECTOR_ID
+uv run python test/integration/integration.py -m improve_model -d $DETECTOR_ID
 
 # Poll for a new inference pod to appear with creationTimestamp newer than the
 # pre-training pod, then wait for it to become Ready. Replaces a flat
@@ -67,9 +67,9 @@ kubectl wait --for=condition=Ready pod/$new_pod -n $DEPLOYMENT_NAMESPACE --timeo
 # NOTE this is temporarily reworded because the current implementation of OODD makes this unreliable.
 # echo Now we check if the edge model performs well...
 echo Now we check that we can submit queries to the new inference pod...
-poetry run python test/integration/integration.py -m final -d $DETECTOR_ID
+uv run python test/integration/integration.py -m final -d $DETECTOR_ID
 
 echo Now checking that the edge metrics status page is available...
-poetry run python test/integration/status.py
+uv run python test/integration/status.py
 
 echo All tests pass :D

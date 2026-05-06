@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Lints the codebase.
 # Dependencies:
-# - poetry
+# - uv
 # - toml-sort, ruff, pylint, mypy
 # Usage:
 # $ lint src test bin
@@ -19,21 +19,21 @@ errors=0
 
 # https://toml-sort.readthedocs.io/en/latest/
 echo "Linting with toml-sort (checks pyproject.toml formatting) ..."
-poetry run toml-sort --check pyproject.toml || ((errors++))
+uv run toml-sort --check pyproject.toml || ((errors++))
 
 # https://beta.ruff.rs/docs/
 echo "Linting with ruff (isort / flake8 / autoflake issues) ..."
-poetry run ruff check $TARGET_PATHS || ((errors++))
+uv run ruff check $TARGET_PATHS || ((errors++))
 
 # Tradeoff: Pylint is useful, but it is also stricter and slower than other linters. TBD on whether
 # we want to keep it.
 # https://pylint.readthedocs.io/en/latest/index.html
 echo "Linting with pylint ..."
-poetry run pylint $TARGET_PATHS || ((errors++))
+uv run pylint $TARGET_PATHS || ((errors++))
 
 # https://mypy.readthedocs.io/en/stable/index.html
 echo "Linting with mypy (type checking) ..."
-poetry run mypy $TARGET_PATHS || ((errors++))
+uv run mypy $TARGET_PATHS || ((errors++))
 
 if [[ $errors -gt 0 ]]; then
   echo "🚨 $errors linters found errors!"

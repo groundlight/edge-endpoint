@@ -3,7 +3,7 @@
 cd $(dirname $0)  # script is in app/bin/ dir
 cd ../..
 
-poetry run uvicorn \
+uv run --no-sync uvicorn \
     --workers 1 \
     --host 0.0.0.0 \
     --port 8123 \

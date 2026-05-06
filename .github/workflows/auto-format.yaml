@@ -2,7 +2,7 @@ name: auto-format
 on: pull_request
 
 env: 
-  POETRY_VERSION: "1.5.1"
+  UV_VERSION: "0.8.4"
   PYTHON_VERSION: "3.11"
 jobs:
   format:
@@ -19,10 +19,10 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
         
-      - name: Install Poetry
-        uses: snok/install-poetry@v1.2.0
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          version: ${{ env.POETRY_VERSION }}
+          version: ${{ env.UV_VERSION }}
       - name: Install Linting Dependencies
         run: |
           make install-lint

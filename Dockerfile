@@ -5,8 +5,9 @@ ARG NGINX_PORT=30101
 ARG NGINX_PORT_OLD=6717
 ARG UVICORN_PORT=6718
 ARG APP_ROOT="/groundlight-edge"
-ARG POETRY_HOME="/opt/poetry"
-ARG POETRY_VERSION=1.5.1
+ARG UV_VERSION=0.8.4
+
+FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 
 ######################
 # React Build Stage
@@ -28,8 +29,8 @@ ARG TARGETARCH
 
 # Args that are needed in this stage
 ARG APP_ROOT
-ARG POETRY_HOME
-ARG POETRY_VERSION
+
+COPY --from=uv /uv /uvx /bin/
 
 # Install required dependencies and tools
 # Combine the installations into a single RUN command
@@ -46,7 +47,6 @@ RUN apt-get update && \
     sqlite3 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
-    POETRY_HOME=${POETRY_HOME} curl -sSL https://install.python-poetry.org | python - && \
     curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
     install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl && \
     rm kubectl
@@ -77,21 +77,21 @@ RUN set -eux; \
     rm /tmp/mount-s3.deb && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Set Python and Poetry ENV vars
+# Set Python and uv ENV vars
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    POETRY_HOME=${POETRY_HOME} \
-    POETRY_VERSION=${POETRY_VERSION} \
-    PATH=${POETRY_HOME}/bin:$PATH
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PATH=${APP_ROOT}/.venv/bin:$PATH
 
 # Copy only required files first to leverage Docker caching
-COPY ./pyproject.toml ./poetry.lock ${APP_ROOT}/
+COPY ./pyproject.toml ./uv.lock ${APP_ROOT}/
 
 WORKDIR ${APP_ROOT}
 
 # Install production dependencies only
-RUN poetry install --no-interaction --no-root --without dev --without lint && \
-    poetry cache clear --all pypi
+RUN uv sync --frozen --no-install-project --no-group dev --no-group lint && \
+    uv cache clean
 
 # Create /etc/groundlight directory where edge-config.yaml and inference_deployment.yaml will be mounted
 RUN mkdir -p /etc/groundlight/edge-config && \
@@ -117,7 +117,7 @@ ARG APP_ROOT
 ARG NGINX_PORT
 ARG UVICORN_PORT
 
-ENV PATH=${POETRY_HOME}/bin:$PATH \
+ENV PATH=${APP_ROOT}/.venv/bin:$PATH \
     APP_PORT=${UVICORN_PORT}
 
 WORKDIR ${APP_ROOT}

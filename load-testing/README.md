@@ -11,7 +11,7 @@ You may want to configure both the edge endpoint and the inference server contai
 
 **To configure edge endpoint workers**: Edit the `--workers` parameter in [launch-edge-logic-server.sh](/app/bin/launch-edge-logic-server.sh). Change from the default:
 ```bash
-poetry run uvicorn \
+uv run --no-sync uvicorn \
     --workers 8 \  # You can tweak this for load testing
     --host 0.0.0.0 \
     --port ${APP_PORT} \
@@ -95,4 +95,3 @@ Below are some commands that are commonly run to evaluate the performance of the
 1. CPU memory utilization: `htop`.
 1. GPU VRAM utilization: `nvtop`. Check that GPU VRAM utilization is evenly spread across all available GPUs. 
 1. Inference pod status: `watch kubectl get pods -n edge`. Check that all pods are online and that no restarts occurred.
-

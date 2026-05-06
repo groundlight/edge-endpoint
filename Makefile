@@ -2,19 +2,19 @@
 SHELL := /bin/bash
 
 install:
-	poetry install --no-root
+	uv sync --no-install-project
 
-install-lint:  ## Only install the linter dependencies
-	poetry install --only lint
+install-lint:  ## Install the linter dependencies
+	uv sync --no-install-project --only-group lint
 
 install-pre-commit: install  ## Install pre-commit hooks. Requires .pre-commit-config.yaml at the root
-	poetry run pre-commit install
+	uv run pre-commit install
 
 test: install  ## Run unit tests in verbose mode
-	. test/setup_plain_test_env.sh && poetry run pytest --cov=app --cov-report=lcov -vs -k "not _live"
+	. test/setup_plain_test_env.sh && uv run pytest --cov=app --cov-report=lcov -vs -k "not _live"
 
 test-with-docker: install  ## Run tests that require a live edge-endpoint server and valid GL API token
-	. test/setup_plain_test_env.sh && poetry run pytest -vs -k "_live"
+	. test/setup_plain_test_env.sh && uv run pytest -vs -k "_live"
 
 test-all: test test-with-docker  ## Run all tests in one make command
 	@echo "All tests completed."
