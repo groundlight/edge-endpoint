@@ -11,7 +11,7 @@ run:
   edge_endpoint_url: "http://10.141.32.60:30101"
   api_token_env: "GROUNDLIGHT_API_TOKEN"
   set_config_timeout_seconds: 900
-  cloud_endpoint: "https://api.groundlight.ai/device-api"
+  cloud_endpoint: "https://api.groundlight.ai/"
   detector_name_prefix: "bench"
   refuse_if_host_not_clean: true
 

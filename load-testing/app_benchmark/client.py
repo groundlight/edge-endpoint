@@ -1,12 +1,14 @@
-"""Per-camera client process: composite generation, chain loop, retry, error budget."""
+"""Per-camera client process: composite generation, chain loop, retry, error budget.
+
+Uses the Groundlight SDK (`gl.submit_image_query`) for inference — the SDK
+handles paths, auth, and retries. Raw HTTP was a mistake; the SDK is the
+canonical path for everything that talks to a Groundlight endpoint.
+"""
 
 import collections
 import logging
 import multiprocessing as mp
-import os
 import time
-
-import requests
 
 from app_benchmark.config import LensSpec
 from app_benchmark.image_loader import (
@@ -34,7 +36,6 @@ class FpsPacer:
         if delay > 0:
             time.sleep(delay)
         self._next += self._period
-        # Drift correction: never let us fall infinitely behind.
         now = time.perf_counter()
         if self._next < now:
             self._next = now + self._period
@@ -61,69 +62,6 @@ class ErrorBudget:
         return (errors / len(self._events)) * 100.0 > self.threshold_pct
 
 
-_IMAGE_QUERIES_PATH = "/device-api/v1/image-queries"
-
-
-def _post_image_query(
-    session: requests.Session,
-    edge_url: str,
-    detector_id: str,
-    image_bytes: bytes,
-    timeout: float = 30.0,
-) -> tuple[int, dict | None]:
-    url = f"{edge_url.rstrip('/')}{_IMAGE_QUERIES_PATH}"
-    params = {"detector_id": detector_id, "want_async": "false"}
-    headers = {
-        "Content-Type": "image/jpeg",
-        "X-API-Token": os.environ.get("GROUNDLIGHT_API_TOKEN", ""),
-    }
-    resp = session.post(url, params=params, data=image_bytes, headers=headers, timeout=timeout)
-    body: dict | None = None
-    if resp.headers.get("Content-Type", "").startswith("application/json"):
-        try:
-            body = resp.json()
-        except Exception:
-            body = None
-    return resp.status_code, body
-
-
-def _post_with_retry(
-    session: requests.Session,
-    edge_url: str,
-    detector_id: str,
-    image_bytes: bytes,
-    *,
-    max_attempts: int = 3,
-    backoffs: tuple[float, ...] = (0.1, 1.0, 5.0),
-) -> tuple[int, int, bool]:
-    """Returns (final_status, retry_count, fatal_4xx). fatal_4xx=True for 4xx other than 429."""
-    last_status = 0
-    retries = 0
-    for attempt in range(max_attempts):
-        try:
-            status, body = _post_image_query(session, edge_url, detector_id, image_bytes)
-        except (requests.ConnectionError, requests.Timeout) as exc:
-            logger.debug("connection error on %s: %s", detector_id, exc)
-            status = 599
-            body = None
-        last_status = status
-        if 200 <= status < 300:
-            if body is not None:
-                from_edge = (body.get("result") or {}).get("from_edge")
-                if from_edge is False:
-                    raise RuntimeError(
-                        f"control-plane drift: from_edge=False for {detector_id}; aborting run"
-                    )
-            return status, retries, False
-        if 400 <= status < 500 and status != 429:
-            return status, retries, True
-        # 5xx, 429, connection error → retry with backoff
-        retries += 1
-        if attempt + 1 < max_attempts:
-            time.sleep(backoffs[min(attempt, len(backoffs) - 1)])
-    return last_status, retries, False
-
-
 def run_client(
     client_id: str,
     cam_idx: int,
@@ -134,6 +72,13 @@ def run_client(
     stop_event,
 ) -> None:
     """Entry point for a single client process. Runs until stop_event is set."""
+
+    # SDK client constructed *after* fork. Edge endpoint; the edge transparently
+    # proxies any cloud-side operations we'd issue, so a single client suffices.
+    from groundlight import ExperimentalApi  # noqa: PLC0415
+    import groundlight_helpers as glh  # noqa: PLC0415
+
+    gl = ExperimentalApi(endpoint=edge_url)
 
     gen = CompositeGenerator(lens.image, cam_idx)
     is_chained = len(lens.chain) > 1
@@ -150,13 +95,14 @@ def run_client(
 
     pacer = FpsPacer(lens.target_fps)
     error_budget = ErrorBudget(lens.error_budget_pct, window_s=30.0)
-    session = requests.Session()
+
+    iq_kwargs = glh.IQ_KWARGS_FOR_NO_ESCALATION
 
     while not stop_event.is_set():
         try:
             frame = gen.next(max_objects=max_objects)
         except Exception as exc:
-            logger.exception("composite generation failed: %s", exc,
+            logger.exception("composite generation failed",
                              extra={"phase": "run", "lens": lens.name, "client": client_id})
             event_queue.put(ClientFailedEvent(ts=time.time(), lens_name=lens.name,
                                               client_id=client_id, reason=f"composite_failed: {exc}"))
@@ -165,9 +111,9 @@ def run_client(
         t0_frame = time.perf_counter()
         try:
             had_any_error = _send_frame(
-                session, edge_url, lens, detector_id_by_name, frame,
+                gl=gl, lens=lens, detector_id_by_name=detector_id_by_name, frame=frame,
                 crop_resize=(crop_w, crop_h), padding_jpeg=padding_jpeg,
-                event_queue=event_queue, client_id=client_id,
+                event_queue=event_queue, client_id=client_id, iq_kwargs=iq_kwargs,
             )
         except RuntimeError as exc:
             logger.error("fatal error in client loop: %s", exc,
@@ -185,7 +131,7 @@ def run_client(
             stage_idx=-1,
             detector_id="",
             latency_ms=latency_ms,
-            http_status=0,
+            http_status=200 if not had_any_error else 0,
             retry_count=0,
             was_terminal=True,
             composite_objects_count=frame.composite_objects_count,
@@ -201,17 +147,39 @@ def run_client(
         pacer.wait()
 
 
+def _submit_via_sdk(gl, detector_id: str, image_bytes: bytes, iq_kwargs: dict) -> tuple[bool, bool]:
+    """Submit one image query via the SDK. Returns (was_error, fatal).
+
+    fatal=True means we observed a control-plane drift (cloud fallback) or an
+    unrecoverable error from the SDK after its built-in retries — caller
+    should propagate as RuntimeError to terminate the run.
+    """
+    try:
+        iq = gl.submit_image_query(detector_id, image_bytes, **iq_kwargs)
+    except Exception as exc:
+        # SDK handles 5xx/429 retry internally; this catches exhausted retries
+        # and any unhandled API error. Treat as a non-fatal error event.
+        logger.warning("SDK submit_image_query failed for %s: %s", detector_id, exc)
+        return True, False
+
+    result = getattr(iq, "result", None)
+    from_edge = getattr(result, "from_edge", None)
+    if from_edge is False:
+        return True, True  # control-plane drift → fatal
+    return False, False
+
+
 def _send_frame(
-    session: requests.Session,
-    edge_url: str,
+    *,
+    gl,
     lens: LensSpec,
     detector_id_by_name: dict[str, str],
     frame: GeneratedFrame,
-    *,
     crop_resize: tuple[int, int],
     padding_jpeg: bytes,
     event_queue: "mp.Queue",
     client_id: str,
+    iq_kwargs: dict,
 ) -> bool:
     """Run the chain for one frame. Returns True if any non-fatal error occurred."""
     had_error = False
@@ -221,17 +189,18 @@ def _send_frame(
     stage_0 = lens.chain[0]
     det_id = detector_id_by_name[stage_0.detector]
     t0 = time.perf_counter()
-    status, retries, fatal = _post_with_retry(session, edge_url, det_id, frame.canvas_jpeg)
+    was_error, fatal = _submit_via_sdk(gl, det_id, frame.canvas_jpeg, iq_kwargs)
     elapsed_ms = (time.perf_counter() - t0) * 1000.0
     event_queue.put(FrameEvent(
         ts=time.time(), lens_name=lens.name, client_id=client_id, stage_idx=0,
-        detector_id=det_id, latency_ms=elapsed_ms, http_status=status,
-        retry_count=retries, was_terminal=not is_chained,
+        detector_id=det_id, latency_ms=elapsed_ms,
+        http_status=200 if not was_error else 0,
+        retry_count=0, was_terminal=not is_chained,
         composite_objects_count=frame.composite_objects_count,
     ))
     if fatal:
-        raise RuntimeError(f"fatal {status} from upstream stage {det_id}")
-    if status >= 400:
+        raise RuntimeError(f"control-plane drift on stage 0 for {det_id}")
+    if was_error:
         had_error = True
     if not is_chained:
         return had_error
@@ -245,25 +214,25 @@ def _send_frame(
         else:
             crops.append(padding_jpeg)
 
-    # Stages 1..N. v1 chains are typically 2-stage (bbox -> binary); for deeper
-    # chains we feed the same crops through each downstream stage.
+    # Stages 1..N. v1 chains are typically 2-stage (bbox -> binary).
     for stage_idx in range(1, len(lens.chain)):
         stage = lens.chain[stage_idx]
         is_terminal = stage_idx == len(lens.chain) - 1
         det_id = detector_id_by_name[stage.detector]
         for crop in crops:
             t0 = time.perf_counter()
-            status, retries, fatal = _post_with_retry(session, edge_url, det_id, crop)
+            was_error, fatal = _submit_via_sdk(gl, det_id, crop, iq_kwargs)
             elapsed_ms = (time.perf_counter() - t0) * 1000.0
             event_queue.put(FrameEvent(
                 ts=time.time(), lens_name=lens.name, client_id=client_id, stage_idx=stage_idx,
-                detector_id=det_id, latency_ms=elapsed_ms, http_status=status,
-                retry_count=retries, was_terminal=is_terminal,
+                detector_id=det_id, latency_ms=elapsed_ms,
+                http_status=200 if not was_error else 0,
+                retry_count=0, was_terminal=is_terminal,
                 composite_objects_count=frame.composite_objects_count,
             ))
             if fatal:
-                raise RuntimeError(f"fatal {status} from stage {stage_idx} {det_id}")
-            if status >= 400:
+                raise RuntimeError(f"control-plane drift on stage {stage_idx} for {det_id}")
+            if was_error:
                 had_error = True
 
     return had_error

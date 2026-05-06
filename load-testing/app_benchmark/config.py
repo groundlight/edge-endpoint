@@ -19,7 +19,7 @@ class RunConfig(BaseModel):
     edge_endpoint_url: str
     api_token_env: str = "GROUNDLIGHT_API_TOKEN"
     set_config_timeout_seconds: int = Field(default=900, ge=30)
-    cloud_endpoint: str = "https://api.groundlight.ai/device-api"
+    cloud_endpoint: str = "https://api.groundlight.ai/"
     detector_name_prefix: str = Field(default="bench", pattern=r"^[a-z][a-z0-9_]{1,15}$")
     refuse_if_host_not_clean: bool = True
 
