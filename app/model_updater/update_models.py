@@ -90,9 +90,7 @@ def _check_new_models_and_inference_deployments(
         ):
             time.sleep(0.5)
             if time.time() - poll_start > rollout_start_timeout:
-                raise TimeoutError(
-                    f"Inference deployments ({deployment_names}) did not start within time limit"
-                )
+                raise TimeoutError(f"Inference deployments ({deployment_names}) did not start within time limit")
 
         # Poll until the rollout completes
         logger.info(f"Waiting for inference deployments ({deployment_names}) to complete")
@@ -103,9 +101,7 @@ def _check_new_models_and_inference_deployments(
         ):
             time.sleep(5)
             if time.time() - poll_start > TEN_MINUTES:
-                raise TimeoutError(
-                    f"Inference deployments ({deployment_names}) are not ready within time limit"
-                )
+                raise TimeoutError(f"Inference deployments ({deployment_names}) are not ready within time limit")
 
         # Now that we have successfully rolled out new model versions, we can clean up our model repository a bit.
         # To be a bit conservative, we keep the current model version as well as the version before that. Older
