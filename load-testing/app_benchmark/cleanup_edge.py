@@ -45,8 +45,9 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as exc:
             logger.error("could not fetch current edge config: %s", exc)
             return 2
-        det_configs = getattr(current, "detectors", None) or {}
-        det_ids = list(det_configs.keys()) if isinstance(det_configs, dict) else []
+        # EdgeEndpointConfig.detectors is a list[DetectorConfig], each with .detector_id
+        det_entries = getattr(current, "detectors", None) or []
+        det_ids = [d.detector_id for d in det_entries if hasattr(d, "detector_id")]
         logger.info("Edge has %d detector(s) configured:", len(det_ids))
         for det_id in det_ids:
             logger.info("  - %s", det_id)
