@@ -61,6 +61,9 @@ class ErrorBudget:
         return (errors / len(self._events)) * 100.0 > self.threshold_pct
 
 
+_IMAGE_QUERIES_PATH = "/device-api/v1/image-queries"
+
+
 def _post_image_query(
     session: requests.Session,
     edge_url: str,
@@ -68,7 +71,7 @@ def _post_image_query(
     image_bytes: bytes,
     timeout: float = 30.0,
 ) -> tuple[int, dict | None]:
-    url = f"{edge_url.rstrip('/')}/image-queries"
+    url = f"{edge_url.rstrip('/')}{_IMAGE_QUERIES_PATH}"
     params = {"detector_id": detector_id, "want_async": "false"}
     headers = {
         "Content-Type": "image/jpeg",

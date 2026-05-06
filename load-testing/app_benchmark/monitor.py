@@ -65,6 +65,7 @@ def run_monitor(
     sample_queue: "mp.Queue",
     frame_queue: "mp.Queue",
     stop_event,
+    edge_url: str,
 ) -> None:
     """Entry point. Polls /status/resources.json at sample_hz until stop_event is set."""
 
@@ -73,7 +74,10 @@ def run_monitor(
     import groundlight_helpers as glh  # noqa: PLC0415
 
     period = 1.0 / sample_hz if sample_hz > 0 else 0.5
-    gl = ExperimentalApi()
+    # Construct ExperimentalApi against the EDGE endpoint, not the cloud.
+    # (ExperimentalApi() with no args picks up GROUNDLIGHT_ENDPOINT which
+    # typically points at the cloud — that returns 404 for /status/resources.json.)
+    gl = ExperimentalApi(endpoint=edge_url)
     last_error_log = 0.0
 
     while not stop_event.is_set():

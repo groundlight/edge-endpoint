@@ -45,7 +45,7 @@ class Supervisor:
         monitor = self.ctx.Process(
             target=self._monitor_target,
             args=(self.cfg.monitoring.sample_hz, self.sample_queue, self.frame_queue,
-                  self.stop_event, *self._monitor_args),
+                  self.stop_event, edge_url, *self._monitor_args),
             name="monitor",
         )
         monitor.start()

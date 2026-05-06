@@ -23,21 +23,36 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, default=str)
 
 
+class _ConsoleFormatter(logging.Formatter):
+    """Compact human-readable: 'HH:MM:SS [level] logger: msg'.
+
+    Drops the noisy timestamp/level/JSON noise from stdout. The full structured
+    JSON record is still written to run.log via JsonFormatter.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        ts = time.strftime("%H:%M:%S", time.gmtime(record.created))
+        # Trim "app_benchmark." prefix to keep lines short.
+        name = record.name.removeprefix("app_benchmark.")
+        msg = record.getMessage()
+        if record.exc_info:
+            msg = f"{msg} | {self.formatException(record.exc_info)}"
+        return f"{ts} [{record.levelname}] {name}: {msg}"
+
+
 def configure(output_dir: Path | None = None, level: int = logging.INFO, run_name: str | None = None) -> None:
     root = logging.getLogger()
     root.setLevel(level)
     root.handlers.clear()
 
-    formatter = JsonFormatter()
-
     stdout = logging.StreamHandler(sys.stdout)
-    stdout.setFormatter(formatter)
+    stdout.setFormatter(_ConsoleFormatter())
     root.addHandler(stdout)
 
     if output_dir is not None:
         output_dir.mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(output_dir / "run.log")
-        file_handler.setFormatter(formatter)
+        file_handler.setFormatter(JsonFormatter())
         root.addHandler(file_handler)
 
     if run_name:
