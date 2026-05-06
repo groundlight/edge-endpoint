@@ -46,14 +46,14 @@ class APIError(Exception):
     """
     pass
 
-def call_api(url: str, params: dict) -> dict:
+def call_api(url: str, params: dict, timeout: float | None = None) -> dict:
     """Perform a GET request with API token and return decoded JSON or raise APIError."""
 
     headers = {
         "X-API-Token": os.environ.get('GROUNDLIGHT_API_TOKEN')
     }
-    
-    response = requests.get(url, params=params, headers=headers)
+
+    response = requests.get(url, params=params, headers=headers, timeout=timeout)
     if response.status_code == 200:
         response_content = response.content.decode('utf-8')
         return json.loads(response_content)
@@ -130,6 +130,12 @@ def _get_status_metrics(gl: ExperimentalApi) -> dict:
     base = gl.endpoint.replace('/device-api', '')
     url = base + '/status/metrics.json'
     return call_api(url, {})
+
+def _get_resources(gl: ExperimentalApi, timeout: float = 5.0) -> dict:
+    """Retrieve the resource utilization JSON from the Edge Endpoint's /status/resources.json."""
+    base = gl.endpoint.replace('/device-api', '')
+    url = base + '/status/resources.json'
+    return call_api(url, {}, timeout=timeout)
 
 def get_container_images_map(gl: ExperimentalApi) -> dict[str, dict[str, str]]:
     """Return a map of pod -> {container: image_id} from edge status metrics."""
