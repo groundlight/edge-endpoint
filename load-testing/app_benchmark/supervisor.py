@@ -24,8 +24,12 @@ class Supervisor:
         self.created = created
         self.ctx = mp.get_context("spawn")
         self.stop_event = self.ctx.Event()
-        self.frame_queue: mp.Queue = self.ctx.Queue(maxsize=100_000)
-        self.sample_queue: mp.Queue = self.ctx.Queue(maxsize=10_000)
+        # Queue maxsize is bounded by the OS POSIX semaphore SEM_VALUE_MAX. On
+        # macOS that limit is 32767; Linux is much higher but we cap uniformly.
+        # At 60 fps × ~10 stage events × Σcameras the queue fills slowly
+        # because metrics_writer drains continuously; 32k is plenty of headroom.
+        self.frame_queue: mp.Queue = self.ctx.Queue(maxsize=32_000)
+        self.sample_queue: mp.Queue = self.ctx.Queue(maxsize=4_000)
         self._monitor_target = monitor_target
         self._monitor_args = monitor_args
         self._processes: list[mp.Process] = []
