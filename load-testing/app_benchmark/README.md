@@ -33,18 +33,30 @@ Flags:
 - `--dry-run` — validate YAML, create detectors, register on edge, verify, then delete. No load generated.
 - `--no-cleanup` — skip detector deletion at end (debugging only).
 
-## Cleanup orphan detectors
+## Cleanup utilities
 
-If a run is hard-killed (`kill -9`, OOM), detectors may leak in the cloud account.
-Recover with the standalone CLI:
+If a run is hard-killed (`kill -9`, OOM, or an old run before the
+snapshot+restore fix), state can leak in two places:
+
+**Cloud-side orphans** — detectors that were created but never deleted:
 
 ```bash
 python -m app_benchmark.cleanup_orphans --prefix bench --dry-run
 python -m app_benchmark.cleanup_orphans --prefix bench --older-than 1h
 ```
 
-The prefix MUST be at least 4 characters; the script refuses to delete by
-short or empty prefixes.
+The prefix must be ≥4 characters; the script refuses short/empty prefixes.
+
+**Edge-side orphans** — detector configs that the edge still has loaded
+(inference pods running, even if the cloud detector was deleted):
+
+```bash
+# See what's loaded on the edge:
+python -m app_benchmark.cleanup_edge --edge-endpoint http://EDGE:30101 --list
+
+# Wipe everything (pushes an empty EdgeEndpointConfig):
+python -m app_benchmark.cleanup_edge --edge-endpoint http://EDGE:30101 --wipe
+```
 
 ## Output artifacts
 

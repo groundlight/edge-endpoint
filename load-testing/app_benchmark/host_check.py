@@ -1,4 +1,11 @@
-"""Pre-flight: refuse to run if the edge has pre-existing non-bench detectors."""
+"""Pre-flight: refuse to run if the edge has pre-existing detectors loaded.
+
+The /status/resources.json detectors[] entries only carry `detector_id` (no
+cloud `name`), so we can't prefix-match here. Policy: a "clean host" has zero
+loaded detectors. To recover from a leak, use:
+
+    python -m app_benchmark.cleanup_edge --edge-endpoint <URL> --wipe
+"""
 
 import logging
 
@@ -14,9 +21,12 @@ class HostNotCleanError(RuntimeError):
 
 
 def ensure_host_clean(gl_edge: ExperimentalApi, expected_prefix: str, *, allow: bool = False) -> None:
-    """Hits /status/resources.json. Raises if any detectors[] entry has a name not starting with expected_prefix.
+    """Hits /status/resources.json. Raises if ANY detector is loaded on the edge.
 
-    If `allow=True`, only logs a warning instead of raising.
+    `expected_prefix` is accepted for forward compatibility (so the harness can
+    match cloud-name prefixes once the resource endpoint returns names) but is
+    not currently used for matching. With `allow=True`, prints a loud warning
+    and proceeds.
     """
     try:
         resources = glh._get_resources(gl_edge, timeout=5.0)
@@ -35,26 +45,15 @@ def ensure_host_clean(gl_edge: ExperimentalApi, expected_prefix: str, *, allow: 
         logger.info("host clean check passed — no detectors loaded", extra={"phase": "host_check"})
         return
 
-    foreign: list[str] = []
-    for d in detectors:
-        det_id = d.get("detector_id") or ""
-        det_name = d.get("name") or det_id
-        if not det_name.startswith(expected_prefix):
-            foreign.append(f"{det_id} (name={det_name})")
-
-    if not foreign:
-        logger.info("host clean check passed — %d detector(s) loaded, all matching prefix %r",
-                    len(detectors), expected_prefix, extra={"phase": "host_check"})
-        return
+    det_ids = [d.get("detector_id") or "<no-id>" for d in detectors]
 
     if allow:
-        # Loud, prominent warning so the user can't miss it in the run.log.
         bar = "=" * 78
         logger.warning(bar, extra={"phase": "host_check"})
         logger.warning("HOST NOT CLEAN — %d pre-existing detector(s) on the edge:",
-                       len(foreign), extra={"phase": "host_check"})
-        for entry in foreign:
-            logger.warning("    %s", entry, extra={"phase": "host_check"})
+                       len(det_ids), extra={"phase": "host_check"})
+        for det_id in det_ids:
+            logger.warning("    %s", det_id, extra={"phase": "host_check"})
         logger.warning("These detectors share GPU/CPU/RAM with the benchmark and WILL affect the",
                        extra={"phase": "host_check"})
         logger.warning("FPS / VRAM / latency numbers. Re-run on a clean edge for trustworthy results.",
@@ -63,8 +62,9 @@ def ensure_host_clean(gl_edge: ExperimentalApi, expected_prefix: str, *, allow: 
         return
 
     msg = (
-        f"Edge has {len(foreign)} detector(s) not matching prefix {expected_prefix!r}: {foreign}. "
-        f"Run on a clean edge, or set run.refuse_if_host_not_clean: false to proceed with a "
+        f"Edge has {len(det_ids)} pre-existing detector(s) loaded: {det_ids}. "
+        f"Wipe with: python -m app_benchmark.cleanup_edge --edge-endpoint <URL> --wipe. "
+        f"Or set run.refuse_if_host_not_clean: false in the YAML to proceed with a "
         f"contaminated host (results will be affected)."
     )
     raise HostNotCleanError(msg)
