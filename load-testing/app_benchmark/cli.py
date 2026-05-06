@@ -138,15 +138,19 @@ def main(argv: list[str] | None = None) -> int:
 
     def _cleanup() -> None:
         if args.no_cleanup:
-            logger.warning("--no-cleanup set; %d detector(s) NOT deleted", len(created),
-                           extra={"phase": "cleanup"})
+            logger.warning("--no-cleanup set; %d detector(s) NOT deleted, edge config NOT restored",
+                           len(created), extra={"phase": "cleanup"})
             return
+        # 1. Restore pre-run edge config first → tears down inference pods for our detectors.
+        edge_restored = dm.restore_edge_config()
+        # 2. Then delete detectors from the cloud.
         if not created:
             return
         deleted, failed = dm.delete_all(created)
         cleanup_log = output_dir / "cleanup.log"
         cleanup_log.write_text(
             f"created: {len(created)}\ndeleted: {deleted}\nfailed: {failed}\n"
+            f"edge_config_restored: {edge_restored}\n"
             + "\n".join(f"  {c.spec_name} -> {c.detector_id}" for c in created) + "\n"
         )
 
@@ -166,6 +170,11 @@ def main(argv: list[str] | None = None) -> int:
     signal.signal(signal.SIGTERM, _signal_cleanup)
 
     try:
+        # Snapshot the pre-run edge config BEFORE any modifications. Our
+        # cleanup will restore this exact state to tear down our inference pods
+        # while preserving any pre-existing detectors (only present when
+        # refuse_if_host_not_clean=false).
+        dm.snapshot_edge_config()
         created = dm.create_all()
         dm.register_on_edge(created)
 

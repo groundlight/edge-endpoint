@@ -47,11 +47,24 @@ def ensure_host_clean(gl_edge: ExperimentalApi, expected_prefix: str, *, allow: 
                     len(detectors), expected_prefix, extra={"phase": "host_check"})
         return
 
+    if allow:
+        # Loud, prominent warning so the user can't miss it in the run.log.
+        bar = "=" * 78
+        logger.warning(bar, extra={"phase": "host_check"})
+        logger.warning("HOST NOT CLEAN — %d pre-existing detector(s) on the edge:",
+                       len(foreign), extra={"phase": "host_check"})
+        for entry in foreign:
+            logger.warning("    %s", entry, extra={"phase": "host_check"})
+        logger.warning("These detectors share GPU/CPU/RAM with the benchmark and WILL affect the",
+                       extra={"phase": "host_check"})
+        logger.warning("FPS / VRAM / latency numbers. Re-run on a clean edge for trustworthy results.",
+                       extra={"phase": "host_check"})
+        logger.warning(bar, extra={"phase": "host_check"})
+        return
+
     msg = (
         f"Edge has {len(foreign)} detector(s) not matching prefix {expected_prefix!r}: {foreign}. "
-        f"Run on a clean instance, or set run.refuse_if_host_not_clean: false to override."
+        f"Run on a clean edge, or set run.refuse_if_host_not_clean: false to proceed with a "
+        f"contaminated host (results will be affected)."
     )
-    if allow:
-        logger.warning("host clean check FAILED but allowed: %s", msg, extra={"phase": "host_check"})
-    else:
-        raise HostNotCleanError(msg)
+    raise HostNotCleanError(msg)

@@ -7,7 +7,7 @@ import logging
 from dataclasses import dataclass
 
 from groundlight import Detector, ExperimentalApi
-from groundlight.edge import NO_CLOUD
+from groundlight.edge import EdgeEndpointConfig, NO_CLOUD
 
 import groundlight_helpers as glh
 from app_benchmark.config import BenchmarkConfig, DetectorSpec, RunConfig
@@ -45,6 +45,41 @@ class DetectorManager:
         self.cfg = cfg
         self.gl_cloud = gl_cloud
         self.gl_edge = gl_edge
+        self._pre_run_edge_config: EdgeEndpointConfig | None = None
+
+    def snapshot_edge_config(self) -> EdgeEndpointConfig:
+        """Capture the current edge config so we can restore it at cleanup.
+
+        Called once before any modifications. If the host was clean at start,
+        the snapshot is effectively empty. If pre-existing detectors are
+        present (refuse_if_host_not_clean=false), restoring this snapshot
+        preserves them.
+        """
+        try:
+            self._pre_run_edge_config = self.gl_edge.edge.get_config()
+            logger.info("snapshotted pre-run edge config",
+                        extra={"phase": "edge_config"})
+        except Exception as exc:
+            logger.warning("could not snapshot pre-run edge config: %s", exc,
+                           extra={"phase": "edge_config"})
+            self._pre_run_edge_config = EdgeEndpointConfig()
+        return self._pre_run_edge_config
+
+    def restore_edge_config(self) -> bool:
+        """Push the pre-run edge config back. Returns True on success."""
+        if self._pre_run_edge_config is None:
+            logger.info("no pre-run edge config snapshot; skipping restore",
+                        extra={"phase": "cleanup"})
+            return False
+        try:
+            self.gl_edge.edge.set_config(self._pre_run_edge_config)
+            logger.info("restored pre-run edge config (inference pods for our detectors will be torn down)",
+                        extra={"phase": "cleanup"})
+            return True
+        except Exception as exc:
+            logger.error("failed to restore pre-run edge config: %s", exc,
+                         extra={"phase": "cleanup"})
+            return False
 
     def create_all(self) -> list[CreatedDetector]:
         seen: dict[str, CreatedDetector] = {}
@@ -75,15 +110,23 @@ class DetectorManager:
         return list(seen.values())
 
     def register_on_edge(self, created: list[CreatedDetector]) -> None:
+        """Add our detectors to the (snapshotted) pre-run config and push.
+
+        Falls back to a fresh config if no snapshot was taken — but the standard
+        flow always snapshots first via snapshot_edge_config(). This way, any
+        pre-existing detectors are preserved during the run.
+        """
         if not created:
             return
+        if self._pre_run_edge_config is not None:
+            edge_config = self._pre_run_edge_config.model_copy(deep=True)
+        else:
+            edge_config = EdgeEndpointConfig()
+        for c in created:
+            edge_config.add_detector(c.detector, NO_CLOUD)
         logger.info("registering %d detector(s) on edge in NO_CLOUD mode (set_config blocks until ready)",
                     len(created), extra={"phase": "edge_config"})
-        glh.configure_edge_endpoint(
-            self.gl_edge,
-            [c.detector for c in created],
-            edge_inference_config=NO_CLOUD,
-        )
+        self.gl_edge.edge.set_config(edge_config, timeout_sec=self.cfg.run.set_config_timeout_seconds)
         logger.info("edge configured", extra={"phase": "edge_config"})
 
     def delete_all(self, created: list[CreatedDetector]) -> tuple[int, int]:
