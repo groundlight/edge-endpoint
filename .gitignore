@@ -153,6 +153,7 @@ docker-compose.yml
 load-testing/logs/
 load-testing/plots/
 load-testing/load_tests/
+load-testing/benchmark_results/
 
 # React status page build output (built during Docker image build)
 app/status_monitor/react-build/

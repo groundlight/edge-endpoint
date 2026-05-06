@@ -96,3 +96,34 @@ Below are some commands that are commonly run to evaluate the performance of the
 1. GPU VRAM utilization: `nvtop`. Check that GPU VRAM utilization is evenly spread across all available GPUs. 
 1. Inference pod status: `watch kubectl get pods -n edge`. Check that all pods are online and that no restarts occurred.
 
+### Detector Resource Benchmark
+
+#### Purpose
+Measures per-detector VRAM and RAM consumption on a running Edge Endpoint for a list of edge pipeline configs. For each `(mode, pipeline)` entry, the script provisions a (trained) detector, configures the Edge Endpoint to run it, and samples `/status/resources.json`.
+
+#### Usage
+```
+uv run python measure_ram_and_vram_usage.py PIPELINES_YAML [options]
+```
+
+The pipelines YAML lists the edge pipeline configs to benchmark, grouped by mode. See `edge-pipeline-configs.md` for what's available.
+
+```yaml
+BINARY:
+  - generic-cached-timm-efficientnetv2s-calibrated-mlp
+MULTI_CLASS:
+  - multiclass-generic-cached-timm-efficientnetv2s-calibrated-mlp
+COUNT:
+  - count-step-centernet
+BOUNDING_BOX:
+  - bounding-boxes-step-yolox
+```
+
+The first run for any pipeline can take several minutes per detector because the script primes and waits for the edge pipeline to train. Cloud training runs concurrently across all detectors, so total wall-time is bounded by the slowest single training, not the sum. Subsequent runs reuse the already-trained detectors.
+
+#### Outputs
+A timestamped CSV under `load-testing/benchmark_results/`, with one row per `(mode, pipeline, n)` triple containing per-detector VRAM and RAM (primary / oodd / total) and the system-level VRAM and RAM totals at sample time.
+
+#### Resuming
+Pass `--resume <existing.csv>` to skip rows already recorded in the file and append only the missing pipelines. Useful for long sweeps and for incrementally adding new pipelines to the YAML.
+
