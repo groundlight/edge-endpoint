@@ -1,8 +1,8 @@
 """Post-`set_config` control-plane verification.
 
 Asserts:
-  1. POST /image-queries with a sentinel image returns from_edge=True per detector.
-  2. /status/resources.json shows our created detectors and loading_detectors == 0.
+  1. SDK submit_image_query with a sentinel image returns from_edge=True per detector.
+  2. gl.edge.get_detector_readiness() shows all our detectors as ready (=True).
   3. Sentinel latency is below the sanity threshold (slower implies cloud fallback).
 """
 
@@ -75,18 +75,15 @@ class Verifier:
 
     def _check_resources_loaded(self, expected_ids: set[str]) -> None:
         try:
-            resources = glh._get_resources(self.gl_edge, timeout=5.0)
+            readiness = self.gl_edge.edge.get_detector_readiness()
         except Exception as exc:
-            raise VerificationError(f"resource fetch failed: {exc}") from exc
-        if "error" in resources:
-            raise VerificationError(f"resource endpoint reported error: {resources.get('error')}")
-        loading = resources.get("system", {}).get("gpu", {}).get("vram_bytes", {}).get("loading_detectors", 0)
-        if loading and loading > 0:
-            raise VerificationError(f"detectors still loading (loading_detectors={loading} bytes)")
-        loaded = {d.get("detector_id") for d in resources.get("detectors", []) or []}
-        missing = expected_ids - loaded
+            raise VerificationError(f"get_detector_readiness failed: {exc}") from exc
+        missing = expected_ids - set(readiness.keys())
         if missing:
-            raise VerificationError(f"expected detector(s) not present in /status/resources.json: {sorted(missing)}")
+            raise VerificationError(f"expected detector(s) not configured on edge: {sorted(missing)}")
+        not_ready = sorted(did for did in expected_ids if not readiness.get(did, False))
+        if not_ready:
+            raise VerificationError(f"detector(s) not ready (inference pods still loading): {not_ready}")
 
     def _check_sentinel(self, detectors: list[Detector]) -> None:
         for det in detectors:
