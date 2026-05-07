@@ -3,6 +3,7 @@
 Wraps existing helpers in load-testing/groundlight_helpers.py — does NOT reimplement.
 """
 
+import hashlib
 import logging
 from dataclasses import dataclass
 
@@ -13,6 +14,13 @@ import groundlight_helpers as glh
 from app_benchmark.config import BenchmarkConfig, DetectorSpec, RunConfig
 
 logger = logging.getLogger(__name__)
+
+# Cloud Predictor.name has a 100-char hard limit. provision_detector appends
+# up to ~50 chars of suffix to our prefix (" {W} x {H} - {MODE} - n{n} - {hash}"),
+# and Groundlight's cloud-side bookkeeping further appends ~15-20 chars to the
+# sibling Predictor name during creation. Keeping our prefix <= ~28 chars
+# leaves a safety margin under the 100-char limit.
+_MAX_PREFIX_LEN = 28
 
 
 @dataclass
@@ -34,10 +42,17 @@ _TYPE_TO_MODE = {
 def _name_prefix(run: RunConfig, spec: DetectorSpec) -> str:
     """Cloud detector name prefix.
 
-    `provision_detector` will append " {W} x {H} - {MODE} - n{n} - {hash}" to
-    this prefix. We use the prefix for orphan-cleanup matching.
+    Encoded as `{detector_name_prefix}_{6-char run.name hash}_{spec.name}`,
+    capped at _MAX_PREFIX_LEN chars. Orphan cleanup matches by
+    `{detector_name_prefix}_*` so the inner hash is invisible to the user.
     """
-    return f"{run.detector_name_prefix}_{run.name}_{spec.name}"
+    run_hash = hashlib.sha256(run.name.encode()).hexdigest()[:6]
+    candidate = f"{run.detector_name_prefix}_{run_hash}_{spec.name}"
+    if len(candidate) <= _MAX_PREFIX_LEN:
+        return candidate
+    # spec.name too long — replace with its own short hash to avoid collisions.
+    spec_hash = hashlib.sha256(spec.name.encode()).hexdigest()[:8]
+    return f"{run.detector_name_prefix}_{run_hash}_{spec_hash}"
 
 
 class DetectorManager:

@@ -19,13 +19,20 @@ def host_from_url(url: str) -> str | None:
     return parsed.hostname
 
 
-def measure(host: str, count: int = 5, per_ping_timeout_s: float = 2.0) -> dict | None:
+_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
+
+
+def measure(host: str, count: int = 5, per_ping_timeout_s: float = 1.5) -> dict | None:
     """Run system `ping -c <count> <host>` and parse the rtt summary line.
 
     Returns dict with min_ms / avg_ms / max_ms / stddev_ms / count, or None
     if ping isn't installed, the host is unreachable, or output couldn't
     be parsed (e.g. firewall blocks ICMP).
     """
+    if host in _LOOPBACK_HOSTS:
+        logger.info("loopback host (%s) — skipping ping baseline", host,
+                    extra={"phase": "startup"})
+        return None
     if shutil.which("ping") is None:
         logger.info("ping not installed; skipping latency baseline",
                     extra={"phase": "startup"})
@@ -34,10 +41,11 @@ def measure(host: str, count: int = 5, per_ping_timeout_s: float = 2.0) -> dict 
         result = subprocess.run(
             ["ping", "-c", str(count), host],
             capture_output=True, text=True,
-            timeout=per_ping_timeout_s * count + 5,
+            timeout=per_ping_timeout_s * count + 3,
         )
     except subprocess.TimeoutExpired:
-        logger.warning("ping %s timed out", host, extra={"phase": "startup"})
+        logger.warning("ping %s timed out after %.1fs", host,
+                       per_ping_timeout_s * count + 3, extra={"phase": "startup"})
         return None
     except Exception as exc:
         logger.warning("ping %s failed: %s", host, exc, extra={"phase": "startup"})
