@@ -129,6 +129,7 @@ def _per_lens_summary(cfg: BenchmarkConfig, frame_events: list[dict],
 
         out[lens.name] = {
             "target_fps_per_camera": lens.target_fps,
+            "target_fps_aggregate": target_fps,
             "cameras": lens.cameras,
             "image_resolution": list(lens.image.resolution),
             "downstream_crop_resolution": list(lens.downstream_crop.resize_to) if lens.downstream_crop else None,
@@ -323,14 +324,23 @@ def _write_summary_md(summary: dict[str, Any], out_path: Path) -> None:
     lines.append("")
     lines.append("## Lenses")
     lines.append("")
-    lines.append("| Lens | Status | Aggregate FPS | Target FPS | Deficit % | E2E p50 (ms) | E2E p95 (ms) | Errors % |")
-    lines.append("|---|---|---|---|---|---|---|---|")
+    lines.append("FPS columns are **aggregate per lens** (per-camera × cams). "
+                 "Per-camera achieved FPS is in `summary.json.lenses[].achieved_fps_per_client`.")
+    lines.append("")
+    lines.append("| Lens | Status | Cams | Target FPS (per-cam) | Target FPS (aggr) | "
+                 "Achieved FPS (aggr) | Deficit % | E2E p50 (ms) | E2E p95 (ms) | Errors % |")
+    lines.append("|---|---|---|---|---|---|---|---|---|---|")
     for name, lens in summary.get("lenses", {}).items():
-        target = lens["target_fps_per_camera"] * lens["cameras"]
+        per_cam = lens["target_fps_per_camera"]
+        cams = lens["cameras"]
+        aggr_target = per_cam * cams
+        per_cam_str = "saturate" if per_cam == 0 else f"{per_cam:.2f}"
+        aggr_str = "saturate" if aggr_target == 0 else f"{aggr_target:.2f}"
         lines.append(
-            f"| {name} | **{lens['status']}** | {lens['achieved_fps_aggregate']:.2f} | {target:.2f} | "
-            f"{lens['fps_deficit_pct']:.1f} | {lens['e2e_latency_ms']['p50']:.1f} | "
-            f"{lens['e2e_latency_ms']['p95']:.1f} | {lens['error_rate_pct']:.2f} |"
+            f"| {name} | **{lens['status']}** | {cams} | {per_cam_str} | {aggr_str} | "
+            f"{lens['achieved_fps_aggregate']:.2f} | {lens['fps_deficit_pct']:.1f} | "
+            f"{lens['e2e_latency_ms']['p50']:.1f} | {lens['e2e_latency_ms']['p95']:.1f} | "
+            f"{lens['error_rate_pct']:.2f} |"
         )
 
     sys_sum = summary.get("system", {}) or {}
