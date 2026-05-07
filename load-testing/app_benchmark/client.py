@@ -1,8 +1,12 @@
-"""Per-camera client process: composite generation, chain loop, retry, error budget.
+"""Per-camera client process: composite generation, chain loop, error budget.
 
-Uses the Groundlight SDK (`gl.submit_image_query`) for inference — the SDK
-handles paths, auth, and retries. Raw HTTP was a mistake; the SDK is the
-canonical path for everything that talks to a Groundlight endpoint.
+Uses `gl.ask_ml(detector, image)` for every inference — it returns the
+first ML prediction without polling for confidence escalation, which is
+required when the edge runs in NO_CLOUD mode (submit_image_query would
+otherwise round-trip to the (unreachable in our runs) cloud for low-confidence
+results).
+
+The SDK handles paths, auth, and 5xx/429 retries internally.
 """
 
 import collections
@@ -76,7 +80,6 @@ def run_client(
     # SDK client constructed *after* fork. Edge endpoint; the edge transparently
     # proxies any cloud-side operations we'd issue, so a single client suffices.
     from groundlight import ExperimentalApi  # noqa: PLC0415
-    import groundlight_helpers as glh  # noqa: PLC0415
 
     gl = ExperimentalApi(endpoint=edge_url)
 
@@ -96,8 +99,6 @@ def run_client(
     pacer = FpsPacer(lens.target_fps)
     error_budget = ErrorBudget(lens.error_budget_pct, window_s=30.0)
 
-    iq_kwargs = glh.IQ_KWARGS_FOR_NO_ESCALATION
-
     while not stop_event.is_set():
         try:
             frame = gen.next(max_objects=max_objects)
@@ -113,7 +114,7 @@ def run_client(
             had_any_error = _send_frame(
                 gl=gl, lens=lens, detector_id_by_name=detector_id_by_name, frame=frame,
                 crop_resize=(crop_w, crop_h), padding_jpeg=padding_jpeg,
-                event_queue=event_queue, client_id=client_id, iq_kwargs=iq_kwargs,
+                event_queue=event_queue, client_id=client_id,
             )
         except RuntimeError as exc:
             logger.error("fatal error in client loop: %s", exc,
@@ -147,19 +148,23 @@ def run_client(
         pacer.wait()
 
 
-def _submit_via_sdk(gl, detector_id: str, image_bytes: bytes, iq_kwargs: dict) -> tuple[bool, bool]:
-    """Submit one image query via the SDK. Returns (was_error, fatal).
+def _submit_via_sdk(gl, detector_id: str, image_bytes: bytes) -> tuple[bool, bool]:
+    """Submit one inference via gl.ask_ml. Returns (was_error, fatal).
+
+    ask_ml is preferred over submit_image_query in NO_CLOUD mode: it returns
+    the first ML prediction without polling for high-confidence escalation,
+    which would otherwise round-trip to the cloud and fail.
 
     fatal=True means we observed a control-plane drift (cloud fallback) or an
     unrecoverable error from the SDK after its built-in retries — caller
     should propagate as RuntimeError to terminate the run.
     """
     try:
-        iq = gl.submit_image_query(detector_id, image_bytes, **iq_kwargs)
+        iq = gl.ask_ml(detector_id, image_bytes)
     except Exception as exc:
         # SDK handles 5xx/429 retry internally; this catches exhausted retries
         # and any unhandled API error. Treat as a non-fatal error event.
-        logger.warning("SDK submit_image_query failed for %s: %s", detector_id, exc)
+        logger.warning("SDK ask_ml failed for %s: %s", detector_id, exc)
         return True, False
 
     result = getattr(iq, "result", None)
@@ -179,7 +184,6 @@ def _send_frame(
     padding_jpeg: bytes,
     event_queue: "mp.Queue",
     client_id: str,
-    iq_kwargs: dict,
 ) -> bool:
     """Run the chain for one frame. Returns True if any non-fatal error occurred."""
     had_error = False
@@ -189,7 +193,7 @@ def _send_frame(
     stage_0 = lens.chain[0]
     det_id = detector_id_by_name[stage_0.detector]
     t0 = time.perf_counter()
-    was_error, fatal = _submit_via_sdk(gl, det_id, frame.canvas_jpeg, iq_kwargs)
+    was_error, fatal = _submit_via_sdk(gl, det_id, frame.canvas_jpeg)
     elapsed_ms = (time.perf_counter() - t0) * 1000.0
     event_queue.put(FrameEvent(
         ts=time.time(), lens_name=lens.name, client_id=client_id, stage_idx=0,
@@ -221,7 +225,7 @@ def _send_frame(
         det_id = detector_id_by_name[stage.detector]
         for crop in crops:
             t0 = time.perf_counter()
-            was_error, fatal = _submit_via_sdk(gl, det_id, crop, iq_kwargs)
+            was_error, fatal = _submit_via_sdk(gl, det_id, crop)
             elapsed_ms = (time.perf_counter() - t0) * 1000.0
             event_queue.put(FrameEvent(
                 ts=time.time(), lens_name=lens.name, client_id=client_id, stage_idx=stage_idx,

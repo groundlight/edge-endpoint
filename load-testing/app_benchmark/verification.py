@@ -1,7 +1,7 @@
 """Post-`set_config` control-plane verification.
 
 Asserts:
-  1. SDK submit_image_query with a sentinel image returns from_edge=True per detector.
+  1. gl.ask_ml with a sentinel image returns from_edge=True per detector.
   2. gl.edge.get_detector_readiness() shows all our detectors as ready (=True).
   3. Sentinel latency is below the sanity threshold (slower implies cloud fallback).
 """
@@ -13,8 +13,6 @@ from pathlib import Path
 
 import cv2
 from groundlight import Detector, ExperimentalApi
-
-import groundlight_helpers as glh
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +86,8 @@ class Verifier:
     def _check_sentinel(self, detectors: list[Detector]) -> None:
         for det in detectors:
             t0 = time.perf_counter()
-            iq = self.gl_edge.submit_image_query(det, self._sentinel_image, **glh.IQ_KWARGS_FOR_NO_ESCALATION)
+            # ask_ml: ML-only prediction, no cloud poll for confidence — required in NO_CLOUD mode.
+            iq = self.gl_edge.ask_ml(det, self._sentinel_image)
             elapsed = time.perf_counter() - t0
             if elapsed > LATENCY_SANITY_THRESHOLD_S:
                 raise VerificationError(
@@ -102,6 +101,6 @@ class Verifier:
         latencies: dict[str, float] = {}
         for det in detectors:
             t0 = time.perf_counter()
-            self.gl_edge.submit_image_query(det, self._sentinel_image, **glh.IQ_KWARGS_FOR_NO_ESCALATION)
+            self.gl_edge.ask_ml(det, self._sentinel_image)
             latencies[det.id] = (time.perf_counter() - t0) * 1000
         return latencies
