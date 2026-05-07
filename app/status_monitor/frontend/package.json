@@ -16,7 +16,8 @@
     "postcss-simple-vars": "^7.0.1",
     "react": "^19",
     "react-dom": "^19",
-    "recharts": "^3.7.0"
+    "recharts": "^3.7.0",
+    "yaml": "^2.8.3"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4",

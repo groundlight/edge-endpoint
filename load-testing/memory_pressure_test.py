@@ -9,11 +9,10 @@ from threading import Thread
 
 import groundlight_helpers as glh
 import image_helpers as imgh
+from constants import OBJECT_DETECTION_CLASS_NAME
 
-SUPPORTED_DETECTOR_MODES = (
-    'BINARY',
-    'COUNT',
-)
+# Subset of SUPPORTED_DETECTOR_MODES that this script's load-generation path implements.
+MEMORY_PRESSURE_DETECTOR_MODES = ('BINARY', 'COUNT')
 
 # The number of image queries that this script will attempt to submit to the Edge Endpoint, per detector
 # This is an arbitrarily high number. In practice the script can be stopped once memory usage stabilizes
@@ -65,7 +64,7 @@ def parse_arguments():
     )
     parser.add_argument(
         'detector_mode',
-        choices=SUPPORTED_DETECTOR_MODES,
+        choices=MEMORY_PRESSURE_DETECTOR_MODES,
         help=f'Detector mode'
     )
 
@@ -170,17 +169,15 @@ def set_detectors_confidence_threshold(gl: Groundlight, detectors: list[Detector
         set_detector_confidence_threshold(gl, detector, confidence_threshold)
         print(f'Adjusted {detector.id} confidence threshold to {confidence_threshold}')
                 
-def main(num_detectors: int, get_or_create_detectors: Callable, generate_random_image: Callable, kwargs) -> None:
-    """
-    Generate load for a Count detector
-    """
+def main(num_detectors: int, get_or_create_detectors: Callable, generate_random_image: Callable, detector_kwargs: dict, image_kwargs: dict) -> None:
+    """Generate sustained load against a set of detectors to trigger and measure edge inference pod behavior."""
     gl = create_client()
 
     # Start a timer to measure how long it takes for all edge inference pods to come online
     test_start = time.time()
 
     # create the detectors and adjust confidence thresholds
-    detectors = get_or_create_detectors(gl, num_detectors, **kwargs)
+    detectors = get_or_create_detectors(gl, num_detectors, **detector_kwargs)
     set_detectors_confidence_threshold(gl, detectors, args.confidence_threshold)
         
     # Send load to the detectors to trigger inference pod creation
@@ -191,10 +188,9 @@ def main(num_detectors: int, get_or_create_detectors: Callable, generate_random_
             image_width = 640
             image_height = 480
             image, label, rois = generate_random_image(
-                gl=gl,
                 image_width=image_width,
                 image_height=image_height,
-                **kwargs,
+                **image_kwargs,
             )
             print(f'{n}:', end=' ', flush=True)
             try:
@@ -239,24 +235,21 @@ if __name__ == "__main__":
     args = parse_arguments()
     
     if args.detector_mode == "BINARY":
-        kwargs = {}
         main(
-            args.num_detectors, 
-            get_or_create_binary_detectors, 
-            imgh.generate_random_binary_image, 
-            kwargs
-            )
+            args.num_detectors,
+            get_or_create_binary_detectors,
+            imgh.generate_random_binary_image,
+            detector_kwargs={},
+            image_kwargs={},
+        )
     elif args.detector_mode == "COUNT":
-        kwargs = {
-            'class_name': 'circle',
-            'max_count': 10,
-        }
         main(
-            args.num_detectors, 
-            get_or_create_count_detectors, 
-            imgh.generate_random_objects_image, 
-            kwargs
-            )
+            args.num_detectors,
+            get_or_create_count_detectors,
+            imgh.generate_random_objects_image,
+            detector_kwargs={'class_name': OBJECT_DETECTION_CLASS_NAME, 'max_count': 10},
+            image_kwargs={'max_count': 10},
+        )
     else:
         raise ValueError(
             f'Unrecognized detector mode: {args.detector_mode}'

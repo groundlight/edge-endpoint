@@ -46,7 +46,7 @@ def get_max_inference_revision() -> int:
 
 def _add_label_sync(gl_cloud: Groundlight, detector: Detector) -> None:
     """Submit a random image query via the cloud client and label it."""
-    image, label, _ = imgh.generate_random_binary_image(gl_cloud)
+    image, label, _ = imgh.generate_random_binary_image()
     iq = gl_cloud.ask_async(detector, image, human_review="NEVER")
     gl_cloud.add_label(iq, label)
 
@@ -88,7 +88,7 @@ def main():
     print('All retries disabled -- 503s will propagate immediately.\n')
 
     while time.time() - test_start < VICTORY_DURATION_SEC:
-        image, _, _ = imgh.generate_random_binary_image(gl)
+        image, _, _ = imgh.generate_random_binary_image()
         iq = gl.submit_image_query(
             detector=detector,
             image=image,

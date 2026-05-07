@@ -57,6 +57,9 @@ persistentVolumeNameBase: "edge-endpoint-pv"
 # set this value to "cpu".
 inferenceFlavor: "gpu"
 
+# Whether to enable torch.compile (or equivalent) optimization in the inference server.
+edgeCompileEnabled: false
+
 # The user must provide the Groundlight API token as input or the deployment will fail
 groundlightApiToken: ""
 
