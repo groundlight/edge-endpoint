@@ -1,0 +1,70 @@
+# Two-lens 2K saturation benchmark — single-stage counting + chained bbox→binary.
+# - 1920×1080 ("2K") composite per frame
+# - target_fps: 0  → saturate (back-pressure-bound, single in-flight per camera)
+# - chain caps downstream fan-out at 5 crops per upstream frame
+# - count detector capped at max_count=5
+
+schema_version: 1
+
+run:
+  name: "two-lens-2k-saturate"
+  duration_seconds: 60
+  warmup_seconds: 15
+  output_dir: "./benchmark-results/{name}-{ts}/"
+  edge_endpoint_url: "http://10.141.32.60:30101"
+  set_config_timeout_seconds: 900
+  cloud_endpoint: "https://api.groundlight.ai/"
+  detector_name_prefix: "bench"
+  refuse_if_host_not_clean: true
+
+detectors:
+  # Single-stage counting lens uses this:
+  - name: "obj_count"
+    type: "count"
+    n: 5
+
+  # Chain lens upstream — bounding boxes, max 5 detected:
+  - name: "obj_bbox"
+    type: "bounding_box"
+    n: 5
+
+  # Chain lens downstream — binary classification on each cropped ROI:
+  - name: "obj_binary"
+    type: "binary"
+
+lenses:
+  # Lens 1: single-stage counting. Always 5 objects in the composite.
+  - name: "count_lens"
+    chain:
+      - detector: "obj_count"
+    target_fps: 0                  # 0 = saturate
+    cameras: 1
+    image:
+      base: "images/dog.jpeg"
+      resolution: [1920, 1080]
+      composite_objects: 5
+      seed: 42
+    error_budget_pct: 5
+
+  # Lens 2: chained bbox -> binary. Composite has random[1,5] objects per frame;
+  # downstream stage always sees exactly 5 crops (real ROIs + cat-image padding).
+  - name: "chain_lens"
+    chain:
+      - detector: "obj_bbox"
+        num_crops_into_next: 5
+      - detector: "obj_binary"
+    target_fps: 0                  # 0 = saturate
+    cameras: 1
+    image:
+      base: "images/dog.jpeg"
+      resolution: [1920, 1080]
+      composite_objects: null      # null = random[1, num_crops_into_next] per frame
+      seed: 43
+    downstream_crop:
+      resize_to: [224, 224]
+      padding_image: "images/cat.jpeg"
+    error_budget_pct: 5
+
+monitoring:
+  sample_hz: 2
+  steady_state_window_seconds: 10

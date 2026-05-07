@@ -1,0 +1,37 @@
+# Minimal smoke-test config — 1 binary detector, 1 single-stage lens, ~60s.
+# Used to validate the harness end-to-end against a real edge.
+
+schema_version: 1
+
+run:
+  name: "smoke"
+  duration_seconds: 60
+  warmup_seconds: 10
+  output_dir: "./benchmark-results/{name}-{ts}/"
+  edge_endpoint_url: "http://10.141.32.60:30101"
+  set_config_timeout_seconds: 900
+  cloud_endpoint: "https://api.groundlight.ai/"
+  detector_name_prefix: "bench"
+  refuse_if_host_not_clean: true
+
+detectors:
+  - name: "bg_binary"
+    type: "binary"
+    mlpipe: null
+
+lenses:
+  - name: "bg_lens"
+    chain:
+      - detector: "bg_binary"
+    target_fps: 5
+    cameras: 1
+    image:
+      base: "images/dog.jpeg"
+      resolution: [640, 480]
+      composite_objects: 1
+      seed: 42
+    error_budget_pct: 5
+
+monitoring:
+  sample_hz: 2
+  steady_state_window_seconds: 10
