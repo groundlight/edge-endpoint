@@ -276,7 +276,17 @@ def _plot_fps_combined(cfg: BenchmarkConfig, frame_events: list[dict], out_path:
     plt.close(fig)
 
 
-def _plot_system_metric(metrics: list[dict], field: str, label: str, out_path: Path) -> None:
+_BYTES_PER_GB = 1024 ** 3
+
+
+def _plot_system_metric(
+    metrics: list[dict],
+    field: str,
+    label: str,
+    out_path: Path,
+    *,
+    bytes_to_gb: bool = False,
+) -> None:
     fig, ax = plt.subplots(figsize=(10, 4))
     if not metrics:
         ax.text(0.5, 0.5, "no samples", ha="center", va="center", transform=ax.transAxes)
@@ -284,6 +294,8 @@ def _plot_system_metric(metrics: list[dict], field: str, label: str, out_path: P
         t0 = metrics[0]["ts"]
         xs = [m["ts"] - t0 for m in metrics]
         ys = [m[field] for m in metrics]
+        if bytes_to_gb:
+            ys = [y / _BYTES_PER_GB for y in ys]
         ax.plot(xs, ys, color="C2")
     ax.set_xlabel("seconds")
     ax.set_ylabel(label)
@@ -301,6 +313,13 @@ def _write_summary_md(summary: dict[str, Any], out_path: Path) -> None:
     lines.append(f"Duration: {summary['duration_seconds']}s (warmup {summary['warmup']['duration_seconds']}s, "
                  f"steady_state_reached={summary['warmup']['steady_state_reached']})  ")
     lines.append(f"Started: {summary['started_at_iso']}")
+    nl = (summary.get("environment") or {}).get("network_latency_ms")
+    if nl:
+        lines.append(
+            f"Network latency to edge ({nl['count']} pings to {nl['host']}): "
+            f"min/avg/max/stddev = "
+            f"{nl['min_ms']:.3f}/{nl['avg_ms']:.3f}/{nl['max_ms']:.3f}/{nl['stddev_ms']:.3f} ms"
+        )
     lines.append("")
     lines.append("## Lenses")
     lines.append("")
@@ -323,10 +342,11 @@ def _write_summary_md(summary: dict[str, Any], out_path: Path) -> None:
         ram = sys_sum.get("ram_used_bytes", {})
         gpu = sys_sum.get("gpu_compute_total_pct", {})
         vram = sys_sum.get("gpu_vram_used_bytes", {})
+        gb = _BYTES_PER_GB
         lines.append(f"- CPU total: p50={cpu.get('p50', 0):.1f}%, p95={cpu.get('p95', 0):.1f}%")
-        lines.append(f"- RAM used: p50={ram.get('p50', 0)/1e9:.2f} GB, p95={ram.get('p95', 0)/1e9:.2f} GB")
+        lines.append(f"- RAM used: p50={ram.get('p50', 0)/gb:.2f} GB, p95={ram.get('p95', 0)/gb:.2f} GB")
         lines.append(f"- GPU compute: p50={gpu.get('p50', 0):.1f}%, p95={gpu.get('p95', 0):.1f}%")
-        lines.append(f"- GPU VRAM used: p50={vram.get('p50', 0)/1e9:.2f} GB, p95={vram.get('p95', 0)/1e9:.2f} GB")
+        lines.append(f"- GPU VRAM used: p50={vram.get('p50', 0)/gb:.2f} GB, p95={vram.get('p95', 0)/gb:.2f} GB")
         lines.append(f"- VRAM imbalance: {sys_sum.get('vram_imbalance_pct', 0):.1f}%")
 
     warnings: list[str] = []
@@ -401,9 +421,12 @@ def build(
     _plot_fps_per_lens(cfg, frame_events, plots_dir / "fps_per_lens.png")
     _plot_fps_combined(cfg, frame_events, plots_dir / "fps_combined.png")
     _plot_system_metric(metrics, "cpu_total_pct", "CPU total %", plots_dir / "cpu.png")
-    _plot_system_metric(metrics, "ram_used_bytes", "RAM used (bytes)", plots_dir / "ram.png")
-    _plot_system_metric(metrics, "gpu_compute_total_pct", "GPU compute %", plots_dir / "gpu_compute.png")
-    _plot_system_metric(metrics, "gpu_vram_used_bytes", "VRAM used (bytes)", plots_dir / "vram.png")
+    _plot_system_metric(metrics, "ram_used_bytes", "RAM used (GB)",
+                        plots_dir / "ram.png", bytes_to_gb=True)
+    _plot_system_metric(metrics, "gpu_compute_total_pct", "GPU compute %",
+                        plots_dir / "gpu_compute.png")
+    _plot_system_metric(metrics, "gpu_vram_used_bytes", "VRAM used (GB)",
+                        plots_dir / "vram.png", bytes_to_gb=True)
 
     logger.info("report written to %s", output_dir, extra={"phase": "report"})
     return summary_path

@@ -15,7 +15,7 @@ from pathlib import Path
 import groundlight_helpers as glh
 from groundlight import ExperimentalApi
 
-from app_benchmark import logging_setup
+from app_benchmark import logging_setup, network
 from app_benchmark.config import BenchmarkConfig, ConfigError, load_config
 from app_benchmark.detectors import CreatedDetector, DetectorManager
 from app_benchmark.environment import capture as capture_env
@@ -104,12 +104,10 @@ def main(argv: list[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         return 2
 
-    api_token = os.environ.get(cfg.run.api_token_env)
-    if not api_token:
-        print(f"ERROR: env var {cfg.run.api_token_env} is not set.", file=sys.stderr)
+    if not os.environ.get("GROUNDLIGHT_API_TOKEN"):
+        print("ERROR: GROUNDLIGHT_API_TOKEN env var is not set "
+              "(SDK reads it directly).", file=sys.stderr)
         return 2
-    # Both SDK clients pull the token from $GROUNDLIGHT_API_TOKEN.
-    os.environ["GROUNDLIGHT_API_TOKEN"] = api_token
 
     output_dir = _resolve_output_dir(cfg.run.output_dir, cfg.run.name)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -123,6 +121,12 @@ def main(argv: list[str] | None = None) -> int:
 
     gl_cloud = ExperimentalApi(endpoint=cfg.run.cloud_endpoint)
     gl_edge = ExperimentalApi(endpoint=cfg.run.edge_endpoint_url)
+
+    # 0. Network latency baseline to the edge (ICMP ping × 5).
+    edge_host = network.host_from_url(cfg.run.edge_endpoint_url)
+    network_latency = network.measure(edge_host) if edge_host else None
+    logger.info("network baseline: %s", network.format_summary(network_latency),
+                extra={"phase": "startup"})
 
     # 1. Pre-flight host check.
     try:
@@ -199,6 +203,7 @@ def main(argv: list[str] | None = None) -> int:
         except Exception:
             resources = None
         env_block = capture_env(gl_edge, resources, repo_root=str(repo_root))
+        env_block["network_latency_ms"] = network_latency  # may be None
 
         # 5. Spin up supervisor + writer.
         supervisor = Supervisor(cfg, created, monitor_target=run_monitor, monitor_args=())

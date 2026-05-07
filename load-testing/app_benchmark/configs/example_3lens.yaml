@@ -6,7 +6,6 @@ run:
   warmup_seconds: 30
   output_dir: "./benchmark-results/{name}-{ts}/"
   edge_endpoint_url: "http://localhost:30101"
-  api_token_env: "GROUNDLIGHT_API_TOKEN"
   set_config_timeout_seconds: 900
   cloud_endpoint: "https://api.groundlight.ai/"
   detector_name_prefix: "bench"

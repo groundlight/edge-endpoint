@@ -17,7 +17,6 @@ class RunConfig(BaseModel):
     warmup_seconds: int = Field(default=30, ge=0)
     output_dir: str = "./benchmark-results/{name}-{ts}/"
     edge_endpoint_url: str
-    api_token_env: str = "GROUNDLIGHT_API_TOKEN"
     set_config_timeout_seconds: int = Field(default=900, ge=30)
     cloud_endpoint: str = "https://api.groundlight.ai/"
     detector_name_prefix: str = Field(default="bench", pattern=r"^[a-z][a-z0-9_]{1,15}$")
