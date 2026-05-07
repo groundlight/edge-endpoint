@@ -103,8 +103,11 @@ export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 # This should get substituted by the launching script
 export GROUNDLIGHT_API_TOKEN="__GROUNDLIGHTAPITOKEN__"
 
-# Install the edge-endpoint using helm
-make helm-install HELM_ARGS="--set groundlightApiToken=${GROUNDLIGHT_API_TOKEN} --set imageTag=${EE_IMAGE_TAG}"
+# Install the edge-endpoint using helm.
+# Override edgeEndpointTag (this PR's freshly-built image) but leave inferenceTag
+# unset so it falls back to imageTag's default ("release") — the gl-edge-inference
+# image is built on a different release cycle and `${EE_IMAGE_TAG}` never exists for it.
+make helm-install HELM_ARGS="--set groundlightApiToken=${GROUNDLIGHT_API_TOKEN} --set edgeEndpointTag=${EE_IMAGE_TAG}"
 
 # Configure kubectl to use the namespace where the EE is installed
 kubectl config set-context edge --namespace=edge --cluster=default --user=default

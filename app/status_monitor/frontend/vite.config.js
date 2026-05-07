@@ -19,6 +19,7 @@ export default defineConfig({
       "/status/resources.json": EDGE_ENDPOINT,
       "/status/static/icon_gold_dark.svg": EDGE_ENDPOINT,
       "/status/static/favicon.ico": EDGE_ENDPOINT,
+      "/edge-config": EDGE_ENDPOINT,
     },
   },
 });

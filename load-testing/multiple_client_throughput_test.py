@@ -17,6 +17,7 @@ from tqdm import tqdm
 
 import groundlight_helpers as glh
 import image_helpers as imgh
+from constants import SUPPORTED_DETECTOR_MODES
 from system_helpers import SystemMonitor
 
 
@@ -91,7 +92,7 @@ def send_image_requests(  # noqa: PLR0913
         request_start_time = time.time()
 
         try:
-            image, _, _ = imgh.generate_random_image(gl, detector, image_width, image_height)
+            image, _, _ = imgh.generate_random_image(detector, image_width, image_height)
             iq = gl.submit_image_query(detector, image, **glh.IQ_KWARGS_FOR_NO_ESCALATION)
             glh.error_if_not_from_edge(iq)
             success = True
@@ -281,8 +282,8 @@ if __name__ == "__main__":
         formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument(
-        "detector_mode", choices=glh.SUPPORTED_DETECTOR_MODES, metavar="detector_mode",
-        help=f"Detector mode to test. One of: {', '.join(sorted(glh.SUPPORTED_DETECTOR_MODES))}.",
+        "detector_mode", choices=SUPPORTED_DETECTOR_MODES, metavar="detector_mode",
+        help=f"Detector mode to test. One of: {', '.join(sorted(SUPPORTED_DETECTOR_MODES))}.",
     )
     parser.add_argument(
         "n", type=int, nargs="?", default=None,
