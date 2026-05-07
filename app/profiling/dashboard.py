@@ -151,7 +151,9 @@ def _(mo):
 @app.cell
 def _(PROFILING_DIR, mo):
     import os as _os
-    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+    from datetime import timezone as _tz
 
     traces_dir = _os.environ.get("PROFILING_TRACES_DIR", PROFILING_DIR)
 
@@ -237,7 +239,8 @@ def _(
     # Reactive: re-runs when controls change or auto-refresh fires.
     _ = refresh
 
-    from datetime import datetime as _dt, timezone as _tz
+    from datetime import datetime as _dt
+    from datetime import timezone as _tz
 
     _since_val = time_range.value  # mapped int from dict options; 0 means "all"
     _start_dt = None
@@ -260,6 +263,7 @@ def _(
     # the detector filter to the merged trace set.
     traces = merge_traces_by_id(load_traces(traces_dir, since_minutes=_since))
     if _start_dt is not None or _end_dt is not None:
+
         def _in_range(_t):
             _ts = _t.get("start_wall_time_iso", "")
             try:
@@ -611,9 +615,7 @@ def _(go, mo, traces):
         )
 
         request_duration_chart = mo.ui.plotly(_fig)
-        request_duration_curve_traces = [
-            [_p[2] for _p in _by_detector[_d]] for _d in sorted(_by_detector.keys())
-        ]
+        request_duration_curve_traces = [[_p[2] for _p in _by_detector[_d]] for _d in sorted(_by_detector.keys())]
         _out = mo.vstack(
             [
                 mo.md("## Request Duration Scatter _(one point per trace)_"),
@@ -759,9 +761,7 @@ def _(FALLBACK_COLOR, SPAN_COLORS, get_trace_detail, go, mo, trace_id_search, tr
     _query = (trace_id_search.value or "").strip()
     if _query:
         # Prefix match against all traces, not just the dropdown's top-N window.
-        _matches = list(dict.fromkeys(
-            _t.get("trace_id") for _t in traces if _t.get("trace_id", "").startswith(_query)
-        ))
+        _matches = list(dict.fromkeys(_t.get("trace_id") for _t in traces if _t.get("trace_id", "").startswith(_query)))
     else:
         _matches = None  # signal: fall through to dropdown selection
 
