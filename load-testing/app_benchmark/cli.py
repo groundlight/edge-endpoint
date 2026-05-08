@@ -53,36 +53,30 @@ def _worker_for(
     log_file: str,
     duration_seconds: float,
     worker_number: int,
+    camera: int,
 ):
     image_size = tuple(lens.image_size if lens.image_size is not None else cfg.globals_.image_size)
     target_fps = lens.target_fps if lens.target_fps is not None else cfg.globals_.target_fps
+    common = dict(
+        worker_number=worker_number, camera=camera, lens_name=lens.name,
+        edge_url=edge_url, image_size=image_size, target_fps=target_fps,
+        duration_seconds=duration_seconds, log_file=log_file,
+    )
     if isinstance(lens, SingleBinaryLens):
         single = next(sd for sd in sds if sd.stage == "single")
-        return lenses.run_single_binary, dict(
-            worker_number=worker_number, lens_name=lens.name,
-            detector_id=single.detector_id, edge_url=edge_url,
-            image_size=image_size, target_fps=target_fps,
-            duration_seconds=duration_seconds, log_file=log_file,
-        )
+        return lenses.run_single_binary, {**common, "detector_id": single.detector_id}
     if isinstance(lens, SingleBboxLens):
         single = next(sd for sd in sds if sd.stage == "single")
-        return lenses.run_single_bbox, dict(
-            worker_number=worker_number, lens_name=lens.name,
-            detector_id=single.detector_id, n=n, edge_url=edge_url,
-            image_size=image_size, target_fps=target_fps,
-            duration_seconds=duration_seconds, log_file=log_file,
-        )
+        return lenses.run_single_bbox, {**common, "detector_id": single.detector_id, "n": n}
     if isinstance(lens, BboxToBinaryLens):
         bbox = next(sd for sd in sds if sd.stage == "bbox")
         binary = next(sd for sd in sds if sd.stage == "binary")
-        return lenses.run_bbox_to_binary, dict(
-            worker_number=worker_number, lens_name=lens.name,
-            bbox_detector_id=bbox.detector_id,
-            binary_detector_id=binary.detector_id,
-            n=n, edge_url=edge_url, image_size=image_size,
-            target_fps=target_fps, duration_seconds=duration_seconds,
-            log_file=log_file,
-        )
+        return lenses.run_bbox_to_binary, {
+            **common,
+            "bbox_detector_id": bbox.detector_id,
+            "binary_detector_id": binary.detector_id,
+            "n": n,
+        }
     raise RuntimeError(f"unknown lens type: {type(lens).__name__}")
 
 
@@ -103,7 +97,7 @@ def _spawn_lens_workers(
         for cam_idx in range(lens.cameras):
             target, kwargs = _worker_for(
                 lens, sds, run.lens_n.get(lens.name), cfg, edge_url,
-                log_file, duration_seconds, worker_number,
+                log_file, duration_seconds, worker_number, cam_idx,
             )
             p = mp.Process(target=target, kwargs=kwargs, name=f"{lens.name}_cam{cam_idx}")
             p.start()
@@ -178,10 +172,17 @@ def _run_one(
         "run_index": run.run_index,
         "lens_n": run.lens_n,
         "lenses": [
-            {"name": l.name, "type": l.type, "cameras": l.cameras} for l in cfg.lenses
+            {
+                "name": l.name,
+                "type": l.type,
+                "cameras": l.cameras,
+                "target_fps": (l.target_fps if l.target_fps is not None
+                               else cfg.globals_.target_fps),
+                "image_size": list(l.image_size if l.image_size is not None
+                                   else cfg.globals_.image_size),
+            }
+            for l in cfg.lenses
         ],
-        "image_size": list(cfg.globals_.image_size),
-        "target_fps": cfg.globals_.target_fps,
         "duration_seconds": cfg.globals_.duration_seconds,
         "warmup_seconds": cfg.globals_.warmup_seconds,
     }

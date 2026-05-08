@@ -54,6 +54,7 @@ def _submit_and_log(
     *,
     log_file: str,
     lens_name: str,
+    camera: int,
     worker_number: int,
     request_number: int,
     stage: str | None = None,
@@ -74,6 +75,7 @@ def _submit_and_log(
         "ts": end,
         "event": "request",
         "lens_name": lens_name,
+        "camera": camera,
         "worker_number": worker_number,
         "request_number": request_number,
         "latency": round(end - request_start, 4),
@@ -103,6 +105,7 @@ def _pace(period: float, frame_start: float) -> None:
 def run_single_binary(  # noqa: PLR0913
     *,
     worker_number: int,
+    camera: int,
     lens_name: str,
     detector_id: str,
     edge_url: str,
@@ -122,7 +125,7 @@ def run_single_binary(  # noqa: PLR0913
         frame_start = time.time()
         _submit_and_log(
             gl, detector_id, pool[pool_idx],
-            log_file=log_file, lens_name=lens_name,
+            log_file=log_file, lens_name=lens_name, camera=camera,
             worker_number=worker_number, request_number=request_number,
         )
         request_number += 1
@@ -133,6 +136,7 @@ def run_single_binary(  # noqa: PLR0913
 def run_single_bbox(  # noqa: PLR0913
     *,
     worker_number: int,
+    camera: int,
     lens_name: str,
     detector_id: str,
     n: int,
@@ -153,7 +157,7 @@ def run_single_bbox(  # noqa: PLR0913
         frame_start = time.time()
         _submit_and_log(
             gl, detector_id, pool[pool_idx],
-            log_file=log_file, lens_name=lens_name,
+            log_file=log_file, lens_name=lens_name, camera=camera,
             worker_number=worker_number, request_number=request_number,
         )
         request_number += 1
@@ -164,6 +168,7 @@ def run_single_bbox(  # noqa: PLR0913
 def run_bbox_to_binary(  # noqa: PLR0913
     *,
     worker_number: int,
+    camera: int,
     lens_name: str,
     bbox_detector_id: str,
     binary_detector_id: str,
@@ -187,7 +192,7 @@ def run_bbox_to_binary(  # noqa: PLR0913
         frame_start = time.time()
         _submit_and_log(
             gl, bbox_detector_id, bbox_pool[pool_idx],
-            log_file=log_file, lens_name=lens_name,
+            log_file=log_file, lens_name=lens_name, camera=camera,
             worker_number=worker_number, request_number=request_number, stage="bbox",
         )
         request_number += 1
@@ -195,7 +200,7 @@ def run_bbox_to_binary(  # noqa: PLR0913
         for _ in range(n):
             _submit_and_log(
                 gl, binary_detector_id, binary_blob,
-                log_file=log_file, lens_name=lens_name,
+                log_file=log_file, lens_name=lens_name, camera=camera,
                 worker_number=worker_number, request_number=request_number, stage="binary",
             )
             request_number += 1
