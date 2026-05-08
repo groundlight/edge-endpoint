@@ -204,9 +204,15 @@ def main(  # noqa: PLR0913
     image_height: int = 480,
     edge_pipeline_config: str | None = None,
     n: int | None = None,
-    system_sample_interval_seconds: float = 5.0,
+    system_sample_interval_seconds: float = 1.0,
 ) -> None:
-    """Provision a detector for the requested mode and run the multi-client throughput ramp."""
+    """Provision a detector for the requested mode and run the multi-client throughput ramp.
+    
+    Note: system_sample_interval_seconds is set to 1.0 to get more frequent sample. This only works
+    for GPU and VRAM metrics as the Kubernetes Metrics Server for CPU and RAM is 15 seconds. We
+    should revisit this when we have a way to get CPU and RAM metrics not through the Kubernetes 
+    Metrics Server.
+    """
     edge_pipeline_config = glh.normalize_edge_pipeline_config(edge_pipeline_config)
 
     gl = ExperimentalApi()
