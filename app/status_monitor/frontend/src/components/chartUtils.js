@@ -66,8 +66,8 @@ export function formatPctInt(bytes, totalBytes) {
  * relies on for stable positional animation.
  *
  * `resourceKey` selects which sub-object on each detector to read (e.g.
- * "vram" or "ram"); each detector is expected to have that key with a
- * nested `total_bytes` field.
+ * "gpu.vram_bytes" or "ram_bytes"); each detector is expected to have that
+ * key with a nested `total` field.
  */
 export function buildSlices({
   detectors,
@@ -84,8 +84,10 @@ export function buildSlices({
   const slices = [];
   let accountedBytes = 0;
 
+  const getResource = (det) => resourceKey.split(".").reduce((value, key) => value?.[key], det);
+
   for (const det of detectors) {
-    const bytes = det[resourceKey]?.total_bytes || 0;
+    const bytes = getResource(det)?.total || 0;
     accountedBytes += bytes;
     slices.push({
       sliceKey: `det:${det.detector_id}`,

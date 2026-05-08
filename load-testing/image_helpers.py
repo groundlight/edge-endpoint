@@ -106,8 +106,14 @@ def generate_random_binary_image(
         text_color = BLACK
         label = "NO"
 
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    cv2.putText(image, timestamp, (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, text_color, 2)
+    timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    # Scale relative to the 640x480 baseline so text occupies the same fraction of any image size.
+    font_scale = min(image_width / 640.0, image_height / 480.0)
+    thickness = max(1, round(font_scale * 2))
+    (_, text_h), _ = cv2.getTextSize(timestamp, font, font_scale, thickness)
+    margin = max(5, round(image_height * 0.02))
+    cv2.putText(image, timestamp, (margin, margin + text_h), font, font_scale, text_color, thickness)
 
     return image, label, None
 

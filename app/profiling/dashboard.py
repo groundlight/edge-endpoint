@@ -10,6 +10,43 @@ def span_sort_key(name: str) -> tuple[int, str]:
     return (0 if name == "request" else 1, name)
 
 
+@app.function
+def render_selected_trace_ids(chart, curve_traces, mo):
+    """Render the "Selected trace IDs" panel beneath a scatter chart."""
+    if chart is None:
+        return mo.md("")
+    ids = selected_trace_ids(chart.value, curve_traces)
+    if ids:
+        items = "\n".join(f"- `{_id}`" for _id in ids)
+        return mo.md(f"**Selected trace IDs:**\n\n{items}")
+    return mo.md("*Drag a box around one or more points to capture their trace IDs.*")
+
+
+@app.function
+def selected_trace_ids(chart_value, curve_traces) -> list[str]:
+    """Extract trace IDs from a marimo plotly scatter box/lasso selection.
+
+    Marimo's scatter range/lasso extractor strips ``customdata`` from the
+    selection payload, so we look the trace ID up in ``curve_traces`` — a
+    list-of-lists indexed by ``curveNumber`` then ``pointIndex``.
+    """
+    seen: list[str] = []
+    for p in chart_value or []:
+        cn = p.get("curveNumber")
+        pn = p.get("pointIndex")
+        if not (
+            isinstance(cn, int)
+            and isinstance(pn, int)
+            and 0 <= cn < len(curve_traces)
+            and 0 <= pn < len(curve_traces[cn])
+        ):
+            continue
+        tid = curve_traces[cn][pn]
+        if tid and tid not in seen:
+            seen.append(str(tid))
+    return seen
+
+
 @app.cell
 def _():
     import marimo as mo
@@ -114,12 +151,19 @@ def _(mo):
 @app.cell
 def _(PROFILING_DIR, mo):
     import os as _os
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+    from datetime import timezone as _tz
 
     traces_dir = _os.environ.get("PROFILING_TRACES_DIR", PROFILING_DIR)
 
     # Auto-refresh is opt-in (no default_interval) so the dashboard stays put
     # while you investigate a trace. Pick an interval from the dropdown to enable.
     refresh = mo.ui.refresh(options=["15s", "30s", "1m", "5m"], label="Auto-refresh")
+
+    # Sentinel for the "Custom range" option in time_range — any value that
+    # can't collide with a real "minutes ago" preset (which are >= 0).
+    CUSTOM_RANGE = -1
 
     _time_options = {
         "Last 15 min": 15,
@@ -129,6 +173,7 @@ def _(PROFILING_DIR, mo):
         "Last 6 hours": 360,
         "Last 24 hours": 1440,
         "All": 0,
+        "Custom range": CUSTOM_RANGE,
     }
     time_range = mo.ui.dropdown(
         options=_time_options,
@@ -136,7 +181,12 @@ def _(PROFILING_DIR, mo):
         label="Time range",
     )
 
-    return refresh, time_range, traces_dir
+    # Default the custom range to the last hour, in UTC, rounded to the minute.
+    _now = _dt.now(_tz.utc).replace(second=0, microsecond=0, tzinfo=None)
+    start_time = mo.ui.datetime(value=_now - _td(hours=1), label="Start (UTC)")
+    end_time = mo.ui.datetime(value=_now, label="End (UTC)")
+
+    return CUSTOM_RANGE, end_time, refresh, start_time, time_range, traces_dir
 
 
 @app.cell
@@ -160,23 +210,73 @@ def _(get_detector_ids, load_traces, mo, traces_dir):
 
 
 @app.cell
-def _(detector_filter, mo, refresh, time_range):
-    mo.hstack([time_range, detector_filter, refresh], justify="start", gap=1)
+def _(CUSTOM_RANGE, detector_filter, end_time, mo, refresh, start_time, time_range):
+    _top = mo.hstack([time_range, detector_filter, refresh], justify="start", gap=1)
+    if time_range.value == CUSTOM_RANGE:
+        _row = mo.vstack(
+            [_top, mo.hstack([start_time, end_time], justify="start", gap=1)],
+            gap=0.5,
+        )
+    else:
+        _row = _top
+    _row
 
 
 @app.cell
-def _(detector_filter, get_detector_ids, load_traces, merge_traces_by_id, mo, refresh, time_range, traces_dir):
+def _(
+    CUSTOM_RANGE,
+    detector_filter,
+    end_time,
+    get_detector_ids,
+    load_traces,
+    merge_traces_by_id,
+    mo,
+    refresh,
+    start_time,
+    time_range,
+    traces_dir,
+):
     # Reactive: re-runs when controls change or auto-refresh fires.
     _ = refresh
 
+    from datetime import datetime as _dt
+    from datetime import timezone as _tz
+
     _since_val = time_range.value  # mapped int from dict options; 0 means "all"
-    _since = int(_since_val) if _since_val else None
+    _start_dt = None
+    _end_dt = None
+    if _since_val == CUSTOM_RANGE:
+        # Custom range: treat picker values as UTC.
+        _start_dt = start_time.value.replace(tzinfo=_tz.utc) if start_time.value else None
+        _end_dt = end_time.value.replace(tzinfo=_tz.utc) if end_time.value else None
+        # Use start as the file-mtime prefilter to avoid scanning irrelevant files.
+        if _start_dt is not None:
+            _since = max(1, int((_dt.now(_tz.utc) - _start_dt).total_seconds() // 60) + 1)
+        else:
+            _since = None
+    else:
+        _since = int(_since_val) if _since_val else None
     _det = detector_filter.value or None
     # Load all records (no detector filter at load time) so that cross-process
     # records sharing a trace_id can be merged. The inference-side records carry
     # an empty detector_id and would otherwise be dropped before merge. Apply
     # the detector filter to the merged trace set.
     traces = merge_traces_by_id(load_traces(traces_dir, since_minutes=_since))
+    if _start_dt is not None or _end_dt is not None:
+
+        def _in_range(_t):
+            _ts = _t.get("start_wall_time_iso", "")
+            try:
+                _trace_dt = _dt.fromisoformat(_ts.replace("Z", "+00:00"))
+            except (ValueError, AttributeError):
+                return False
+            if _start_dt is not None and _trace_dt < _start_dt:
+                return False
+            if _end_dt is not None and _trace_dt > _end_dt:
+                return False
+            return True
+
+        traces = [t for t in traces if _in_range(t)]
     if _det:
         traces = [t for t in traces if t.get("detector_id") == _det]
 
@@ -440,18 +540,29 @@ def _(AUTO_PALETTE, SPAN_COLORS, go, latency_over_time_spans, mo, traces):
             margin=dict(t=20, b=80),
             legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5),
             hovermode="closest",
+            dragmode="select",
         )
 
+        latency_chart = mo.ui.plotly(_fig)
+        latency_curve_traces = [[_p[2] for _p in _points_by_span[_n]] for _n in _ordered_names]
         _out = mo.vstack(
             [
                 mo.md("## Latency Over Time _(one point per span, colored by span)_"),
-                mo.ui.plotly(_fig),
+                latency_chart,
             ]
         )
     else:
+        latency_chart = None
+        latency_curve_traces = []
         _out = mo.md("## Latency Over Time\n\n*Select at least one span to plot.*")
 
     _out
+    return latency_chart, latency_curve_traces
+
+
+@app.cell
+def _(latency_chart, latency_curve_traces, mo):
+    render_selected_trace_ids(latency_chart, latency_curve_traces, mo)
 
 
 @app.cell
@@ -468,6 +579,9 @@ def _(go, mo, traces):
             _by_detector.setdefault(_det, []).append((_ts, _dur, _tid))
 
     if _by_detector:
+        # Default-hide "unknown" only if there are real detectors to show alongside it;
+        # if "unknown" is the only series, leave it visible so the plot isn't empty.
+        _hide_unknown = "unknown" in _by_detector and len(_by_detector) > 1
         _fig = go.Figure()
         for _det in sorted(_by_detector.keys()):
             _points = _by_detector[_det]
@@ -485,6 +599,7 @@ def _(go, mo, traces):
                         "Duration: %{y:.1f}ms<br>"
                         "Trace: %{customdata}<extra></extra>"
                     ),
+                    visible="legendonly" if (_det == "unknown" and _hide_unknown) else True,
                 )
             )
 
@@ -493,20 +608,32 @@ def _(go, mo, traces):
             yaxis_title="Request duration (ms)",
             height=500,
             margin=dict(t=20, b=80),
+            showlegend=True,
             legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5),
             hovermode="closest",
+            dragmode="select",
         )
 
+        request_duration_chart = mo.ui.plotly(_fig)
+        request_duration_curve_traces = [[_p[2] for _p in _by_detector[_d]] for _d in sorted(_by_detector.keys())]
         _out = mo.vstack(
             [
                 mo.md("## Request Duration Scatter _(one point per trace)_"),
-                mo.ui.plotly(_fig),
+                request_duration_chart,
             ]
         )
     else:
+        request_duration_chart = None
+        request_duration_curve_traces = []
         _out = mo.md("## Request Duration Scatter\n\n*No request data to plot.*")
 
     _out
+    return request_duration_chart, request_duration_curve_traces
+
+
+@app.cell
+def _(mo, request_duration_chart, request_duration_curve_traces):
+    render_selected_trace_ids(request_duration_chart, request_duration_curve_traces, mo)
 
 
 @app.cell
@@ -601,6 +728,9 @@ def _(MAX_TRACES_IN_SELECTOR, mo, sort_order, span_filter, traces):
         _trace_options[_label] = _tid
 
     trace_selector = mo.ui.dropdown(options=_trace_options, value="(none)", label="Select trace")
+    # Free-text search bypasses the top-N window so a trace_id pasted from a
+    # scatter selection still resolves even when the trace isn't in the dropdown.
+    trace_id_search = mo.ui.text(label="Or search by trace ID", placeholder="full ID or prefix", full_width=True)
 
     _total = len(_matching)
     _shown = len(_top)
@@ -618,18 +748,42 @@ def _(MAX_TRACES_IN_SELECTOR, mo, sort_order, span_filter, traces):
                 f"sort to find outliers, then select one to see a Gantt-style timeline. "
                 f"{_count_note}"
             ),
-            mo.hstack([span_filter, sort_order, trace_selector], justify="start", gap=1),
+            mo.hstack([span_filter, sort_order], justify="start", gap=1),
+            trace_selector,
+            trace_id_search,
         ]
     )
-    return (trace_selector,)
+    return trace_id_search, trace_selector
 
 
 @app.cell
-def _(FALLBACK_COLOR, SPAN_COLORS, get_trace_detail, go, mo, trace_selector, traces):
-    if not trace_selector.value:
+def _(FALLBACK_COLOR, SPAN_COLORS, get_trace_detail, go, mo, trace_id_search, trace_selector, traces):
+    _query = (trace_id_search.value or "").strip()
+    if _query:
+        # Prefix match against all traces, not just the dropdown's top-N window.
+        _matches = list(dict.fromkeys(_t.get("trace_id") for _t in traces if _t.get("trace_id", "").startswith(_query)))
+    else:
+        _matches = None  # signal: fall through to dropdown selection
+
+    if _matches is None:
+        _selected_id = trace_selector.value
+        _search_msg = None
+    elif len(_matches) == 1:
+        _selected_id = _matches[0]
+        _search_msg = None
+    elif _matches:
+        _selected_id = None
+        _search_msg = mo.md(f"*{len(_matches)} traces match `{_query}` — type more to disambiguate.*")
+    else:
+        _selected_id = None
+        _search_msg = mo.md(f"*No trace matches `{_query}`.*")
+
+    if _search_msg is not None:
+        _output = _search_msg
+    elif not _selected_id:
         _output = mo.md("*Select a trace above to view its waterfall.*")
     else:
-        _detail = get_trace_detail(traces, trace_selector.value)
+        _detail = get_trace_detail(traces, _selected_id)
         if not _detail:
             _output = mo.md("*Trace not found.*")
         else:

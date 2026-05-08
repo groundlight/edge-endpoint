@@ -73,6 +73,8 @@ spec:
           value: "{{ .Values.inferenceFlavor }}"
         - name: WORKERS  # Number of uvicorn workers for the inference server
           value: "1"
+        - name: EDGE_COMPILE_ENABLED
+          value: "{{ .Values.edgeCompileEnabled }}"
         volumeMounts:
         - name: edge-endpoint-persistent-volume
           mountPath: *modelRepository
