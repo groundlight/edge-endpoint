@@ -311,7 +311,7 @@ if __name__ == "__main__":
     parser.add_argument("--image-height", type=int, default=480)
     parser.add_argument("--edge-pipeline-config", type=str, default=None, help="Edge pipeline configuration name.")
     parser.add_argument(
-        "--system-sample-interval-seconds", type=float, default=5.0,
+        "--system-sample-interval-seconds", type=float, default=1.0,
         help=(
             "How often to poll the Edge Endpoint's /status/resources.json for system utilization. "
             "CPU/RAM are bounded by Kubernetes Metrics Server cadence (~15s); values below 15s give "
