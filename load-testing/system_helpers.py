@@ -26,9 +26,10 @@ class SystemMonitor:
     are fresh-on-call. Sampling below 15s gives repeated CPU/RAM but fresher GPU.
     """
 
-    def __init__(self, log_file: str, sample_interval: float = 5.0):
+    def __init__(self, log_file: str, sample_interval: float = 5.0, endpoint: Optional[str] = None):
         self.log_file = log_file
         self.sample_interval = sample_interval
+        self.endpoint = endpoint
         self._stop_event = multiprocessing.Event()
         self._process: Optional[multiprocessing.Process] = None
 
@@ -41,7 +42,7 @@ class SystemMonitor:
         self._stop_event.clear()
         self._process = multiprocessing.Process(
             target=self._monitor_loop,
-            args=(self.log_file, self.sample_interval, self._stop_event),
+            args=(self.log_file, self.sample_interval, self._stop_event, self.endpoint),
         )
         self._process.start()
 
@@ -53,8 +54,8 @@ class SystemMonitor:
         self._process = None
 
     @staticmethod
-    def _monitor_loop(log_file: str, sample_interval: float, stop_event) -> None:
-        gl = ExperimentalApi()
+    def _monitor_loop(log_file: str, sample_interval: float, stop_event, endpoint: Optional[str]) -> None:
+        gl = ExperimentalApi(endpoint=endpoint) if endpoint else ExperimentalApi()
         last_error_log_ts = 0.0
 
         while not stop_event.is_set():

@@ -149,7 +149,11 @@ def _run_one(
     warmup = float(cfg.globals_.warmup_seconds)
     total_cameras = sum(l.cameras for l in cfg.lenses)
 
-    monitor = SystemMonitor(str(log_file), sample_interval=1.0 / cfg.monitoring.sample_hz)
+    monitor = SystemMonitor(
+        str(log_file),
+        sample_interval=1.0 / cfg.monitoring.sample_hz,
+        endpoint=cfg.run.edge_endpoint_url,
+    )
     monitor.start()
 
     try:
