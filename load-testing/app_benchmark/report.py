@@ -38,8 +38,16 @@ def _percentile(sorted_values: list[float], pct: float) -> float:
     return sorted_values[idx]
 
 
+def _frame_count(events: list[dict]) -> int:
+    """How many lens-loop iterations are represented. Per-event check so this
+    works correctly when single-stage and multi-stage lens events are mixed
+    (e.g. when summarizing the aggregate across all lenses)."""
+    return sum(1 for e in events if "stage" not in e or e.get("stage") == "bbox")
+
+
 def _summarize_events(events: list[dict]) -> dict[str, Any]:
-    total = len(events)
+    total_requests = len(events)
+    total_frames = _frame_count(events)
     errors = sum(1 for e in events if not e.get("success", True))
     latencies = sorted(float(e.get("latency", 0)) for e in events)
     if events:
@@ -48,10 +56,12 @@ def _summarize_events(events: list[dict]) -> dict[str, Any]:
     else:
         duration = 0.0
     return {
-        "total_requests": total,
+        "total_frames": total_frames,
+        "total_requests": total_requests,
         "errors": errors,
         "duration_seconds": round(duration, 2),
-        "achieved_rps": round(total / duration, 2) if duration > 0 else 0.0,
+        "achieved_fps": round(total_frames / duration, 2) if duration > 0 else 0.0,
+        "achieved_rps": round(total_requests / duration, 2) if duration > 0 else 0.0,
         "latency_p50_sec": round(_percentile(latencies, 0.5), 4),
         "latency_p95_sec": round(_percentile(latencies, 0.95), 4),
     }
@@ -90,18 +100,22 @@ def _write_run_md(path: Path, summary: dict[str, Any]) -> None:
         f"- **image_size**: `{meta.get('image_size')}`  **target_fps**: `{meta.get('target_fps')}`",
         f"- **duration**: `{meta.get('duration_seconds')}s`",
         "",
-        f"**Aggregate**: {agg['total_requests']} requests · {agg['errors']} errors · "
-        f"{agg['achieved_rps']:.1f} RPS · p50={agg['latency_p50_sec']:.3f}s · "
-        f"p95={agg['latency_p95_sec']:.3f}s",
+        "FPS counts lens-loop iterations (one per camera frame). "
+        "RPS counts HTTP requests — for `bbox_to_binary` lenses each frame "
+        "produces `1 + n` requests, so RPS = (1+n) × FPS.",
         "",
-        "| Lens | Requests | Errors | RPS | p50 (s) | p95 (s) |",
-        "|---|---:|---:|---:|---:|---:|",
+        f"**Aggregate**: {agg['total_frames']} frames · {agg['total_requests']} requests · "
+        f"{agg['errors']} errors · {agg['achieved_fps']:.1f} FPS · {agg['achieved_rps']:.1f} RPS · "
+        f"p50={agg['latency_p50_sec']:.3f}s · p95={agg['latency_p95_sec']:.3f}s",
+        "",
+        "| Lens | Frames | Requests | Errors | FPS | RPS | p50 (s) | p95 (s) |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for lens, stats in summary["lenses"].items():
         lines.append(
-            f"| {lens} | {stats['total_requests']} | {stats['errors']} | "
-            f"{stats['achieved_rps']:.1f} | {stats['latency_p50_sec']:.3f} | "
-            f"{stats['latency_p95_sec']:.3f} |"
+            f"| {lens} | {stats['total_frames']} | {stats['total_requests']} | "
+            f"{stats['errors']} | {stats['achieved_fps']:.1f} | {stats['achieved_rps']:.1f} | "
+            f"{stats['latency_p50_sec']:.3f} | {stats['latency_p95_sec']:.3f} |"
         )
     path.write_text("\n".join(lines) + "\n")
 
@@ -165,7 +179,13 @@ def write_top_level(out_root: Path, summaries: list[dict[str, Any]]) -> None:
         return
 
     lens_names = sorted({lens for s in summaries for lens in s.get("lenses", {})})
-    header = ["run", "lens_n", "agg RPS", "agg errors"] + [f"{l} RPS" for l in lens_names]
+    per_lens_cols = [c for lens in lens_names for c in (f"{lens} FPS", f"{lens} RPS")]
+    header = ["run", "lens_n", "agg FPS", "agg RPS", "agg errors"] + per_lens_cols
+    lines.append(
+        "FPS = lens-loop iterations / sec. RPS = HTTP requests / sec "
+        "(differs from FPS for `bbox_to_binary` lenses, where each frame = 1 + n requests).",
+    )
+    lines.append("")
     lines.append("| " + " | ".join(header) + " |")
     lines.append("|" + "|".join(["---"] * len(header)) + "|")
     for s in summaries:
@@ -174,11 +194,13 @@ def write_top_level(out_root: Path, summaries: list[dict[str, Any]]) -> None:
         cells = [
             str(meta.get("run_index", "?")),
             f"`{meta.get('lens_n', {})}`",
+            f"{agg['achieved_fps']:.1f}",
             f"{agg['achieved_rps']:.1f}",
             str(agg["errors"]),
         ]
         for lens in lens_names:
             stats = s.get("lenses", {}).get(lens)
+            cells.append(f"{stats['achieved_fps']:.1f}" if stats else "—")
             cells.append(f"{stats['achieved_rps']:.1f}" if stats else "—")
         lines.append("| " + " | ".join(cells) + " |")
     (out_root / "summary.md").write_text("\n".join(lines) + "\n")
