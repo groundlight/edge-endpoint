@@ -1,12 +1,18 @@
 """Per-run + cross-run summaries and plots from the JSONL request log.
 
-Each (lens, camera) is treated as an independent process and gets its own
-FPS-over-time plot + summary row. RPS isn't reported — for the chained
-`bbox_to_binary` lens it's just FPS × (1 + n), which adds noise without
-information about the lens-level throughput we actually care about.
+Output layout under each benchmark's output_dir:
 
-The system_utilization plot still uses parse_load_test_logs.parse_log_file
-to read the cpu/gpu time series the SystemMonitor writes.
+    summary.md          ← single consolidated doc (overview + per-run sections)
+    summary.json        ← cross-run machine-readable
+    run_NN/
+        load_test.log
+        summary.json    ← per-run machine-readable
+        plots/
+            fps_{lens}_camera_{N}.png
+            system_utilization.png   ← 2x2 grid: CPU%, GPU%, RAM GB, VRAM GB
+
+Everything is plotted on a benchmark-relative time axis (seconds since the
+post-warmup main start) so plots line up across cameras and resources.
 """
 
 import json
@@ -15,7 +21,6 @@ from pathlib import Path
 from typing import Any
 
 import matplotlib.pyplot as plt
-from parse_load_test_logs import parse_log_file
 
 # Achieved FPS counts as "hit" target if it's within this fraction.
 _FPS_HIT_TOLERANCE = 0.95
@@ -35,6 +40,42 @@ def _read_request_events(log_file: Path, start_ts: float) -> list[dict]:
                 continue
             out.append(payload)
     return out
+
+
+def _read_resource_events(log_file: Path, main_start_ts: float) -> dict[str, Any]:
+    """Bucket cpu/gpu events by seconds-since-main-start. Returns dicts of
+    {seconds_offset: value} plus discovered totals (max seen)."""
+    cpu_pct: dict[float, float] = {}
+    ram_gb: dict[float, float] = {}
+    gpu_pct: dict[float, float] = {}
+    vram_gb: dict[float, float] = {}
+    ram_total = 0.0
+    vram_total = 0.0
+    with log_file.open() as f:
+        for line in f:
+            line = line.strip()
+            if not line.startswith("{"):
+                continue
+            payload = json.loads(line)
+            event = payload.get("event")
+            if event not in ("cpu", "gpu"):
+                continue
+            offset = float(payload.get("ts", 0)) - main_start_ts
+            if offset < 0:
+                continue
+            if event == "cpu":
+                cpu_pct[offset] = float(payload.get("cpu_percent", 0))
+                ram_gb[offset] = float(payload.get("ram_used_gb", 0))
+                ram_total = max(ram_total, float(payload.get("ram_total_gb", 0)))
+            else:
+                gpu_pct[offset] = float(payload.get("gpu_utilization", 0))
+                vram_gb[offset] = float(payload.get("vram_used_gb", 0))
+                vram_total = max(vram_total, float(payload.get("vram_total_gb", 0)))
+    return {
+        "cpu_pct": cpu_pct, "gpu_pct": gpu_pct,
+        "ram_gb": ram_gb, "ram_total_gb": ram_total,
+        "vram_gb": vram_gb, "vram_total_gb": vram_total,
+    }
 
 
 def _is_frame(event: dict) -> bool:
@@ -62,7 +103,7 @@ def _summarize(events: list[dict], target_fps: float | None) -> dict[str, Any]:
     achieved_fps = total_frames / duration if duration > 0 else 0.0
 
     if target_fps is None or target_fps <= 0:
-        hit = None  # saturate / no target
+        hit = None
     else:
         hit = achieved_fps >= target_fps * _FPS_HIT_TOLERANCE
 
@@ -85,10 +126,10 @@ def write_run_artifacts(
     run_meta: dict[str, Any],
     main_start_ts: float,
 ) -> dict[str, Any]:
-    """Per-(lens, camera) summary + FPS plots, plus system utilization plot."""
+    """Per-(lens, camera) stats + FPS plots + 2x2 system grid. Writes
+    summary.json (machine-readable) but NOT summary.md — top-level
+    write_top_level produces a single consolidated doc."""
     events = _read_request_events(log_file, start_ts=main_start_ts)
-
-    # Build (lens, camera) buckets and the per-lens target_fps lookup.
     target_by_lens: dict[str, float] = {l["name"]: l["target_fps"] for l in run_meta["lenses"]}
     by_camera: dict[tuple[str, int], list[dict]] = defaultdict(list)
     for ev in events:
@@ -108,49 +149,8 @@ def write_run_artifacts(
         "aggregate": _summarize(events, target_fps=None),
     }
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=2))
-    _write_run_md(run_dir / "summary.md", summary)
     _plot_run(run_dir, by_camera, target_by_lens, main_start_ts, log_file)
     return summary
-
-
-def _hit_label(hit: bool | None) -> str:
-    if hit is None:
-        return "—"
-    return "yes" if hit else "no"
-
-
-def _target_label(target_fps: float | None) -> str:
-    if target_fps is None:
-        return "—"
-    if target_fps <= 0:
-        return "saturate"
-    return f"{target_fps:.1f}"
-
-
-def _write_run_md(path: Path, summary: dict[str, Any]) -> None:
-    meta = summary["meta"]
-    lines = [
-        f"# Run {meta.get('run_index')}",
-        "",
-        f"- **lens_n**: `{meta.get('lens_n', {})}`",
-        f"- **duration**: `{meta.get('duration_seconds')}s`  "
-        f"**warmup**: `{meta.get('warmup_seconds')}s`",
-        "",
-        "Each row is one camera process. `Hit` = achieved FPS within "
-        f"{int(_FPS_HIT_TOLERANCE * 100)}% of target. `target = saturate` means "
-        "no pacing (target_fps: 0); no Hit verdict in that case.",
-        "",
-        "| Lens | Camera | Frames | Errors | FPS | Target | Hit | p50 (s) | p95 (s) |",
-        "|---|---:|---:|---:|---:|---:|:---:|---:|---:|",
-    ]
-    for cam in summary["cameras"]:
-        lines.append(
-            f"| {cam['lens_name']} | {cam['camera']} | {cam['total_frames']} | "
-            f"{cam['errors']} | {cam['achieved_fps']:.1f} | "
-            f"{_target_label(cam['target_fps'])} | {_hit_label(cam['hit_target'])} | "
-            f"{cam['latency_p50_sec']:.3f} | {cam['latency_p95_sec']:.3f} |"
-        )
-    path.write_text("\n".join(lines) + "\n")
 
 
 def _plot_run(
@@ -165,7 +165,7 @@ def _plot_run(
     for (lens_name, camera), events in sorted(by_camera.items()):
         _plot_camera_fps(plots_dir, lens_name, camera, events,
                          target_by_lens.get(lens_name), main_start_ts)
-    _plot_system_util(plots_dir, log_file)
+    _plot_system_grid(plots_dir, log_file, main_start_ts)
 
 
 def _plot_camera_fps(
@@ -205,57 +205,117 @@ def _plot_camera_fps(
     plt.close(fig)
 
 
-def _plot_system_util(plots_dir: Path, log_file: Path) -> None:
-    try:
-        res = parse_log_file(str(log_file))
-    except RuntimeError:
+def _plot_system_grid(plots_dir: Path, log_file: Path, main_start_ts: float) -> None:
+    parsed = _read_resource_events(log_file, main_start_ts)
+    has_any = any((parsed["cpu_pct"], parsed["gpu_pct"], parsed["ram_gb"], parsed["vram_gb"]))
+    if not has_any:
         return
-    fig, ax = plt.subplots(figsize=(10, 4))
-    plotted = False
-    for label, series, color in [
-        ("GPU compute %", res.gpu_by_time, "tab:red"),
-        ("VRAM %", res.vram_by_time, "tab:purple"),
-        ("CPU %", res.cpu_by_time, "tab:blue"),
-        ("RAM %", res.ram_by_time, "tab:green"),
-    ]:
-        items = sorted(series.items())
-        if not items:
-            continue
-        ax.plot([t for t, _ in items], [v for _, v in items], label=label, color=color)
-        plotted = True
-    if plotted:
-        ax.set_ylim(0, 105)
-        ax.set_ylabel("%")
-        ax.set_xlabel("time")
-        ax.set_title("System utilization")
-        ax.legend(loc="upper right")
+
+    fig, axes = plt.subplots(2, 2, figsize=(12, 7), sharex=True)
+    cpu_ax, gpu_ax = axes[0]
+    ram_ax, vram_ax = axes[1]
+
+    _plot_pct(cpu_ax, parsed["cpu_pct"], "CPU utilization", color="tab:blue")
+    _plot_pct(gpu_ax, parsed["gpu_pct"], "GPU compute utilization", color="tab:red")
+    _plot_gb(ram_ax, parsed["ram_gb"], parsed["ram_total_gb"], "RAM used", color="tab:green")
+    _plot_gb(vram_ax, parsed["vram_gb"], parsed["vram_total_gb"], "VRAM used", color="tab:purple")
+
+    for ax in axes.flat:
+        ax.set_xlabel("seconds since main start")
         ax.grid(True, alpha=0.3)
-        fig.autofmt_xdate()
-        fig.tight_layout()
-        fig.savefig(plots_dir / "system_utilization.png", dpi=120)
+    fig.suptitle("System utilization", fontsize=14)
+    fig.tight_layout()
+    fig.savefig(plots_dir / "system_utilization.png", dpi=120)
     plt.close(fig)
 
 
-def write_top_level(out_root: Path, summaries: list[dict[str, Any]]) -> None:
-    """Cross-run table: per-run rows with mean per-lens FPS + worst-case Hit."""
-    payload = {"runs": summaries}
+def _plot_pct(ax, series: dict[float, float], title: str, color: str) -> None:
+    items = sorted(series.items())
+    if items:
+        ax.plot([t for t, _ in items], [v for _, v in items], color=color, linewidth=1.2)
+    ax.set_title(title)
+    ax.set_ylabel("%")
+    ax.set_ylim(0, 105)
+
+
+def _plot_gb(ax, series: dict[float, float], total_gb: float, title: str, color: str) -> None:
+    items = sorted(series.items())
+    if items:
+        ax.plot([t for t, _ in items], [v for _, v in items], color=color, linewidth=1.2)
+    if total_gb > 0:
+        ax.axhline(total_gb, color="gray", linestyle="--", alpha=0.5,
+                   label=f"total {total_gb:.1f} GB")
+        ax.legend(loc="lower right")
+    ax.set_title(title)
+    ax.set_ylabel("GB")
+    ax.set_ylim(bottom=0)
+
+
+# ---------------------------------------------------------------------------
+# Top-level consolidated summary
+# ---------------------------------------------------------------------------
+
+
+def _hit_label(hit: bool | None) -> str:
+    if hit is None:
+        return "—"
+    return "yes" if hit else "no"
+
+
+def _target_label(target_fps: float | None) -> str:
+    if target_fps is None:
+        return "—"
+    if target_fps <= 0:
+        return "saturate"
+    return f"{target_fps:.1f}"
+
+
+def write_top_level(
+    out_root: Path,
+    summaries: list[dict[str, Any]],
+    *,
+    benchmark_meta: dict[str, Any],
+    network_baseline: dict | None,
+    network_baseline_text: str,
+) -> None:
+    """Single consolidated summary.md with environment block, cross-run
+    overview, and one section per run (table + plots)."""
+    payload = {
+        "meta": benchmark_meta,
+        "network_baseline": network_baseline,
+        "runs": summaries,
+    }
     (out_root / "summary.json").write_text(json.dumps(payload, indent=2))
 
-    lines = ["# Benchmark summary", ""]
+    lines = [f"# Benchmark: {benchmark_meta.get('name', '?')}", ""]
+    lines.append(f"- **Started**: {benchmark_meta.get('started_at', '?')}")
+    lines.append(f"- **Edge endpoint**: `{benchmark_meta.get('edge_endpoint_url', '?')}`")
+    lines.append(f"- **Network ping baseline**: {network_baseline_text}")
+    cfg = benchmark_meta.get("config", {})
+    if cfg:
+        lines.append(
+            f"- **Defaults**: image_size `{cfg.get('image_size')}`, "
+            f"target_fps `{cfg.get('target_fps')}`, "
+            f"duration `{cfg.get('duration_seconds')}s`, "
+            f"warmup `{cfg.get('warmup_seconds')}s`"
+        )
+    lines.append("")
+
     if not summaries:
         lines.append("(no runs)")
         (out_root / "summary.md").write_text("\n".join(lines) + "\n")
         return
 
+    lines.append("## Overview")
+    lines.append("")
     lens_names = sorted({c["lens_name"] for s in summaries for c in s.get("cameras", [])})
     per_lens_cols = [c for lens in lens_names for c in (f"{lens} FPS", f"{lens} Hit")]
-    header = ["run", "lens_n"] + per_lens_cols
     lines.append(
-        "Per-lens FPS = mean across that lens's camera processes. "
-        f"Hit = `yes` if every camera in the lens hit ≥{int(_FPS_HIT_TOLERANCE * 100)}% "
-        "of its target; `no` otherwise; `—` for saturate-mode lenses."
+        f"Per-lens FPS = mean across that lens's camera processes. "
+        f"Hit = `yes` if every camera hit ≥{int(_FPS_HIT_TOLERANCE * 100)}% of its target."
     )
     lines.append("")
+    header = ["run", "lens_n"] + per_lens_cols
     lines.append("| " + " | ".join(header) + " |")
     lines.append("|" + "|".join(["---"] * len(header)) + "|")
     for s in summaries:
@@ -272,12 +332,49 @@ def write_top_level(out_root: Path, summaries: list[dict[str, Any]]) -> None:
             mean_fps = sum(c["achieved_fps"] for c in cams) / len(cams)
             hits = [c["hit_target"] for c in cams]
             if all(h is None for h in hits):
-                hit_label = "—"
+                hit = "—"
             elif any(h is False for h in hits):
-                hit_label = "no"
+                hit = "no"
             else:
-                hit_label = "yes"
+                hit = "yes"
             cells.append(f"{mean_fps:.1f}")
-            cells.append(hit_label)
+            cells.append(hit)
         lines.append("| " + " | ".join(cells) + " |")
+    lines.append("")
+
+    for s in summaries:
+        lines.extend(_render_run_section(s))
+
     (out_root / "summary.md").write_text("\n".join(lines) + "\n")
+
+
+def _render_run_section(s: dict[str, Any]) -> list[str]:
+    meta = s["meta"]
+    run_index = meta.get("run_index", "?")
+    run_dir = f"run_{int(run_index):02d}" if isinstance(run_index, int) else f"run_{run_index}"
+    lines = [
+        f"## Run {run_index}",
+        "",
+        f"- **lens_n**: `{meta.get('lens_n', {})}`",
+        f"- **duration**: `{meta.get('duration_seconds')}s`  "
+        f"**warmup**: `{meta.get('warmup_seconds')}s`",
+        "",
+        "| Lens | Camera | Frames | Errors | FPS | Target | Hit | p50 (s) | p95 (s) |",
+        "|---|---:|---:|---:|---:|---:|:---:|---:|---:|",
+    ]
+    for cam in s.get("cameras", []):
+        lines.append(
+            f"| {cam['lens_name']} | {cam['camera']} | {cam['total_frames']} | "
+            f"{cam['errors']} | {cam['achieved_fps']:.1f} | "
+            f"{_target_label(cam['target_fps'])} | {_hit_label(cam['hit_target'])} | "
+            f"{cam['latency_p50_sec']:.3f} | {cam['latency_p95_sec']:.3f} |"
+        )
+    lines.append("")
+    lines.append(f"![system utilization]({run_dir}/plots/system_utilization.png)")
+    lines.append("")
+    lines.append("**FPS plots:**")
+    for cam in s.get("cameras", []):
+        fname = f"fps_{cam['lens_name']}_camera_{cam['camera']}.png"
+        lines.append(f"- [{cam['lens_name']} cam {cam['camera']}]({run_dir}/plots/{fname})")
+    lines.append("")
+    return lines

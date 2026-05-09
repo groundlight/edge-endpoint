@@ -15,7 +15,7 @@ from pathlib import Path
 from groundlight import ExperimentalApi
 from system_helpers import SystemMonitor
 
-from app_benchmark import lenses, report
+from app_benchmark import lenses, network, report
 from app_benchmark.config import (
     BboxToBinaryLens,
     BenchmarkConfig,
@@ -216,6 +216,12 @@ def main(argv: list[str] | None = None) -> int:
     out_root = _resolve_output_dir(cfg.run.output_dir, cfg.run.name)
     out_root.mkdir(parents=True, exist_ok=True)
     logger.info("output dir: %s", out_root)
+    started_at_iso = datetime.now(timezone.utc).isoformat()
+
+    edge_host = network.host_from_url(cfg.run.edge_endpoint_url)
+    network_baseline = network.measure(edge_host)
+    network_baseline_text = network.format_summary(network_baseline, edge_host)
+    logger.info("network ping baseline: %s", network_baseline_text)
 
     gl_cloud = ExperimentalApi(endpoint=cfg.run.cloud_endpoint)
     gl_edge = ExperimentalApi(endpoint=cfg.run.edge_endpoint_url)
@@ -255,7 +261,23 @@ def main(argv: list[str] | None = None) -> int:
         logger.exception("benchmark run failed")
         return 1
 
-    report.write_top_level(out_root, summaries)
+    benchmark_meta = {
+        "name": cfg.run.name,
+        "started_at": started_at_iso,
+        "edge_endpoint_url": cfg.run.edge_endpoint_url,
+        "config": {
+            "image_size": list(cfg.globals_.image_size),
+            "target_fps": cfg.globals_.target_fps,
+            "duration_seconds": cfg.globals_.duration_seconds,
+            "warmup_seconds": cfg.globals_.warmup_seconds,
+        },
+    }
+    report.write_top_level(
+        out_root, summaries,
+        benchmark_meta=benchmark_meta,
+        network_baseline=network_baseline,
+        network_baseline_text=network_baseline_text,
+    )
     logger.info("done; results in %s", out_root)
     return 0
 

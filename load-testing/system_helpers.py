@@ -93,6 +93,10 @@ class SystemMonitor:
             vram_used = vram.get("used", 0)
             vram_percent = (vram_used / vram_total * 100) if vram_total else 0.0
 
+            ram_used_gb = ram_used / 1e9
+            ram_total_gb = ram_total / 1e9
+            vram_used_gb = vram_used / 1e9
+            vram_total_gb = vram_total / 1e9
             SystemMonitor._append_log(
                 log_file,
                 {
@@ -101,6 +105,8 @@ class SystemMonitor:
                     "event": "cpu",
                     "cpu_percent": round(cpu_total, 2),
                     "memory_percent": round(memory_percent, 2),
+                    "ram_used_gb": round(ram_used_gb, 3),
+                    "ram_total_gb": round(ram_total_gb, 3),
                 },
             )
             SystemMonitor._append_log(
@@ -111,6 +117,8 @@ class SystemMonitor:
                     "event": "gpu",
                     "gpu_utilization": round(gpu_compute_total, 2),
                     "vram_utilization": round(vram_percent, 2),
+                    "vram_used_gb": round(vram_used_gb, 3),
+                    "vram_total_gb": round(vram_total_gb, 3),
                 },
             )
 
