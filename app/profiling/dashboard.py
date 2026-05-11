@@ -398,9 +398,7 @@ def _(go, mo, traces):
                     textfont=dict(color=_color, size=10),
                     marker=dict(color=_color, size=11, line=dict(width=1.5, color="white")),
                     customdata=_counts,
-                    hovertemplate=(
-                        f"<b>%{{y}}</b><br>{_label}: %{{x:.1f}}ms<br>n=%{{customdata}}<extra></extra>"
-                    ),
+                    hovertemplate=(f"<b>%{{y}}</b><br>{_label}: %{{x:.1f}}ms<br>n=%{{customdata}}<extra></extra>"),
                 )
             )
 
