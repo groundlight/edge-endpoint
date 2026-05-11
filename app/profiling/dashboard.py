@@ -311,10 +311,11 @@ def _(
 
 @app.cell
 def _(go, mo, traces):
-    # Box plot of request (root-span) durations grouped by detector, with p50/p95/p99
-    # markers + labels overlaid per detector. Traces missing a detector_id are
-    # dropped (the per-trace scatter above already surfaces them). Detectors are
-    # ordered by p50 so the slowest sit on the right.
+    # Horizontal dumbbell plot of p50/p95/p99 request latency per detector.
+    # One row per detector with a line from p50 to p99 and markers at each
+    # percentile, so tail spread is visible at a glance. Traces missing a
+    # detector_id are dropped (the per-trace scatter above already surfaces
+    # them). Detectors ordered by p99 desc so the slowest sit at the top.
     _durations_by_detector: dict[str, list[float]] = {}
     for _t in traces:
         _dur = trace_duration_ms(_t)
@@ -341,64 +342,87 @@ def _(go, mo, traces):
             "p50": _percentile(_vals, 50),
             "p95": _percentile(_vals, 95),
             "p99": _percentile(_vals, 99),
+            "count": len(_vals),
         }
         for _det, _vals in _durations_by_detector.items()
     }
 
+    # Sort descending so slowest p99 is at the top of the (reversed) y-axis.
     _ordered_detectors = sorted(
         _durations_by_detector.keys(),
-        key=lambda d: _percentiles_by_detector[d]["p50"],
+        key=lambda d: _percentiles_by_detector[d]["p99"],
+        reverse=True,
     )
 
     if _ordered_detectors:
-        _fig = go.Figure()
-        for _det in _ordered_detectors:
-            _fig.add_trace(
-                go.Box(
-                    y=_durations_by_detector[_det],
-                    name=_det,
-                    boxmean=True,
-                    boxpoints="outliers",
-                    showlegend=False,
-                )
-            )
-
-        # Overlay p50/p95/p99 markers + value labels on each detector category.
-        # Colors match the per-span histogram cell so they're easy to recognize.
         _percentile_styles = [
             ("p50", "#00CC96"),
             ("p95", "#FFA15A"),
             ("p99", "#EF553B"),
         ]
+
+        _fig = go.Figure()
+
+        # Connecting line spans p50..p99 per detector. A single trace with `None`
+        # separators between segments keeps the legend uncluttered.
+        _line_x: list = []
+        _line_y: list = []
+        for _det in _ordered_detectors:
+            _p = _percentiles_by_detector[_det]
+            _line_x.extend([_p["p50"], _p["p99"], None])
+            _line_y.extend([_det, _det, None])
+        _fig.add_trace(
+            go.Scatter(
+                x=_line_x,
+                y=_line_y,
+                mode="lines",
+                line=dict(color="#B6B6B6", width=2),
+                hoverinfo="skip",
+                showlegend=False,
+            )
+        )
+
+        # One marker trace per percentile so each gets its own legend entry and
+        # the markers sit on top of the connecting line.
         for _label, _color in _percentile_styles:
-            _y_vals = [_percentiles_by_detector[_d][_label] for _d in _ordered_detectors]
+            _x_vals = [_percentiles_by_detector[_d][_label] for _d in _ordered_detectors]
+            _counts = [_percentiles_by_detector[_d]["count"] for _d in _ordered_detectors]
             _fig.add_trace(
                 go.Scatter(
-                    x=_ordered_detectors,
-                    y=_y_vals,
+                    x=_x_vals,
+                    y=_ordered_detectors,
                     mode="markers+text",
                     name=_label,
-                    text=[f"{_v:.0f}" for _v in _y_vals],
-                    textposition="middle right",
-                    textfont=dict(color=_color, size=11),
-                    marker=dict(color=_color, size=10, symbol="line-ew", line=dict(width=3, color=_color)),
-                    hovertemplate=f"<b>{_label}</b>: %{{y:.1f}}ms<extra></extra>",
+                    text=[f"{_v:.0f}" for _v in _x_vals],
+                    textposition="top center",
+                    textfont=dict(color=_color, size=10),
+                    marker=dict(color=_color, size=11, line=dict(width=1.5, color="white")),
+                    customdata=_counts,
+                    hovertemplate=(
+                        f"<b>%{{y}}</b><br>{_label}: %{{x:.1f}}ms<br>n=%{{customdata}}<extra></extra>"
+                    ),
                 )
             )
 
         _fig.update_layout(
-            yaxis_title="Request duration (ms)",
-            xaxis_title="Detector",
-            xaxis=dict(categoryorder="array", categoryarray=_ordered_detectors),
+            xaxis_title="Request duration (ms)",
+            yaxis_title="Detector",
+            yaxis=dict(
+                categoryorder="array",
+                categoryarray=list(reversed(_ordered_detectors)),
+                # Extend the plot area beyond the top/bottom rows so the value
+                # labels above each marker don't clip on the topmost row.
+                range=[-0.55, len(_ordered_detectors) - 0.25],
+            ),
             showlegend=True,
-            legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5),
-            height=450,
-            margin=dict(t=20, b=80),
+            legend=dict(orientation="h", yanchor="top", y=-0.35, xanchor="center", x=0.5),
+            height=max(320, 38 * len(_ordered_detectors) + 180),
+            margin=dict(t=50, b=110, l=160),
         )
 
         _out = mo.vstack(
             [
-                mo.md("## Request Latency by Detector"),
+                mo.md("## Request Latency by Detector _(p50 / p95 / p99)_"),
                 mo.ui.plotly(_fig),
             ]
         )
