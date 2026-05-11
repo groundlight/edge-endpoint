@@ -311,26 +311,43 @@ def _(
 
 @app.cell
 def _(go, mo, traces):
-    # Box plot of request (root-span) durations grouped by detector. Surfaces
-    # per-detector latency distributions at a glance — detectors ordered by
-    # median duration so the slowest sit on the right.
+    # Box plot of request (root-span) durations grouped by detector, with p50/p95/p99
+    # markers + labels overlaid per detector. Traces missing a detector_id are
+    # dropped (the per-trace scatter above already surfaces them). Detectors are
+    # ordered by p50 so the slowest sit on the right.
     _durations_by_detector: dict[str, list[float]] = {}
     for _t in traces:
         _dur = trace_duration_ms(_t)
         if _dur <= 0:
             continue
-        _det = _t.get("detector_id") or "unknown"
+        _det = _t.get("detector_id")
+        if not _det or _det == "unknown":
+            continue
         _durations_by_detector.setdefault(_det, []).append(_dur)
 
-    def _median(values: list[float]) -> float:
+    def _percentile(values: list[float], pct: float) -> float:
+        # Linear-interpolated percentile; matches numpy.percentile defaults.
         _s = sorted(values)
         _n = len(_s)
-        _mid = _n // 2
-        return _s[_mid] if _n % 2 else (_s[_mid - 1] + _s[_mid]) / 2
+        if _n == 1:
+            return _s[0]
+        _rank = (pct / 100) * (_n - 1)
+        _lo = int(_rank)
+        _hi = min(_lo + 1, _n - 1)
+        return _s[_lo] + (_s[_hi] - _s[_lo]) * (_rank - _lo)
+
+    _percentiles_by_detector = {
+        _det: {
+            "p50": _percentile(_vals, 50),
+            "p95": _percentile(_vals, 95),
+            "p99": _percentile(_vals, 99),
+        }
+        for _det, _vals in _durations_by_detector.items()
+    }
 
     _ordered_detectors = sorted(
         _durations_by_detector.keys(),
-        key=lambda d: _median(_durations_by_detector[d]),
+        key=lambda d: _percentiles_by_detector[d]["p50"],
     )
 
     if _ordered_detectors:
@@ -342,6 +359,30 @@ def _(go, mo, traces):
                     name=_det,
                     boxmean=True,
                     boxpoints="outliers",
+                    showlegend=False,
+                )
+            )
+
+        # Overlay p50/p95/p99 markers + value labels on each detector category.
+        # Colors match the per-span histogram cell so they're easy to recognize.
+        _percentile_styles = [
+            ("p50", "#00CC96"),
+            ("p95", "#FFA15A"),
+            ("p99", "#EF553B"),
+        ]
+        for _label, _color in _percentile_styles:
+            _y_vals = [_percentiles_by_detector[_d][_label] for _d in _ordered_detectors]
+            _fig.add_trace(
+                go.Scatter(
+                    x=_ordered_detectors,
+                    y=_y_vals,
+                    mode="markers+text",
+                    name=_label,
+                    text=[f"{_v:.0f}" for _v in _y_vals],
+                    textposition="middle right",
+                    textfont=dict(color=_color, size=11),
+                    marker=dict(color=_color, size=10, symbol="line-ew", line=dict(width=3, color=_color)),
+                    hovertemplate=f"<b>{_label}</b>: %{{y:.1f}}ms<extra></extra>",
                 )
             )
 
@@ -349,7 +390,8 @@ def _(go, mo, traces):
             yaxis_title="Request duration (ms)",
             xaxis_title="Detector",
             xaxis=dict(categoryorder="array", categoryarray=_ordered_detectors),
-            showlegend=False,
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5),
             height=450,
             margin=dict(t=20, b=80),
         )
