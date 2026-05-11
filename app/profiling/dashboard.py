@@ -310,6 +310,63 @@ def _(
 
 
 @app.cell
+def _(go, mo, traces):
+    # Box plot of request (root-span) durations grouped by detector. Surfaces
+    # per-detector latency distributions at a glance — detectors ordered by
+    # median duration so the slowest sit on the right.
+    _durations_by_detector: dict[str, list[float]] = {}
+    for _t in traces:
+        _dur = trace_duration_ms(_t)
+        if _dur <= 0:
+            continue
+        _det = _t.get("detector_id") or "unknown"
+        _durations_by_detector.setdefault(_det, []).append(_dur)
+
+    def _median(values: list[float]) -> float:
+        _s = sorted(values)
+        _n = len(_s)
+        _mid = _n // 2
+        return _s[_mid] if _n % 2 else (_s[_mid - 1] + _s[_mid]) / 2
+
+    _ordered_detectors = sorted(
+        _durations_by_detector.keys(),
+        key=lambda d: _median(_durations_by_detector[d]),
+    )
+
+    if _ordered_detectors:
+        _fig = go.Figure()
+        for _det in _ordered_detectors:
+            _fig.add_trace(
+                go.Box(
+                    y=_durations_by_detector[_det],
+                    name=_det,
+                    boxmean=True,
+                    boxpoints="outliers",
+                )
+            )
+
+        _fig.update_layout(
+            yaxis_title="Request duration (ms)",
+            xaxis_title="Detector",
+            xaxis=dict(categoryorder="array", categoryarray=_ordered_detectors),
+            showlegend=False,
+            height=450,
+            margin=dict(t=20, b=80),
+        )
+
+        _out = mo.vstack(
+            [
+                mo.md("## Request Latency by Detector _(box plot per detector)_"),
+                mo.ui.plotly(_fig),
+            ]
+        )
+    else:
+        _out = mo.md("## Request Latency by Detector\n\n*No request data to plot.*")
+
+    _out
+
+
+@app.cell
 def _(compute_span_stats, mo, traces):
     stats = compute_span_stats(traces)
 
