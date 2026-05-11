@@ -356,7 +356,7 @@ def _(go, mo, traces):
 
         _out = mo.vstack(
             [
-                mo.md("## Request Latency by Detector _(box plot per detector)_"),
+                mo.md("## Request Latency by Detector"),
                 mo.ui.plotly(_fig),
             ]
         )
