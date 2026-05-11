@@ -204,8 +204,15 @@ def main(  # noqa: PLR0913
     image_height: int = 480,
     edge_pipeline_config: str | None = None,
     n: int | None = None,
+    system_sample_interval_seconds: float = 1.0,
 ) -> None:
-    """Provision a detector for the requested mode and run the multi-client throughput ramp."""
+    """Provision a detector for the requested mode and run the multi-client throughput ramp.
+    
+    Note: system_sample_interval_seconds is set to 1.0 to get more frequent sample. This only works
+    for GPU and VRAM metrics as the Kubernetes Metrics Server for CPU and RAM is 15 seconds. We
+    should revisit this when we have a way to get CPU and RAM metrics not through the Kubernetes 
+    Metrics Server.
+    """
     edge_pipeline_config = glh.normalize_edge_pipeline_config(edge_pipeline_config)
 
     gl = ExperimentalApi()
@@ -229,7 +236,7 @@ def main(  # noqa: PLR0913
     detectors = [detector.id]
     print(f"Running load test for {len(detectors)} detector(s).")
 
-    system_monitor = SystemMonitor(log_file)
+    system_monitor = SystemMonitor(log_file, sample_interval=system_sample_interval_seconds)
     system_monitor.start()
     try:
         incremental_client_ramp_up(
@@ -265,7 +272,7 @@ def main(  # noqa: PLR0913
         detector_mode=detector_mode, max_clients=max_clients, step_size=step_size,
         time_between_ramp=time_between_ramp, requests_per_second=requests_per_second,
         image_width=image_width, image_height=image_height, edge_pipeline_config=edge_pipeline_config,
-        n=n,
+        n=n, system_sample_interval_seconds=system_sample_interval_seconds,
     )
     write_load_test_results_to_file(
         log_file,
@@ -303,5 +310,13 @@ if __name__ == "__main__":
     parser.add_argument("--image-width", type=int, default=640)
     parser.add_argument("--image-height", type=int, default=480)
     parser.add_argument("--edge-pipeline-config", type=str, default=None, help="Edge pipeline configuration name.")
+    parser.add_argument(
+        "--system-sample-interval-seconds", type=float, default=1.0,
+        help=(
+            "How often to poll the Edge Endpoint's /status/resources.json for system utilization. "
+            "CPU/RAM are bounded by Kubernetes Metrics Server cadence (~15s); values below 15s give "
+            "repeated CPU/RAM samples but fresher GPU/VRAM samples."
+        ),
+    )
     args = parser.parse_args()
     main(**vars(args))
