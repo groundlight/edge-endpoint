@@ -279,13 +279,22 @@ def write_top_level(
     network_baseline_text: str,
 ) -> None:
     """Single consolidated summary.md with environment block, cross-run
-    overview, and one section per run (table + plots)."""
+    overview, combined cross-run plots, and one section per run.
+
+    Combined plots span all runs on a benchmark-wall-clock time axis with
+    vertical lines at each run boundary. Per-run plots remain in
+    run_NN/plots/ for drill-down.
+    """
     payload = {
         "meta": benchmark_meta,
         "network_baseline": network_baseline,
         "runs": summaries,
     }
     (out_root / "summary.json").write_text(json.dumps(payload, indent=2))
+
+    plot_refs: dict[str, Any] = {}
+    if summaries:
+        plot_refs = _write_combined_plots(out_root, summaries)
 
     lines = [f"# Benchmark: {benchmark_meta.get('name', '?')}", ""]
     lines.append(f"- **Started**: {benchmark_meta.get('started_at', '?')}")
@@ -342,6 +351,28 @@ def write_top_level(
         lines.append("| " + " | ".join(cells) + " |")
     lines.append("")
 
+    if plot_refs.get("system"):
+        lines.append("## Cross-run system utilization")
+        lines.append("")
+        lines.append(f"![system utilization]({plot_refs['system']})")
+        lines.append("")
+
+    if plot_refs.get("fps_per_camera"):
+        lines.append("## Cross-run FPS per camera")
+        lines.append("")
+        for (lens, camera), rel_path in plot_refs["fps_per_camera"]:
+            lines.append(f"### {lens} — camera {camera}")
+            lines.append("")
+            lines.append(f"![{lens} cam {camera}]({rel_path})")
+            lines.append("")
+
+    lines.append("## Run details")
+    lines.append("")
+    lines.append(
+        "Per-run plots (one system_utilization.png and one fps_*.png per camera) "
+        "live under each `run_NN/plots/` directory."
+    )
+    lines.append("")
     for s in summaries:
         lines.extend(_render_run_section(s))
 
@@ -351,9 +382,8 @@ def write_top_level(
 def _render_run_section(s: dict[str, Any]) -> list[str]:
     meta = s["meta"]
     run_index = meta.get("run_index", "?")
-    run_dir = f"run_{int(run_index):02d}" if isinstance(run_index, int) else f"run_{run_index}"
     lines = [
-        f"## Run {run_index}",
+        f"### Run {run_index}",
         "",
         f"- **lens_n**: `{meta.get('lens_n', {})}`",
         f"- **duration**: `{meta.get('duration_seconds')}s`  "
@@ -370,11 +400,165 @@ def _render_run_section(s: dict[str, Any]) -> list[str]:
             f"{cam['latency_p50_sec']:.3f} | {cam['latency_p95_sec']:.3f} |"
         )
     lines.append("")
-    lines.append(f"![system utilization]({run_dir}/plots/system_utilization.png)")
-    lines.append("")
-    lines.append("**FPS plots:**")
-    for cam in s.get("cameras", []):
-        fname = f"fps_{cam['lens_name']}_camera_{cam['camera']}.png"
-        lines.append(f"- [{cam['lens_name']} cam {cam['camera']}]({run_dir}/plots/{fname})")
-    lines.append("")
     return lines
+
+
+# ---------------------------------------------------------------------------
+# Combined cross-run plots
+# ---------------------------------------------------------------------------
+
+
+def _write_combined_plots(
+    out_root: Path,
+    summaries: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build plots/system_utilization.png and plots/fps_{lens}_camera_{N}.png
+    spanning all runs on a benchmark-wall-clock axis. Returns relative paths
+    to the generated plots for embedding in summary.md."""
+    plots_dir = out_root / "plots"
+    plots_dir.mkdir(exist_ok=True)
+    benchmark_t0 = min(s["meta"]["main_start_ts"] for s in summaries)
+
+    # Parse every run's log into combined series.
+    cpu_pct: dict[float, float] = {}
+    gpu_pct: dict[float, float] = {}
+    ram_gb: dict[float, float] = {}
+    vram_gb: dict[float, float] = {}
+    ram_total = vram_total = 0.0
+    by_camera_buckets: dict[tuple[str, int], dict[int, int]] = defaultdict(
+        lambda: defaultdict(int))
+
+    for s in summaries:
+        meta = s["meta"]
+        run_t0 = meta["main_start_ts"]
+        run_dir = out_root / f"run_{int(meta['run_index']):02d}"
+        log_file = run_dir / "load_test.log"
+        if not log_file.exists():
+            continue
+        with log_file.open() as f:
+            for line in f:
+                line = line.strip()
+                if not line.startswith("{"):
+                    continue
+                payload = json.loads(line)
+                ts = float(payload.get("ts", 0))
+                if ts < run_t0:
+                    continue
+                offset = ts - benchmark_t0
+                event = payload.get("event")
+                if event == "cpu":
+                    cpu_pct[offset] = float(payload.get("cpu_percent", 0))
+                    ram_gb[offset] = float(payload.get("ram_used_gb", 0))
+                    ram_total = max(ram_total, float(payload.get("ram_total_gb", 0)))
+                elif event == "gpu":
+                    gpu_pct[offset] = float(payload.get("gpu_utilization", 0))
+                    vram_gb[offset] = float(payload.get("vram_used_gb", 0))
+                    vram_total = max(vram_total, float(payload.get("vram_total_gb", 0)))
+                elif event == "request" and _is_frame(payload):
+                    key = (payload.get("lens_name", "_"), int(payload.get("camera", 0)))
+                    by_camera_buckets[key][int(offset)] += 1
+
+    boundaries = [
+        (s["meta"]["main_start_ts"] - benchmark_t0,
+         int(s["meta"]["run_index"]),
+         s["meta"].get("lens_n", {}))
+        for s in summaries
+    ]
+    target_by_lens: dict[str, float] = {}
+    for s in summaries:
+        for l in s["meta"].get("lenses", []):
+            target_by_lens[l["name"]] = l["target_fps"]
+
+    refs: dict[str, Any] = {}
+
+    sys_path = plots_dir / "system_utilization.png"
+    if _plot_combined_system(
+        sys_path, cpu_pct, gpu_pct, ram_gb, ram_total, vram_gb, vram_total, boundaries,
+    ):
+        refs["system"] = f"plots/{sys_path.name}"
+
+    fps_refs: list[tuple[tuple[str, int], str]] = []
+    for (lens, camera), buckets in sorted(by_camera_buckets.items()):
+        fps_path = plots_dir / f"fps_{lens}_camera_{camera}.png"
+        if _plot_combined_camera_fps(
+            fps_path, lens, camera, buckets, target_by_lens.get(lens), boundaries,
+        ):
+            fps_refs.append(((lens, camera), f"plots/{fps_path.name}"))
+    refs["fps_per_camera"] = fps_refs
+    return refs
+
+
+def _annotate_boundaries(
+    ax,
+    boundaries: list[tuple[float, int, dict[str, int]]],
+    lens_name: str | None = None,
+) -> None:
+    """Draw a vertical line at each run's main_start offset, with a label.
+    If lens_name is given, the label shows that lens's `n` for the run
+    (e.g. "Run 2 (n=6)") when available; otherwise just the run index."""
+    ymin, ymax = ax.get_ylim()
+    label_y = ymin + (ymax - ymin) * 0.92
+    for offset, run_idx, lens_n in boundaries:
+        ax.axvline(offset, color="gray", linestyle=":", alpha=0.6, linewidth=1.0)
+        if lens_name is not None and lens_name in lens_n:
+            label = f"Run {run_idx} (n={lens_n[lens_name]})"
+        else:
+            label = f"Run {run_idx}"
+        ax.text(offset + 0.5, label_y, label, fontsize=8, color="dimgray",
+                rotation=90, va="top", ha="left")
+
+
+def _plot_combined_system(
+    path: Path,
+    cpu_pct, gpu_pct, ram_gb, ram_total, vram_gb, vram_total,
+    boundaries,
+) -> bool:
+    if not any((cpu_pct, gpu_pct, ram_gb, vram_gb)):
+        return False
+    fig, axes = plt.subplots(2, 2, figsize=(13, 7.5), sharex=True)
+    cpu_ax, gpu_ax = axes[0]
+    ram_ax, vram_ax = axes[1]
+    _plot_pct(cpu_ax, cpu_pct, "CPU utilization", color="tab:blue")
+    _plot_pct(gpu_ax, gpu_pct, "GPU compute utilization", color="tab:red")
+    _plot_gb(ram_ax, ram_gb, ram_total, "RAM used", color="tab:green")
+    _plot_gb(vram_ax, vram_gb, vram_total, "VRAM used", color="tab:purple")
+    for ax in axes.flat:
+        ax.set_xlabel("seconds since benchmark start")
+        ax.grid(True, alpha=0.3)
+        _annotate_boundaries(ax, boundaries)
+    fig.suptitle("System utilization (all runs)", fontsize=14)
+    fig.tight_layout()
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+    return True
+
+
+def _plot_combined_camera_fps(
+    path: Path,
+    lens_name: str,
+    camera: int,
+    buckets: dict[int, int],
+    target_fps: float | None,
+    boundaries,
+) -> bool:
+    if not buckets:
+        return False
+    seconds = sorted(buckets.keys())
+    fps_values = [buckets[s] for s in seconds]
+    fig, ax = plt.subplots(figsize=(13, 4))
+    ax.plot(seconds, fps_values, color="tab:blue",
+            marker="o", markersize=2.5, linewidth=1.1)
+    if target_fps is not None and target_fps > 0:
+        ax.axhline(target_fps, color="tab:red", linestyle="--", alpha=0.7,
+                   label=f"target {target_fps:.1f} fps")
+        ax.legend(loc="lower right")
+    ax.set_title(f"{lens_name} — camera {camera} — FPS (all runs)")
+    ax.set_xlabel("seconds since benchmark start")
+    ax.set_ylabel("frames per second")
+    ax.set_ylim(bottom=0)
+    ax.grid(True, alpha=0.3)
+    _annotate_boundaries(ax, boundaries, lens_name=lens_name)
+    fig.tight_layout()
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+    return True

@@ -128,16 +128,11 @@ def _run_one(
     cfg: BenchmarkConfig,
     run: ResolvedRun,
     out_root: Path,
-    dm: DetectorManager,
 ) -> dict:
     run_dir = out_root / f"run_{run.run_index:02d}"
     run_dir.mkdir(parents=True, exist_ok=True)
     log_file = run_dir / "load_test.log"
     log_file.touch()
-
-    logger.info("[run %d] pushing edge config (%d detector(s))",
-                run.run_index, len(run.stage_detectors))
-    dm.push_edge_config(run)
 
     duration = float(cfg.globals_.duration_seconds)
     warmup = float(cfg.globals_.warmup_seconds)
@@ -165,6 +160,7 @@ def _run_one(
         _emit_ramp_marker(log_file, total_cameras)
         time.sleep(duration)
         _join_with_grace(procs, timeout_s=30.0)
+        main_end_ts = time.time()
     finally:
         monitor.stop()
 
@@ -185,6 +181,8 @@ def _run_one(
         ],
         "duration_seconds": cfg.globals_.duration_seconds,
         "warmup_seconds": cfg.globals_.warmup_seconds,
+        "main_start_ts": main_start_ts,
+        "main_end_ts": main_end_ts,
     }
     return report.write_run_artifacts(run_dir, log_file, run_meta, main_start_ts)
 
@@ -249,11 +247,15 @@ def main(argv: list[str] | None = None) -> int:
 
     summaries: list[dict] = []
     try:
+        logger.info("provisioning detectors (one-shot, reused across all runs)")
+        stage_detectors = dm.provision_all()
+        logger.info("pushing edge config (%d detector(s))", len(stage_detectors))
+        dm.push_edge_config(stage_detectors)
         for i in range(n_runs):
             lens_n = _lens_n_for_run(cfg, i)
             logger.info("[run %d/%d] lens_n=%s", i + 1, n_runs, lens_n)
-            run = dm.provision_run(i, lens_n)
-            summaries.append(_run_one(cfg, run, out_root, dm))
+            run = ResolvedRun(run_index=i, lens_n=lens_n, stage_detectors=stage_detectors)
+            summaries.append(_run_one(cfg, run, out_root))
     except KeyboardInterrupt:
         logger.warning("interrupted; running cleanup via atexit")
         return 130

@@ -1,8 +1,13 @@
-"""Detector lifecycle: cloud provision (with training) + per-run edge config push.
+"""Detector lifecycle: one-shot cloud provision (with training) + one-shot
+edge config push.
 
-Reuses load-testing/groundlight_helpers.provision_detector — every detector is
-named deterministically by (run_name, lens_name, stage, n) so unchanged
-detectors are cached across runs and don't re-prime.
+For n-bearing lenses, the bbox detector is created once with
+`max_num_bboxes = max(lens.n)` — the upper bound. The model's inference
+cost is essentially independent of `max_num_bboxes` (it processes the
+whole image regardless; only NMS post-processing depends on actual
+detected count, which is negligible). The per-run `n` variation lives
+entirely in the worker: image synthesis bounds + number of downstream
+binary calls in `bbox_to_binary`.
 """
 
 import hashlib
@@ -36,6 +41,9 @@ class StageDetector:
 
 @dataclass
 class ResolvedRun:
+    """Per-run binding: which `n` each lens uses, plus the (shared, static)
+    list of stage detectors. Detectors are provisioned once for the whole
+    benchmark — this just records which `n` the workers should run with."""
     run_index: int
     lens_n: dict[str, int]
     stage_detectors: list[StageDetector]
@@ -84,15 +92,15 @@ class DetectorManager:
             logger.error("failed to restore pre-run edge config: %s", exc)
             return False
 
-    def provision_run(self, run_index: int, lens_n: dict[str, int]) -> ResolvedRun:
-        """Cloud-create / train (if needed) every detector this run uses.
-        Cached by deterministic name across runs."""
+    def provision_all(self) -> list[StageDetector]:
+        """Cloud-create / train (if needed) every detector the benchmark uses,
+        ONCE. For n-bearing lenses, uses max(lens.n) for max_num_bboxes."""
         run_name = self.cfg.run.name
         stage_detectors: list[StageDetector] = []
 
         for lens in self.cfg.lenses:
-            n = lens_n.get(lens.name)
             image_size = lens.image_size if lens.image_size is not None else self.cfg.globals_.image_size
+            max_n = max(lens.n) if hasattr(lens, "n") else None
             if isinstance(lens, SingleBinaryLens):
                 det = self._provision(
                     prefix=_name_prefix(run_name, lens.name),
@@ -101,19 +109,19 @@ class DetectorManager:
                 )
                 stage_detectors.append(StageDetector(lens.name, "single", det, det.id))
             elif isinstance(lens, SingleBboxLens):
-                assert n is not None
+                assert max_n is not None
                 det = self._provision(
                     prefix=_name_prefix(run_name, lens.name),
                     mode="BOUNDING_BOX", image_size=image_size,
-                    pipeline=lens.pipeline, n=n,
+                    pipeline=lens.pipeline, n=max_n,
                 )
                 stage_detectors.append(StageDetector(lens.name, "single", det, det.id))
             elif isinstance(lens, BboxToBinaryLens):
-                assert n is not None
+                assert max_n is not None
                 bbox_det = self._provision(
                     prefix=_name_prefix(run_name, lens.name, "bbox"),
                     mode="BOUNDING_BOX", image_size=image_size,
-                    pipeline=lens.bbox_pipeline, n=n,
+                    pipeline=lens.bbox_pipeline, n=max_n,
                 )
                 bin_det = self._provision(
                     prefix=_name_prefix(run_name, lens.name, "binary"),
@@ -124,8 +132,8 @@ class DetectorManager:
                 stage_detectors.append(StageDetector(lens.name, "binary", bin_det, bin_det.id))
             else:
                 raise RuntimeError(f"unknown lens type: {type(lens).__name__}")
-
-        return ResolvedRun(run_index=run_index, lens_n=lens_n, stage_detectors=stage_detectors)
+        self._all_stage_detectors = stage_detectors
+        return stage_detectors
 
     def _provision(
         self,
@@ -148,15 +156,16 @@ class DetectorManager:
         self._all_created[det.name] = det
         return det
 
-    def push_edge_config(self, run: ResolvedRun) -> None:
-        """Push edge config with this run's detectors in NO_CLOUD mode.
+    def push_edge_config(self, stage_detectors: list[StageDetector]) -> None:
+        """Push edge config with all benchmark detectors in NO_CLOUD mode.
+        Called once before the run loop — the same detectors serve every run.
         Includes the pre-run snapshot so any detectors that were already
         configured continue to live alongside ours."""
         if self._pre_run_edge_config is not None:
             edge_config = self._pre_run_edge_config.model_copy(deep=True)
         else:
             edge_config = EdgeEndpointConfig()
-        for sd in run.stage_detectors:
+        for sd in stage_detectors:
             edge_config.add_detector(sd.detector, NO_CLOUD)
         self.gl_edge.edge.set_config(
             edge_config, timeout_sec=self.cfg.run.set_config_timeout_seconds,

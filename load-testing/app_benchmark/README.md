@@ -82,14 +82,12 @@ tabulates aggregate + per-lens RPS as `n` sweeps.
 
 ## Cleanup utilities
 
-If a run is hard-killed (`kill -9`, OOM):
+The benchmark cleans up its own detectors (cloud-side delete + edge-config
+restore) at exit. If a run is hard-killed (`kill -9`, OOM) the cleanup
+doesn't run — delete cloud detectors via the Groundlight dashboard and wipe
+the edge-side stuck pods:
 
 ```bash
-# Cloud-side orphan detectors:
-python -m app_benchmark.cleanup_orphans --prefix bench --dry-run
-python -m app_benchmark.cleanup_orphans --prefix bench --older-than 1h
-
-# Edge-side stuck pods:
 python -m app_benchmark.cleanup_edge --edge-endpoint http://EDGE:30101 --list
 python -m app_benchmark.cleanup_edge --edge-endpoint http://EDGE:30101 --wipe
 ```
