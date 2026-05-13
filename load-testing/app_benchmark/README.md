@@ -9,8 +9,15 @@ latency degrade as more crops are forwarded into a binary stage.
 | `type` | Stages | `n`? | Per-frame work |
 |---|---|---|---|
 | `single_binary` | 1 binary call | no | binary inference on a pre-encoded synthetic JPEG |
-| `single_bbox` | 1 bbox call | yes (sets `max_num_bboxes`) | bbox inference on a synthetic objects image |
-| `bbox_to_binary` | 1 bbox + N binary | yes (sets `max_num_bboxes` AND number of downstream calls) | one bbox call, then N binary calls reusing one tiny pre-encoded JPEG |
+| `single_bbox` | 1 bbox call | yes | bbox inference on a synthetic objects image bounded by `n` |
+| `bbox_to_binary` | 1 bbox + N binary | yes | one bbox call, then N binary calls reusing one tiny pre-encoded JPEG |
+
+For n-bearing lenses, the bbox detector is provisioned **once** with
+`max_num_bboxes = max(lens.n)` and reused across every run in the sweep.
+The per-run `n` only varies the worker's behavior:
+
+- the synthetic image's object-count bound (`generate_random_objects_image(max_count=n)`), and
+- for `bbox_to_binary`, the number of downstream binary calls issued per frame.
 
 All lenses pre-encode a small JPEG pool at startup and cycle per frame —
 keeps the per-iteration overhead minimal so you measure inference, not OpenCV.
@@ -74,22 +81,46 @@ Flags:
 
 ```
 benchmark-results/{name}-{ts}/
-├── summary.json         # cross-run aggregate (one row per n-step)
-├── summary.md           # human-readable cross-run table
+├── summary.md                          # consolidated doc — primary view
+├── summary.json                        # cross-run machine-readable
+├── plots/                              # combined cross-run plots
+│   ├── system_utilization.png          # 2x2 grid (CPU%, GPU%, RAM GB, VRAM GB)
+│   └── fps_{lens}_camera_{N}.png       # one per camera process
 ├── run_00/
-│   ├── load_test.log    # JSONL: request events + cpu/gpu samples
-│   ├── summary.json
-│   ├── summary.md
-│   └── plots/
-│       ├── requests_per_second.png
-│       └── system_utilization.png
+│   ├── load_test.log                   # JSONL: request + cpu/gpu events
+│   ├── summary.json                    # per-run machine-readable
+│   └── plots/                          # per-run drill-down
+│       ├── system_utilization.png
+│       └── fps_{lens}_camera_{N}.png
 ├── run_01/...
 └── ...
 ```
 
-The per-run `summary.{json,md}` reports per-lens RPS, error count, and
-p50/p95 latency over the post-warmup window. Cross-run `summary.md`
-tabulates aggregate + per-lens RPS as `n` sweeps.
+`summary.md` is the primary view. It contains:
+
+- An environment block: run name, started_at, edge URL, ICMP **ping baseline**
+  measured before the benchmark starts, and the global defaults.
+- A cross-run overview table with per-lens mean FPS + Hit verdict per run
+  (`yes` if every camera in the lens hit ≥95% of its target, `no` otherwise,
+  `—` for saturate-mode lenses).
+- Combined cross-run plots embedded inline. Each plot spans the whole
+  benchmark wall-clock with vertical dotted lines + labels at each run's
+  start. System plot labels: `Run i`. FPS plots: `Run i (n=X)` using
+  that lens's own `n` for the run.
+- Per-run sections with a per-camera table — `Frames`, `Errors`, `FPS`,
+  `Target`, `Hit`, `p50`, `p95` — and a ⚠ callout for any worker that
+  exited non-zero or any camera that produced no events.
+
+The FPS plots show frames-per-second on the left y-axis (blue), target FPS
+as a dashed orange line, and failed requests / sec on a right y-axis (red).
+For chained `bbox_to_binary` lenses, **frame** means one lens-loop iteration
+(one bbox call + N binary calls); the errors axis counts all failed
+**requests** across stages.
+
+The measurement window is fixed at `[main_start_ts, main_start_ts +
+duration)`. Events before `main_start_ts` (warmup) or at/after
+`main_end_ts` (any in-flight or grace-period requests) are excluded from
+the summary, so FPS reflects exactly `total_frames / duration`.
 
 ## Cleanup utilities
 
@@ -107,11 +138,20 @@ python -m app_benchmark.cleanup_edge --edge-endpoint http://EDGE:30101 --wipe
 
 ```
 main                   (cli.py — orchestrates runs)
-├─ SystemMonitor       (samples /status/resources.json)
+├─ SystemMonitor       (samples /status/resources.json on the edge)
 └─ Σ lens.cameras workers across all lenses (per-camera frame loop)
 ```
 
-For each run: workers run for `warmup + duration` seconds. The harness drops
-a `RAMP <total_cameras>` marker after the warmup elapses, and the report
-filters request events to `ts >= main_start_ts` so warmup is excluded from
-the throughput / latency stats.
+For each run: workers run for `warmup + duration` seconds. The harness
+drops a `RAMP <total_cameras>` marker after the warmup elapses; that
+timestamp becomes `main_start_ts`, and `main_end_ts = main_start_ts +
+duration` bounds the measurement window from above. After the duration
+elapses, `_join_with_grace` waits for workers to exit and collects any
+non-zero exit codes — these are surfaced as `worker_failures` in
+`summary.json` and as a ⚠ callout in `summary.md`. Cameras that produced
+no events at all get a flagged row in the per-run table.
+
+Detectors are provisioned **once** at the start and reused across every
+run (see "Detector lifecycle" above), so the run-to-run transition is
+just workers exiting + new workers spawning; no detector retraining and
+no edge-config swap between runs.
