@@ -12,10 +12,10 @@ binary calls in `bbox_to_binary`.
 
 import hashlib
 import logging
-from dataclasses import dataclass
 
 from groundlight import Detector, ExperimentalApi
 from groundlight.edge import NO_CLOUD, EdgeEndpointConfig
+from pydantic import BaseModel, ConfigDict
 
 import groundlight_helpers as glh
 from app_benchmark.config import (
@@ -30,20 +30,21 @@ logger = logging.getLogger(__name__)
 _MAX_PREFIX_LEN = 28
 
 
-@dataclass(frozen=True)
-class StageDetector:
-    """One provisioned cloud detector for one stage of one lens in one run."""
+class StageDetector(BaseModel):
+    """One provisioned cloud detector for one stage of one lens.
+    Holds an SDK Detector instance, which isn't a Pydantic model."""
+    model_config = ConfigDict(arbitrary_types_allowed=True, frozen=True)
     lens_name: str
     stage: str  # "single", "bbox", or "binary"
     detector: Detector
     detector_id: str
 
 
-@dataclass
-class ResolvedRun:
+class ResolvedRun(BaseModel):
     """Per-run binding: which `n` each lens uses, plus the (shared, static)
     list of stage detectors. Detectors are provisioned once for the whole
     benchmark — this just records which `n` the workers should run with."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     run_index: int
     lens_n: dict[str, int]
     stage_detectors: list[StageDetector]
@@ -108,7 +109,8 @@ class DetectorManager:
                     mode="BINARY", image_size=image_size,
                     pipeline=lens.pipeline, n=None,
                 )
-                stage_detectors.append(StageDetector(lens.name, "single", det, det.id))
+                stage_detectors.append(StageDetector(
+                    lens_name=lens.name, stage="single", detector=det, detector_id=det.id))
             elif isinstance(lens, SingleBboxLens):
                 assert max_n is not None
                 det = self._provision(
@@ -116,7 +118,8 @@ class DetectorManager:
                     mode="BOUNDING_BOX", image_size=image_size,
                     pipeline=lens.pipeline, n=max_n,
                 )
-                stage_detectors.append(StageDetector(lens.name, "single", det, det.id))
+                stage_detectors.append(StageDetector(
+                    lens_name=lens.name, stage="single", detector=det, detector_id=det.id))
             elif isinstance(lens, BboxToBinaryLens):
                 assert max_n is not None
                 bbox_det = self._provision(
@@ -129,8 +132,10 @@ class DetectorManager:
                     mode="BINARY", image_size=image_size,
                     pipeline=lens.binary_pipeline, n=None,
                 )
-                stage_detectors.append(StageDetector(lens.name, "bbox", bbox_det, bbox_det.id))
-                stage_detectors.append(StageDetector(lens.name, "binary", bin_det, bin_det.id))
+                stage_detectors.append(StageDetector(
+                    lens_name=lens.name, stage="bbox", detector=bbox_det, detector_id=bbox_det.id))
+                stage_detectors.append(StageDetector(
+                    lens_name=lens.name, stage="binary", detector=bin_det, detector_id=bin_det.id))
             else:
                 raise RuntimeError(f"unknown lens type: {type(lens).__name__}")
         self._all_stage_detectors = stage_detectors

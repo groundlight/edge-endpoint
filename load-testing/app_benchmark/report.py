@@ -190,30 +190,45 @@ def _plot_camera_fps(
     target_fps: float | None,
     main_start_ts: float,
 ) -> None:
-    buckets: dict[int, int] = defaultdict(int)
+    fps_buckets: dict[int, int] = defaultdict(int)
+    err_buckets: dict[int, int] = defaultdict(int)
     for ev in events:
-        if not _is_frame(ev):
-            continue
         sec = int(float(ev["ts"]) - main_start_ts)
-        buckets[sec] += 1
-    if not buckets:
+        if _is_frame(ev):
+            fps_buckets[sec] += 1
+        if not ev.get("success", True):
+            err_buckets[sec] += 1
+    if not fps_buckets:
         return
-    seconds = sorted(buckets.keys())
-    fps_values = [buckets[s] for s in seconds]
+    seconds = sorted(fps_buckets.keys())
+    fps_values = [fps_buckets[s] for s in seconds]
 
-    fig, ax = plt.subplots(figsize=(9, 3.5))
-    ax.plot(seconds, fps_values, color="tab:blue",
-            marker="o", markersize=3, linewidth=1.2,
-            label=f"{lens_name} cam {camera}")
+    fig, ax = plt.subplots(figsize=(9, 4.0))
+    line_fps, = ax.plot(seconds, fps_values, color="tab:blue",
+                        marker="o", markersize=3, linewidth=1.2, label="FPS")
+    handles: list = [line_fps]
     if target_fps is not None and target_fps > 0:
-        ax.axhline(target_fps, color="tab:red", linestyle="--", alpha=0.7,
-                   label=f"target {target_fps:.1f} fps")
+        line_target = ax.axhline(target_fps, color="tab:orange", linestyle="--", alpha=0.8,
+                                 label=f"target {target_fps:.1f} fps")
+        handles.append(line_target)
     ax.set_title(f"{lens_name} — camera {camera} — FPS over time")
     ax.set_xlabel("seconds since main start")
-    ax.set_ylabel("frames per second")
+    ax.set_ylabel("frames per second", color="tab:blue")
+    ax.tick_params(axis="y", labelcolor="tab:blue")
     ax.set_ylim(bottom=0)
     ax.grid(True, alpha=0.3)
-    ax.legend(loc="lower right")
+
+    ax_err = ax.twinx()
+    err_seconds = sorted(set(seconds) | set(err_buckets.keys()))
+    err_values = [err_buckets.get(s, 0) for s in err_seconds]
+    line_err, = ax_err.plot(err_seconds, err_values, color="tab:red",
+                            linewidth=1.2, label="failed requests / sec")
+    ax_err.set_ylabel("failed requests / sec", color="tab:red")
+    ax_err.tick_params(axis="y", labelcolor="tab:red")
+    ax_err.set_ylim(bottom=0)
+    handles.append(line_err)
+
+    ax.legend(handles=handles, loc="lower right")
     fig.tight_layout()
     fig.savefig(plots_dir / f"fps_{lens_name}_camera_{camera}.png", dpi=120)
     plt.close(fig)
@@ -453,7 +468,9 @@ def _write_combined_plots(
     ram_gb: dict[float, float] = {}
     vram_gb: dict[float, float] = {}
     ram_total = vram_total = 0.0
-    by_camera_buckets: dict[tuple[str, int], dict[int, int]] = defaultdict(
+    by_camera_frames: dict[tuple[str, int], dict[int, int]] = defaultdict(
+        lambda: defaultdict(int))
+    by_camera_errors: dict[tuple[str, int], dict[int, int]] = defaultdict(
         lambda: defaultdict(int))
 
     for s in summaries:
@@ -483,9 +500,12 @@ def _write_combined_plots(
                     gpu_pct[offset] = float(payload.get("gpu_utilization", 0))
                     vram_gb[offset] = float(payload.get("vram_used_gb", 0))
                     vram_total = max(vram_total, float(payload.get("vram_total_gb", 0)))
-                elif event == "request" and _is_frame(payload):
+                elif event == "request":
                     key = (payload.get("lens_name", "_"), int(payload.get("camera", 0)))
-                    by_camera_buckets[key][int(offset)] += 1
+                    if _is_frame(payload):
+                        by_camera_frames[key][int(offset)] += 1
+                    if not payload.get("success", True):
+                        by_camera_errors[key][int(offset)] += 1
 
     boundaries = [
         (s["meta"]["main_start_ts"] - benchmark_t0,
@@ -507,14 +527,26 @@ def _write_combined_plots(
         refs["system"] = f"plots/{sys_path.name}"
 
     fps_refs: list[tuple[tuple[str, int], str]] = []
-    for (lens, camera), buckets in sorted(by_camera_buckets.items()):
+    for (lens, camera), buckets in sorted(by_camera_frames.items()):
         fps_path = plots_dir / f"fps_{lens}_camera_{camera}.png"
         if _plot_combined_camera_fps(
-            fps_path, lens, camera, buckets, target_by_lens.get(lens), boundaries,
+            fps_path, lens, camera, buckets,
+            by_camera_errors.get((lens, camera), {}),
+            target_by_lens.get(lens), boundaries,
         ):
             fps_refs.append(((lens, camera), f"plots/{fps_path.name}"))
     refs["fps_per_camera"] = fps_refs
     return refs
+
+
+def _draw_boundary_lines(
+    ax,
+    boundaries: list[tuple[float, int, dict[str, int]]],
+) -> None:
+    """Just the vertical lines, no labels. Use when the same axis shares an
+    x-axis with another that carries the labels."""
+    for offset, _run_idx, _lens_n in boundaries:
+        ax.axvline(offset, color="gray", linestyle=":", alpha=0.6, linewidth=1.0)
 
 
 def _annotate_boundaries(
@@ -522,19 +554,22 @@ def _annotate_boundaries(
     boundaries: list[tuple[float, int, dict[str, int]]],
     lens_name: str | None = None,
 ) -> None:
-    """Draw a vertical line at each run's main_start offset, with a label.
-    If lens_name is given, the label shows that lens's `n` for the run
-    (e.g. "Run 2 (n=6)") when available; otherwise just the run index."""
-    ymin, ymax = ax.get_ylim()
-    label_y = ymin + (ymax - ymin) * 0.92
+    """Draw a vertical line at each boundary AND a label below the x-axis,
+    rotated 30° so labels stack neatly without overlapping chart content."""
     for offset, run_idx, lens_n in boundaries:
         ax.axvline(offset, color="gray", linestyle=":", alpha=0.6, linewidth=1.0)
         if lens_name is not None and lens_name in lens_n:
             label = f"Run {run_idx} (n={lens_n[lens_name]})"
         else:
             label = f"Run {run_idx}"
-        ax.text(offset + 0.5, label_y, label, fontsize=8, color="dimgray",
-                rotation=90, va="top", ha="left")
+        # xy=(offset, 0) in (data, axes) coords; xytext nudges below the axis.
+        ax.annotate(
+            label, xy=(offset, 0), xycoords=("data", "axes fraction"),
+            xytext=(2, -16), textcoords="offset points",
+            fontsize=8, color="dimgray",
+            rotation=30, ha="right", va="top", rotation_mode="anchor",
+            annotation_clip=False,
+        )
 
 
 def _plot_combined_system(
@@ -544,19 +579,26 @@ def _plot_combined_system(
 ) -> bool:
     if not any((cpu_pct, gpu_pct, ram_gb, vram_gb)):
         return False
-    fig, axes = plt.subplots(2, 2, figsize=(13, 7.5), sharex=True)
+    fig, axes = plt.subplots(2, 2, figsize=(13, 8.5), sharex=True)
     cpu_ax, gpu_ax = axes[0]
     ram_ax, vram_ax = axes[1]
     _plot_pct(cpu_ax, cpu_pct, "CPU utilization", color="tab:blue")
     _plot_pct(gpu_ax, gpu_pct, "GPU compute utilization", color="tab:red")
     _plot_gb(ram_ax, ram_gb, ram_total, "RAM used", color="tab:green")
     _plot_gb(vram_ax, vram_gb, vram_total, "VRAM used", color="tab:purple")
-    for ax in axes.flat:
+    # Vertical lines on every panel; labels only on the bottom row (x-axis
+    # is shared, so labels on the top row would be hidden anyway).
+    for ax in (cpu_ax, gpu_ax):
+        _draw_boundary_lines(ax, boundaries)
+        ax.grid(True, alpha=0.3)
+    for ax in (ram_ax, vram_ax):
+        _annotate_boundaries(ax, boundaries)
         ax.set_xlabel("seconds since benchmark start")
         ax.grid(True, alpha=0.3)
-        _annotate_boundaries(ax, boundaries)
     fig.suptitle("System utilization (all runs)", fontsize=14)
     fig.tight_layout()
+    # Leave room for the rotated run-boundary labels below the bottom row.
+    fig.subplots_adjust(bottom=0.15)
     fig.savefig(path, dpi=120)
     plt.close(fig)
     return True
@@ -566,28 +608,44 @@ def _plot_combined_camera_fps(
     path: Path,
     lens_name: str,
     camera: int,
-    buckets: dict[int, int],
+    frame_buckets: dict[int, int],
+    error_buckets: dict[int, int],
     target_fps: float | None,
     boundaries,
 ) -> bool:
-    if not buckets:
+    if not frame_buckets:
         return False
-    seconds = sorted(buckets.keys())
-    fps_values = [buckets[s] for s in seconds]
-    fig, ax = plt.subplots(figsize=(13, 4))
-    ax.plot(seconds, fps_values, color="tab:blue",
-            marker="o", markersize=2.5, linewidth=1.1)
+    seconds = sorted(frame_buckets.keys())
+    fps_values = [frame_buckets[s] for s in seconds]
+    fig, ax = plt.subplots(figsize=(13, 4.5))
+    line_fps, = ax.plot(seconds, fps_values, color="tab:blue",
+                        marker="o", markersize=2.5, linewidth=1.1, label="FPS")
+    handles: list = [line_fps]
     if target_fps is not None and target_fps > 0:
-        ax.axhline(target_fps, color="tab:red", linestyle="--", alpha=0.7,
-                   label=f"target {target_fps:.1f} fps")
-        ax.legend(loc="lower right")
+        line_target = ax.axhline(target_fps, color="tab:orange", linestyle="--", alpha=0.8,
+                                 label=f"target {target_fps:.1f} fps")
+        handles.append(line_target)
     ax.set_title(f"{lens_name} — camera {camera} — FPS (all runs)")
     ax.set_xlabel("seconds since benchmark start")
-    ax.set_ylabel("frames per second")
+    ax.set_ylabel("frames per second", color="tab:blue")
+    ax.tick_params(axis="y", labelcolor="tab:blue")
     ax.set_ylim(bottom=0)
     ax.grid(True, alpha=0.3)
+
+    ax_err = ax.twinx()
+    err_seconds = sorted(set(seconds) | set(error_buckets.keys()))
+    err_values = [error_buckets.get(s, 0) for s in err_seconds]
+    line_err, = ax_err.plot(err_seconds, err_values, color="tab:red",
+                            linewidth=1.2, label="failed requests / sec")
+    ax_err.set_ylabel("failed requests / sec", color="tab:red")
+    ax_err.tick_params(axis="y", labelcolor="tab:red")
+    ax_err.set_ylim(bottom=0)
+    handles.append(line_err)
+
     _annotate_boundaries(ax, boundaries, lens_name=lens_name)
+    ax.legend(handles=handles, loc="lower right")
     fig.tight_layout()
+    fig.subplots_adjust(bottom=0.20)
     fig.savefig(path, dpi=120)
     plt.close(fig)
     return True
