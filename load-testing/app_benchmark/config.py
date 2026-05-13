@@ -14,10 +14,29 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 
 class ConfigError(Exception):
-    pass
+    """Raised by load_config / validate_config when a YAML config fails any
+    schema or cross-lens validation rule."""
 
 
 class RunConfig(BaseModel):
+    """Top-level run settings (everything under the YAML `run:` block).
+
+    Attributes:
+        name: Benchmark identifier; appears in output_dir, detector names,
+            and summary.md. Restricted to [a-zA-Z0-9_-], max 64 chars.
+        output_dir: Where artifacts get written. `{name}` and `{ts}` are
+            substituted at runtime.
+        edge_endpoint_url: HTTP(S) URL of the edge endpoint under test.
+        cloud_endpoint: Groundlight cloud URL used for detector CRUD.
+        detector_name_prefix: Short prefix (≤16 chars, lowercase) that all
+            created detectors carry. Used by the cloud dashboard / cleanup
+            flows to identify benchmark detectors.
+        refuse_if_host_not_clean: If True, refuse to start when the edge
+            already has detectors configured. Set False to run with
+            contaminated state (results will skew).
+        set_config_timeout_seconds: How long to wait for `edge.set_config`
+            to finish (cold edges with many models need more).
+    """
     name: str = Field(pattern=r"^[a-zA-Z0-9_-]+$", max_length=64)
     output_dir: str = "./benchmark-results/{name}-{ts}/"
     edge_endpoint_url: str
@@ -28,12 +47,29 @@ class RunConfig(BaseModel):
 
 
 def _check_image_size(size: tuple[int, int]) -> None:
+    """Raise ValueError if (width, height) is outside [32, 8192] in either dim."""
     w, h = size
     if w < 32 or h < 32 or w > 8192 or h > 8192:
         raise ValueError(f"image_size out of range: {size}")
 
 
 class GlobalConfig(BaseModel):
+    """Per-benchmark defaults (YAML key `global`, aliased to `globals_` in
+    Python since `global` is a keyword). Any lens may override `image_size`
+    or `target_fps`; the rest are run-wide.
+
+    Attributes:
+        image_size: (width, height) in pixels for the synthetic images each
+            worker generates. Bounded to [32, 8192] in each dimension.
+        target_fps: Per-camera frame rate target. 0 disables pacing
+            (saturate — workers issue requests as fast as the edge serves).
+        duration_seconds: Length of the measurement window for each run
+            (excluding warmup). Events at or after main_start_ts + duration
+            are excluded from the summary.
+        warmup_seconds: Time the workers run before the measurement window
+            opens. Lets caches warm up and inference pods spin to steady
+            state before we start counting.
+    """
     image_size: tuple[int, int] = (1920, 1080)
     target_fps: float = Field(default=5.0, ge=0)  # 0 = saturate (no pacing)
     duration_seconds: int = Field(default=180, ge=10)
@@ -49,6 +85,19 @@ _LENS_NAME_PATTERN = r"^[a-zA-Z0-9_]+$"
 
 
 class _LensBase(BaseModel):
+    """Fields shared by every lens type. Subclasses add `type` (the
+    discriminator) plus the pipeline/n fields specific to their shape.
+
+    Attributes:
+        name: Lens identifier; appears in detector names, log records,
+            plot filenames, and summary tables.
+        cameras: How many independent worker processes to run for this
+            lens. Each camera generates and submits its own frames.
+        image_size: Optional override for this lens; falls back to global
+            image_size when None.
+        target_fps: Optional override; falls back to global target_fps.
+            0 means saturate (no pacing).
+    """
     model_config = ConfigDict(extra="forbid")
     name: str = Field(pattern=_LENS_NAME_PATTERN, max_length=64)
     cameras: int = Field(default=1, ge=1, le=64)
@@ -63,11 +112,29 @@ class _LensBase(BaseModel):
 
 
 class SingleBinaryLens(_LensBase):
+    """One binary inference per frame. Workers generate a synthetic
+    black/white image with a timestamp overlay and submit it.
+
+    Attributes:
+        pipeline: Optional Groundlight pipeline config name. None uses
+            the cloud's default binary pipeline.
+    """
     type: Literal["single_binary"]
     pipeline: str | None = Field(default=None, max_length=100)
 
 
 class SingleBboxLens(_LensBase):
+    """One bounding-box inference per frame. The synthetic image contains
+    up to `n` random objects (count varies per frame), and the bbox
+    detector is provisioned with `max_num_bboxes = max(n)`.
+
+    Attributes:
+        pipeline: Optional Groundlight pipeline config name. None uses
+            the cloud's default bbox pipeline.
+        n: List of integer values to sweep across runs. Zipped with other
+            lenses' n lists; must share the same length when multiple
+            lenses declare n.
+    """
     type: Literal["single_bbox"]
     pipeline: str | None = Field(default=None, max_length=100)
     n: list[int] = Field(min_length=1)
@@ -81,6 +148,20 @@ class SingleBboxLens(_LensBase):
 
 
 class BboxToBinaryLens(_LensBase):
+    """Chained inference: 1 bbox call + N binary calls per frame. Models a
+    "detect objects, then classify each ROI" pipeline. Each frame submits
+    the bbox image once and then resubmits a small cached binary image N
+    times.
+
+    Attributes:
+        bbox_pipeline: Optional pipeline config for the bbox stage.
+        binary_pipeline: Optional pipeline config for the downstream
+            binary stage.
+        n: List of integer values to sweep across runs. n controls BOTH
+            the bbox detector's `max_num_bboxes` (set to max(n) once at
+            provisioning) AND the number of downstream binary calls
+            issued per frame in this run.
+    """
     type: Literal["bbox_to_binary"]
     bbox_pipeline: str | None = Field(default=None, max_length=100)
     binary_pipeline: str | None = Field(default=None, max_length=100)
@@ -94,6 +175,8 @@ class BboxToBinaryLens(_LensBase):
         return self
 
 
+# Pydantic discriminated union — picks the right subclass based on the
+# `type` field in YAML.
 LensSpec = Annotated[
     SingleBinaryLens | SingleBboxLens | BboxToBinaryLens,
     Field(discriminator="type"),
@@ -101,10 +184,28 @@ LensSpec = Annotated[
 
 
 class MonitoringConfig(BaseModel):
+    """SystemMonitor polling parameters.
+
+    Attributes:
+        sample_hz: How often (Hz) to poll /status/resources.json on the
+            edge. CPU/RAM are bounded by k8s Metrics Server cadence (~15s)
+            so values above 1Hz give repeated CPU/RAM samples but fresher
+            GPU/VRAM numbers.
+    """
     sample_hz: float = Field(default=1.0, gt=0, le=20)
 
 
 class BenchmarkConfig(BaseModel):
+    """Root config object built from the YAML file.
+
+    Attributes:
+        run: Top-level run settings (name, URLs, output dir, etc.).
+        globals_: Per-benchmark defaults. YAML key is `global`; Python
+            access uses `globals_` because `global` is a keyword.
+        lenses: List of lens specs. Each runs concurrently within every
+            run; lenses that declare `n` define the sweep dimension.
+        monitoring: SystemMonitor sampling settings.
+    """
     model_config = ConfigDict(populate_by_name=True)
     run: RunConfig
     globals_: GlobalConfig = Field(alias="global")
@@ -113,8 +214,18 @@ class BenchmarkConfig(BaseModel):
 
 
 def validate_config(cfg: BenchmarkConfig) -> None:
-    """Cross-lens invariants. Pydantic handles per-field rules; this catches
-    the things that depend on the relationship between lenses."""
+    """Cross-lens invariants that don't fit inside a single Pydantic model.
+
+    Pydantic already enforces per-field rules; this function catches
+    relationships between lenses that need a whole-config view.
+
+    Args:
+        cfg: The Pydantic-validated config object.
+
+    Raises:
+        ConfigError: When two lenses share a name, or when two or more
+            lenses declare `n` lists of different lengths.
+    """
     names = [l.name for l in cfg.lenses]
     duplicates = sorted({n for n in names if names.count(n) > 1})
     if duplicates:
@@ -132,7 +243,15 @@ def validate_config(cfg: BenchmarkConfig) -> None:
 
 
 def num_runs(cfg: BenchmarkConfig) -> int:
-    """How many runs the config expands to (length of any `n` list, else 1)."""
+    """Return the number of runs this config expands to.
+
+    Args:
+        cfg: A validated BenchmarkConfig.
+
+    Returns:
+        len(lens.n) for any lens that declares n (all n lists share a
+        length per validate_config), or 1 when no lens has n.
+    """
     for lens in cfg.lenses:
         if hasattr(lens, "n"):
             return len(lens.n)
@@ -140,6 +259,7 @@ def num_runs(cfg: BenchmarkConfig) -> int:
 
 
 def _format_validation_error(error: ValidationError) -> str:
+    """Build a human-readable summary of a Pydantic ValidationError."""
     lines = [f"Configuration validation failed ({len(error.errors())} error(s)):"]
     for err in error.errors():
         loc = ".".join(str(p) for p in err.get("loc", ())) or "<root>"
@@ -148,6 +268,19 @@ def _format_validation_error(error: ValidationError) -> str:
 
 
 def load_config(path: str | Path) -> BenchmarkConfig:
+    """Parse a YAML config file and run all validators.
+
+    Args:
+        path: Filesystem path to the YAML config.
+
+    Returns:
+        Fully-validated BenchmarkConfig — Pydantic field rules AND
+        validate_config's cross-lens checks have already passed.
+
+    Raises:
+        ConfigError: File missing, empty, fails Pydantic validation, or
+            fails any cross-lens invariant.
+    """
     path = Path(path)
     if not path.is_file():
         raise ConfigError(f"Config file not found: {path}")

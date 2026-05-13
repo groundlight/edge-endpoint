@@ -32,11 +32,14 @@ logger = logging.getLogger("app_benchmark")
 
 
 def _resolve_output_dir(template: str, run_name: str) -> Path:
+    """Substitute `{name}` and `{ts}` placeholders in an output_dir template."""
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return Path(template.format(name=run_name, ts=ts))
 
 
 def _lens_n_for_run(cfg: BenchmarkConfig, run_index: int) -> dict[str, int]:
+    """Pick the `n` value at position `run_index` from every lens that
+    declares an `n` list. Lenses without `n` are absent from the result."""
     out: dict[str, int] = {}
     for lens in cfg.lenses:
         if hasattr(lens, "n"):
@@ -55,6 +58,28 @@ def _worker_for(
     worker_number: int,
     camera: int,
 ):
+    """Build the (target_fn, kwargs) pair for one camera process.
+
+    Resolves per-lens overrides (image_size, target_fps) against globals
+    and picks the right runner function plus the right detector IDs from
+    `sds` (the stage detectors for this lens).
+
+    Args:
+        lens: A LensSpec subtype (SingleBinaryLens, SingleBboxLens, or
+            BboxToBinaryLens).
+        sds: Stage detectors for THIS lens (typically 1 or 2 entries).
+        n: This run's `n` value for the lens, or None if the lens has
+            no `n` (single_binary case).
+        cfg: Full benchmark config — used to resolve global defaults.
+        edge_url: Edge endpoint URL the worker should hit.
+        log_file: JSONL log path the worker should append to.
+        duration_seconds: Total worker lifetime including warmup.
+        worker_number: Global worker index (across all lenses + cameras).
+        camera: Per-lens camera index.
+
+    Returns:
+        (target_fn, kwargs_dict) suitable for multiprocessing.Process.
+    """
     image_size = tuple(lens.image_size if lens.image_size is not None else cfg.globals_.image_size)
     target_fps = lens.target_fps if lens.target_fps is not None else cfg.globals_.target_fps
     common = dict(
@@ -87,6 +112,21 @@ def _spawn_lens_workers(
     log_file: str,
     duration_seconds: float,
 ) -> list[mp.Process]:
+    """Start one Process per (lens × camera) and return them.
+
+    Workers are started in lens-config order; worker_number increments
+    monotonically (used as a global tag in the JSONL log).
+
+    Args:
+        cfg: Benchmark config (for lens list and overrides).
+        run: ResolvedRun providing lens_n and the shared stage_detectors.
+        edge_url: Edge endpoint URL passed into each worker.
+        log_file: Shared JSONL log path.
+        duration_seconds: How long each worker should run before exiting.
+
+    Returns:
+        List of started Process objects (already `.start()`ed).
+    """
     by_lens: dict[str, list[StageDetector]] = {}
     for sd in run.stage_detectors:
         by_lens.setdefault(sd.lens_name, []).append(sd)
@@ -107,13 +147,27 @@ def _spawn_lens_workers(
 
 
 def _emit_ramp_marker(log_file: Path, total_clients: int) -> None:
-    """Single fake RAMP marker so parse_load_test_logs can compute clients_by_second."""
+    """Write one fake `RAMP <N> ts=<epoch>` line to the log so the
+    parse_load_test_logs parser can locate the post-warmup start; we
+    write it exactly when main_start_ts is captured."""
     with log_file.open("a", encoding="utf-8") as f:
         f.write(f"RAMP {total_clients} ts={time.time()}\n")
 
 
 def _join_with_grace(procs: list[mp.Process], timeout_s: float) -> list[dict]:
-    """Join all worker processes; collect non-zero exitcodes as failures."""
+    """Wait for every worker process to exit (with a hard cap), then
+    collect non-zero exit codes as failures for the report.
+
+    Args:
+        procs: Worker processes to join.
+        timeout_s: Hard total budget across all joins. Any process still
+            alive at the deadline is `.terminate()`'d.
+
+    Returns:
+        List of {"name": process_name, "exitcode": code} dicts for every
+        worker that exited with a non-zero (or None) exit code. Surfaced
+        as worker_failures in summary.json / summary.md.
+    """
     deadline = time.time() + timeout_s
     for p in procs:
         remaining = max(0.0, deadline - time.time())
@@ -137,6 +191,24 @@ def _run_one(
     run: ResolvedRun,
     out_root: Path,
 ) -> dict:
+    """Execute one run end-to-end (warmup + measurement window + cleanup).
+
+    Workers are spawned for `warmup + duration` seconds. The
+    measurement window starts AFTER the warmup sleep and is fixed at
+    `[main_start_ts, main_start_ts + duration)` — any request landing
+    after that boundary is excluded from the summary.
+
+    Args:
+        cfg: Benchmark config.
+        run: ResolvedRun for this iteration; carries the per-lens `n`
+            and the shared stage_detectors.
+        out_root: Top-level output directory; this run writes into
+            `out_root/run_NN/`.
+
+    Returns:
+        The per-run summary dict produced by report.write_run_artifacts,
+        which also wrote `run_NN/summary.json` and the per-run plots.
+    """
     run_dir = out_root / f"run_{run.run_index:02d}"
     run_dir.mkdir(parents=True, exist_ok=True)
     log_file = run_dir / "load_test.log"
@@ -202,6 +274,27 @@ def _run_one(
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Entry point for `python -m app_benchmark <config.yaml>`.
+
+    Performs (in order):
+      1. Parse args, load + validate the YAML config.
+      2. Measure an ICMP ping baseline to the edge (skipped for loopback).
+      3. Refuse if the edge already has detectors loaded
+         (`refuse_if_host_not_clean: true`).
+      4. Snapshot pre-run edge config; register atexit cleanup.
+      5. Provision every detector once and push edge config once.
+      6. Run each n-step sweep iteration via `_run_one`.
+      7. Write the consolidated top-level summary.md + summary.json with
+         cross-run combined plots.
+
+    Args:
+        argv: Optional CLI args list (None means use sys.argv).
+
+    Returns:
+        Process exit code: 0 success, 1 unhandled failure during runs,
+        2 config or env error, 3 host-clean check failed,
+        130 KeyboardInterrupt.
+    """
     parser = argparse.ArgumentParser(description="Edge-endpoint application benchmarking harness.")
     parser.add_argument("config", help="Path to benchmark YAML config.")
     parser.add_argument("--no-cleanup", action="store_true",

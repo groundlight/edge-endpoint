@@ -37,7 +37,29 @@ def _submit_and_log(
     request_number: int,
     stage: str | None = None,
 ) -> None:
-    """One submit + one JSONL line. Catches all exceptions; logs success/error."""
+    """Submit one inference, time it, append one JSONL line to log_file.
+
+    Catches every exception so a single request failure doesn't kill the
+    worker; the failure is recorded as `success: false` in the log and
+    rolls up into the run's error count. The SDK retries 5xx/429
+    internally before bubbling up, so anything we catch here has already
+    exhausted the SDK's backoff.
+
+    Args:
+        gl: SDK client pointed at the edge endpoint.
+        detector_id: Target detector for this request.
+        image: np.ndarray passed directly to ask_ml; the SDK encodes it.
+        log_file: Path to the worker's JSONL log; appended to per call.
+        lens_name: Identifies the lens in the log (and the report).
+        camera: Per-lens camera index (0..lens.cameras-1).
+        worker_number: Global worker index across all lenses, useful for
+            cross-process tagging.
+        request_number: Monotonic counter within this worker — useful
+            when diffing logs.
+        stage: Optional "bbox" or "binary" tag for chained lenses;
+            single-stage lenses leave this None. The report keys frame
+            counting off the absence of `stage` OR `stage == "bbox"`.
+    """
     request_start = time.time()
     try:
         iq = gl.ask_ml(detector_id, image)
@@ -75,6 +97,8 @@ def _silence_stderr() -> None:
 
 
 def _pace(period: float, frame_start: float) -> None:
+    """Sleep just long enough to maintain `period` between frame starts.
+    No-op when `period <= 0` (saturate mode)."""
     if period <= 0:
         return
     sleep_for = period - (time.time() - frame_start)
@@ -94,6 +118,26 @@ def run_single_binary(  # noqa: PLR0913
     duration_seconds: float,
     log_file: str,
 ) -> None:
+    """multiprocessing.Process target for a `single_binary` lens worker.
+
+    Generates a fresh random binary image (black/white with timestamp
+    overlay) per frame and submits one inference. Loops until
+    `duration_seconds` elapses.
+
+    Args:
+        worker_number: Global worker index, recorded on every log line.
+        camera: This worker's per-lens camera index.
+        lens_name: Logged on every event; matched against config in the
+            report.
+        detector_id: Cloud detector ID for the binary inference.
+        edge_url: Edge endpoint URL; the SDK client is built from this.
+        image_size: (width, height) of the synthetic image to generate.
+        target_fps: Per-frame pace target. 0 = saturate (no sleep
+            between frames).
+        duration_seconds: How long this worker runs before exiting.
+        log_file: Append-only JSONL log path; shared with all other
+            workers and the SystemMonitor in this run.
+    """
     gl = ExperimentalApi(endpoint=edge_url)
     w, h = image_size
     _silence_stderr()
@@ -125,6 +169,29 @@ def run_single_bbox(  # noqa: PLR0913
     duration_seconds: float,
     log_file: str,
 ) -> None:
+    """multiprocessing.Process target for a `single_bbox` lens worker.
+
+    Generates a fresh image containing up to `n` random objects per
+    frame and submits one bounding-box inference. The actual object
+    count per frame is `randint(0, n)` inside the image helper.
+
+    Args:
+        worker_number: Global worker index, recorded on every log line.
+        camera: This worker's per-lens camera index.
+        lens_name: Logged on every event; matched against config in the
+            report.
+        detector_id: Cloud detector ID for the bbox inference.
+        n: Upper bound on object count in the synthesized image for this
+            run. The detector itself was provisioned once with
+            max_num_bboxes = max(lens.n), so a per-run `n` smaller than
+            the max only affects image content, not inference cost.
+        edge_url: Edge endpoint URL; the SDK client is built from this.
+        image_size: (width, height) of the synthetic image to generate.
+        target_fps: Per-frame pace target. 0 = saturate.
+        duration_seconds: How long this worker runs before exiting.
+        log_file: Append-only JSONL log path; shared with all other
+            workers and the SystemMonitor in this run.
+    """
     gl = ExperimentalApi(endpoint=edge_url)
     w, h = image_size
     _silence_stderr()
@@ -157,6 +224,35 @@ def run_bbox_to_binary(  # noqa: PLR0913
     duration_seconds: float,
     log_file: str,
 ) -> None:
+    """multiprocessing.Process target for a `bbox_to_binary` lens worker.
+
+    Per frame:
+      1. Generate a fresh `image_size` image with up to `n` random
+         objects and submit one bbox inference (logged with stage=bbox).
+      2. Submit a cached small (224x224) binary image `n` times in a
+         row (each logged with stage=binary).
+
+    The cached downstream image is generated once at worker startup; the
+    SDK re-encodes it per call, which at 224x224 is cheap.
+
+    Args:
+        worker_number: Global worker index, recorded on every log line.
+        camera: This worker's per-lens camera index.
+        lens_name: Logged on every event; matched against config in the
+            report.
+        bbox_detector_id: Cloud detector ID for the upstream bbox stage.
+        binary_detector_id: Cloud detector ID for the downstream binary
+            stage.
+        n: Both the upper bound on object count in the bbox image AND
+            the number of downstream binary calls to issue per frame.
+        edge_url: Edge endpoint URL; the SDK client is built from this.
+        image_size: (width, height) of the upstream bbox image.
+        target_fps: Per-frame pace target (one frame = 1 bbox + n binary
+            calls). 0 = saturate.
+        duration_seconds: How long this worker runs before exiting.
+        log_file: Append-only JSONL log path; shared with all other
+            workers and the SystemMonitor in this run.
+    """
     gl = ExperimentalApi(endpoint=edge_url)
     w, h = image_size
     bw, bh = _BINARY_DOWNSTREAM_SIZE

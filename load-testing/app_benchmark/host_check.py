@@ -14,12 +14,27 @@ logger = logging.getLogger(__name__)
 
 
 class HostNotCleanError(RuntimeError):
-    pass
+    """Raised by ensure_host_clean when the edge already has detectors
+    configured and refuse_if_host_not_clean is True."""
 
 
 def ensure_host_clean(gl_edge: ExperimentalApi, *, allow: bool = False) -> None:
-    """Raise HostNotCleanError if any detector is configured on the edge.
-    With `allow=True`, log a loud warning and proceed."""
+    """Pre-flight check: refuse to start if the edge already has detectors.
+
+    The benchmark assumes it has the edge to itself; pre-existing
+    detectors share GPU/CPU/RAM and skew the numbers.
+
+    Args:
+        gl_edge: SDK client pointed at the local edge endpoint.
+        allow: If True, downgrade the failure to a loud warning and
+            proceed. Controlled from YAML via
+            `run.refuse_if_host_not_clean: false`.
+
+    Raises:
+        HostNotCleanError: When `allow=False` and the edge has ≥1
+            detector configured. Message includes the recovery command
+            (cleanup_edge.py --wipe) and the YAML flag to bypass.
+    """
     try:
         edge_config = gl_edge.edge.get_config()
     except Exception as exc:

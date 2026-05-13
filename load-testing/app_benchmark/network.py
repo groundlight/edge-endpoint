@@ -13,17 +13,33 @@ _PING_OUTPUT_RE = re.compile(r"=\s*([\d.]+)/([\d.]+)/([\d.]+)/([\d.]+)\s*ms")
 
 
 def host_from_url(url: str) -> str | None:
+    """Extract the hostname portion of `url` (e.g. "10.1.2.3" from
+    "http://10.1.2.3:30101"). Returns None when the URL has no host."""
     parsed = urlparse(url)
     return parsed.hostname or None
 
 
 def _is_loopback(host: str) -> bool:
+    """True for localhost / 127.x.x.x / IPv6 ::1."""
     return host in {"localhost", "127.0.0.1", "::1"} or host.startswith("127.")
 
 
 def measure(host: str | None, packet_count: int = 5, timeout_s: int = 5) -> dict | None:
-    """ICMP ping `host` `packet_count` times. Returns RTT stats in ms,
-    or None if loopback / ping unavailable / unreachable."""
+    """Measure ICMP round-trip latency to `host` and return the stats.
+
+    Args:
+        host: Hostname or IP. Loopback hosts return None (pinging
+            localhost only measures the kernel — not useful as a
+            network baseline).
+        packet_count: Number of ICMP echo requests to send.
+        timeout_s: Per-packet timeout in seconds passed to `ping -W`.
+
+    Returns:
+        Dict with keys {host, packets, min_ms, avg_ms, max_ms, stddev_ms}
+        on success. None when the host is loopback, the `ping` binary
+        is missing, the host is unreachable, or the ping output couldn't
+        be parsed.
+    """
     if not host or _is_loopback(host):
         return None
     try:
@@ -50,6 +66,19 @@ def measure(host: str | None, packet_count: int = 5, timeout_s: int = 5) -> dict
 
 
 def format_summary(stats: dict | None, host: str | None = None) -> str:
+    """Render a one-line ping summary for summary.md.
+
+    Args:
+        stats: The dict returned by `measure(...)`, or None.
+        host: Original host string (only used to distinguish the
+            "loopback — skipped" case from a hard failure).
+
+    Returns:
+        Human-readable string. Either:
+            - "min ... ms · avg ... ms · max ... ms · σ ... ms (N pkts to HOST)"
+            - "loopback — skipped" when host is loopback and stats is None
+            - "unavailable" when stats is None for any other reason
+    """
     if stats is None:
         if host and _is_loopback(host):
             return "loopback — skipped"

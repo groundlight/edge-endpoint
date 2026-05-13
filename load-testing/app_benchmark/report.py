@@ -28,6 +28,16 @@ _FPS_HIT_TOLERANCE = 0.95
 
 
 def _read_request_events(log_file: Path, start_ts: float, end_ts: float) -> list[dict]:
+    """Read every `event: request` line whose `ts` falls in [start, end).
+
+    Args:
+        log_file: Path to the worker JSONL log.
+        start_ts: Inclusive lower bound (== main_start_ts).
+        end_ts: Exclusive upper bound (== main_end_ts).
+
+    Returns:
+        List of request-event dicts, in file order.
+    """
     out: list[dict] = []
     with log_file.open() as f:
         for line in f:
@@ -45,8 +55,23 @@ def _read_request_events(log_file: Path, start_ts: float, end_ts: float) -> list
 
 
 def _read_resource_events(log_file: Path, start_ts: float, end_ts: float) -> dict[str, Any]:
-    """Bucket cpu/gpu events by seconds-since-start_ts within [start, end).
-    Returns dicts of {seconds_offset: value} plus discovered totals."""
+    """Read cpu/gpu events from a per-run log and bucket by seconds-since-start.
+
+    Args:
+        log_file: Path to the worker JSONL log (also contains SystemMonitor
+            events written by the same process).
+        start_ts: Inclusive lower bound (== main_start_ts).
+        end_ts: Exclusive upper bound (== main_end_ts).
+
+    Returns:
+        Dictionary with keys:
+            - "cpu_pct": {seconds_offset: cpu_percent} float series
+            - "gpu_pct": {seconds_offset: gpu_compute_percent} float series
+            - "ram_gb": {seconds_offset: ram_used_gb} float series
+            - "ram_total_gb": float — max RAM total seen (for the y-axis reference line)
+            - "vram_gb": {seconds_offset: vram_used_gb} float series
+            - "vram_total_gb": float — max VRAM total seen
+    """
     cpu_pct: dict[float, float] = {}
     ram_gb: dict[float, float] = {}
     gpu_pct: dict[float, float] = {}
@@ -82,16 +107,47 @@ def _read_resource_events(log_file: Path, start_ts: float, end_ts: float) -> dic
 
 
 def _is_frame(event: dict) -> bool:
-    """A frame = one lens-loop iteration. For multi-stage lenses only the
-    upstream `bbox` event counts; single-stage lenses have no `stage` field."""
+    """True if `event` represents one lens-loop iteration.
+
+    For single-stage lenses every request is a frame (no `stage` field).
+    For `bbox_to_binary`, each frame produces 1 bbox request + N binary
+    requests; only the upstream `bbox` event counts as a frame here.
+
+    Per-event check (rather than "any event has stage") so the predicate
+    works correctly on a mixed-lens event stream — e.g. computing the
+    aggregate frame count across all lenses in a run.
+    """
     return "stage" not in event or event.get("stage") == "bbox"
 
 
 def _summarize(events: list[dict], target_fps: float | None, duration_s: float) -> dict[str, Any]:
-    """Summarize events over a FIXED window of `duration_s` seconds. FPS
-    is computed against that fixed duration, not against max-min of the
-    observed event timestamps — so in-flight or grace-period stragglers
-    can't drag duration up and FPS down."""
+    """Compute per-camera (or per-run aggregate) stats over a fixed window.
+
+    FPS is computed as `total_frames / duration_s` — the intended window
+    length, not `max(ts) - min(ts)`. This keeps a late-tail request from
+    inflating duration and quietly under-reporting FPS.
+
+    Args:
+        events: All request events in scope (within the measurement
+            window; could be one camera's events, or every camera's
+            events for the aggregate).
+        target_fps: Per-camera FPS target, or None when no target
+            applies (used to compute the Hit verdict).
+        duration_s: Fixed window length (main_end_ts - main_start_ts).
+
+    Returns:
+        Dict with keys:
+            - "total_frames": int — count of lens-loop iterations
+            - "total_requests": int — count of HTTP requests (≥ frames for chained)
+            - "errors": int — count of `success: False` events
+            - "duration_seconds": float — echoed back for clarity
+            - "achieved_fps": float — total_frames / duration_s
+            - "target_fps": float | None — echoed back
+            - "hit_target": bool | None — achieved_fps >= 0.95 * target_fps,
+              None when target_fps is 0 or None (saturate / no target)
+            - "latency_p50_sec": float — interpolated p50 of request latency
+            - "latency_p95_sec": float — interpolated p95 of request latency
+    """
     frames = [e for e in events if _is_frame(e)]
     total_frames = len(frames)
     errors = sum(1 for e in events if not e.get("success", True))
@@ -124,9 +180,25 @@ def write_run_artifacts(
     main_start_ts: float,
     main_end_ts: float,
 ) -> dict[str, Any]:
-    """Per-(lens, camera) stats + FPS plots + 2x2 system grid. Writes
-    summary.json (machine-readable) but NOT summary.md — top-level
-    write_top_level produces a single consolidated doc."""
+    """Build all per-run artifacts: stats, plots, and summary.json.
+
+    Cross-references `run_meta["lenses"]` against observed events so
+    cameras that produced no events get a flagged row (no_events=True,
+    hit_target=False) rather than silently disappearing from the table.
+
+    Args:
+        run_dir: Per-run output dir (`out_root/run_NN/`). Created by
+            the caller before this is called.
+        log_file: Path to the worker JSONL log inside run_dir.
+        run_meta: Metadata produced by cli._run_one; carries lens config,
+            durations, main_start_ts, main_end_ts, and worker_failures.
+        main_start_ts: Inclusive start of the measurement window.
+        main_end_ts: Exclusive end of the measurement window.
+
+    Returns:
+        Per-run summary dict (also written to run_dir/summary.json),
+        used by write_top_level to assemble the consolidated doc.
+    """
     duration_s = main_end_ts - main_start_ts
     events = _read_request_events(log_file, start_ts=main_start_ts, end_ts=main_end_ts)
     target_by_lens: dict[str, float] = {l["name"]: l["target_fps"] for l in run_meta["lenses"]}
@@ -190,6 +262,23 @@ def _plot_camera_fps(
     target_fps: float | None,
     main_start_ts: float,
 ) -> None:
+    """Write the per-run FPS plot for one (lens, camera).
+
+    The plot has two y-axes:
+      - Left (blue): frames/sec, dotted markers per second, with an
+        orange dashed reference line at target_fps when set.
+      - Right (red): failed requests / sec.
+
+    Args:
+        plots_dir: Where to write `fps_{lens_name}_camera_{camera}.png`.
+        lens_name: Used in the title and filename.
+        camera: Used in the title and filename.
+        events: Request events for THIS camera within the measurement
+            window.
+        target_fps: Per-lens target; None or 0 skips the target line.
+        main_start_ts: Used to compute seconds-since-main-start for the
+            x-axis (matches the FPS plot's bucketing).
+    """
     fps_buckets: dict[int, int] = defaultdict(int)
     err_buckets: dict[int, int] = defaultdict(int)
     for ev in events:
@@ -235,6 +324,9 @@ def _plot_camera_fps(
 
 
 def _plot_system_grid(plots_dir: Path, log_file: Path, main_start_ts: float, main_end_ts: float) -> None:
+    """Write the per-run 2×2 system utilization grid (CPU %, GPU %,
+    RAM GB, VRAM GB). No-op when the log has no cpu/gpu events
+    (e.g. /status/resources.json was unreachable)."""
     parsed = _read_resource_events(log_file, main_start_ts, main_end_ts)
     has_any = any((parsed["cpu_pct"], parsed["gpu_pct"], parsed["ram_gb"], parsed["vram_gb"]))
     if not has_any:
@@ -307,12 +399,24 @@ def write_top_level(
     network_baseline: dict | None,
     network_baseline_text: str,
 ) -> None:
-    """Single consolidated summary.md with environment block, cross-run
-    overview, combined cross-run plots, and one section per run.
+    """Write the consolidated top-level summary.md, summary.json, and
+    cross-run combined plots.
 
-    Combined plots span all runs on a benchmark-wall-clock time axis with
-    vertical lines at each run boundary. Per-run plots remain in
-    run_NN/plots/ for drill-down.
+    summary.md sections:
+        1. Environment header (name, started_at, edge URL, ping baseline, defaults)
+        2. Overview table (one row per run, per-lens mean FPS + Hit verdict)
+        3. Combined system_utilization.png embedded
+        4. One combined FPS plot per (lens, camera) embedded
+        5. Per-run sections with full per-camera tables
+
+    Args:
+        out_root: Top-level benchmark output directory.
+        summaries: Output of every `write_run_artifacts` call, in run order.
+        benchmark_meta: Top-level metadata produced by cli.main (name,
+            started_at, edge_endpoint_url, config defaults).
+        network_baseline: Result of network.measure (or None).
+        network_baseline_text: Pre-formatted version of the above for
+            inline rendering.
     """
     payload = {
         "meta": benchmark_meta,
@@ -455,9 +559,28 @@ def _write_combined_plots(
     out_root: Path,
     summaries: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Build plots/system_utilization.png and plots/fps_{lens}_camera_{N}.png
-    spanning all runs on a benchmark-wall-clock axis. Returns relative paths
-    to the generated plots for embedding in summary.md."""
+    """Build cross-run combined plots and return their relative paths.
+
+    Reads every run's load_test.log, re-bases events on the benchmark
+    wall-clock (`offset = ts - first_run.main_start_ts`), and writes:
+      - plots/system_utilization.png — 2x2 CPU%, GPU%, RAM GB, VRAM GB
+      - plots/fps_{lens}_camera_{N}.png — one per camera process
+
+    Each plot has dotted vertical lines at every run's main_start with
+    labels below the x-axis (system plot: "Run i"; FPS plots:
+    "Run i (n=X)" using that lens's own n).
+
+    Args:
+        out_root: Top-level benchmark output dir.
+        summaries: All per-run summaries (each contains main_start_ts /
+            main_end_ts that bound the event window for that run).
+
+    Returns:
+        Dict with keys:
+            - "system": "plots/system_utilization.png" or absent
+            - "fps_per_camera": list of ((lens, camera), relative_path)
+              for embedding into summary.md
+    """
     plots_dir = out_root / "plots"
     plots_dir.mkdir(exist_ok=True)
     benchmark_t0 = min(s["meta"]["main_start_ts"] for s in summaries)
@@ -543,8 +666,17 @@ def _draw_boundary_lines(
     ax,
     boundaries: list[tuple[float, int, dict[str, int]]],
 ) -> None:
-    """Just the vertical lines, no labels. Use when the same axis shares an
-    x-axis with another that carries the labels."""
+    """Draw a dotted vertical line on `ax` at each run boundary, no labels.
+
+    Used on the top row of the 2x2 system grid where the x-axis is
+    shared with the bottom row — labels would be hidden, so we just
+    draw the lines for visual continuity across panels.
+
+    Args:
+        ax: Matplotlib axis to draw on.
+        boundaries: List of (x_offset_seconds, run_index, lens_n_dict).
+            Only the first element matters here; the rest are ignored.
+    """
     for offset, _run_idx, _lens_n in boundaries:
         ax.axvline(offset, color="gray", linestyle=":", alpha=0.6, linewidth=1.0)
 
@@ -554,8 +686,21 @@ def _annotate_boundaries(
     boundaries: list[tuple[float, int, dict[str, int]]],
     lens_name: str | None = None,
 ) -> None:
-    """Draw a vertical line at each boundary AND a label below the x-axis,
-    rotated 30° so labels stack neatly without overlapping chart content."""
+    """Draw vertical lines at run boundaries AND rotated labels below the axis.
+
+    Labels live below the x-axis (rotated 30°) so they don't overlap
+    chart content. Callers must pair this with
+    `fig.subplots_adjust(bottom=...)` to reserve the space.
+
+    Args:
+        ax: Matplotlib axis to annotate.
+        boundaries: List of (x_offset_seconds, run_index, lens_n_dict)
+            for each run.
+        lens_name: When set, labels look like "Run i (n=X)" using
+            `lens_n_dict[lens_name]`. When None, labels are just
+            "Run i" (used on the global system util plot since
+            different lenses can have different n values).
+    """
     for offset, run_idx, lens_n in boundaries:
         ax.axvline(offset, color="gray", linestyle=":", alpha=0.6, linewidth=1.0)
         if lens_name is not None and lens_name in lens_n:

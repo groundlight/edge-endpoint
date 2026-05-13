@@ -18,6 +18,18 @@ logger = logging.getLogger(__name__)
 
 
 def main(argv: list[str] | None = None) -> int:
+    """CLI entry point: list and/or wipe the edge endpoint's configured detectors.
+
+    Useful after a hard kill (SIGKILL/OOM) when the benchmark's atexit
+    handler didn't run and inference pods are still loaded on the edge.
+
+    Args:
+        argv: Optional CLI args list (None means use sys.argv).
+
+    Returns:
+        Exit code: 0 success, 1 wipe failed or user aborted at confirm,
+        2 could not reach edge / bad usage.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--edge-endpoint", required=True, help="Edge endpoint URL.")
     parser.add_argument("--list", action="store_true", help="Print currently-loaded detectors and exit.")
