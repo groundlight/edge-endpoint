@@ -90,7 +90,10 @@ def _submit_and_log(
 
 
 def _silence_stderr() -> None:
-    """SDK retry warnings are noisy at high RPS; mute them in worker processes."""
+    """SDK retry warnings are noisy at high RPS — mute stderr right before the
+    per-frame submit loop. Call this *after* SDK init + JPEG pool build so any
+    startup failure (bad URL, missing token, image generator error) surfaces
+    its traceback to the parent's stderr instead of vanishing into /dev/null."""
     sys.stderr = open(os.devnull, "w")  # noqa: SIM115
 
 
@@ -114,9 +117,9 @@ def run_single_binary(  # noqa: PLR0913
     duration_seconds: float,
     log_file: str,
 ) -> None:
-    _silence_stderr()
     gl = ExperimentalApi(endpoint=edge_url)
     pool = _build_binary_pool(image_size)
+    _silence_stderr()
     period = 1.0 / target_fps if target_fps > 0 else 0.0
     deadline = time.time() + duration_seconds
     request_number = 1
@@ -146,9 +149,9 @@ def run_single_bbox(  # noqa: PLR0913
     duration_seconds: float,
     log_file: str,
 ) -> None:
-    _silence_stderr()
     gl = ExperimentalApi(endpoint=edge_url)
     pool = _build_objects_pool(image_size, n)
+    _silence_stderr()
     period = 1.0 / target_fps if target_fps > 0 else 0.0
     deadline = time.time() + duration_seconds
     request_number = 1
@@ -179,11 +182,11 @@ def run_bbox_to_binary(  # noqa: PLR0913
     duration_seconds: float,
     log_file: str,
 ) -> None:
-    _silence_stderr()
     gl = ExperimentalApi(endpoint=edge_url)
     bbox_pool = _build_objects_pool(image_size, n)
     bw, bh = _BINARY_DOWNSTREAM_SIZE
     binary_blob = _encode_jpeg(imgh.generate_random_binary_image(bw, bh)[0])
+    _silence_stderr()
     period = 1.0 / target_fps if target_fps > 0 else 0.0
     deadline = time.time() + duration_seconds
     request_number = 1

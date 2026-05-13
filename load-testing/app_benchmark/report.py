@@ -21,12 +21,13 @@ from pathlib import Path
 from typing import Any
 
 import matplotlib.pyplot as plt
+from parse_load_test_logs import _percentile as _interp_percentile
 
 # Achieved FPS counts as "hit" target if it's within this fraction.
 _FPS_HIT_TOLERANCE = 0.95
 
 
-def _read_request_events(log_file: Path, start_ts: float) -> list[dict]:
+def _read_request_events(log_file: Path, start_ts: float, end_ts: float) -> list[dict]:
     out: list[dict] = []
     with log_file.open() as f:
         for line in f:
@@ -36,15 +37,16 @@ def _read_request_events(log_file: Path, start_ts: float) -> list[dict]:
             payload = json.loads(line)
             if payload.get("event") != "request":
                 continue
-            if float(payload.get("ts", 0)) < start_ts:
+            ts = float(payload.get("ts", 0))
+            if ts < start_ts or ts >= end_ts:
                 continue
             out.append(payload)
     return out
 
 
-def _read_resource_events(log_file: Path, main_start_ts: float) -> dict[str, Any]:
-    """Bucket cpu/gpu events by seconds-since-main-start. Returns dicts of
-    {seconds_offset: value} plus discovered totals (max seen)."""
+def _read_resource_events(log_file: Path, start_ts: float, end_ts: float) -> dict[str, Any]:
+    """Bucket cpu/gpu events by seconds-since-start_ts within [start, end).
+    Returns dicts of {seconds_offset: value} plus discovered totals."""
     cpu_pct: dict[float, float] = {}
     ram_gb: dict[float, float] = {}
     gpu_pct: dict[float, float] = {}
@@ -60,9 +62,10 @@ def _read_resource_events(log_file: Path, main_start_ts: float) -> dict[str, Any
             event = payload.get("event")
             if event not in ("cpu", "gpu"):
                 continue
-            offset = float(payload.get("ts", 0)) - main_start_ts
-            if offset < 0:
+            ts = float(payload.get("ts", 0))
+            if ts < start_ts or ts >= end_ts:
                 continue
+            offset = ts - start_ts
             if event == "cpu":
                 cpu_pct[offset] = float(payload.get("cpu_percent", 0))
                 ram_gb[offset] = float(payload.get("ram_used_gb", 0))
@@ -84,23 +87,16 @@ def _is_frame(event: dict) -> bool:
     return "stage" not in event or event.get("stage") == "bbox"
 
 
-def _percentile(sorted_values: list[float], pct: float) -> float:
-    if not sorted_values:
-        return 0.0
-    idx = min(len(sorted_values) - 1, int(pct * len(sorted_values)))
-    return sorted_values[idx]
-
-
-def _summarize(events: list[dict], target_fps: float | None) -> dict[str, Any]:
+def _summarize(events: list[dict], target_fps: float | None, duration_s: float) -> dict[str, Any]:
+    """Summarize events over a FIXED window of `duration_s` seconds. FPS
+    is computed against that fixed duration, not against max-min of the
+    observed event timestamps — so in-flight or grace-period stragglers
+    can't drag duration up and FPS down."""
     frames = [e for e in events if _is_frame(e)]
     total_frames = len(frames)
     errors = sum(1 for e in events if not e.get("success", True))
     latencies = sorted(float(e.get("latency", 0)) for e in events)
-    duration = 0.0
-    if events:
-        ts = [float(e["ts"]) for e in events]
-        duration = max(ts) - min(ts)
-    achieved_fps = total_frames / duration if duration > 0 else 0.0
+    achieved_fps = total_frames / duration_s if duration_s > 0 else 0.0
 
     if target_fps is None or target_fps <= 0:
         hit = None
@@ -111,12 +107,12 @@ def _summarize(events: list[dict], target_fps: float | None) -> dict[str, Any]:
         "total_frames": total_frames,
         "total_requests": len(events),
         "errors": errors,
-        "duration_seconds": round(duration, 2),
+        "duration_seconds": round(duration_s, 2),
         "achieved_fps": round(achieved_fps, 2),
         "target_fps": target_fps,
         "hit_target": hit,
-        "latency_p50_sec": round(_percentile(latencies, 0.5), 4),
-        "latency_p95_sec": round(_percentile(latencies, 0.95), 4),
+        "latency_p50_sec": round(_interp_percentile(latencies, 0.5), 4),
+        "latency_p95_sec": round(_interp_percentile(latencies, 0.95), 4),
     }
 
 
@@ -124,32 +120,49 @@ def write_run_artifacts(
     run_dir: Path,
     log_file: Path,
     run_meta: dict[str, Any],
+    *,
     main_start_ts: float,
+    main_end_ts: float,
 ) -> dict[str, Any]:
     """Per-(lens, camera) stats + FPS plots + 2x2 system grid. Writes
     summary.json (machine-readable) but NOT summary.md — top-level
     write_top_level produces a single consolidated doc."""
-    events = _read_request_events(log_file, start_ts=main_start_ts)
+    duration_s = main_end_ts - main_start_ts
+    events = _read_request_events(log_file, start_ts=main_start_ts, end_ts=main_end_ts)
     target_by_lens: dict[str, float] = {l["name"]: l["target_fps"] for l in run_meta["lenses"]}
     by_camera: dict[tuple[str, int], list[dict]] = defaultdict(list)
     for ev in events:
         key = (ev.get("lens_name", "_"), int(ev.get("camera", 0)))
         by_camera[key].append(ev)
 
+    # Expected (lens, camera) set from config — emit rows for missing ones too.
+    expected_cameras: list[tuple[str, int]] = []
+    for lens in run_meta["lenses"]:
+        for cam_idx in range(int(lens["cameras"])):
+            expected_cameras.append((lens["name"], cam_idx))
+
     cameras_summary: list[dict[str, Any]] = []
-    for (lens_name, camera), camera_events in sorted(by_camera.items()):
-        stats = _summarize(camera_events, target_by_lens.get(lens_name))
+    for (lens_name, camera) in expected_cameras:
+        camera_events = by_camera.get((lens_name, camera), [])
+        stats = _summarize(camera_events, target_by_lens.get(lens_name), duration_s)
         stats["lens_name"] = lens_name
         stats["camera"] = camera
+        # If no events were observed for an expected camera, that worker
+        # almost certainly crashed before its first request — flag it loudly
+        # and override Hit to False so the run-level verdict reflects it.
+        if not camera_events:
+            stats["no_events"] = True
+            if stats["target_fps"] is not None and stats["target_fps"] > 0:
+                stats["hit_target"] = False
         cameras_summary.append(stats)
 
     summary = {
         "meta": run_meta,
         "cameras": cameras_summary,
-        "aggregate": _summarize(events, target_fps=None),
+        "aggregate": _summarize(events, target_fps=None, duration_s=duration_s),
     }
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=2))
-    _plot_run(run_dir, by_camera, target_by_lens, main_start_ts, log_file)
+    _plot_run(run_dir, by_camera, target_by_lens, main_start_ts, main_end_ts, log_file)
     return summary
 
 
@@ -158,6 +171,7 @@ def _plot_run(
     by_camera: dict[tuple[str, int], list[dict]],
     target_by_lens: dict[str, float],
     main_start_ts: float,
+    main_end_ts: float,
     log_file: Path,
 ) -> None:
     plots_dir = run_dir / "plots"
@@ -165,7 +179,7 @@ def _plot_run(
     for (lens_name, camera), events in sorted(by_camera.items()):
         _plot_camera_fps(plots_dir, lens_name, camera, events,
                          target_by_lens.get(lens_name), main_start_ts)
-    _plot_system_grid(plots_dir, log_file, main_start_ts)
+    _plot_system_grid(plots_dir, log_file, main_start_ts, main_end_ts)
 
 
 def _plot_camera_fps(
@@ -205,8 +219,8 @@ def _plot_camera_fps(
     plt.close(fig)
 
 
-def _plot_system_grid(plots_dir: Path, log_file: Path, main_start_ts: float) -> None:
-    parsed = _read_resource_events(log_file, main_start_ts)
+def _plot_system_grid(plots_dir: Path, log_file: Path, main_start_ts: float, main_end_ts: float) -> None:
+    parsed = _read_resource_events(log_file, main_start_ts, main_end_ts)
     has_any = any((parsed["cpu_pct"], parsed["gpu_pct"], parsed["ram_gb"], parsed["vram_gb"]))
     if not has_any:
         return
@@ -388,11 +402,25 @@ def _render_run_section(s: dict[str, Any]) -> list[str]:
         f"- **lens_n**: `{meta.get('lens_n', {})}`",
         f"- **duration**: `{meta.get('duration_seconds')}s`  "
         f"**warmup**: `{meta.get('warmup_seconds')}s`",
-        "",
-        "| Lens | Camera | Frames | Errors | FPS | Target | Hit | p50 (s) | p95 (s) |",
-        "|---|---:|---:|---:|---:|---:|:---:|---:|---:|",
     ]
+    failures = meta.get("worker_failures") or []
+    if failures:
+        lines.append("")
+        lines.append(
+            f"> ⚠ **{len(failures)} worker process(es) exited with non-zero status**: "
+            + ", ".join(f"`{f['name']}` (exit={f['exitcode']})" for f in failures)
+        )
+    lines.append("")
+    lines.append("| Lens | Camera | Frames | Errors | FPS | Target | Hit | p50 (s) | p95 (s) |")
+    lines.append("|---|---:|---:|---:|---:|---:|:---:|---:|---:|")
     for cam in s.get("cameras", []):
+        if cam.get("no_events"):
+            lines.append(
+                f"| {cam['lens_name']} | {cam['camera']} | 0 | ? | 0.0 | "
+                f"{_target_label(cam['target_fps'])} | {_hit_label(cam['hit_target'])} | "
+                f"— | — |  ⚠ no events captured (worker likely crashed)"
+            )
+            continue
         lines.append(
             f"| {cam['lens_name']} | {cam['camera']} | {cam['total_frames']} | "
             f"{cam['errors']} | {cam['achieved_fps']:.1f} | "
@@ -431,6 +459,7 @@ def _write_combined_plots(
     for s in summaries:
         meta = s["meta"]
         run_t0 = meta["main_start_ts"]
+        run_end = meta["main_end_ts"]
         run_dir = out_root / f"run_{int(meta['run_index']):02d}"
         log_file = run_dir / "load_test.log"
         if not log_file.exists():
@@ -442,7 +471,7 @@ def _write_combined_plots(
                     continue
                 payload = json.loads(line)
                 ts = float(payload.get("ts", 0))
-                if ts < run_t0:
+                if ts < run_t0 or ts >= run_end:
                     continue
                 offset = ts - benchmark_t0
                 event = payload.get("event")

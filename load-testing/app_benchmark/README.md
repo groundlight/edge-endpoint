@@ -32,9 +32,20 @@ across runs. With three lenses where two have `n=[2,4,6,8]` and `n=[1,3,5,7]`,
 the harness produces 4 runs: `(n_a=2, n_b=1)`, `(n_a=4, n_b=3)`, etc.
 
 Within each run, every lens runs its full `cameras` count in parallel as
-independent OS processes. The bbox `n` for that run sets the detector's
-`max_num_bboxes` (so the inference cost varies) and, for `bbox_to_binary`,
-also controls how many downstream binary calls are issued per frame.
+independent OS processes.
+
+**Detector lifecycle is one-shot, not per-run.** Each n-bearing lens
+provisions a single bbox detector with `max_num_bboxes = max(lens.n)`
+(the upper bound across the sweep) and trains it once before any run
+starts. The per-run `n` value only controls:
+
+- the synthetic image's object-count bound (`generate_random_objects_image(max_count=n)`), and
+- for `bbox_to_binary` lenses, the number of downstream binary calls issued per frame.
+
+The inference cost of the bbox model itself is essentially independent
+of `max_num_bboxes` — the model processes the whole image regardless;
+only NMS post-processing depends on detected count, which is negligible
+relative to the convolutional cost.
 
 ## Hard dependencies
 

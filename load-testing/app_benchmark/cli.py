@@ -112,7 +112,8 @@ def _emit_ramp_marker(log_file: Path, total_clients: int) -> None:
         f.write(f"RAMP {total_clients} ts={time.time()}\n")
 
 
-def _join_with_grace(procs: list[mp.Process], timeout_s: float) -> None:
+def _join_with_grace(procs: list[mp.Process], timeout_s: float) -> list[dict]:
+    """Join all worker processes; collect non-zero exitcodes as failures."""
     deadline = time.time() + timeout_s
     for p in procs:
         remaining = max(0.0, deadline - time.time())
@@ -122,6 +123,13 @@ def _join_with_grace(procs: list[mp.Process], timeout_s: float) -> None:
             logger.warning("worker %s still alive after timeout; terminating", p.name)
             p.terminate()
             p.join(5)
+    failures: list[dict] = []
+    for p in procs:
+        code = p.exitcode
+        if code is None or code != 0:
+            logger.error("worker %s exited with code %s", p.name, code)
+            failures.append({"name": p.name, "exitcode": code})
+    return failures
 
 
 def _run_one(
@@ -157,10 +165,12 @@ def _run_one(
         if warmup > 0:
             time.sleep(warmup)
         main_start_ts = time.time()
+        # Intended measurement window — fixed by config, not by wall-clock.
+        # Any in-flight or grace-period activity past main_end_ts is excluded.
+        main_end_ts = main_start_ts + duration
         _emit_ramp_marker(log_file, total_cameras)
         time.sleep(duration)
-        _join_with_grace(procs, timeout_s=30.0)
-        main_end_ts = time.time()
+        worker_failures = _join_with_grace(procs, timeout_s=30.0)
     finally:
         monitor.stop()
 
@@ -183,8 +193,12 @@ def _run_one(
         "warmup_seconds": cfg.globals_.warmup_seconds,
         "main_start_ts": main_start_ts,
         "main_end_ts": main_end_ts,
+        "worker_failures": worker_failures,
     }
-    return report.write_run_artifacts(run_dir, log_file, run_meta, main_start_ts)
+    return report.write_run_artifacts(
+        run_dir, log_file, run_meta,
+        main_start_ts=main_start_ts, main_end_ts=main_end_ts,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

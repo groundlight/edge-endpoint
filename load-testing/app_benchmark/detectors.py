@@ -49,17 +49,17 @@ class ResolvedRun:
     stage_detectors: list[StageDetector]
 
 
-def _name_prefix(run_name: str, lens_name: str, suffix: str = "") -> str:
+def _name_prefix(detector_name_prefix: str, run_name: str, lens_name: str, suffix: str = "") -> str:
     """Cloud detector name prefix; ≤28 chars to leave room for the
     image/mode/n suffix that provision_detector appends internally."""
     run_hash = hashlib.sha256(run_name.encode()).hexdigest()[:6]
-    candidate = f"bench_{run_hash}_{lens_name}"
+    candidate = f"{detector_name_prefix}_{run_hash}_{lens_name}"
     if suffix:
         candidate += f"_{suffix}"
     if len(candidate) <= _MAX_PREFIX_LEN:
         return candidate
     lens_hash = hashlib.sha256(f"{lens_name}_{suffix}".encode()).hexdigest()[:8]
-    return f"bench_{run_hash}_{lens_hash}"
+    return f"{detector_name_prefix}_{run_hash}_{lens_hash}"
 
 
 class DetectorManager:
@@ -96,6 +96,7 @@ class DetectorManager:
         """Cloud-create / train (if needed) every detector the benchmark uses,
         ONCE. For n-bearing lenses, uses max(lens.n) for max_num_bboxes."""
         run_name = self.cfg.run.name
+        name_prefix = self.cfg.run.detector_name_prefix
         stage_detectors: list[StageDetector] = []
 
         for lens in self.cfg.lenses:
@@ -103,7 +104,7 @@ class DetectorManager:
             max_n = max(lens.n) if hasattr(lens, "n") else None
             if isinstance(lens, SingleBinaryLens):
                 det = self._provision(
-                    prefix=_name_prefix(run_name, lens.name),
+                    prefix=_name_prefix(name_prefix, run_name, lens.name),
                     mode="BINARY", image_size=image_size,
                     pipeline=lens.pipeline, n=None,
                 )
@@ -111,7 +112,7 @@ class DetectorManager:
             elif isinstance(lens, SingleBboxLens):
                 assert max_n is not None
                 det = self._provision(
-                    prefix=_name_prefix(run_name, lens.name),
+                    prefix=_name_prefix(name_prefix, run_name, lens.name),
                     mode="BOUNDING_BOX", image_size=image_size,
                     pipeline=lens.pipeline, n=max_n,
                 )
@@ -119,12 +120,12 @@ class DetectorManager:
             elif isinstance(lens, BboxToBinaryLens):
                 assert max_n is not None
                 bbox_det = self._provision(
-                    prefix=_name_prefix(run_name, lens.name, "bbox"),
+                    prefix=_name_prefix(name_prefix, run_name, lens.name, "bbox"),
                     mode="BOUNDING_BOX", image_size=image_size,
                     pipeline=lens.bbox_pipeline, n=max_n,
                 )
                 bin_det = self._provision(
-                    prefix=_name_prefix(run_name, lens.name, "binary"),
+                    prefix=_name_prefix(name_prefix, run_name, lens.name, "binary"),
                     mode="BINARY", image_size=image_size,
                     pipeline=lens.binary_pipeline, n=None,
                 )
