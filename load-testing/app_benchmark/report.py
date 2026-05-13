@@ -562,10 +562,12 @@ def _annotate_boundaries(
             label = f"Run {run_idx} (n={lens_n[lens_name]})"
         else:
             label = f"Run {run_idx}"
-        # xy=(offset, 0) in (data, axes) coords; xytext nudges below the axis.
+        # xy=(offset, 0) in (data, axes) coords; xytext nudges well below the
+        # x-axis label so the rotated text doesn't collide with "seconds since
+        # benchmark start". Pair with subplots_adjust(bottom=...) at the caller.
         ax.annotate(
             label, xy=(offset, 0), xycoords=("data", "axes fraction"),
-            xytext=(2, -16), textcoords="offset points",
+            xytext=(2, -38), textcoords="offset points",
             fontsize=8, color="dimgray",
             rotation=30, ha="right", va="top", rotation_mode="anchor",
             annotation_clip=False,
@@ -597,8 +599,10 @@ def _plot_combined_system(
         ax.grid(True, alpha=0.3)
     fig.suptitle("System utilization (all runs)", fontsize=14)
     fig.tight_layout()
-    # Leave room for the rotated run-boundary labels below the bottom row.
-    fig.subplots_adjust(bottom=0.15)
+    # Reserve space below the bottom-row xlabels for the rotated
+    # "Run i" labels — without this they collide with "seconds since
+    # benchmark start".
+    fig.subplots_adjust(bottom=0.18)
     fig.savefig(path, dpi=120)
     plt.close(fig)
     return True
@@ -645,7 +649,8 @@ def _plot_combined_camera_fps(
     _annotate_boundaries(ax, boundaries, lens_name=lens_name)
     ax.legend(handles=handles, loc="lower right")
     fig.tight_layout()
-    fig.subplots_adjust(bottom=0.20)
+    # Reserve space below the xlabel for the rotated "Run i (n=X)" labels.
+    fig.subplots_adjust(bottom=0.28)
     fig.savefig(path, dpi=120)
     plt.close(fig)
     return True
