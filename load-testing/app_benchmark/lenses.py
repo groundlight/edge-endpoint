@@ -4,10 +4,12 @@ Three lens types — each entry point is a multiprocessing.Process target.
 Every HTTP inference is logged as one JSONL "request" event in the schema
 parse_load_test_logs consumes (matches multiple_client_throughput_test.py).
 
-Image strategy (favoring throughput, not realism):
-- Each lens pre-encodes a small pool of JPEGs at startup and cycles per frame.
-- The downstream binary stage in bbox_to_binary reuses ONE tiny pre-encoded
-  JPEG submitted N times per frame — bypasses crop/resize/re-encode entirely.
+Image strategy: generate a fresh ndarray per frame from the helpers in
+load-testing/image_helpers.py and pass it straight to the Groundlight SDK
+(`ask_ml` accepts np.ndarray and handles JPEG encoding internally). For the
+chained `bbox_to_binary` lens, the small downstream binary image is built
+once at lens startup and re-submitted N times per frame — the SDK
+re-encodes per call, which at 224x224 is negligible.
 """
 
 import json
@@ -16,41 +18,17 @@ import sys
 import time
 from datetime import datetime
 
-import cv2
 import image_helpers as imgh
-import numpy as np
 from groundlight import ExperimentalApi
 from groundlight_helpers import error_if_not_from_edge
 
-_JPEG_QUALITY = 90
 _BINARY_DOWNSTREAM_SIZE = (224, 224)
-_POOL_SIZE = 8
-
-
-def _encode_jpeg(canvas: np.ndarray) -> bytes:
-    ok, buf = cv2.imencode(".jpg", canvas, [int(cv2.IMWRITE_JPEG_QUALITY), _JPEG_QUALITY])
-    if not ok:
-        raise RuntimeError("JPEG encoding failed")
-    return buf.tobytes()
-
-
-def _build_binary_pool(image_size: tuple[int, int]) -> list[bytes]:
-    w, h = image_size
-    return [_encode_jpeg(imgh.generate_random_binary_image(w, h)[0]) for _ in range(_POOL_SIZE)]
-
-
-def _build_objects_pool(image_size: tuple[int, int], max_count: int) -> list[bytes]:
-    w, h = image_size
-    return [
-        _encode_jpeg(imgh.generate_random_objects_image(w, h, max_count=max_count)[0])
-        for _ in range(_POOL_SIZE)
-    ]
 
 
 def _submit_and_log(
     gl: ExperimentalApi,
     detector_id: str,
-    image_bytes: bytes,
+    image,  # np.ndarray; SDK does the JPEG encode
     *,
     log_file: str,
     lens_name: str,
@@ -62,7 +40,7 @@ def _submit_and_log(
     """One submit + one JSONL line. Catches all exceptions; logs success/error."""
     request_start = time.time()
     try:
-        iq = gl.ask_ml(detector_id, image_bytes)
+        iq = gl.ask_ml(detector_id, image)
         error_if_not_from_edge(iq)
         success = True
         error: str | None = None
@@ -91,9 +69,8 @@ def _submit_and_log(
 
 def _silence_stderr() -> None:
     """SDK retry warnings are noisy at high RPS — mute stderr right before the
-    per-frame submit loop. Call this *after* SDK init + JPEG pool build so any
-    startup failure (bad URL, missing token, image generator error) surfaces
-    its traceback to the parent's stderr instead of vanishing into /dev/null."""
+    per-frame submit loop. Call this *after* SDK init so any startup failure
+    (bad URL, missing token, etc.) surfaces its traceback to the parent."""
     sys.stderr = open(os.devnull, "w")  # noqa: SIM115
 
 
@@ -118,21 +95,20 @@ def run_single_binary(  # noqa: PLR0913
     log_file: str,
 ) -> None:
     gl = ExperimentalApi(endpoint=edge_url)
-    pool = _build_binary_pool(image_size)
+    w, h = image_size
     _silence_stderr()
     period = 1.0 / target_fps if target_fps > 0 else 0.0
     deadline = time.time() + duration_seconds
     request_number = 1
-    pool_idx = 0
     while time.time() < deadline:
         frame_start = time.time()
+        image, _, _ = imgh.generate_random_binary_image(w, h)
         _submit_and_log(
-            gl, detector_id, pool[pool_idx],
+            gl, detector_id, image,
             log_file=log_file, lens_name=lens_name, camera=camera,
             worker_number=worker_number, request_number=request_number,
         )
         request_number += 1
-        pool_idx = (pool_idx + 1) % _POOL_SIZE
         _pace(period, frame_start)
 
 
@@ -150,21 +126,20 @@ def run_single_bbox(  # noqa: PLR0913
     log_file: str,
 ) -> None:
     gl = ExperimentalApi(endpoint=edge_url)
-    pool = _build_objects_pool(image_size, n)
+    w, h = image_size
     _silence_stderr()
     period = 1.0 / target_fps if target_fps > 0 else 0.0
     deadline = time.time() + duration_seconds
     request_number = 1
-    pool_idx = 0
     while time.time() < deadline:
         frame_start = time.time()
+        image, _, _ = imgh.generate_random_objects_image(w, h, max_count=n)
         _submit_and_log(
-            gl, detector_id, pool[pool_idx],
+            gl, detector_id, image,
             log_file=log_file, lens_name=lens_name, camera=camera,
             worker_number=worker_number, request_number=request_number,
         )
         request_number += 1
-        pool_idx = (pool_idx + 1) % _POOL_SIZE
         _pace(period, frame_start)
 
 
@@ -183,26 +158,27 @@ def run_bbox_to_binary(  # noqa: PLR0913
     log_file: str,
 ) -> None:
     gl = ExperimentalApi(endpoint=edge_url)
-    bbox_pool = _build_objects_pool(image_size, n)
+    w, h = image_size
     bw, bh = _BINARY_DOWNSTREAM_SIZE
-    binary_blob = _encode_jpeg(imgh.generate_random_binary_image(bw, bh)[0])
+    # One small binary image, reused for every downstream call. The SDK
+    # encodes each request, but 224x224 encoding is cheap (~ms).
+    binary_image, _, _ = imgh.generate_random_binary_image(bw, bh)
     _silence_stderr()
     period = 1.0 / target_fps if target_fps > 0 else 0.0
     deadline = time.time() + duration_seconds
     request_number = 1
-    pool_idx = 0
     while time.time() < deadline:
         frame_start = time.time()
+        bbox_image, _, _ = imgh.generate_random_objects_image(w, h, max_count=n)
         _submit_and_log(
-            gl, bbox_detector_id, bbox_pool[pool_idx],
+            gl, bbox_detector_id, bbox_image,
             log_file=log_file, lens_name=lens_name, camera=camera,
             worker_number=worker_number, request_number=request_number, stage="bbox",
         )
         request_number += 1
-        pool_idx = (pool_idx + 1) % _POOL_SIZE
         for _ in range(n):
             _submit_and_log(
-                gl, binary_detector_id, binary_blob,
+                gl, binary_detector_id, binary_image,
                 log_file=log_file, lens_name=lens_name, camera=camera,
                 worker_number=worker_number, request_number=request_number, stage="binary",
             )
