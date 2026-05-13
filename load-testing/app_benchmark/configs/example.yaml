@@ -1,5 +1,5 @@
 run:
-  name: "axon-bench"
+  name: "sample-bench"
   output_dir: "./benchmark-results/{name}-{ts}/"
   edge_endpoint_url: "http://localhost:30101"
   detector_name_prefix: "bench"
