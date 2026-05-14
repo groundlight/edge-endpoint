@@ -6,8 +6,13 @@ app = marimo.App(width="medium", app_title="Edge Endpoint Profiling Dashboard")
 
 @app.function
 def span_sort_key(name: str) -> tuple[int, str]:
-    """Sort key that puts the 'request' root span first, then alphabetical."""
-    return (0 if name == "request" else 1, name)
+    """Sort key that puts the 'request' root span first, then 'edge_endpoint_self'
+    (derived metric), then alphabetical."""
+    if name == "request":
+        return (0, "")
+    if name == "edge_endpoint_self":
+        return (1, "")
+    return (2, name)
 
 
 @app.function
@@ -54,6 +59,7 @@ def _():
     # Deterministic color per span name; unknown spans fall back to FALLBACK_COLOR.
     SPAN_COLORS = {
         "request": "#636EFA",
+        "edge_endpoint_self": "#7F4FBF",
         "validate_image_bytes": "#1F77B4",
         "validate_query_params_for_edge": "#17BECF",
         "active": "#E377C2",
@@ -115,8 +121,10 @@ def _():
     import plotly.graph_objects as go
 
     from app.profiling.data_loader import (
+        compute_edge_self_stats,
         compute_span_stats,
         compute_time_series,
+        edge_self_durations,
         get_detector_ids,
         get_trace_detail,
         load_traces,
@@ -126,8 +134,10 @@ def _():
 
     return (
         PROFILING_DIR,
+        compute_edge_self_stats,
         compute_span_stats,
         compute_time_series,
+        edge_self_durations,
         get_detector_ids,
         get_trace_detail,
         go,
@@ -431,8 +441,14 @@ def _(go, mo, traces):
 
 
 @app.cell
-def _(compute_span_stats, mo, traces):
+def _(compute_edge_self_stats, compute_span_stats, mo, traces):
     stats = compute_span_stats(traces)
+    # Synthetic row: total request time minus the union of inference-call
+    # intervals — i.e., wall time inside the edge-endpoint pod NOT spent
+    # waiting on the inference pods. Slotted in beside real spans.
+    _edge_self = compute_edge_self_stats(traces)
+    if _edge_self is not None:
+        stats["edge_endpoint_self"] = _edge_self
 
     _table_data = []
     for _name in sorted(stats.keys(), key=span_sort_key):
@@ -465,7 +481,7 @@ def _(compute_span_stats, mo, traces):
 
 
 @app.cell
-def _(go, mo, traces):
+def _(edge_self_durations, go, mo, traces):
     durations_by_span: dict[str, list[float]] = {}
     for _t in traces:
         for _s in _t.get("spans", []):
@@ -473,6 +489,12 @@ def _(go, mo, traces):
             _name = _s.get("name")
             if _name and _dur is not None and _dur >= 0:
                 durations_by_span.setdefault(_name, []).append(_dur)
+
+    # Inject the derived edge-endpoint self-time as a pseudo-span so it shows
+    # up in the box plot and histogram dropdown alongside real spans.
+    _edge_vals = edge_self_durations(traces)
+    if _edge_vals:
+        durations_by_span["edge_endpoint_self"] = _edge_vals
 
     _ordered_names = sorted(
         durations_by_span.keys(),

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.profiling.data_loader import (
+    compute_edge_self_ms,
     compute_span_stats,
     compute_time_series,
     get_detector_ids,
@@ -12,6 +13,27 @@ from app.profiling.data_loader import (
     load_traces,
     merge_traces_by_id,
 )
+
+
+def _span(
+    name,
+    start_ns,
+    end_ns,
+    span_id="s",
+    parent_span_id=None,
+    trace_id="t1",
+):
+    """Build a span dict with duration_ms derived from start/end."""
+    return {
+        "name": name,
+        "trace_id": trace_id,
+        "span_id": span_id,
+        "parent_span_id": parent_span_id,
+        "start_time_ns": start_ns,
+        "end_time_ns": end_ns,
+        "duration_ms": (end_ns - start_ns) / 1_000_000,
+        "annotations": {},
+    }
 
 
 def _make_trace_dict(
@@ -347,6 +369,87 @@ class TestComputeSpanStats:
         assert stats["request"]["p99"] == 100.0
 
 
+class TestComputeEdgeSelfMs:
+    def test_no_inference_spans_returns_full_request_duration(self):
+        trace = _make_trace_dict(
+            spans=[_span("request", 0, 100_000_000, span_id="r")],
+        )
+        assert compute_edge_self_ms(trace) == 100.0
+
+    def test_single_inference_call_subtracted(self):
+        trace = _make_trace_dict(
+            spans=[
+                _span("request", 0, 100_000_000, span_id="r"),
+                _span("_submit_primary_inference", 20_000_000, 90_000_000, span_id="p", parent_span_id="r"),
+            ],
+        )
+        # request=100ms, primary=70ms -> self=30ms
+        assert compute_edge_self_ms(trace) == pytest.approx(30.0)
+
+    def test_overlapping_primary_and_oodd_uses_union(self):
+        """Primary and OODD run in parallel via ThreadPoolExecutor — only the
+        union of their intervals counts as 'time waiting on inference pods'."""
+        trace = _make_trace_dict(
+            spans=[
+                _span("request", 0, 100_000_000, span_id="r"),
+                # Primary: 10ms..80ms (70ms)
+                _span("_submit_primary_inference", 10_000_000, 80_000_000, span_id="p", parent_span_id="r"),
+                # OODD:    30ms..90ms (60ms), overlaps primary
+                _span("_submit_oodd_inference", 30_000_000, 90_000_000, span_id="o", parent_span_id="r"),
+            ],
+        )
+        # Union = 10ms..90ms = 80ms. Sum would be 130ms (wrong). self = 100 - 80 = 20ms.
+        assert compute_edge_self_ms(trace) == pytest.approx(20.0)
+
+    def test_non_overlapping_inference_intervals_sum(self):
+        trace = _make_trace_dict(
+            spans=[
+                _span("request", 0, 100_000_000, span_id="r"),
+                _span("_submit_primary_inference", 10_000_000, 30_000_000, span_id="p", parent_span_id="r"),
+                _span("_submit_oodd_inference", 50_000_000, 80_000_000, span_id="o", parent_span_id="r"),
+            ],
+        )
+        # 20ms + 30ms = 50ms inference, self = 50ms
+        assert compute_edge_self_ms(trace) == pytest.approx(50.0)
+
+    def test_no_request_span_returns_none(self):
+        """A trace record contributed only by the inference side has no root request span."""
+        trace = _make_trace_dict(
+            spans=[
+                _span("_submit_primary_inference", 10_000_000, 80_000_000, span_id="p"),
+            ],
+        )
+        assert compute_edge_self_ms(trace) is None
+
+    def test_inference_longer_than_request_clamps_to_zero(self):
+        """Pathological clock-skew / partial-record case — never return negative."""
+        trace = _make_trace_dict(
+            spans=[
+                _span("request", 0, 10_000_000, span_id="r"),
+                _span("_submit_primary_inference", 0, 50_000_000, span_id="p", parent_span_id="r"),
+            ],
+        )
+        assert compute_edge_self_ms(trace) == 0.0
+
+    def test_ignores_non_root_request_span(self):
+        """A 'request' span with a parent (e.g. inference-side root) must not be picked up."""
+        trace = _make_trace_dict(
+            spans=[
+                _span("request", 0, 100_000_000, span_id="edge_root"),
+                _span("request", 25_000_000, 75_000_000, span_id="inf_root", parent_span_id="edge_root"),
+                _span(
+                    "_submit_primary_inference",
+                    20_000_000,
+                    80_000_000,
+                    span_id="p",
+                    parent_span_id="edge_root",
+                ),
+            ],
+        )
+        # Root request = 100ms, inference = 60ms, self = 40ms
+        assert compute_edge_self_ms(trace) == pytest.approx(40.0)
+
+
 class TestComputeTimeSeries:
     def test_buckets_traces(self):
         base = datetime(2026, 4, 1, 12, 0, 0, tzinfo=timezone.utc)
@@ -675,8 +778,13 @@ class TestDashboardSmoke:
         pytest.importorskip("marimo")
         from app.profiling.dashboard import span_sort_key
 
-        names = ["get_inference_result", "request", "primary_inference"]
-        assert sorted(names, key=span_sort_key) == ["request", "get_inference_result", "primary_inference"]
+        names = ["get_inference_result", "request", "primary_inference", "edge_endpoint_self"]
+        assert sorted(names, key=span_sort_key) == [
+            "request",
+            "edge_endpoint_self",
+            "get_inference_result",
+            "primary_inference",
+        ]
 
     def test_build_waterfall_renders(self):
         """Exercise the waterfall helper end-to-end with synthetic data.
