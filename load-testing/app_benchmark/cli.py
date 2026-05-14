@@ -4,6 +4,7 @@ push edge config + spawn workers + monitor + summarize → cleanup.
 
 import argparse
 import atexit
+import json
 import logging
 import multiprocessing as mp
 import os
@@ -47,7 +48,7 @@ def _lens_n_for_run(cfg: BenchmarkConfig, run_index: int) -> dict[str, int]:
     return out
 
 
-def _worker_for(
+def _build_worker_args(
     lens,
     sds: list[StageDetector],
     n: int | None,
@@ -135,7 +136,7 @@ def _spawn_lens_workers(
     for lens in cfg.lenses:
         sds = by_lens[lens.name]
         for cam_idx in range(lens.cameras):
-            target, kwargs = _worker_for(
+            target, kwargs = _build_worker_args(
                 lens, sds, run.lens_n.get(lens.name), cfg, edge_url,
                 log_file, duration_seconds, worker_number, cam_idx,
             )
@@ -146,12 +147,19 @@ def _spawn_lens_workers(
     return procs
 
 
-def _emit_ramp_marker(log_file: Path, total_clients: int) -> None:
-    """Write one fake `RAMP <N> ts=<epoch>` line to the log so the
-    parse_load_test_logs parser can locate the post-warmup start; we
-    write it exactly when main_start_ts is captured."""
+def _emit_main_start_marker(log_file: Path, total_cameras: int, run_index: int) -> None:
+    """Append a single JSONL `main_start` event when the measurement
+    window opens — handy when scanning the log directly to see where
+    the post-warmup phase began. The report bounds the window using
+    main_start_ts captured in Python, not this marker."""
+    record = {
+        "ts": time.time(),
+        "event": "main_start",
+        "run_index": run_index,
+        "total_cameras": total_cameras,
+    }
     with log_file.open("a", encoding="utf-8") as f:
-        f.write(f"RAMP {total_clients} ts={time.time()}\n")
+        f.write(json.dumps(record) + "\n")
 
 
 def _join_with_grace(procs: list[mp.Process], timeout_s: float) -> list[dict]:
@@ -240,7 +248,7 @@ def _run_one(
         # Intended measurement window — fixed by config, not by wall-clock.
         # Any in-flight or grace-period activity past main_end_ts is excluded.
         main_end_ts = main_start_ts + duration
-        _emit_ramp_marker(log_file, total_cameras)
+        _emit_main_start_marker(log_file, total_cameras, run.run_index)
         time.sleep(duration)
         worker_failures = _join_with_grace(procs, timeout_s=30.0)
     finally:

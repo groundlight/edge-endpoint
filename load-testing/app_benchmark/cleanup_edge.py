@@ -1,10 +1,17 @@
-"""Standalone CLI to inspect / wipe the edge-endpoint's loaded detector config.
+"""Standalone CLI to inspect or wipe the edge-endpoint's loaded detector config.
 
-Companion to cleanup_orphans.py (cloud-side). Useful when a previous run leaked
-detectors on the edge (SIGKILL, OOM, etc.).
+Useful when a previous run leaked detectors on the edge (SIGKILL, OOM, etc.).
+Without flags, lists what's currently configured. With `--wipe`, pushes an
+empty config (asks for confirmation unless `--force` is passed).
 
-    python -m app_benchmark.cleanup_edge --edge-endpoint http://EDGE:30101 --list
+    # list (default)
+    python -m app_benchmark.cleanup_edge --edge-endpoint http://EDGE:30101
+
+    # wipe with confirmation
     python -m app_benchmark.cleanup_edge --edge-endpoint http://EDGE:30101 --wipe
+
+    # wipe without confirmation (scripted use)
+    python -m app_benchmark.cleanup_edge --edge-endpoint http://EDGE:30101 --wipe --force
 """
 
 import argparse
@@ -28,18 +35,17 @@ def main(argv: list[str] | None = None) -> int:
 
     Returns:
         Exit code: 0 success, 1 wipe failed or user aborted at confirm,
-        2 could not reach edge / bad usage.
+        2 could not reach edge.
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--edge-endpoint", required=True, help="Edge endpoint URL.")
-    parser.add_argument("--list", action="store_true", help="Print currently-loaded detectors and exit.")
-    parser.add_argument("--wipe", action="store_true", help="Push an empty EdgeEndpointConfig.")
-    parser.add_argument("--confirm", action="store_true", help="With --wipe, require interactive confirmation.")
+    parser.add_argument("--wipe", action="store_true",
+                        help="Push an empty EdgeEndpointConfig (asks for confirmation).")
+    parser.add_argument("--force", action="store_true",
+                        help="With --wipe, skip the interactive confirmation prompt.")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    if not args.list and not args.wipe:
-        parser.error("must pass at least one of --list, --wipe")
 
     gl = ExperimentalApi(endpoint=args.edge_endpoint)
     try:
@@ -54,13 +60,15 @@ def main(argv: list[str] | None = None) -> int:
     for det_id in det_ids:
         logger.info("  - %s", det_id)
 
-    if args.list and not args.wipe:
+    if not args.wipe:
         return 0
     if not det_ids:
         logger.info("Nothing to wipe.")
         return 0
-    if args.confirm:
-        ans = input(f"Wipe {len(det_ids)} detector(s) from {args.edge_endpoint}? [y/N] ").strip().lower()
+    if not args.force:
+        ans = input(
+            f"Wipe {len(det_ids)} detector(s) from {args.edge_endpoint}? [y/N] "
+        ).strip().lower()
         if ans != "y":
             logger.info("aborted")
             return 1

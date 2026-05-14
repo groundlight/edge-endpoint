@@ -25,25 +25,51 @@ class RunConfig(BaseModel):
         name: Benchmark identifier; appears in output_dir, detector names,
             and summary.md. Restricted to [a-zA-Z0-9_-], max 64 chars.
         output_dir: Where artifacts get written. `{name}` and `{ts}` are
-            substituted at runtime.
+            substituted at runtime. Default puts everything under
+            `./benchmark_results/{name}-{ts}/` so the root .gitignore
+            (which ignores `load-testing/benchmark_results/`) covers it.
         edge_endpoint_url: HTTP(S) URL of the edge endpoint under test.
         cloud_endpoint: Groundlight cloud URL used for detector CRUD.
-        detector_name_prefix: Short prefix (≤16 chars, lowercase) that all
-            created detectors carry. Used by the cloud dashboard / cleanup
-            flows to identify benchmark detectors.
+        detector_name_prefix: Optional short prefix (≤16 chars, lowercase,
+            must start with a letter) that all created detectors carry.
+            When None, derived automatically from `name` (lowercased,
+            dashes → underscores, truncated to 16 chars). Used by the
+            cloud dashboard / cleanup flows to identify benchmark
+            detectors.
         refuse_if_host_not_clean: If True, refuse to start when the edge
-            already has detectors configured. Set False to run with
-            contaminated state (results will skew).
+            already has detectors configured. Default False — we log a
+            warning and proceed, since `edge.set_config` merges cleanly
+            and restores the pre-run state at cleanup. Set True for CI
+            or any context where contamination is unacceptable.
         set_config_timeout_seconds: How long to wait for `edge.set_config`
             to finish (cold edges with many models need more).
     """
     name: str = Field(pattern=r"^[a-zA-Z0-9_-]+$", max_length=64)
-    output_dir: str = "./benchmark-results/{name}-{ts}/"
+    output_dir: str = "./benchmark_results/{name}-{ts}/"
     edge_endpoint_url: str
     cloud_endpoint: str = "https://api.groundlight.ai/"
-    detector_name_prefix: str = Field(default="bench", pattern=r"^[a-z][a-z0-9_]{1,15}$")
-    refuse_if_host_not_clean: bool = True
+    detector_name_prefix: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{1,15}$")
+    refuse_if_host_not_clean: bool = False
     set_config_timeout_seconds: int = Field(default=900, ge=30)
+
+    @model_validator(mode="after")
+    def _derive_prefix(self) -> "RunConfig":
+        if self.detector_name_prefix is None:
+            # Slug the name into the prefix shape: lowercase, dashes→underscores,
+            # strip anything outside [a-z0-9_], truncate to 16 chars, ensure
+            # it starts with a letter (fall back to "bench" if not).
+            slug = "".join(
+                c for c in self.name.lower().replace("-", "_")
+                if c.isalnum() or c == "_"
+            )[:16]
+            if not slug or not slug[0].isalpha():
+                slug = "bench"
+            # Replicate the validator that's enforced when the user sets it
+            # explicitly — must be ≥2 chars to satisfy the {1,15} length tail.
+            if len(slug) < 2:
+                slug = (slug + "bench")[:16]
+            self.detector_name_prefix = slug
+        return self
 
 
 def _check_image_size(size: tuple[int, int]) -> None:

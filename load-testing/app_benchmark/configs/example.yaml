@@ -1,15 +1,17 @@
 run:
   name: "sample-bench"
-  output_dir: "./benchmark-results/{name}-{ts}/"
   edge_endpoint_url: "http://localhost:30101"
-  detector_name_prefix: "bench"
-  refuse_if_host_not_clean: true
+  # `output_dir` defaults to "./benchmark_results/{name}-{ts}/".
+  # `detector_name_prefix` defaults to a slug of `name` (lowercased,
+  # dashes → underscores, ≤16 chars). Both can be set here if needed.
+  # `refuse_if_host_not_clean` defaults to false (warn-and-proceed). Set
+  # true if you want a hard refusal when other detectors are loaded.
 
 global:
   image_size: [1920, 1080]
-  target_fps: 5         # 0 = saturate (no pacing)
-  duration_seconds: 180
-  warmup_seconds: 20
+  target_fps: 5           # per-frame iteration rate; 0 = saturate (no pacing)
+  duration_seconds: 180   # the measurement window after warmup; FPS / latency / errors are computed over this
+  warmup_seconds: 20      # workers run for this long BEFORE the window opens, letting caches warm + pods reach steady state
 
 # Lenses run CONCURRENTLY inside each run. Lenses that declare an `n` list
 # sweep across runs — every `n` list must share the same length and is

@@ -12,6 +12,7 @@ import groundlight_helpers as glh
 
 
 _ERROR_LOG_INTERVAL_SEC = 30.0
+_BYTES_PER_GB = 1_000_000_000  # decimal GB to match what nvidia-smi / cgroups report
 
 
 class SystemMonitor:
@@ -93,10 +94,10 @@ class SystemMonitor:
             vram_used = vram.get("used", 0)
             vram_percent = (vram_used / vram_total * 100) if vram_total else 0.0
 
-            ram_used_gb = ram_used / 1e9
-            ram_total_gb = ram_total / 1e9
-            vram_used_gb = vram_used / 1e9
-            vram_total_gb = vram_total / 1e9
+            ram_used_gb = ram_used / _BYTES_PER_GB
+            ram_total_gb = ram_total / _BYTES_PER_GB
+            vram_used_gb = vram_used / _BYTES_PER_GB
+            vram_total_gb = vram_total / _BYTES_PER_GB
             SystemMonitor._append_log(
                 log_file,
                 {
