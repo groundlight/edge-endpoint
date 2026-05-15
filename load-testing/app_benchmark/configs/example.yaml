@@ -1,11 +1,9 @@
 run:
   name: "sample-bench"
   edge_endpoint_url: "http://localhost:30101"
-  # `output_dir` defaults to "./benchmark_results/{name}-{ts}/".
-  # `detector_name_prefix` defaults to a slug of `name` (lowercased,
-  # dashes → underscores, ≤16 chars). Both can be set here if needed.
-  # `refuse_if_host_not_clean` defaults to false (warn-and-proceed). Set
-  # true if you want a hard refusal when other detectors are loaded.
+  output_dir: "./benchmark_results/{name}-{ts}/"   # default shown; {name} and {ts} are substituted at runtime
+  detector_name_prefix: "sample_bench"             # optional; defaults to a slug of `name` (lowercased, dashes → underscores, ≤16 chars)
+  refuse_if_host_not_clean: false                  # default; set true to hard-fail when the edge already has detectors loaded
 
 global:
   image_size: [1920, 1080]
