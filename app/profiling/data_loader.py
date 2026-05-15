@@ -167,13 +167,65 @@ def get_detector_ids(traces: list[dict]) -> list[str]:
 
 
 def get_trace_detail(traces: list[dict], trace_id: str) -> dict | None:
-    """Find a specific trace by ID and return it with spans sorted by start_time_ns."""
-    for trace in traces:
-        if trace.get("trace_id") == trace_id:
-            result = dict(trace)
-            result["spans"] = sorted(result.get("spans", []), key=lambda s: s.get("start_time_ns", 0))
-            return result
-    return None
+    """Find a specific trace by ID and return it with spans sorted by start_time_ns.
+
+    Spans for one trace_id can be split across multiple records — the edge endpoint
+    and the inference server each write their own record with the same trace_id but
+    a disjoint span set. Merge all matching records so the waterfall shows the full
+    cross-process tree. Spans are deduped by span_id (first record wins).
+    """
+    matches = [t for t in traces if t.get("trace_id") == trace_id]
+    if not matches:
+        return None
+    return _merge_trace_records(matches)
+
+
+def merge_traces_by_id(traces: list[dict]) -> list[dict]:
+    """Group records by trace_id and merge into one record per trace.
+
+    Records can be split across processes (edge endpoint + inference server)
+    that share a trace_id but contribute disjoint span sets. This produces
+    one merged dict per trace_id with the union of spans (deduped by span_id).
+    Metadata (detector_id, start_wall_time_iso, ...) comes from the record
+    carrying the most informative detector_id, breaking ties by span count
+    so the most "complete" record wins. Records without a trace_id are dropped.
+    """
+    by_id: dict[str, list[dict]] = {}
+    for t in traces:
+        tid = t.get("trace_id")
+        if tid:
+            by_id.setdefault(tid, []).append(t)
+
+    merged_list: list[dict] = []
+    for group in by_id.values():
+        merged_list.append(_merge_trace_records(group))
+    return merged_list
+
+
+def _merge_trace_records(records: list[dict]) -> dict:
+    """Merge a list of records sharing a trace_id into one record."""
+
+    def _info_score(r: dict) -> tuple[int, int]:
+        det = (r.get("detector_id") or "").strip()
+        det_score = 2 if det and det != "unknown" else (1 if det else 0)
+        return (det_score, len(r.get("spans") or []))
+
+    base = max(records, key=_info_score)
+
+    seen_span_ids: set[str] = set()
+    merged_spans: list[dict] = []
+    for t in records:
+        for s in t.get("spans", []):
+            sid = s.get("span_id")
+            if sid is not None:
+                if sid in seen_span_ids:
+                    continue
+                seen_span_ids.add(sid)
+            merged_spans.append(s)
+
+    result = dict(base)
+    result["spans"] = sorted(merged_spans, key=lambda s: s.get("start_time_ns", 0))
+    return result
 
 
 def _stats_dict(durations: list[float]) -> dict:

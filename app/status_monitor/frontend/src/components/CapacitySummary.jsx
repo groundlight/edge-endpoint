@@ -25,23 +25,24 @@ export function GpuCapacitySummary({ observedGpus, totalBytes, usedBytes }) {
 
   if (gpus.length === 1) {
     const gpu = gpus[0];
+    const vram = gpu.vram_bytes || {};
     return (
       <Text size="sm" fw={500}>
-        {gpu.name} ({formatBytes(gpu.used_bytes)} / {formatBytes(gpu.total_bytes)},{" "}
-        {formatPctInt(gpu.used_bytes, gpu.total_bytes)})
+        {gpu.name} ({formatBytes(vram.used)} / {formatBytes(vram.total)},{" "}
+        {formatPctInt(vram.used, vram.total)})
       </Text>
     );
   }
 
-  const totalGpuBytes = gpus.reduce((sum, gpu) => sum + (gpu.total_bytes || 0), 0);
-  const usedGpuBytes = gpus.reduce((sum, gpu) => sum + (gpu.used_bytes || 0), 0);
+  const totalGpuBytes = gpus.reduce((sum, gpu) => sum + (gpu.vram_bytes?.total || 0), 0);
+  const usedGpuBytes = gpus.reduce((sum, gpu) => sum + (gpu.vram_bytes?.used || 0), 0);
   return (
     <Stack gap={2}>
       <InlineSummary usedBytes={usedGpuBytes} totalBytes={totalGpuBytes} />
       {gpus.map((gpu, i) => (
         <Text key={`${gpu.name}-${i}`} size="xs" c="gray.8">
-          GPU {gpu.index ?? i}: {gpu.name} ({formatBytes(gpu.used_bytes)} /{" "}
-          {formatBytes(gpu.total_bytes)})
+          GPU {gpu.index ?? i}: {gpu.name} ({formatBytes(gpu.vram_bytes?.used)} /{" "}
+          {formatBytes(gpu.vram_bytes?.total)})
         </Text>
       ))}
     </Stack>
