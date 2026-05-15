@@ -19,16 +19,19 @@ class HostNotCleanError(RuntimeError):
 
 
 def ensure_host_clean(gl_edge: ExperimentalApi, *, allow: bool = False) -> None:
-    """Pre-flight check: refuse to start if the edge already has detectors.
+    """Pre-flight check: warn or refuse when the edge has pre-existing detectors.
 
-    The benchmark assumes it has the edge to itself; pre-existing
-    detectors share GPU/CPU/RAM and skew the numbers.
+    The benchmark pushes an edge config containing ONLY its own
+    detectors, so any pre-existing detectors get evicted (their pods
+    torn down) for the duration of the run and restored at cleanup.
+    That keeps the measurement clean but means any application using
+    those detectors will see errors until cleanup completes.
 
     Args:
         gl_edge: SDK client pointed at the local edge endpoint.
         allow: If True, downgrade the failure to a loud warning and
-            proceed. Controlled from YAML via
-            `run.refuse_if_host_not_clean: false`.
+            proceed (eviction + restore at cleanup). Controlled from
+            YAML via `run.refuse_if_host_not_clean: false`.
 
     Raises:
         HostNotCleanError: When `allow=False` and the edge has ≥1
@@ -53,12 +56,17 @@ def ensure_host_clean(gl_edge: ExperimentalApi, *, allow: bool = False) -> None:
         logger.warning("HOST NOT CLEAN — %d pre-existing detector(s) on the edge:", len(det_ids))
         for det_id in det_ids:
             logger.warning("    %s", det_id)
-        logger.warning("These share GPU/CPU/RAM with the benchmark and WILL skew numbers.")
+        logger.warning("These will be TEMPORARILY EVICTED while the benchmark runs and")
+        logger.warning("RESTORED at cleanup. Applications that depend on them will see")
+        logger.warning("errors for the duration of the run, plus cold-start latency")
+        logger.warning("once they come back up.")
         logger.warning(bar)
         return
 
     raise HostNotCleanError(
         f"Edge has {len(det_ids)} pre-existing detector(s) configured: {det_ids}. "
-        f"Wipe with: python -m app_benchmark.cleanup_edge --edge-endpoint <URL> --wipe. "
-        f"Or set run.refuse_if_host_not_clean: false in the YAML to proceed (results will skew)."
+        f"Set run.refuse_if_host_not_clean: false in the YAML to proceed — those "
+        f"detectors will be temporarily evicted for the duration of the benchmark "
+        f"and restored at cleanup. Or wipe them manually with: "
+        f"python -m app_benchmark.cleanup_edge --edge-endpoint <URL> --wipe."
     )

@@ -259,22 +259,24 @@ class DetectorManager:
         return det
 
     def push_edge_config(self, stage_detectors: list[StageDetector]) -> None:
-        """Push a single edge config containing every benchmark detector
+        """Push an edge config containing ONLY the benchmark detectors
         in NO_CLOUD mode. Called once before the run loop.
 
-        Merges with the snapshotted pre-run edge config (if any) so that
-        detectors that were already loaded on the edge survive the
-        benchmark — they'll be restored cleanly at cleanup. This blocks
-        until inference pods report ready (or `set_config_timeout_seconds`
-        elapses).
+        This deliberately does NOT merge with the snapshotted pre-run
+        config — pre-existing detectors are evicted for the duration of
+        the benchmark so the measurement isn't contaminated by their
+        GPU / CPU / RAM usage. `restore_edge_config` puts them back at
+        cleanup; their pods will cold-start as Kubernetes reconciles the
+        restored config. Applications that depend on the pre-existing
+        detectors will see errors for the duration of the benchmark.
+
+        Blocks until inference pods report ready (or
+        `set_config_timeout_seconds` elapses).
 
         Args:
             stage_detectors: Result of provision_all().
         """
-        if self._pre_run_edge_config is not None:
-            edge_config = self._pre_run_edge_config.model_copy(deep=True)
-        else:
-            edge_config = EdgeEndpointConfig()
+        edge_config = EdgeEndpointConfig()
         for sd in stage_detectors:
             edge_config.add_detector(sd.detector, NO_CLOUD)
         self.gl_edge.edge.set_config(

@@ -160,10 +160,32 @@ Detectors are provisioned **once** at the start and reused across every
 run, so the run-to-run transition is just workers exiting + new workers
 spawning; no detector retraining and no edge-config swap between runs.
 
-## Host check
+## Host check and edge-config lifecycle
+
+The benchmark always pushes an edge config that contains **only** its own
+detectors. Any pre-existing detectors are evicted for the duration of the
+run and restored at cleanup. This keeps the measurement clean — pre-existing
+detectors don't contaminate GPU / CPU / RAM during the benchmark — at the
+cost of disrupting any application using them while the benchmark runs.
+
+Sequence:
+
+```
+T0  edge: [detA, detB]                          ← whatever was there
+T1  snapshot captures [detA, detB]
+T2  push ONLY ours: edge ← [benchX, benchY]     ← detA, detB pods torn down
+T3  benchmark runs against a clean edge
+T4  restore snapshot: edge ← [detA, detB]       ← detA, detB pods cold-start back
+T5  delete benchX, benchY from cloud
+```
 
 By default the benchmark logs a warning and proceeds when the edge already
-has detectors loaded — `edge.set_config` merges cleanly, and the cleanup
-flow restores the pre-run snapshot at exit. Set
-`run.refuse_if_host_not_clean: true` to hard-fail instead, which is the
-right choice for CI or any context where contamination is unacceptable.
+has detectors loaded; expect those detectors' applications to error between
+T2 and T4. Set `run.refuse_if_host_not_clean: true` to hard-fail instead —
+the right choice for CI, shared edges, or any context where eviction would
+break someone.
+
+Caveat: the restore at T4 only runs if `atexit` fires (normal exit,
+exception, SIGINT, SIGTERM). A `kill -9` or OOM leaves the edge in the
+benchmark-only state; recover with `cleanup_edge.py --wipe` followed by
+re-applying the host's real config.
