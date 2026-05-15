@@ -128,10 +128,13 @@ COPY /app ${APP_ROOT}/app/
 # Copy built React status page assets
 COPY --from=react-build-stage /react-app/dist ${APP_ROOT}/app/status_monitor/react-build
 COPY /deploy ${APP_ROOT}/deploy/
+COPY /docker/bin/poetry /docker/bin/run_model_updater /usr/local/bin/
 COPY /licenses ${APP_ROOT}/licenses/
 COPY /README.md ${APP_ROOT}/README.md
 
 COPY --from=production-dependencies-build-stage ${APP_ROOT}/configs/nginx.conf /etc/nginx/nginx.conf
+
+RUN chmod 0755 /usr/local/bin/poetry /usr/local/bin/run_model_updater
 
 # Remove default nginx config
 RUN rm /etc/nginx/sites-enabled/default
