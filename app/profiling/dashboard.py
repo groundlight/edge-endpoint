@@ -10,6 +10,43 @@ def span_sort_key(name: str) -> tuple[int, str]:
     return (0 if name == "request" else 1, name)
 
 
+@app.function
+def render_selected_trace_ids(chart, curve_traces, mo):
+    """Render the "Selected trace IDs" panel beneath a scatter chart."""
+    if chart is None:
+        return mo.md("")
+    ids = selected_trace_ids(chart.value, curve_traces)
+    if ids:
+        items = "\n".join(f"- `{_id}`" for _id in ids)
+        return mo.md(f"**Selected trace IDs:**\n\n{items}")
+    return mo.md("*Drag a box around one or more points to capture their trace IDs.*")
+
+
+@app.function
+def selected_trace_ids(chart_value, curve_traces) -> list[str]:
+    """Extract trace IDs from a marimo plotly scatter box/lasso selection.
+
+    Marimo's scatter range/lasso extractor strips ``customdata`` from the
+    selection payload, so we look the trace ID up in ``curve_traces`` — a
+    list-of-lists indexed by ``curveNumber`` then ``pointIndex``.
+    """
+    seen: list[str] = []
+    for p in chart_value or []:
+        cn = p.get("curveNumber")
+        pn = p.get("pointIndex")
+        if not (
+            isinstance(cn, int)
+            and isinstance(pn, int)
+            and 0 <= cn < len(curve_traces)
+            and 0 <= pn < len(curve_traces[cn])
+        ):
+            continue
+        tid = curve_traces[cn][pn]
+        if tid and tid not in seen:
+            seen.append(str(tid))
+    return seen
+
+
 @app.cell
 def _():
     import marimo as mo
@@ -122,12 +159,19 @@ def _(mo):
 @app.cell
 def _(PROFILING_DIR, mo):
     import os as _os
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+    from datetime import timezone as _tz
 
     traces_dir = _os.environ.get("PROFILING_TRACES_DIR", PROFILING_DIR)
 
     # Auto-refresh is opt-in (no default_interval) so the dashboard stays put
     # while you investigate a trace. Pick an interval from the dropdown to enable.
     refresh = mo.ui.refresh(options=["15s", "30s", "1m", "5m"], label="Auto-refresh")
+
+    # Sentinel for the "Custom range" option in time_range — any value that
+    # can't collide with a real "minutes ago" preset (which are >= 0).
+    CUSTOM_RANGE = -1
 
     _time_options = {
         "Last 15 min": 15,
@@ -137,6 +181,7 @@ def _(PROFILING_DIR, mo):
         "Last 6 hours": 360,
         "Last 24 hours": 1440,
         "All": 0,
+        "Custom range": CUSTOM_RANGE,
     }
     time_range = mo.ui.dropdown(
         options=_time_options,
@@ -144,7 +189,12 @@ def _(PROFILING_DIR, mo):
         label="Time range",
     )
 
-    return refresh, time_range, traces_dir
+    # Default the custom range to the last hour, in UTC, rounded to the minute.
+    _now = _dt.now(_tz.utc).replace(second=0, microsecond=0, tzinfo=None)
+    start_time = mo.ui.datetime(value=_now - _td(hours=1), label="Start (UTC)")
+    end_time = mo.ui.datetime(value=_now, label="End (UTC)")
+
+    return CUSTOM_RANGE, end_time, refresh, start_time, time_range, traces_dir
 
 
 @app.cell
@@ -168,23 +218,73 @@ def _(get_detector_ids, load_traces, mo, traces_dir):
 
 
 @app.cell
-def _(detector_filter, mo, refresh, time_range):
-    mo.hstack([time_range, detector_filter, refresh], justify="start", gap=1)
+def _(CUSTOM_RANGE, detector_filter, end_time, mo, refresh, start_time, time_range):
+    _top = mo.hstack([time_range, detector_filter, refresh], justify="start", gap=1)
+    if time_range.value == CUSTOM_RANGE:
+        _row = mo.vstack(
+            [_top, mo.hstack([start_time, end_time], justify="start", gap=1)],
+            gap=0.5,
+        )
+    else:
+        _row = _top
+    _row
 
 
 @app.cell
-def _(detector_filter, get_detector_ids, load_traces, merge_traces_by_id, mo, refresh, time_range, traces_dir):
+def _(
+    CUSTOM_RANGE,
+    detector_filter,
+    end_time,
+    get_detector_ids,
+    load_traces,
+    merge_traces_by_id,
+    mo,
+    refresh,
+    start_time,
+    time_range,
+    traces_dir,
+):
     # Reactive: re-runs when controls change or auto-refresh fires.
     _ = refresh
 
+    from datetime import datetime as _dt
+    from datetime import timezone as _tz
+
     _since_val = time_range.value  # mapped int from dict options; 0 means "all"
-    _since = int(_since_val) if _since_val else None
+    _start_dt = None
+    _end_dt = None
+    if _since_val == CUSTOM_RANGE:
+        # Custom range: treat picker values as UTC.
+        _start_dt = start_time.value.replace(tzinfo=_tz.utc) if start_time.value else None
+        _end_dt = end_time.value.replace(tzinfo=_tz.utc) if end_time.value else None
+        # Use start as the file-mtime prefilter to avoid scanning irrelevant files.
+        if _start_dt is not None:
+            _since = max(1, int((_dt.now(_tz.utc) - _start_dt).total_seconds() // 60) + 1)
+        else:
+            _since = None
+    else:
+        _since = int(_since_val) if _since_val else None
     _det = detector_filter.value or None
     # Load all records (no detector filter at load time) so that cross-process
     # records sharing a trace_id can be merged. The inference-side records carry
     # an empty detector_id and would otherwise be dropped before merge. Apply
     # the detector filter to the merged trace set.
     traces = merge_traces_by_id(load_traces(traces_dir, since_minutes=_since))
+    if _start_dt is not None or _end_dt is not None:
+
+        def _in_range(_t):
+            _ts = _t.get("start_wall_time_iso", "")
+            try:
+                _trace_dt = _dt.fromisoformat(_ts.replace("Z", "+00:00"))
+            except (ValueError, AttributeError):
+                return False
+            if _start_dt is not None and _trace_dt < _start_dt:
+                return False
+            if _end_dt is not None and _trace_dt > _end_dt:
+                return False
+            return True
+
+        traces = [t for t in traces if _in_range(t)]
     if _det:
         traces = [t for t in traces if t.get("detector_id") == _det]
 
@@ -215,6 +315,127 @@ def _(detector_filter, get_detector_ids, load_traces, merge_traces_by_id, mo, re
 
     _summary
     return (traces,)
+
+
+@app.cell
+def _(go, mo, traces):
+    # Horizontal dumbbell plot of p50/p95/p99 request latency per detector.
+    # One row per detector with a line from p50 to p99 and markers at each
+    # percentile, so tail spread is visible at a glance. Traces missing a
+    # detector_id are dropped (the per-trace scatter above already surfaces
+    # them). Detectors ordered by p99 desc so the slowest sit at the top.
+    _durations_by_detector: dict[str, list[float]] = {}
+    for _t in traces:
+        _dur = trace_duration_ms(_t)
+        if _dur <= 0:
+            continue
+        _det = _t.get("detector_id")
+        if not _det or _det == "unknown":
+            continue
+        _durations_by_detector.setdefault(_det, []).append(_dur)
+
+    def _percentile(values: list[float], pct: float) -> float:
+        # Linear-interpolated percentile; matches numpy.percentile defaults.
+        _s = sorted(values)
+        _n = len(_s)
+        if _n == 1:
+            return _s[0]
+        _rank = (pct / 100) * (_n - 1)
+        _lo = int(_rank)
+        _hi = min(_lo + 1, _n - 1)
+        return _s[_lo] + (_s[_hi] - _s[_lo]) * (_rank - _lo)
+
+    _percentiles_by_detector = {
+        _det: {
+            "p50": _percentile(_vals, 50),
+            "p95": _percentile(_vals, 95),
+            "p99": _percentile(_vals, 99),
+            "count": len(_vals),
+        }
+        for _det, _vals in _durations_by_detector.items()
+    }
+
+    # Sort descending so slowest p99 is at the top of the (reversed) y-axis.
+    _ordered_detectors = sorted(
+        _durations_by_detector.keys(),
+        key=lambda d: _percentiles_by_detector[d]["p99"],
+        reverse=True,
+    )
+
+    if _ordered_detectors:
+        _percentile_styles = [
+            ("p50", "#00CC96"),
+            ("p95", "#FFA15A"),
+            ("p99", "#EF553B"),
+        ]
+
+        _fig = go.Figure()
+
+        # Connecting line spans p50..p99 per detector. A single trace with `None`
+        # separators between segments keeps the legend uncluttered.
+        _line_x: list = []
+        _line_y: list = []
+        for _det in _ordered_detectors:
+            _p = _percentiles_by_detector[_det]
+            _line_x.extend([_p["p50"], _p["p99"], None])
+            _line_y.extend([_det, _det, None])
+        _fig.add_trace(
+            go.Scatter(
+                x=_line_x,
+                y=_line_y,
+                mode="lines",
+                line=dict(color="#B6B6B6", width=2),
+                hoverinfo="skip",
+                showlegend=False,
+            )
+        )
+
+        # One marker trace per percentile so each gets its own legend entry and
+        # the markers sit on top of the connecting line.
+        for _label, _color in _percentile_styles:
+            _x_vals = [_percentiles_by_detector[_d][_label] for _d in _ordered_detectors]
+            _counts = [_percentiles_by_detector[_d]["count"] for _d in _ordered_detectors]
+            _fig.add_trace(
+                go.Scatter(
+                    x=_x_vals,
+                    y=_ordered_detectors,
+                    mode="markers+text",
+                    name=_label,
+                    text=[f"{_v:.0f}" for _v in _x_vals],
+                    textposition="top center",
+                    textfont=dict(color=_color, size=10),
+                    marker=dict(color=_color, size=11, line=dict(width=1.5, color="white")),
+                    customdata=_counts,
+                    hovertemplate=(f"<b>%{{y}}</b><br>{_label}: %{{x:.1f}}ms<br>n=%{{customdata}}<extra></extra>"),
+                )
+            )
+
+        _fig.update_layout(
+            xaxis_title="Request duration (ms)",
+            yaxis_title="Detector",
+            yaxis=dict(
+                categoryorder="array",
+                categoryarray=list(reversed(_ordered_detectors)),
+                # Extend the plot area beyond the top/bottom rows so the value
+                # labels above each marker don't clip on the topmost row.
+                range=[-0.55, len(_ordered_detectors) - 0.25],
+            ),
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="top", y=-0.35, xanchor="center", x=0.5),
+            height=max(320, 38 * len(_ordered_detectors) + 180),
+            margin=dict(t=50, b=110, l=160),
+        )
+
+        _out = mo.vstack(
+            [
+                mo.md("## Request Latency by Detector _(p50 / p95 / p99)_"),
+                mo.ui.plotly(_fig),
+            ]
+        )
+    else:
+        _out = mo.md("## Request Latency by Detector\n\n*No request data to plot.*")
+
+    _out
 
 
 @app.cell
@@ -448,18 +669,29 @@ def _(AUTO_PALETTE, SPAN_COLORS, go, latency_over_time_spans, mo, traces):
             margin=dict(t=20, b=80),
             legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5),
             hovermode="closest",
+            dragmode="select",
         )
 
+        latency_chart = mo.ui.plotly(_fig)
+        latency_curve_traces = [[_p[2] for _p in _points_by_span[_n]] for _n in _ordered_names]
         _out = mo.vstack(
             [
                 mo.md("## Latency Over Time _(one point per span, colored by span)_"),
-                mo.ui.plotly(_fig),
+                latency_chart,
             ]
         )
     else:
+        latency_chart = None
+        latency_curve_traces = []
         _out = mo.md("## Latency Over Time\n\n*Select at least one span to plot.*")
 
     _out
+    return latency_chart, latency_curve_traces
+
+
+@app.cell
+def _(latency_chart, latency_curve_traces, mo):
+    render_selected_trace_ids(latency_chart, latency_curve_traces, mo)
 
 
 @app.cell
@@ -476,6 +708,9 @@ def _(go, mo, traces):
             _by_detector.setdefault(_det, []).append((_ts, _dur, _tid))
 
     if _by_detector:
+        # Default-hide "unknown" only if there are real detectors to show alongside it;
+        # if "unknown" is the only series, leave it visible so the plot isn't empty.
+        _hide_unknown = "unknown" in _by_detector and len(_by_detector) > 1
         _fig = go.Figure()
         for _det in sorted(_by_detector.keys()):
             _points = _by_detector[_det]
@@ -493,6 +728,7 @@ def _(go, mo, traces):
                         "Duration: %{y:.1f}ms<br>"
                         "Trace: %{customdata}<extra></extra>"
                     ),
+                    visible="legendonly" if (_det == "unknown" and _hide_unknown) else True,
                 )
             )
 
@@ -501,20 +737,32 @@ def _(go, mo, traces):
             yaxis_title="Request duration (ms)",
             height=500,
             margin=dict(t=20, b=80),
+            showlegend=True,
             legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5),
             hovermode="closest",
+            dragmode="select",
         )
 
+        request_duration_chart = mo.ui.plotly(_fig)
+        request_duration_curve_traces = [[_p[2] for _p in _by_detector[_d]] for _d in sorted(_by_detector.keys())]
         _out = mo.vstack(
             [
                 mo.md("## Request Duration Scatter _(one point per trace)_"),
-                mo.ui.plotly(_fig),
+                request_duration_chart,
             ]
         )
     else:
+        request_duration_chart = None
+        request_duration_curve_traces = []
         _out = mo.md("## Request Duration Scatter\n\n*No request data to plot.*")
 
     _out
+    return request_duration_chart, request_duration_curve_traces
+
+
+@app.cell
+def _(mo, request_duration_chart, request_duration_curve_traces):
+    render_selected_trace_ids(request_duration_chart, request_duration_curve_traces, mo)
 
 
 @app.cell
@@ -609,6 +857,9 @@ def _(MAX_TRACES_IN_SELECTOR, mo, sort_order, span_filter, traces):
         _trace_options[_label] = _tid
 
     trace_selector = mo.ui.dropdown(options=_trace_options, value="(none)", label="Select trace")
+    # Free-text search bypasses the top-N window so a trace_id pasted from a
+    # scatter selection still resolves even when the trace isn't in the dropdown.
+    trace_id_search = mo.ui.text(label="Or search by trace ID", placeholder="full ID or prefix", full_width=True)
 
     _total = len(_matching)
     _shown = len(_top)
@@ -626,18 +877,42 @@ def _(MAX_TRACES_IN_SELECTOR, mo, sort_order, span_filter, traces):
                 f"sort to find outliers, then select one to see a Gantt-style timeline. "
                 f"{_count_note}"
             ),
-            mo.hstack([span_filter, sort_order, trace_selector], justify="start", gap=1),
+            mo.hstack([span_filter, sort_order], justify="start", gap=1),
+            trace_selector,
+            trace_id_search,
         ]
     )
-    return (trace_selector,)
+    return trace_id_search, trace_selector
 
 
 @app.cell
-def _(FALLBACK_COLOR, SPAN_COLORS, get_trace_detail, go, mo, trace_selector, traces):
-    if not trace_selector.value:
+def _(FALLBACK_COLOR, SPAN_COLORS, get_trace_detail, go, mo, trace_id_search, trace_selector, traces):
+    _query = (trace_id_search.value or "").strip()
+    if _query:
+        # Prefix match against all traces, not just the dropdown's top-N window.
+        _matches = list(dict.fromkeys(_t.get("trace_id") for _t in traces if _t.get("trace_id", "").startswith(_query)))
+    else:
+        _matches = None  # signal: fall through to dropdown selection
+
+    if _matches is None:
+        _selected_id = trace_selector.value
+        _search_msg = None
+    elif len(_matches) == 1:
+        _selected_id = _matches[0]
+        _search_msg = None
+    elif _matches:
+        _selected_id = None
+        _search_msg = mo.md(f"*{len(_matches)} traces match `{_query}` — type more to disambiguate.*")
+    else:
+        _selected_id = None
+        _search_msg = mo.md(f"*No trace matches `{_query}`.*")
+
+    if _search_msg is not None:
+        _output = _search_msg
+    elif not _selected_id:
         _output = mo.md("*Select a trace above to view its waterfall.*")
     else:
-        _detail = get_trace_detail(traces, trace_selector.value)
+        _detail = get_trace_detail(traces, _selected_id)
         if not _detail:
             _output = mo.md("*Trace not found.*")
         else:

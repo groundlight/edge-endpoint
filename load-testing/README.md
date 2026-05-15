@@ -52,7 +52,12 @@ If `--edge-pipeline-config` is omitted, the detector's current/default edge pipe
 ### Multiple Client Throughput Test
 
 #### Purpose
-Tests the Edge Endpoint's ability to handle concurrent client load by spawning multiple client processes that ramp up gradually from 1 to N workers, measuring throughput and latency over time. During the test, host system utilization (CPU/GPU/RAM/VRAM) is also sampled and included in the generated artifacts.
+Tests the Edge Endpoint's ability to handle concurrent client load by spawning multiple client processes that ramp up gradually from 1 to N workers, measuring throughput and latency over time. During the test, system utilization (CPU/GPU/RAM/VRAM) is sampled by polling the Edge Endpoint's `/status/resources.json` and included in the generated artifacts.
+
+#### System utilization sampling
+Sampling cadence is controlled by `--system-sample-interval-seconds` (default 5s). Two notes:
+* Only system-level totals (`system.cpu_utilization_pct.total`, `system.ram_bytes`, `system.gpu.compute_utilization_pct.total`, `system.gpu.vram_bytes`) are recorded. Per-detector / `loading_detectors` / `other` buckets are intentionally ignored.
+* GPU/VRAM is fresh-on-call (~1s NVML ring buffer). CPU/RAM is bounded by the Kubernetes Metrics Server cadence (~15s default refresh). Adjacent samples will show GPU swinging while CPU/RAM stays flat — that is expected, not a bug.
 
 #### Usage
 ```
