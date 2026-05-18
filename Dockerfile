@@ -64,6 +64,19 @@ RUN cd /tmp && \
     ./aws/install --update && \
     rm -rf awscliv2.zip aws
 
+# Install mount-s3 (Mountpoint for Amazon S3) for FUSE-mounting S3 buckets
+# Used by the edge-endpoint init container to mount model weights from S3
+RUN set -eux; \
+    case "$TARGETARCH" in \
+    amd64)  MOUNT_S3_ARCH=x86_64 ;; \
+    arm64)  MOUNT_S3_ARCH=arm64 ;; \
+    *) echo "Unsupported arch for mount-s3: $TARGETARCH" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://s3.amazonaws.com/mountpoint-s3-release/latest/${MOUNT_S3_ARCH}/mount-s3.deb" -o /tmp/mount-s3.deb && \
+    apt-get update && apt-get install -y --no-install-recommends /tmp/mount-s3.deb fuse && \
+    rm /tmp/mount-s3.deb && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # Set Python and Poetry ENV vars
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

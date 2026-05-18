@@ -8,13 +8,9 @@ from kubernetes import client as kube_client
 from kubernetes import config
 from kubernetes.client import V1Deployment
 
-from .edge_inference import (
-    get_current_model_version,
-    get_edge_inference_deployment_name,
-    get_edge_inference_model_name,
-    get_edge_inference_service_name,
-)
+from .edge_inference import get_current_model_version
 from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH, MODEL_REPOSITORY_PATH
+from .naming import get_edge_inference_deployment_name, get_edge_inference_model_name, get_edge_inference_service_name
 
 logger = logging.getLogger(__name__)
 
@@ -218,6 +214,40 @@ class InferenceDeploymentManager:
         self._app_kube_client.patch_namespaced_deployment(
             name=deployment_name, namespace=self._target_namespace, body=deployment
         )
+        return True
+
+    def delete_inference_deployment(self, detector_id: str, is_oodd: bool = False) -> None:
+        """Delete the K8s Deployment and Service for a detector. 404s are ignored."""
+        deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd)
+        service_name = get_edge_inference_service_name(detector_id, is_oodd)
+
+        for name, delete_fn in [
+            (deployment_name, lambda n: self._app_kube_client.delete_namespaced_deployment(n, self._target_namespace)),
+            (service_name, lambda n: self._core_kube_client.delete_namespaced_service(n, self._target_namespace)),
+        ]:
+            try:
+                delete_fn(name)
+                logger.info(f"Deleted {name} in namespace {self._target_namespace}")
+            except kube_client.rest.ApiException as e:
+                if e.status == status.HTTP_404_NOT_FOUND:
+                    logger.debug(f"{name} not found in namespace {self._target_namespace}, skipping deletion")
+                else:
+                    raise
+
+    def is_inference_deployment_fully_deleted(self, detector_id: str, is_oodd: bool = False) -> bool:
+        """Return True only when the Deployment is gone AND zero pods remain (RAM/VRAM freed)."""
+        deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd)
+        if self.get_inference_deployment(deployment_name) is not None:
+            return False
+
+        instance_label = f"instance-{get_edge_inference_model_name(detector_id, is_oodd).replace('/', '-')}"
+        label_str = f"app=inference-server,instance={instance_label}"
+        pod_list = self._core_kube_client.list_namespaced_pod(
+            namespace=self._target_namespace, label_selector=label_str
+        )
+        if len(pod_list.items) > 0:
+            logger.debug(f"Deployment {deployment_name} is gone but {len(pod_list.items)} pod(s) still running")
+            return False
         return True
 
     def is_inference_deployment_rollout_complete(self, deployment_name: str) -> bool:

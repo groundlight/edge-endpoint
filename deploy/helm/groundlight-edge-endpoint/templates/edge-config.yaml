@@ -10,3 +10,5 @@ metadata:
 data:
   edge-config.yaml: |
     {{- include "groundlight-edge-endpoint.edgeConfig" . | nindent 4 }}
+  apply-edge-config.sh: |
+    {{- .Files.Get "files/apply-edge-config.sh" | nindent 4 }}

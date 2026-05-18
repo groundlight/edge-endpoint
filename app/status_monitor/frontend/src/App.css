@@ -64,6 +64,34 @@ body {
   font-size: 0.8em;
 }
 
+/* CollapsibleSection title row. Slight padding + negative margin so the
+   hover background doesn't shift the layout, and a subtle tint on hover so
+   the click target reads as interactive. */
+.collapsible-section-trigger {
+  border-radius: 4px;
+  padding: 4px 6px;
+  margin: -4px -6px;
+  width: fit-content;
+  transition: background-color 100ms ease;
+}
+.collapsible-section-trigger:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+/* SegmentedControl styling for the yaml/json toggle inside the dark gray
+   Configuration header bar. Solid dark monochrome pill with a mid-gray
+   active indicator. */
+.dark-pill-toggle-root {
+  background-color: #1f1d20;
+  border: none;
+}
+.dark-pill-toggle-indicator {
+  background-color: #5a585c;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+.dark-pill-toggle-label { color: rgba(255, 255, 255, 0.55); }
+.dark-pill-toggle-label[data-active] { color: #fff; }
+
 /* Recharts donut tooltip -- z-index ensures it renders above the center label */
 .recharts-tooltip-wrapper {
   z-index: 10 !important;
@@ -86,9 +114,31 @@ body {
   line-height: 1.2;
 }
 
+.donut-tooltip-help {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid #eee;
+  max-width: 260px;
+  font-size: 0.92em;
+  color: #555;
+  font-style: italic;
+  line-height: 1.3;
+  white-space: normal;
+}
+
+/* Side-by-side donut charts, wrapping to vertical on narrow viewports */
+.resource-donuts-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  justify-content: center;
+  align-items: flex-start;
+}
+
 .recharts-sector:focus,
 .recharts-sector:focus-visible,
 .recharts-pie-sector:focus,
-.recharts-pie-sector:focus-visible {
+.recharts-pie-sector:focus-visible,
+.recharts-surface:focus {
   outline: none;
 }

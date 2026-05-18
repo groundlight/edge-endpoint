@@ -12,10 +12,10 @@ import {
   Group,
 } from "@mantine/core";
 import { CodeHighlight } from "@mantine/code-highlight";
+import { DARK_HEADER_STYLE } from "../sharedStyles";
 
 const TH_STYLE = {
-  backgroundColor: "#3a383c",
-  color: "#fff",
+  ...DARK_HEADER_STYLE,
   whiteSpace: "nowrap",
 };
 
@@ -82,7 +82,7 @@ function StatusBadge({ status, statusDetail }) {
         </Badge>
       </Tooltip>
       {(status === "error" || status === "update_failed") && statusDetail && (
-        <Text size="xs" c="dimmed">
+        <Text size="xs" c="gray.8">
           {statusDetail}
         </Text>
       )}
@@ -94,12 +94,13 @@ const YAML_COLLAPSED_HEIGHT = 160;
 
 function PipelineCell({ yaml }) {
   const [expanded, setExpanded] = useState(false);
-  if (!yaml) return <Text c="dimmed">--</Text>;
+  if (!yaml) return <Text c="gray.8">--</Text>;
   const needsCollapse = yaml.split("\n").length > 4;
   return (
     <div>
       <div style={{ position: "relative" }}>
         <div
+          className="theme-code"
           style={{
             maxHeight: expanded || !needsCollapse ? "none" : YAML_COLLAPSED_HEIGHT,
             overflow: "hidden",
@@ -152,7 +153,7 @@ function PipelineCell({ yaml }) {
 }
 
 function EdgeConfigTable({ config }) {
-  if (!config || Object.keys(config).length === 0) return <Text c="dimmed">--</Text>;
+  if (!config || Object.keys(config).length === 0) return <Text c="gray.8">--</Text>;
   return (
     <table className="edge-config-table">
       <tbody>
@@ -169,12 +170,12 @@ function EdgeConfigTable({ config }) {
 
 function TimestampCell({ isoString }) {
   const ts = formatTimestamp(isoString);
-  if (!ts) return <Text c="dimmed">--</Text>;
+  if (!ts) return <Text c="gray.8">--</Text>;
   return (
     <Stack gap={0}>
       <Text size="sm">{ts.date}</Text>
       <Text size="sm">{ts.time}</Text>
-      <Text size="xs" c="dimmed">
+      <Text size="xs" c="gray.8">
         ({ts.relative})
       </Text>
     </Stack>
@@ -236,7 +237,7 @@ export default function DetectorDetails({ details, loading }) {
   if (!details || Object.keys(details).length === 0) {
     return (
       <Paper shadow="xs" p="md" radius="sm">
-        <Text c="dimmed" fs="italic">
+        <Text c="gray.8" fs="italic">
           No detectors are currently deployed on edge.
         </Text>
       </Paper>
@@ -294,7 +295,7 @@ export default function DetectorDetails({ details, loading }) {
                     <Text size="sm" fw={500}>
                       {info.query || "--"}
                     </Text>
-                    <Text size="sm" fw={700} c="dimmed">
+                    <Text size="sm" fw={700} c="gray.8">
                       {info.mode || "--"}
                     </Text>
                   </Stack>

@@ -17,7 +17,8 @@ spec:
       hostPID: true
       containers:
       - name: k3s-memory-configurator
-        image: alpine:latest
+        image: alpine:3.20
+        imagePullPolicy: IfNotPresent
         command:
         - chroot
         - /host

@@ -36,9 +36,16 @@ export REFRESH_RATE=60 # not actually different than the default, but we may wan
 # but first, save the template to a temporary file
 EDGE_CONFIG_FILE="/tmp/edge-config.$$.yaml"
 
-cp deploy/helm/groundlight-edge-endpoint/files/default-edge-config.yaml $EDGE_CONFIG_FILE
-sed -i "s/detector_id: \"\"/detector_id: \"$DETECTOR_ID\"/" $EDGE_CONFIG_FILE
-sed -i "s/refresh_rate: 60/refresh_rate: $REFRESH_RATE/" $EDGE_CONFIG_FILE
+cat > $EDGE_CONFIG_FILE <<EOF
+global_config:
+  refresh_rate: $REFRESH_RATE
+edge_inference_configs:
+  default:
+    enabled: true
+detectors:
+  - detector_id: "$DETECTOR_ID"
+    edge_inference_config: default
+EOF
 
 trap 'rm -rf "$EDGE_CONFIG_FILE"' EXIT
 
@@ -80,7 +87,32 @@ echo "Edge-endpoint pods have successfully rolled out."
 echo "Waiting for the inference deployments to rollout (inferencemodel-primary-$DETECTOR_ID) and (inferencemodel-oodd-$DETECTOR_ID)..."
 
 export DETECTOR_ID_WITH_DASHES=$(echo ${DETECTOR_ID//_/-} | tr '[:upper:]' '[:lower:]')
-sleep 60
+
+# Poll for both inference deployments to be created by the edge-endpoint pod
+# (its model_updater creates them on its refresh_rate cycle, so it can take up
+# to refresh_rate seconds). Replaces a flat `sleep 60` that wasted that time on
+# the happy path.
+echo "Waiting for inference deployments to be created..."
+deploy_timeout=$((2 * REFRESH_RATE))
+deploy_end=$(($(date +%s) + deploy_timeout))
+deployments_exist=false
+while [ $(date +%s) -lt $deploy_end ]; do
+    if kubectl get deployment/inferencemodel-primary-$DETECTOR_ID_WITH_DASHES -n $DEPLOYMENT_NAMESPACE >/dev/null 2>&1 \
+       && kubectl get deployment/inferencemodel-oodd-$DETECTOR_ID_WITH_DASHES -n $DEPLOYMENT_NAMESPACE >/dev/null 2>&1; then
+        echo "Inference deployments exist."
+        deployments_exist=true
+        break
+    fi
+    sleep 2
+done
+
+if [ "$deployments_exist" != "true" ]; then
+    echo "Error: inference deployments did not appear within ${deploy_timeout}s." \
+         "edge-endpoint's model_updater may have failed to create them. Dumping diagnostics..."
+    kubectl get pods -n $DEPLOYMENT_NAMESPACE
+    kubectl logs deployment/edge-endpoint -c inference-model-updater -n $DEPLOYMENT_NAMESPACE --tail=200 || true
+    exit 1
+fi
 
 echo "Describing the inferencemodel pod (inferencemodel-primary-$DETECTOR_ID_WITH_DASHES)..."
 kubectl describe pod -l app=inferencemodel-primary-$DETECTOR_ID_WITH_DASHES -n $DEPLOYMENT_NAMESPACE

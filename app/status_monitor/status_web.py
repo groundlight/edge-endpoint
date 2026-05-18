@@ -7,9 +7,9 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.metrics.gpu_metrics import GpuMetricsCollector
 from app.metrics.iq_activity import clear_old_activity_files
 from app.metrics.metric_reporting import MetricsReporter
+from app.metrics.resource_metrics import ResourceMetricsCollector
 
 ONE_HOUR_IN_SECONDS = 3600
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -20,7 +20,7 @@ REACT_BUILD_DIR = Path(__file__).parent / "react-build"
 app = FastAPI(title="status-monitor")
 scheduler = AsyncIOScheduler()
 reporter = MetricsReporter()
-gpu_collector = GpuMetricsCollector()
+resource_collector = ResourceMetricsCollector()
 
 
 @app.on_event("startup")
@@ -46,10 +46,10 @@ async def get_metrics():
     return reporter.metrics_payload()
 
 
-@app.get("/status/gpu.json")
-def get_gpu():
-    """Return per-detector GPU usage as JSON."""
-    return gpu_collector.collect()
+@app.get("/status/resources.json")
+def get_resources():
+    """Return per-detector GPU and RAM usage as JSON."""
+    return resource_collector.collect()
 
 
 @app.get("/status")
