@@ -200,7 +200,7 @@ def run_single_bbox(  # noqa: PLR0913
     request_number = 1
     while time.time() < deadline:
         frame_start = time.time()
-        image, _, _ = imgh.generate_random_objects_image(w, h, max_count=n)
+        image, _, _ = imgh.generate_fixed_objects_image(w, h, count=n)
         _submit_and_log(
             gl, detector_id, image,
             log_file=log_file, lens_name=lens_name, camera=camera,
@@ -265,7 +265,7 @@ def run_bbox_to_binary(  # noqa: PLR0913
     request_number = 1
     while time.time() < deadline:
         frame_start = time.time()
-        bbox_image, _, _ = imgh.generate_random_objects_image(w, h, max_count=n)
+        bbox_image, _, _ = imgh.generate_fixed_objects_image(w, h, count=n)
         _submit_and_log(
             gl, bbox_detector_id, bbox_image,
             log_file=log_file, lens_name=lens_name, camera=camera,

@@ -90,6 +90,49 @@ def generate_random_objects_image(
     return canvas, len(rois), rois
 
 
+def generate_fixed_objects_image(
+    image_width: int = 640,
+    image_height: int = 480,
+    count: int = 10,
+) -> tuple[np.ndarray, int, list[ROI]]:
+    """Same shape as generate_random_objects_image but with a deterministic
+    number of placed objects. Each call places exactly `count` objects (each
+    at a random size and position); use this when you need reproducible
+    per-frame object counts (e.g. benchmarking inference cost as a function
+    of object count).
+
+    The returned tuple is (canvas, num_placed, rois). num_placed equals
+    `count` unless an individual placement was skipped because the chosen
+    size exceeded the canvas bounds — rare for typical small `count` values
+    on standard-sized canvases.
+    """
+    h, w = OBJECT_DETECTION_IMAGE.shape[:2]
+
+    canvas = generate_color_canvas(image_width, image_height, WHITE)
+
+    short_side = min(image_width, image_height)
+    min_size = max(1, int(short_side * 0.10))
+    max_size = max(min_size, int(short_side * 0.25))
+
+    rois: list[ROI] = []
+    for _ in range(count):
+        target_size = random.randint(min_size, max_size)
+        scale = target_size / max(w, h)
+        dw = max(1, int(w * scale))
+        dh = max(1, int(h * scale))
+
+        if dw > image_width or dh > image_height:
+            continue
+
+        x = random.randint(0, max(0, image_width - dw))
+        y = random.randint(0, max(0, image_height - dh))
+
+        _place_object(canvas, x, y, dw, dh)
+        rois.append(_make_roi(OBJECT_DETECTION_CLASS_NAME, x, y, dw, dh, image_width, image_height))
+
+    return canvas, len(rois), rois
+
+
 def generate_random_binary_image(
     image_width: int = 640,
     image_height: int = 480,

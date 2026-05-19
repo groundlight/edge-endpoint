@@ -9,8 +9,8 @@ latency change as more crops are forwarded into a binary stage.
 | `type` | Stages | `n`? | What `n` controls |
 |---|---|---|---|
 | `single_binary` | 1 binary call per frame | no | — |
-| `single_bbox` | 1 bbox call per frame | yes | (a) the bbox detector's `max_num_bboxes`, set once to `max(lens.n)` at provisioning; (b) the synthetic image generator's `max_count` — each frame has `randint(0, n)` objects |
-| `bbox_to_binary` | 1 bbox + N binary calls per frame | yes | (a) the upstream bbox detector's `max_num_bboxes` = `max(lens.n)`; (b) the synthetic image's `max_count` = the run's `n`; (c) the exact number of downstream binary calls issued per frame |
+| `single_bbox` | 1 bbox call per frame | yes | (a) the bbox detector's `max_num_bboxes`, set once to `max(lens.n)` at provisioning; (b) the synthetic image's **exact** object count — each frame contains exactly `n` placed objects |
+| `bbox_to_binary` | 1 bbox + N binary calls per frame | yes | (a) the upstream bbox detector's `max_num_bboxes` = `max(lens.n)`; (b) the synthetic image's **exact** object count = the run's `n`; (c) the exact number of downstream binary calls issued per frame |
 
 Workers generate a fresh synthetic image per frame via the helpers in
 `load-testing/image_helpers.py` and pass the ndarray directly to
