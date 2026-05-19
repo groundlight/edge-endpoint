@@ -16,6 +16,11 @@ logger = logging.getLogger(__name__)
 
 TEN_MINUTES = 60 * 10
 POD_DELETION_TIMEOUT_SECONDS = 60 * 3
+# Max seconds to wait for a single inference-pod rollout to become Ready before giving up
+# and letting the for-loop move on. Must comfortably exceed realistic cold-load time on the
+# slowest link the device must support; otherwise the next outer-loop pass can stack a
+# second rollout on top of the still-loading first one (memory doubles → eviction cascade).
+ROLLOUT_READY_TIMEOUT_S = int(os.environ.get("ROLLOUT_READY_TIMEOUT_S", 60 * 30))
 
 USE_MINIMAL_IMAGE = os.environ.get("USE_MINIMAL_IMAGE", "false") == "true"
 
@@ -100,7 +105,7 @@ def _check_new_models_and_inference_deployments(
             and not deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name)
         ):
             time.sleep(5)
-            if time.time() - poll_start > TEN_MINUTES:
+            if time.time() - poll_start > ROLLOUT_READY_TIMEOUT_S:
                 raise TimeoutError(f"Inference deployment(s) ({deployment_names}) are not ready within time limit")
 
         # Now that we have successfully rolled out new model versions, we can clean up our model repository a bit.

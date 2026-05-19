@@ -85,6 +85,17 @@ ecrRegistry: "767397850842.dkr.ecr.us-west-2.amazonaws.com"
 # This sets the log level for all the containers, both edge endpoint and inference.
 logLevel: "INFO"
 
+# inference-model-updater behavior
+modelUpdater:
+  # Seconds the model-updater waits for a new inference pod rollout to become Ready
+  # before logging a TimeoutError and moving on. Must comfortably exceed realistic
+  # cold-load time on the slowest link the device must support, so that the for-loop
+  # self-throttles back-to-back rollouts of the same detector (preventing memory
+  # doubling when cloud frequently republishes a model on a slow network).
+  # Stays well below the inference startupProbe ceiling (~45 min) so the pod is never
+  # killed by kubelet before the updater sees it succeed.
+  rolloutReadyTimeoutSeconds: 1800  # 30 min
+
 # These values override the automated settings in _helpers.tpl to keep this short and sweet
 # Don't override these
 nameOverride: "edge-endpoint"
