@@ -24,6 +24,7 @@ from app_benchmark.config import (
     SingleBboxLens,
     SingleBinaryLens,
 )
+from app_benchmark.constants import BINARY_DOWNSTREAM_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -209,8 +210,13 @@ class DetectorManager:
                     pipeline=lens.bbox_pipeline, n=max_n,
                 )
                 bin_det = self._provision(
+                    # The downstream binary stage actually serves
+                    # BINARY_DOWNSTREAM_SIZE-sized images at runtime, so prime
+                    # the detector with images of that same shape — priming on
+                    # the upstream `image_size` (e.g. 1920x1080) trained the
+                    # model on a distribution it never sees in practice.
                     prefix=_name_prefix(name_prefix, run_name, lens.name, "binary"),
-                    mode="BINARY", image_size=image_size,
+                    mode="BINARY", image_size=BINARY_DOWNSTREAM_SIZE,
                     pipeline=lens.binary_pipeline, n=None,
                 )
                 stage_detectors.append(StageDetector(

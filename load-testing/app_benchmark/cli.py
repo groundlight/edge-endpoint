@@ -4,7 +4,6 @@ push edge config + spawn workers + monitor + summarize → cleanup.
 
 import argparse
 import atexit
-import json
 import logging
 import multiprocessing as mp
 import os
@@ -110,19 +109,20 @@ def _spawn_lens_workers(
     cfg: BenchmarkConfig,
     run: ResolvedRun,
     edge_url: str,
-    log_file: str,
+    run_dir: Path,
     duration_seconds: float,
 ) -> list[mp.Process]:
     """Start one Process per (lens × camera) and return them.
 
     Workers are started in lens-config order; worker_number increments
-    monotonically (used as a global tag in the JSONL log).
+    monotonically. Each worker writes to its own `camera_{lens}_{N}.log`
+    in `run_dir` — no shared writer, so no inter-process race on the log.
 
     Args:
         cfg: Benchmark config (for lens list and overrides).
         run: ResolvedRun providing lens_n and the shared stage_detectors.
         edge_url: Edge endpoint URL passed into each worker.
-        log_file: Shared JSONL log path.
+        run_dir: Per-run output directory; per-camera log files live here.
         duration_seconds: How long each worker should run before exiting.
 
     Returns:
@@ -136,30 +136,16 @@ def _spawn_lens_workers(
     for lens in cfg.lenses:
         sds = by_lens[lens.name]
         for cam_idx in range(lens.cameras):
+            log_path = run_dir / f"camera_{lens.name}_{cam_idx}.log"
             target, kwargs = _build_worker_args(
                 lens, sds, run.lens_n.get(lens.name), cfg, edge_url,
-                log_file, duration_seconds, worker_number, cam_idx,
+                str(log_path), duration_seconds, worker_number, cam_idx,
             )
             p = mp.Process(target=target, kwargs=kwargs, name=f"{lens.name}_cam{cam_idx}")
             p.start()
             procs.append(p)
             worker_number += 1
     return procs
-
-
-def _emit_main_start_marker(log_file: Path, total_cameras: int, run_index: int) -> None:
-    """Append a single JSONL `main_start` event when the measurement
-    window opens — handy when scanning the log directly to see where
-    the post-warmup phase began. The report bounds the window using
-    main_start_ts captured in Python, not this marker."""
-    record = {
-        "ts": time.time(),
-        "event": "main_start",
-        "run_index": run_index,
-        "total_cameras": total_cameras,
-    }
-    with log_file.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(record) + "\n")
 
 
 def _join_with_grace(procs: list[mp.Process], timeout_s: float) -> list[dict]:
@@ -219,15 +205,13 @@ def _run_one(
     """
     run_dir = out_root / f"run_{run.run_index:02d}"
     run_dir.mkdir(parents=True, exist_ok=True)
-    log_file = run_dir / "load_test.log"
-    log_file.touch()
+    system_log = run_dir / "system.log"
 
     duration = float(cfg.globals_.duration_seconds)
     warmup = float(cfg.globals_.warmup_seconds)
-    total_cameras = sum(l.cameras for l in cfg.lenses)
 
     monitor = SystemMonitor(
-        str(log_file),
+        str(system_log),
         sample_interval=1.0 / cfg.monitoring.sample_hz,
         endpoint=cfg.run.edge_endpoint_url,
     )
@@ -235,10 +219,11 @@ def _run_one(
 
     try:
         # Workers run for warmup + duration. Main thread sleeps `warmup`,
-        # then drops a ramp marker that becomes the post-warmup t0 for the report.
+        # then records main_start_ts which the report uses as the
+        # post-warmup window start.
         worker_lifetime = warmup + duration
         procs = _spawn_lens_workers(
-            cfg, run, cfg.run.edge_endpoint_url, str(log_file), worker_lifetime,
+            cfg, run, cfg.run.edge_endpoint_url, run_dir, worker_lifetime,
         )
         logger.info("[run %d] %d worker(s) spawned; warmup %.0fs, main %.0fs",
                     run.run_index, len(procs), warmup, duration)
@@ -248,7 +233,6 @@ def _run_one(
         # Intended measurement window — fixed by config, not by wall-clock.
         # Any in-flight or grace-period activity past main_end_ts is excluded.
         main_end_ts = main_start_ts + duration
-        _emit_main_start_marker(log_file, total_cameras, run.run_index)
         time.sleep(duration)
         worker_failures = _join_with_grace(procs, timeout_s=30.0)
     finally:
@@ -276,7 +260,7 @@ def _run_one(
         "worker_failures": worker_failures,
     }
     return report.write_run_artifacts(
-        run_dir, log_file, run_meta,
+        run_dir, run_meta,
         main_start_ts=main_start_ts, main_end_ts=main_end_ts,
     )
 

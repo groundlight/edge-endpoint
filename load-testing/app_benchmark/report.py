@@ -27,39 +27,47 @@ from parse_load_test_logs import _percentile as _interp_percentile
 _FPS_HIT_TOLERANCE = 0.95
 
 
-def _read_request_events(log_file: Path, start_ts: float, end_ts: float) -> list[dict]:
-    """Read every `event: request` line whose `ts` falls in [start, end).
+def _camera_logs(run_dir: Path) -> list[Path]:
+    """Per-camera worker logs in a run directory (`camera_*.log`)."""
+    return sorted(run_dir.glob("camera_*.log"))
+
+
+def _read_request_events(run_dir: Path, start_ts: float, end_ts: float) -> list[dict]:
+    """Read every `event: request` line whose `ts` falls in [start, end)
+    across every per-camera log in `run_dir`.
 
     Args:
-        log_file: Path to the worker JSONL log.
+        run_dir: Per-run directory (e.g. `out_root/run_00/`).
         start_ts: Inclusive lower bound (== main_start_ts).
         end_ts: Exclusive upper bound (== main_end_ts).
 
     Returns:
-        List of request-event dicts, in file order.
+        Flat list of request-event dicts from all camera logs.
     """
     out: list[dict] = []
-    with log_file.open() as f:
-        for line in f:
-            line = line.strip()
-            if not line.startswith("{"):
-                continue
-            payload = json.loads(line)
-            if payload.get("event") != "request":
-                continue
-            ts = float(payload.get("ts", 0))
-            if ts < start_ts or ts >= end_ts:
-                continue
-            out.append(payload)
+    for log_file in _camera_logs(run_dir):
+        with log_file.open() as f:
+            for line in f:
+                line = line.strip()
+                if not line.startswith("{"):
+                    continue
+                payload = json.loads(line)
+                if payload.get("event") != "request":
+                    continue
+                ts = float(payload.get("ts", 0))
+                if ts < start_ts or ts >= end_ts:
+                    continue
+                out.append(payload)
     return out
 
 
-def _read_resource_events(log_file: Path, start_ts: float, end_ts: float) -> dict[str, Any]:
-    """Read cpu/gpu events from a per-run log and bucket by seconds-since-start.
+def _read_resource_events(run_dir: Path, start_ts: float, end_ts: float) -> dict[str, Any]:
+    """Read cpu/gpu events from `run_dir/system.log` and bucket by
+    seconds-since-start.
 
     Args:
-        log_file: Path to the worker JSONL log (also contains SystemMonitor
-            events written by the same process).
+        run_dir: Per-run directory (contains `system.log` written by
+            SystemMonitor).
         start_ts: Inclusive lower bound (== main_start_ts).
         end_ts: Exclusive upper bound (== main_end_ts).
 
@@ -78,7 +86,14 @@ def _read_resource_events(log_file: Path, start_ts: float, end_ts: float) -> dic
     vram_gb: dict[float, float] = {}
     ram_total = 0.0
     vram_total = 0.0
-    with log_file.open() as f:
+    system_log = run_dir / "system.log"
+    if not system_log.exists():
+        return {
+            "cpu_pct": cpu_pct, "gpu_pct": gpu_pct,
+            "ram_gb": ram_gb, "ram_total_gb": ram_total,
+            "vram_gb": vram_gb, "vram_total_gb": vram_total,
+        }
+    with system_log.open() as f:
         for line in f:
             line = line.strip()
             if not line.startswith("{"):
@@ -174,7 +189,6 @@ def _summarize(events: list[dict], target_fps: float | None, duration_s: float) 
 
 def write_run_artifacts(
     run_dir: Path,
-    log_file: Path,
     run_meta: dict[str, Any],
     *,
     main_start_ts: float,
@@ -182,14 +196,15 @@ def write_run_artifacts(
 ) -> dict[str, Any]:
     """Build all per-run artifacts: stats, plots, and summary.json.
 
-    Cross-references `run_meta["lenses"]` against observed events so
-    cameras that produced no events get a flagged row (no_events=True,
-    hit_target=False) rather than silently disappearing from the table.
+    Reads per-camera logs (`camera_*.log`) and the system monitor log
+    (`system.log`) directly from `run_dir`. Cross-references
+    `run_meta["lenses"]` against observed events so cameras that produced
+    no events get a flagged row rather than silently disappearing.
 
     Args:
-        run_dir: Per-run output dir (`out_root/run_NN/`). Created by
-            the caller before this is called.
-        log_file: Path to the worker JSONL log inside run_dir.
+        run_dir: Per-run output dir (`out_root/run_NN/`). Created by the
+            caller before this is called. Contains one `camera_*.log`
+            per worker plus `system.log`.
         run_meta: Metadata produced by cli._run_one; carries lens config,
             durations, main_start_ts, main_end_ts, and worker_failures.
         main_start_ts: Inclusive start of the measurement window.
@@ -200,7 +215,7 @@ def write_run_artifacts(
         used by write_top_level to assemble the consolidated doc.
     """
     duration_s = main_end_ts - main_start_ts
-    events = _read_request_events(log_file, start_ts=main_start_ts, end_ts=main_end_ts)
+    events = _read_request_events(run_dir, start_ts=main_start_ts, end_ts=main_end_ts)
     target_by_lens: dict[str, float] = {l["name"]: l["target_fps"] for l in run_meta["lenses"]}
     by_camera: dict[tuple[str, int], list[dict]] = defaultdict(list)
     for ev in events:
@@ -234,7 +249,7 @@ def write_run_artifacts(
         "aggregate": _summarize(events, target_fps=None, duration_s=duration_s),
     }
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=2))
-    _plot_run(run_dir, by_camera, target_by_lens, main_start_ts, main_end_ts, log_file)
+    _plot_run(run_dir, by_camera, target_by_lens, main_start_ts, main_end_ts)
     return summary
 
 
@@ -244,14 +259,13 @@ def _plot_run(
     target_by_lens: dict[str, float],
     main_start_ts: float,
     main_end_ts: float,
-    log_file: Path,
 ) -> None:
     plots_dir = run_dir / "plots"
     plots_dir.mkdir(exist_ok=True)
     for (lens_name, camera), events in sorted(by_camera.items()):
         _plot_camera_fps(plots_dir, lens_name, camera, events,
                          target_by_lens.get(lens_name), main_start_ts)
-    _plot_system_grid(plots_dir, log_file, main_start_ts, main_end_ts)
+    _plot_system_grid(plots_dir, run_dir, main_start_ts, main_end_ts)
 
 
 def _plot_camera_fps(
@@ -323,11 +337,11 @@ def _plot_camera_fps(
     plt.close(fig)
 
 
-def _plot_system_grid(plots_dir: Path, log_file: Path, main_start_ts: float, main_end_ts: float) -> None:
+def _plot_system_grid(plots_dir: Path, run_dir: Path, main_start_ts: float, main_end_ts: float) -> None:
     """Write the per-run 2×2 system utilization grid (CPU %, GPU %,
-    RAM GB, VRAM GB). No-op when the log has no cpu/gpu events
-    (e.g. /status/resources.json was unreachable)."""
-    parsed = _read_resource_events(log_file, main_start_ts, main_end_ts)
+    RAM GB, VRAM GB) from `run_dir/system.log`. No-op when the log has
+    no cpu/gpu events (e.g. /status/resources.json was unreachable)."""
+    parsed = _read_resource_events(run_dir, main_start_ts, main_end_ts)
     has_any = any((parsed["cpu_pct"], parsed["gpu_pct"], parsed["ram_gb"], parsed["vram_gb"]))
     if not has_any:
         return
@@ -530,21 +544,21 @@ def _render_run_section(s: dict[str, Any]) -> list[str]:
             + ", ".join(f"`{f['name']}` (exit={f['exitcode']})" for f in failures)
         )
     lines.append("")
-    lines.append("| Lens | Camera | Frames | Errors | FPS | Target | Hit | p50 (s) | p95 (s) |")
-    lines.append("|---|---:|---:|---:|---:|---:|:---:|---:|---:|")
+    lines.append("| Lens | Camera | Frames | Errors | FPS | Target | Hit | p50 (s) | p95 (s) | Note |")
+    lines.append("|---|---:|---:|---:|---:|---:|:---:|---:|---:|---|")
     for cam in s.get("cameras", []):
         if cam.get("no_events"):
             lines.append(
                 f"| {cam['lens_name']} | {cam['camera']} | 0 | ? | 0.0 | "
                 f"{_target_label(cam['target_fps'])} | {_hit_label(cam['hit_target'])} | "
-                f"— | — |  ⚠ no events captured (worker likely crashed)"
+                f"— | — | ⚠ no events captured (worker likely crashed) |"
             )
             continue
         lines.append(
             f"| {cam['lens_name']} | {cam['camera']} | {cam['total_frames']} | "
             f"{cam['errors']} | {cam['achieved_fps']:.1f} | "
             f"{_target_label(cam['target_fps'])} | {_hit_label(cam['hit_target'])} | "
-            f"{cam['latency_p50_sec']:.3f} | {cam['latency_p95_sec']:.3f} |"
+            f"{cam['latency_p50_sec']:.3f} | {cam['latency_p95_sec']:.3f} |  |"
         )
     lines.append("")
     return lines
@@ -601,34 +615,47 @@ def _write_combined_plots(
         run_t0 = meta["main_start_ts"]
         run_end = meta["main_end_ts"]
         run_dir = out_root / f"run_{int(meta['run_index']):02d}"
-        log_file = run_dir / "load_test.log"
-        if not log_file.exists():
-            continue
-        with log_file.open() as f:
-            for line in f:
-                line = line.strip()
-                if not line.startswith("{"):
-                    continue
-                payload = json.loads(line)
-                ts = float(payload.get("ts", 0))
-                if ts < run_t0 or ts >= run_end:
-                    continue
-                offset = ts - benchmark_t0
-                event = payload.get("event")
-                if event == "cpu":
-                    cpu_pct[offset] = float(payload.get("cpu_percent", 0))
-                    ram_gb[offset] = float(payload.get("ram_used_gb", 0))
-                    ram_total = max(ram_total, float(payload.get("ram_total_gb", 0)))
-                elif event == "gpu":
-                    gpu_pct[offset] = float(payload.get("gpu_utilization", 0))
-                    vram_gb[offset] = float(payload.get("vram_used_gb", 0))
-                    vram_total = max(vram_total, float(payload.get("vram_total_gb", 0)))
-                elif event == "request":
+        # Resource events live in system.log; request events live in
+        # per-camera camera_*.log files.
+        for log_file in _camera_logs(run_dir):
+            with log_file.open() as f:
+                for line in f:
+                    line = line.strip()
+                    if not line.startswith("{"):
+                        continue
+                    payload = json.loads(line)
+                    if payload.get("event") != "request":
+                        continue
+                    ts = float(payload.get("ts", 0))
+                    if ts < run_t0 or ts >= run_end:
+                        continue
+                    offset = ts - benchmark_t0
                     key = (payload.get("lens_name", "_"), int(payload.get("camera", 0)))
                     if _is_frame(payload):
                         by_camera_frames[key][int(offset)] += 1
                     if not payload.get("success", True):
                         by_camera_errors[key][int(offset)] += 1
+        system_log = run_dir / "system.log"
+        if system_log.exists():
+            with system_log.open() as f:
+                for line in f:
+                    line = line.strip()
+                    if not line.startswith("{"):
+                        continue
+                    payload = json.loads(line)
+                    ts = float(payload.get("ts", 0))
+                    if ts < run_t0 or ts >= run_end:
+                        continue
+                    offset = ts - benchmark_t0
+                    event = payload.get("event")
+                    if event == "cpu":
+                        cpu_pct[offset] = float(payload.get("cpu_percent", 0))
+                        ram_gb[offset] = float(payload.get("ram_used_gb", 0))
+                        ram_total = max(ram_total, float(payload.get("ram_total_gb", 0)))
+                    elif event == "gpu":
+                        gpu_pct[offset] = float(payload.get("gpu_utilization", 0))
+                        vram_gb[offset] = float(payload.get("vram_used_gb", 0))
+                        vram_total = max(vram_total, float(payload.get("vram_total_gb", 0)))
 
     boundaries = [
         (s["meta"]["main_start_ts"] - benchmark_t0,

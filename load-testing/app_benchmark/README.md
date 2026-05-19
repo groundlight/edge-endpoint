@@ -69,7 +69,7 @@ uv sync
 
 ```bash
 cd load-testing
-GROUNDLIGHT_API_TOKEN=... python -m app_benchmark app_benchmark/configs/example.yaml
+GROUNDLIGHT_API_TOKEN=... uv run --python 3.13 python -m app_benchmark app_benchmark/configs/example.yaml
 ```
 
 Flags:
@@ -87,7 +87,8 @@ benchmark_results/{name}-{ts}/
 │   ├── system_utilization.png          # 2×2 grid (CPU%, GPU%, RAM GB, VRAM GB)
 │   └── fps_{lens}_camera_{N}.png       # one per camera process
 ├── run_00/
-│   ├── load_test.log                   # JSONL: request + cpu/gpu events
+│   ├── system.log                      # JSONL: cpu/gpu events (SystemMonitor)
+│   ├── camera_{lens}_{N}.log           # JSONL: request events, one file per camera process
 │   ├── summary.json                    # per-run machine-readable
 │   └── plots/                          # per-run drill-down
 │       ├── system_utilization.png

@@ -56,18 +56,20 @@ class RunConfig(BaseModel):
     def _derive_prefix(self) -> "RunConfig":
         if self.detector_name_prefix is None:
             # Slug the name into the prefix shape: lowercase, dashes→underscores,
-            # strip anything outside [a-z0-9_], truncate to 16 chars, ensure
-            # it starts with a letter (fall back to "bench" if not).
+            # strip anything outside [a-z0-9_], truncate to 16 chars.
             slug = "".join(
                 c for c in self.name.lower().replace("-", "_")
                 if c.isalnum() or c == "_"
             )[:16]
-            if not slug or not slug[0].isalpha():
-                slug = "bench"
-            # Replicate the validator that's enforced when the user sets it
-            # explicitly — must be ≥2 chars to satisfy the {1,15} length tail.
-            if len(slug) < 2:
-                slug = (slug + "bench")[:16]
+            # Raise loudly instead of silently falling back — better to make
+            # the user pick a prefix than to silently mislabel detectors.
+            if not slug or not slug[0].isalpha() or len(slug) < 2:
+                raise ValueError(
+                    f"could not derive a valid detector_name_prefix from "
+                    f"name={self.name!r} (slug {slug!r} does not match "
+                    f"^[a-z][a-z0-9_]{{1,15}}$). Set run.detector_name_prefix "
+                    f"explicitly in the YAML."
+                )
             self.detector_name_prefix = slug
         return self
 

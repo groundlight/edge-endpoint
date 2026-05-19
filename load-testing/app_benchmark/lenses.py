@@ -22,7 +22,7 @@ import image_helpers as imgh
 from groundlight import ExperimentalApi
 from groundlight_helpers import error_if_not_from_edge
 
-_BINARY_DOWNSTREAM_SIZE = (224, 224)
+from app_benchmark.constants import BINARY_DOWNSTREAM_SIZE
 
 
 def _submit_and_log(
@@ -30,14 +30,14 @@ def _submit_and_log(
     detector_id: str,
     image,  # np.ndarray; SDK does the JPEG encode
     *,
-    log_file: str,
+    log_handle,
     lens_name: str,
     camera: int,
     worker_number: int,
     request_number: int,
     stage: str | None = None,
 ) -> None:
-    """Submit one inference, time it, append one JSONL line to log_file.
+    """Submit one inference, time it, write one JSONL line to log_handle.
 
     Catches every exception so a single request failure doesn't kill the
     worker; the failure is recorded as `success: false` in the log and
@@ -49,7 +49,9 @@ def _submit_and_log(
         gl: SDK client pointed at the edge endpoint.
         detector_id: Target detector for this request.
         image: np.ndarray passed directly to ask_ml; the SDK encodes it.
-        log_file: Path to the worker's JSONL log; appended to per call.
+        log_handle: Open, line-buffered file handle to write to. The
+            runner opens it once at startup (one log file per camera
+            process) and closes it on exit.
         lens_name: Identifies the lens in the log (and the report).
         camera: Per-lens camera index (0..lens.cameras-1).
         worker_number: Global worker index across all lenses, useful for
@@ -85,8 +87,7 @@ def _submit_and_log(
         record["stage"] = stage
     if error is not None:
         record["error"] = error
-    with open(log_file, "a", encoding="utf-8") as f:
-        f.write(json.dumps(record) + "\n")
+    log_handle.write(json.dumps(record) + "\n")
 
 
 def _silence_stderr() -> None:
@@ -135,8 +136,8 @@ def run_single_binary(  # noqa: PLR0913
         target_fps: Per-frame pace target. 0 = saturate (no sleep
             between frames).
         duration_seconds: How long this worker runs before exiting.
-        log_file: Append-only JSONL log path; shared with all other
-            workers and the SystemMonitor in this run.
+        log_file: Append-only JSONL log path; one file per camera process
+            (the runner opens it once and writes for its whole lifetime).
     """
     gl = ExperimentalApi(endpoint=edge_url)
     w, h = image_size
@@ -144,16 +145,19 @@ def run_single_binary(  # noqa: PLR0913
     period = 1.0 / target_fps if target_fps > 0 else 0.0
     deadline = time.time() + duration_seconds
     request_number = 1
-    while time.time() < deadline:
-        frame_start = time.time()
-        image, _, _ = imgh.generate_random_binary_image(w, h)
-        _submit_and_log(
-            gl, detector_id, image,
-            log_file=log_file, lens_name=lens_name, camera=camera,
-            worker_number=worker_number, request_number=request_number,
-        )
-        request_number += 1
-        _pace(period, frame_start)
+    # Per-camera log file: opened once, line-buffered so events flush per
+    # write without an explicit fsync. Closed automatically on `with` exit.
+    with open(log_file, "a", buffering=1, encoding="utf-8") as log:
+        while time.time() < deadline:
+            frame_start = time.time()
+            image, _, _ = imgh.generate_random_binary_image(w, h)
+            _submit_and_log(
+                gl, detector_id, image,
+                log_handle=log, lens_name=lens_name, camera=camera,
+                worker_number=worker_number, request_number=request_number,
+            )
+            request_number += 1
+            _pace(period, frame_start)
 
 
 def run_single_bbox(  # noqa: PLR0913
@@ -189,8 +193,8 @@ def run_single_bbox(  # noqa: PLR0913
         image_size: (width, height) of the synthetic image to generate.
         target_fps: Per-frame pace target. 0 = saturate.
         duration_seconds: How long this worker runs before exiting.
-        log_file: Append-only JSONL log path; shared with all other
-            workers and the SystemMonitor in this run.
+        log_file: Append-only JSONL log path; one file per camera process
+            (the runner opens it once and writes for its whole lifetime).
     """
     gl = ExperimentalApi(endpoint=edge_url)
     w, h = image_size
@@ -198,16 +202,17 @@ def run_single_bbox(  # noqa: PLR0913
     period = 1.0 / target_fps if target_fps > 0 else 0.0
     deadline = time.time() + duration_seconds
     request_number = 1
-    while time.time() < deadline:
-        frame_start = time.time()
-        image, _, _ = imgh.generate_fixed_objects_image(w, h, count=n)
-        _submit_and_log(
-            gl, detector_id, image,
-            log_file=log_file, lens_name=lens_name, camera=camera,
-            worker_number=worker_number, request_number=request_number,
-        )
-        request_number += 1
-        _pace(period, frame_start)
+    with open(log_file, "a", buffering=1, encoding="utf-8") as log:
+        while time.time() < deadline:
+            frame_start = time.time()
+            image, _, _ = imgh.generate_fixed_objects_image(w, h, count=n)
+            _submit_and_log(
+                gl, detector_id, image,
+                log_handle=log, lens_name=lens_name, camera=camera,
+                worker_number=worker_number, request_number=request_number,
+            )
+            request_number += 1
+            _pace(period, frame_start)
 
 
 def run_bbox_to_binary(  # noqa: PLR0913
@@ -250,12 +255,12 @@ def run_bbox_to_binary(  # noqa: PLR0913
         target_fps: Per-frame pace target (one frame = 1 bbox + n binary
             calls). 0 = saturate.
         duration_seconds: How long this worker runs before exiting.
-        log_file: Append-only JSONL log path; shared with all other
-            workers and the SystemMonitor in this run.
+        log_file: Append-only JSONL log path; one file per camera process
+            (the runner opens it once and writes for its whole lifetime).
     """
     gl = ExperimentalApi(endpoint=edge_url)
     w, h = image_size
-    bw, bh = _BINARY_DOWNSTREAM_SIZE
+    bw, bh = BINARY_DOWNSTREAM_SIZE
     # One small binary image, reused for every downstream call. The SDK
     # encodes each request, but 224x224 encoding is cheap (~ms).
     binary_image, _, _ = imgh.generate_random_binary_image(bw, bh)
@@ -263,23 +268,24 @@ def run_bbox_to_binary(  # noqa: PLR0913
     period = 1.0 / target_fps if target_fps > 0 else 0.0
     deadline = time.time() + duration_seconds
     request_number = 1
-    while time.time() < deadline:
-        frame_start = time.time()
-        bbox_image, _, _ = imgh.generate_fixed_objects_image(w, h, count=n)
-        _submit_and_log(
-            gl, bbox_detector_id, bbox_image,
-            log_file=log_file, lens_name=lens_name, camera=camera,
-            worker_number=worker_number, request_number=request_number, stage="bbox",
-        )
-        request_number += 1
-        for _ in range(n):
+    with open(log_file, "a", buffering=1, encoding="utf-8") as log:
+        while time.time() < deadline:
+            frame_start = time.time()
+            bbox_image, _, _ = imgh.generate_fixed_objects_image(w, h, count=n)
             _submit_and_log(
-                gl, binary_detector_id, binary_image,
-                log_file=log_file, lens_name=lens_name, camera=camera,
-                worker_number=worker_number, request_number=request_number, stage="binary",
+                gl, bbox_detector_id, bbox_image,
+                log_handle=log, lens_name=lens_name, camera=camera,
+                worker_number=worker_number, request_number=request_number, stage="bbox",
             )
             request_number += 1
-        _pace(period, frame_start)
+            for _ in range(n):
+                _submit_and_log(
+                    gl, binary_detector_id, binary_image,
+                    log_handle=log, lens_name=lens_name, camera=camera,
+                    worker_number=worker_number, request_number=request_number, stage="binary",
+                )
+                request_number += 1
+            _pace(period, frame_start)
 
 
 LENS_RUNNERS = {
