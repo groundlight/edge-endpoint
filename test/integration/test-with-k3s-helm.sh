@@ -20,7 +20,7 @@ then
 fi
 
 # First create a detector to use for testing:
-export DETECTOR_ID=$(poetry run python test/integration/integration.py --mode create_detector)
+export DETECTOR_ID=$(uv run python test/integration/integration.py --mode create_detector)
 echo "created detector with id: $DETECTOR_ID"
 
 # set some other environment variables
@@ -170,4 +170,3 @@ fi
 
 echo "Namespace $DEPLOYMENT_NAMESPACE has been successfully deleted."
 echo "Test completed successfully."
-
