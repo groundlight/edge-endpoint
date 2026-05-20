@@ -25,8 +25,8 @@ STALE_METADATA_THRESHOLD_SEC = 60  # 60 seconds
 USE_MINIMAL_IMAGE = os.environ.get("USE_MINIMAL_IMAGE", "false") == "true"
 
 
-@trace_span
 @lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
+@trace_span
 def _get_groundlight_sdk_instance_internal(api_token: str):
     """Build (or return a cached) Groundlight SDK instance keyed by API token."""
     # We set the HTTP transport retries to 0 to avoid stalling too long when experiencing network connectivity issues.
