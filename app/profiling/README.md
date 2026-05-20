@@ -65,7 +65,7 @@ Marimo starts a web server on port 2718 (or the next open port) and prints the U
 ### Dashboard Features
 
 - **Summary stats** -- trace count, unique detectors, earliest/latest timestamp in the current filtered view
-- **Latency Summary Table** -- per-span p50/p95/p99/mean/min/max statistics. Includes a derived `edge_endpoint_self` row (request duration minus the union of inference-call intervals) for "how much of the request was spent doing work inside the edge-endpoint pod, not waiting on the inference pods"
+- **Latency Summary Table** -- per-span p50/p95/p99/mean/min/max statistics. Includes a derived `edge_endpoint_pod` row (request duration minus the union of inference-call intervals) for "how much of the request was spent doing work inside the edge-endpoint pod, not waiting on the inference pods"
 - **Latency Distribution** -- box plots showing duration spread for each span type (click a legend entry to hide that span), followed by per-span histograms with p50/p95/p99 markers for finer-grained shape inspection
 - **Latency Over Time** -- scatterplot with one point per span per trace, colored by span name; click a legend entry to toggle that span. Reveals per-span outliers and bimodal patterns (e.g., cache hit vs miss) that bucketed aggregates would smooth over.
 - **Request Duration Scatter** -- one point per trace (x = wall time, y = full-request duration) grouped by detector for color; hover shows the trace ID so you can look up slow outliers in the waterfall selector below

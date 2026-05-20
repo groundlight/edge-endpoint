@@ -7,13 +7,13 @@ app = marimo.App(width="medium", app_title="Edge Endpoint Profiling Dashboard")
 @app.function
 def span_sort_key(name: str) -> tuple[int, str]:
     """Sort key that puts the 'request' root span first, then the derived
-    inference-request metrics ('inference_request' and 'edge_endpoint_self'),
+    inference-request metrics ('inference_request' and 'edge_endpoint_pod'),
     then alphabetical."""
     if name == "request":
         return (0, "")
     if name == "inference_request":
         return (1, "")
-    if name == "edge_endpoint_self":
+    if name == "edge_endpoint_pod":
         return (2, "")
     return (3, name)
 
@@ -63,7 +63,7 @@ def _():
     SPAN_COLORS = {
         "request": "#636EFA",
         "inference_request": "#AB63FA",
-        "edge_endpoint_self": "#7F4FBF",
+        "edge_endpoint_pod": "#7F4FBF",
         "validate_image_bytes": "#1F77B4",
         "validate_query_params_for_edge": "#17BECF",
         "active": "#E377C2",
@@ -125,11 +125,11 @@ def _():
     import plotly.graph_objects as go
 
     from app.profiling.data_loader import (
-        compute_edge_self_stats,
+        compute_edge_pod_stats,
         compute_inference_request_stats,
         compute_span_stats,
         compute_time_series,
-        edge_self_durations,
+        edge_pod_durations,
         get_detector_ids,
         get_trace_detail,
         inference_request_durations,
@@ -140,11 +140,11 @@ def _():
 
     return (
         PROFILING_DIR,
-        compute_edge_self_stats,
+        compute_edge_pod_stats,
         compute_inference_request_stats,
         compute_span_stats,
         compute_time_series,
-        edge_self_durations,
+        edge_pod_durations,
         get_detector_ids,
         get_trace_detail,
         go,
@@ -449,20 +449,20 @@ def _(go, mo, traces):
 
 
 @app.cell
-def _(compute_edge_self_stats, compute_inference_request_stats, compute_span_stats, mo, traces):
+def _(compute_edge_pod_stats, compute_inference_request_stats, compute_span_stats, mo, traces):
     stats = compute_span_stats(traces)
     # Two synthetic rows, both scoped to the same set of "inference requests"
     # (traces that actually invoked at least one inference call), so the two
-    # metrics line up: inference_request = edge_endpoint_self + union of
+    # metrics line up: inference_request = edge_endpoint_pod + union of
     # inference-call intervals.
     #   * inference_request   = total request time, restricted to inference requests
-    #   * edge_endpoint_self  = that same total minus the union of inference-call intervals
+    #   * edge_endpoint_pod  = that same total minus the union of inference-call intervals
     _inference_request = compute_inference_request_stats(traces)
     if _inference_request is not None:
         stats["inference_request"] = _inference_request
-    _edge_self = compute_edge_self_stats(traces)
-    if _edge_self is not None:
-        stats["edge_endpoint_self"] = _edge_self
+    _edge_pod = compute_edge_pod_stats(traces)
+    if _edge_pod is not None:
+        stats["edge_endpoint_pod"] = _edge_pod
 
     _table_data = []
     for _name in sorted(stats.keys(), key=span_sort_key):
@@ -495,7 +495,7 @@ def _(compute_edge_self_stats, compute_inference_request_stats, compute_span_sta
 
 
 @app.cell
-def _(edge_self_durations, go, inference_request_durations, mo, traces):
+def _(edge_pod_durations, go, inference_request_durations, mo, traces):
     durations_by_span: dict[str, list[float]] = {}
     for _t in traces:
         for _s in _t.get("spans", []):
@@ -510,9 +510,9 @@ def _(edge_self_durations, go, inference_request_durations, mo, traces):
     _inference_request_vals = inference_request_durations(traces)
     if _inference_request_vals:
         durations_by_span["inference_request"] = _inference_request_vals
-    _edge_vals = edge_self_durations(traces)
-    if _edge_vals:
-        durations_by_span["edge_endpoint_self"] = _edge_vals
+    _edge_pod_vals = edge_pod_durations(traces)
+    if _edge_pod_vals:
+        durations_by_span["edge_endpoint_pod"] = _edge_pod_vals
 
     _ordered_names = sorted(
         durations_by_span.keys(),

@@ -5,13 +5,13 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.profiling.data_loader import (
-    compute_edge_self_ms,
-    compute_edge_self_stats,
+    compute_edge_pod_ms,
+    compute_edge_pod_stats,
     compute_inference_request_ms,
     compute_inference_request_stats,
     compute_span_stats,
     compute_time_series,
-    edge_self_durations,
+    edge_pod_durations,
     get_detector_ids,
     get_trace_detail,
     inference_request_durations,
@@ -375,16 +375,16 @@ class TestComputeSpanStats:
         assert stats["request"]["p99"] == 100.0
 
 
-class TestComputeEdgeSelfMs:
+class TestComputeEdgePodMs:
     def test_no_inference_spans_returns_none(self):
         """A request that never invoked inference (health checks, status polls,
         GET endpoints, image-query POSTs that short-circuited before reaching
         edge inference) is not an 'inference request' and must not contribute
-        to edge_endpoint_self."""
+        to edge_endpoint_pod."""
         trace = _make_trace_dict(
             spans=[_span("request", 0, 100_000_000, span_id="r")],
         )
-        assert compute_edge_self_ms(trace) is None
+        assert compute_edge_pod_ms(trace) is None
 
     def test_single_inference_call_subtracted(self):
         trace = _make_trace_dict(
@@ -394,7 +394,7 @@ class TestComputeEdgeSelfMs:
             ],
         )
         # request=100ms, primary=70ms -> self=30ms
-        assert compute_edge_self_ms(trace) == pytest.approx(30.0)
+        assert compute_edge_pod_ms(trace) == pytest.approx(30.0)
 
     def test_overlapping_primary_and_oodd_uses_union(self):
         """Primary and OODD run in parallel via ThreadPoolExecutor — only the
@@ -409,7 +409,7 @@ class TestComputeEdgeSelfMs:
             ],
         )
         # Union = 10ms..90ms = 80ms. Sum would be 130ms (wrong). self = 100 - 80 = 20ms.
-        assert compute_edge_self_ms(trace) == pytest.approx(20.0)
+        assert compute_edge_pod_ms(trace) == pytest.approx(20.0)
 
     def test_non_overlapping_inference_intervals_sum(self):
         trace = _make_trace_dict(
@@ -420,7 +420,7 @@ class TestComputeEdgeSelfMs:
             ],
         )
         # 20ms + 30ms = 50ms inference, self = 50ms
-        assert compute_edge_self_ms(trace) == pytest.approx(50.0)
+        assert compute_edge_pod_ms(trace) == pytest.approx(50.0)
 
     def test_no_request_span_returns_none(self):
         """A trace record contributed only by the inference side has no root request span."""
@@ -429,7 +429,7 @@ class TestComputeEdgeSelfMs:
                 _span("_submit_primary_inference", 10_000_000, 80_000_000, span_id="p"),
             ],
         )
-        assert compute_edge_self_ms(trace) is None
+        assert compute_edge_pod_ms(trace) is None
 
     def test_inference_longer_than_request_clamps_to_zero(self):
         """Pathological clock-skew / partial-record case — never return negative."""
@@ -439,7 +439,7 @@ class TestComputeEdgeSelfMs:
                 _span("_submit_primary_inference", 0, 50_000_000, span_id="p", parent_span_id="r"),
             ],
         )
-        assert compute_edge_self_ms(trace) == 0.0
+        assert compute_edge_pod_ms(trace) == 0.0
 
     def test_ignores_non_root_request_span(self):
         """A 'request' span with a parent (e.g. inference-side root) must not be picked up."""
@@ -457,12 +457,12 @@ class TestComputeEdgeSelfMs:
             ],
         )
         # Root request = 100ms, inference = 60ms, self = 40ms
-        assert compute_edge_self_ms(trace) == pytest.approx(40.0)
+        assert compute_edge_pod_ms(trace) == pytest.approx(40.0)
 
 
 class TestInferenceRequestScoping:
     """The pair of derived metrics (``inference_request`` and
-    ``edge_endpoint_self``) must be sourced from exactly the same set of
+    ``edge_endpoint_pod``) must be sourced from exactly the same set of
     traces — those that actually invoked at least one inference call. These
     tests pin the inclusion/exclusion contract for both."""
 
@@ -497,19 +497,19 @@ class TestInferenceRequestScoping:
         trace = _make_trace_dict(spans=[_span("_submit_primary_inference", 10_000_000, 80_000_000, span_id="p")])
         assert compute_inference_request_ms(trace) is None
 
-    def test_inference_request_and_edge_self_use_same_traces(self):
+    def test_inference_request_and_edge_pod_use_same_traces(self):
         """Mixed corpus: only the inference-trace contributes to either metric,
         and the two contribute the *same count* (this is the property that
         lets the dashboard compare them apples-to-apples)."""
         traces = [self._inference_trace(), self._non_inference_trace(), self._non_inference_trace()]
         assert inference_request_durations(traces) == [pytest.approx(100.0)]
-        assert edge_self_durations(traces) == [pytest.approx(40.0)]
+        assert edge_pod_durations(traces) == [pytest.approx(40.0)]
 
     def test_inference_request_decomposes_into_self_plus_union(self):
-        """For each inference request: inference_request == edge_self + union(inference intervals)."""
+        """For each inference request: inference_request == edge_pod + union(inference intervals)."""
         trace = self._inference_trace()
         # primary span is 20..80ms = 60ms; total = 100ms; self should be 40ms.
-        assert compute_inference_request_ms(trace) == pytest.approx(compute_edge_self_ms(trace) + 60.0)
+        assert compute_inference_request_ms(trace) == pytest.approx(compute_edge_pod_ms(trace) + 60.0)
 
     def test_inference_request_stats_aggregates_over_inference_traces_only(self):
         traces = [self._inference_trace(), self._inference_trace(), self._non_inference_trace()]
@@ -522,7 +522,7 @@ class TestInferenceRequestScoping:
     def test_inference_request_stats_none_when_no_inference_requests(self):
         traces = [self._non_inference_trace(), self._non_inference_trace()]
         assert compute_inference_request_stats(traces) is None
-        assert compute_edge_self_stats(traces) is None
+        assert compute_edge_pod_stats(traces) is None
 
 
 class TestComputeTimeSeries:
@@ -857,13 +857,13 @@ class TestDashboardSmoke:
             "get_inference_result",
             "request",
             "primary_inference",
-            "edge_endpoint_self",
+            "edge_endpoint_pod",
             "inference_request",
         ]
         assert sorted(names, key=span_sort_key) == [
             "request",
             "inference_request",
-            "edge_endpoint_self",
+            "edge_endpoint_pod",
             "get_inference_result",
             "primary_inference",
         ]
