@@ -1,5 +1,4 @@
 # Example input for measure_ram_and_vram_usage.py.
-# See load-testing/edge-pipeline-configs.md for the full set of options per mode.
 #
 # For each mode, the script expands the cartesian product of `n` (where applicable)
 # x `image_sizes` x `pipelines` into one measurement per combination.

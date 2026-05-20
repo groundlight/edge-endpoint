@@ -111,7 +111,7 @@ Measures per-detector VRAM and RAM consumption on a running Edge Endpoint for a 
 uv run python measure_ram_and_vram_usage.py PIPELINES_YAML [options]
 ```
 
-The pipelines YAML lists the edge pipeline configs to benchmark, grouped by mode. See `edge-pipeline-configs.md` for what's available.
+The pipelines YAML lists the edge pipeline configs to benchmark, grouped by mode.
 
 ```yaml
 BINARY:
