@@ -484,9 +484,7 @@ class TestInferenceRequestScoping:
         assert is_inference_request(self._non_inference_trace()) is False
 
     def test_is_inference_request_false_when_no_root_request_span(self):
-        trace = _make_trace_dict(
-            spans=[_span("_submit_primary_inference", 10_000_000, 80_000_000, span_id="p")]
-        )
+        trace = _make_trace_dict(spans=[_span("_submit_primary_inference", 10_000_000, 80_000_000, span_id="p")])
         assert is_inference_request(trace) is False
 
     def test_compute_inference_request_ms_returns_request_duration(self):
@@ -496,9 +494,7 @@ class TestInferenceRequestScoping:
         assert compute_inference_request_ms(self._non_inference_trace()) is None
 
     def test_compute_inference_request_ms_none_without_root_request_span(self):
-        trace = _make_trace_dict(
-            spans=[_span("_submit_primary_inference", 10_000_000, 80_000_000, span_id="p")]
-        )
+        trace = _make_trace_dict(spans=[_span("_submit_primary_inference", 10_000_000, 80_000_000, span_id="p")])
         assert compute_inference_request_ms(trace) is None
 
     def test_inference_request_and_edge_self_use_same_traces(self):
@@ -513,9 +509,7 @@ class TestInferenceRequestScoping:
         """For each inference request: inference_request == edge_self + union(inference intervals)."""
         trace = self._inference_trace()
         # primary span is 20..80ms = 60ms; total = 100ms; self should be 40ms.
-        assert compute_inference_request_ms(trace) == pytest.approx(
-            compute_edge_self_ms(trace) + 60.0
-        )
+        assert compute_inference_request_ms(trace) == pytest.approx(compute_edge_self_ms(trace) + 60.0)
 
     def test_inference_request_stats_aggregates_over_inference_traces_only(self):
         traces = [self._inference_trace(), self._inference_trace(), self._non_inference_trace()]
