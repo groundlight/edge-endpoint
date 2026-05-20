@@ -649,7 +649,7 @@ class TestMergeTracesById:
 
 class TestDashboardSmoke:
     """Smoke tests for the Marimo dashboard. Skipped when the `profiling` dependency
-    group is not installed (marimo/plotly missing). Install with `poetry install --with profiling`.
+    group is not installed (marimo/plotly missing). Install with `uv sync --group profiling`.
     """
 
     def test_dashboard_module_imports(self):
