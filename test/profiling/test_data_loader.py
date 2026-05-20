@@ -6,10 +6,16 @@ import pytest
 
 from app.profiling.data_loader import (
     compute_edge_self_ms,
+    compute_edge_self_stats,
+    compute_inference_request_ms,
+    compute_inference_request_stats,
     compute_span_stats,
     compute_time_series,
+    edge_self_durations,
     get_detector_ids,
     get_trace_detail,
+    inference_request_durations,
+    is_inference_request,
     load_traces,
     merge_traces_by_id,
 )
@@ -370,11 +376,15 @@ class TestComputeSpanStats:
 
 
 class TestComputeEdgeSelfMs:
-    def test_no_inference_spans_returns_full_request_duration(self):
+    def test_no_inference_spans_returns_none(self):
+        """A request that never invoked inference (health checks, status polls,
+        GET endpoints, image-query POSTs that short-circuited before reaching
+        edge inference) is not an 'inference request' and must not contribute
+        to edge_endpoint_self."""
         trace = _make_trace_dict(
             spans=[_span("request", 0, 100_000_000, span_id="r")],
         )
-        assert compute_edge_self_ms(trace) == 100.0
+        assert compute_edge_self_ms(trace) is None
 
     def test_single_inference_call_subtracted(self):
         trace = _make_trace_dict(
@@ -448,6 +458,77 @@ class TestComputeEdgeSelfMs:
         )
         # Root request = 100ms, inference = 60ms, self = 40ms
         assert compute_edge_self_ms(trace) == pytest.approx(40.0)
+
+
+class TestInferenceRequestScoping:
+    """The pair of derived metrics (``inference_request`` and
+    ``edge_endpoint_self``) must be sourced from exactly the same set of
+    traces — those that actually invoked at least one inference call. These
+    tests pin the inclusion/exclusion contract for both."""
+
+    def _inference_trace(self):
+        return _make_trace_dict(
+            spans=[
+                _span("request", 0, 100_000_000, span_id="r"),
+                _span("_submit_primary_inference", 20_000_000, 80_000_000, span_id="p", parent_span_id="r"),
+            ],
+        )
+
+    def _non_inference_trace(self):
+        return _make_trace_dict(spans=[_span("request", 0, 100_000_000, span_id="r")])
+
+    def test_is_inference_request_true_when_inference_span_present(self):
+        assert is_inference_request(self._inference_trace()) is True
+
+    def test_is_inference_request_false_for_request_without_inference(self):
+        assert is_inference_request(self._non_inference_trace()) is False
+
+    def test_is_inference_request_false_when_no_root_request_span(self):
+        trace = _make_trace_dict(
+            spans=[_span("_submit_primary_inference", 10_000_000, 80_000_000, span_id="p")]
+        )
+        assert is_inference_request(trace) is False
+
+    def test_compute_inference_request_ms_returns_request_duration(self):
+        assert compute_inference_request_ms(self._inference_trace()) == pytest.approx(100.0)
+
+    def test_compute_inference_request_ms_none_for_non_inference_request(self):
+        assert compute_inference_request_ms(self._non_inference_trace()) is None
+
+    def test_compute_inference_request_ms_none_without_root_request_span(self):
+        trace = _make_trace_dict(
+            spans=[_span("_submit_primary_inference", 10_000_000, 80_000_000, span_id="p")]
+        )
+        assert compute_inference_request_ms(trace) is None
+
+    def test_inference_request_and_edge_self_use_same_traces(self):
+        """Mixed corpus: only the inference-trace contributes to either metric,
+        and the two contribute the *same count* (this is the property that
+        lets the dashboard compare them apples-to-apples)."""
+        traces = [self._inference_trace(), self._non_inference_trace(), self._non_inference_trace()]
+        assert inference_request_durations(traces) == [pytest.approx(100.0)]
+        assert edge_self_durations(traces) == [pytest.approx(40.0)]
+
+    def test_inference_request_decomposes_into_self_plus_union(self):
+        """For each inference request: inference_request == edge_self + union(inference intervals)."""
+        trace = self._inference_trace()
+        # primary span is 20..80ms = 60ms; total = 100ms; self should be 40ms.
+        assert compute_inference_request_ms(trace) == pytest.approx(
+            compute_edge_self_ms(trace) + 60.0
+        )
+
+    def test_inference_request_stats_aggregates_over_inference_traces_only(self):
+        traces = [self._inference_trace(), self._inference_trace(), self._non_inference_trace()]
+        stats = compute_inference_request_stats(traces)
+        assert stats is not None
+        assert stats["count"] == 2
+        assert stats["min"] == 100.0
+        assert stats["max"] == 100.0
+
+    def test_inference_request_stats_none_when_no_inference_requests(self):
+        traces = [self._non_inference_trace(), self._non_inference_trace()]
+        assert compute_inference_request_stats(traces) is None
+        assert compute_edge_self_stats(traces) is None
 
 
 class TestComputeTimeSeries:
@@ -778,9 +859,16 @@ class TestDashboardSmoke:
         pytest.importorskip("marimo")
         from app.profiling.dashboard import span_sort_key
 
-        names = ["get_inference_result", "request", "primary_inference", "edge_endpoint_self"]
+        names = [
+            "get_inference_result",
+            "request",
+            "primary_inference",
+            "edge_endpoint_self",
+            "inference_request",
+        ]
         assert sorted(names, key=span_sort_key) == [
             "request",
+            "inference_request",
             "edge_endpoint_self",
             "get_inference_result",
             "primary_inference",
