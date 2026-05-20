@@ -491,15 +491,16 @@ def _(go, mo, traces):
     if _ordered_names:
         _fig = go.Figure()
         for _name in _ordered_names:
-            _fig.add_trace(go.Box(y=durations_by_span[_name], name=_name, boxmean=True))
+            # Horizontal boxes (x=duration, y=span name) keep long run_in_threadpool[...] names
+            # readable without label rotation or truncation.
+            _fig.add_trace(go.Box(x=durations_by_span[_name], name=_name, boxmean=True, orientation="h"))
 
         _fig.update_layout(
             title="Latency Distribution by Span",
-            yaxis_title="Duration (ms)",
-            xaxis_title="Span",
-            xaxis=dict(categoryorder="array", categoryarray=_ordered_names),
+            xaxis_title="Duration (ms)",
+            yaxis=dict(categoryorder="array", categoryarray=_ordered_names),
             showlegend=True,
-            height=450,
+            height=max(350, 40 * len(_ordered_names) + 100),
         )
 
         _out = mo.vstack([mo.md("## Latency Distribution"), mo.ui.plotly(_fig)])

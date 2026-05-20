@@ -29,6 +29,11 @@ logging.basicConfig(
 
 app = FastAPI(title="edge-endpoint")
 if PROFILING_ENABLED:
+    # Must be called before any module that aliases run_in_threadpool via
+    # `from starlette.concurrency import run_in_threadpool`. This patches the module-level binding;
+    # any module that imported the symbol directly before this runs holds a stale reference and
+    # won't be traced. No such local alias exists in this repo, but moving this call below any
+    # future one would silently drop spans for that code path.
     install_threadpool_tracing()
     app.add_middleware(ProfilingMiddleware)
 app.include_router(router=api_router, prefix=API_BASE_PATH)
