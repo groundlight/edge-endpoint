@@ -2,6 +2,7 @@ from groundlight import ExperimentalApi, Groundlight, Detector, ApiException, Im
 from groundlight.edge import EdgeEndpointConfig, GlobalConfig, InferenceConfig, NO_CLOUD
 
 from concurrent.futures import ThreadPoolExecutor
+from functools import wraps
 import hashlib
 import os
 import requests
@@ -268,6 +269,23 @@ def error_if_endpoint_is_cloud(gl: ExperimentalApi) -> None:
             'Please visit https://github.com/groundlight/edge-endpoint/blob/main/deploy/README.md to learn more about deploying an Edge Endpoint.'
         )
 
+def rate_limit_retry(max_retries: int = 10, wait_sec: float = 10.0):
+    """Decorator that retries a cloud API call on 429 rate-limit responses."""
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            for attempt in range(max_retries):
+                try:
+                    return fn(*args, **kwargs)
+                except ApiException as e:
+                    if e.status != 429 or attempt == max_retries - 1:
+                        raise
+                    print(f"429 rate limit, waiting {wait_sec:.0f}s...")
+                    time.sleep(wait_sec)
+        return wrapper
+    return decorator
+
+
 def prime_detector(
     gl: ExperimentalApi, 
     detector: Detector, 
@@ -276,6 +294,7 @@ def prime_detector(
     image_height: int) -> None:
     """Submit synthetic labels in bounded concurrent batches to trigger model training."""
 
+    @rate_limit_retry()
     def _prime_one() -> None:
         """Generate one sample, submit it, and attach the synthetic label."""
         image, label, rois = imgh.generate_random_image(detector, image_width, image_height)
