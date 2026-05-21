@@ -57,3 +57,8 @@ class RequestTracer:
     @property
     def root_span_id(self) -> str:
         return self._root_span.span_id
+
+    @property
+    def root_span(self) -> Span:
+        """The synthetic top-level span (named for the operation passed to the constructor)."""
+        return self._root_span
