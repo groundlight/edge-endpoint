@@ -81,15 +81,50 @@ sanitized_url=$(sanitize_endpoint_url "${GROUNDLIGHT_ENDPOINT}")
 echo "Sanitized URL: $sanitized_url"
 
 echo "Fetching temporary AWS credentials from the Groundlight cloud service..."
-HTTP_STATUS=$(curl -s -L -o /tmp/credentials.json -w "%{http_code}" --fail-with-body --header "x-api-token: ${GROUNDLIGHT_API_TOKEN}" ${sanitized_url}/reader-credentials)
+CREDENTIALS_FILE="/tmp/credentials.json"
+CURL_ERROR_FILE="/tmp/credentials.curl.err"
+HTTP_STATUS=""
+CURL_EXIT_CODE=0
 
-if [ $? -ne 0 ]; then
+for attempt in 1 2 3 4 5; do
+  rm -f "$CREDENTIALS_FILE" "$CURL_ERROR_FILE"
+  HTTP_STATUS=$(curl -sS -L -o "$CREDENTIALS_FILE" -w "%{http_code}" --fail-with-body \
+    --header "x-api-token: ${GROUNDLIGHT_API_TOKEN}" "${sanitized_url}/reader-credentials" \
+    2>"$CURL_ERROR_FILE")
+  CURL_EXIT_CODE=$?
+
+  if [ $CURL_EXIT_CODE -eq 0 ]; then
+    break
+  fi
+
+  if [ "$HTTP_STATUS" != "000" ] || [ "$attempt" -eq 5 ]; then
+    break
+  fi
+
+  echo "Credential fetch attempt $attempt failed before receiving an HTTP response. Retrying..."
+  if [ -s "$CURL_ERROR_FILE" ]; then
+    echo -n "curl error: "
+    cat "$CURL_ERROR_FILE"; echo
+  fi
+  sleep 5
+done
+
+if [ $CURL_EXIT_CODE -ne 0 ]; then
   echo "Failed to fetch credentials from the Groundlight cloud service"
+  echo "curl exit code: $CURL_EXIT_CODE"
   if [ -n "$HTTP_STATUS" ]; then
     echo "HTTP Status: $HTTP_STATUS"
   fi
+  if [ -s "$CURL_ERROR_FILE" ]; then
+    echo -n "curl error: "
+    cat "$CURL_ERROR_FILE"; echo
+  fi
   echo -n "Response: "
-  cat /tmp/credentials.json; echo
+  if [ -f "$CREDENTIALS_FILE" ]; then
+    cat "$CREDENTIALS_FILE"; echo
+  else
+    echo "(no response body)"
+  fi
   exit 1
 fi
 

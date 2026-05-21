@@ -93,7 +93,7 @@ spec:
             port: 8000
           initialDelaySeconds: 10
           periodSeconds: 10
-          failureThreshold: 270  # Wait for up to 45 min
+          failureThreshold: {{ .Values.inferenceDeployment.startupProbe.failureThreshold }}  # default 540 × 10s = 90 min
         readinessProbe:
           httpGet:
             path: /health/ready  # Checks if the server is ready to serve requests

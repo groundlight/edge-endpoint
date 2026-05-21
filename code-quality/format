@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Formats the codebase.
 # Dependencies:
-# - poetry
+# - uv
 # - toml-sort, ruff, black
 # Usage:
 # $ format src test bin
@@ -17,14 +17,14 @@ echo "Formatting paths: $TARGET_PATHS ..."
 
 # https://toml-sort.readthedocs.io/en/latest/
 echo "Running toml-sort formatter (pyproject.toml formatting) ..."
-poetry run toml-sort -i pyproject.toml
+uv run toml-sort -i pyproject.toml
 
 # https://beta.ruff.rs/docs/
 echo "Running ruff formatter (fixes some of the easier isort / flake8 / autoflake issues) ..."
-poetry run ruff --fix $TARGET_PATHS
+uv run ruff --fix $TARGET_PATHS
 
 # https://black.readthedocs.io/en/stable/index.html
 echo "Running black formatter ..."
-poetry run black $TARGET_PATHS
+uv run black $TARGET_PATHS
 
 echo "✅ Done!"

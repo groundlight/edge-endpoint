@@ -16,7 +16,8 @@ concurrency:
   cancel-in-progress: true
 env:
   PYTHON_VERSION: "3.11"
-  POETRY_VERSION: "2.1.3"
+  UV_VERSION: "0.8.4"
+  SDK_POETRY_VERSION: "2.1.3"
   # This is the token associated with "prod-biggies" (with shared credentials on 1password)
   GROUNDLIGHT_API_TOKEN: ${{ secrets.GROUNDLIGHT_API_TOKEN }}
 
@@ -40,23 +41,14 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install poetry
-        uses: snok/install-poetry@v1
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          installer-parallel: true
-
-      - name: Load Cached venv
-        uses: actions/cache@v3
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/poetry.lock') }}
+          version: ${{ env.UV_VERSION }}
 
       - name: Install edge-endpoint's python dependencies
         run: |
-          poetry install --no-interaction --no-root --with profiling
+          uv sync --frozen --no-install-project --group profiling
 
       - name: Run Unit Tests (that dont require docker)
         run: |
@@ -64,7 +56,7 @@ jobs:
           # -n auto: one worker per CPU core. --dist loadfile keeps tests in the same
           # file on the same worker, avoiding cross-test state issues from module-scoped
           # fixtures (e.g. the in-memory SQLite test_client).
-          poetry run pytest -v -k "not _live" -n auto --dist loadfile
+          uv run pytest -v -k "not _live" -n auto --dist loadfile
 
   test-integration-edge-endpoint:
     # Live tests that need a running edge-endpoint Docker container.
@@ -85,23 +77,14 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install poetry
-        uses: snok/install-poetry@v1
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          installer-parallel: true
-
-      - name: Load Cached venv
-        uses: actions/cache@v3
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/poetry.lock') }}
+          version: ${{ env.UV_VERSION }}
 
       - name: Install edge-endpoint's python dependencies
         run: |
-          poetry install --no-interaction --no-root --with profiling
+          uv sync --frozen --no-install-project --group profiling
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -144,7 +127,7 @@ jobs:
       - name: Run Live Tests (that do require docker)
         run: |
           source test/setup_plain_test_env.sh
-          poetry run pytest -k "_live"
+          uv run pytest -k "_live"
 
       - name: Dump Logs from Docker Container
         if: always()
@@ -213,20 +196,13 @@ jobs:
           sleep 5
           curl -vk https://localhost:30143/health/live
 
-      - name: Install poetry
+      - name: Install Poetry for SDK tests
         uses: snok/install-poetry@v1
         with:
-          version: ${{ env.POETRY_VERSION }}
+          version: ${{ env.SDK_POETRY_VERSION }}
           virtualenvs-create: true
           virtualenvs-in-project: true
           installer-parallel: true
-
-      - name: Load Cached venv
-        id: cached-poetry-dependencies
-        uses: actions/cache@v3
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/poetry.lock') }}
 
       # Note that we're pulling the latest main from the SDK repo
       # This might be ahead of what's published to pypi, but it's useful to test things before they're released.
@@ -377,11 +353,13 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
 
       - name: Make sure uv is working
         run: |
           uv --version
-          uv sync
+          uv sync --frozen
           uv run python --version
 
       - name: Check that pulumi is installed and authenticated

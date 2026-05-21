@@ -1,3 +1,4 @@
+{{ include "validate.timeouts" . }}
 {{- if and (eq .Values.inferenceFlavor "gpu") (not (lookup "node.k8s.io/v1" "RuntimeClass" "" "nvidia")) }}
 # Required runtime class for GPU use in k3s
 # Pods must have `runtimeClassName: nvidia` set to access GPU
@@ -290,7 +291,7 @@ spec:
           requests:
             memory: "200Mi"
         command: ["/bin/bash", "-c"]
-        args: ["poetry run python -m app.model_updater.update_models"]
+        args: ["run_model_updater"]
         env:
         - name: LOG_LEVEL
           value: {{ .Values.logLevel | quote }}
@@ -305,6 +306,8 @@ spec:
               key: GROUNDLIGHT_API_TOKEN
         - name: USE_MINIMAL_IMAGE
           value: "{{ .Values.useMinimalImage }}"
+        - name: ROLLOUT_READY_TIMEOUT_S
+          value: "{{ .Values.modelUpdater.rolloutReadyTimeoutSeconds }}"
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
