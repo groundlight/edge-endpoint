@@ -141,37 +141,6 @@ def fetch_resources(gl: ExperimentalApi) -> dict:
     return glh.call_api(base + "/status/resources.json", {})
 
 
-def fetch_metrics(gl: ExperimentalApi) -> dict:
-    """Fetch /status/metrics.json from the Edge Endpoint."""
-    base = gl.endpoint.replace("/device-api", "")
-    return glh.call_api(base + "/status/metrics.json", {})
-
-
-def extract_image_ids(metrics: dict) -> tuple[Optional[str], Optional[str]]:
-    """Pull the edge-endpoint and inference-server container image IDs out of metrics.json.
-
-    `k3s_stats.container_images` is itself a JSON-encoded string of
-    {pod_name: {container_name: image_id}} (see app/metrics/system_metrics.py).
-    Either image ID may be None if the corresponding pod isn't running yet.
-    """
-    raw = (metrics.get("k3s_stats") or {}).get("container_images")
-    if not raw:
-        return None, None
-    try:
-        containers = json.loads(raw) if isinstance(raw, str) else raw
-    except (json.JSONDecodeError, TypeError):
-        return None, None
-    edge_id: Optional[str] = None
-    inf_id: Optional[str] = None
-    for container_map in (containers or {}).values():
-        for container_name, image_id in (container_map or {}).items():
-            if container_name == "edge-endpoint" and edge_id is None:
-                edge_id = image_id
-            elif container_name == "inference-server" and inf_id is None:
-                inf_id = image_id
-    return edge_id, inf_id
-
-
 def detector_resource_row(resources: dict, detector_id: str) -> Optional[dict]:
     """Return the per-detector entry from /status/resources.json, or None if not present."""
     for det in resources.get("detectors") or []:
@@ -432,7 +401,7 @@ def main() -> None:
     # still be null at this point if the corresponding pods aren't running yet
     # (e.g. inference-server before the first detector loads); that's OK.
     if not args.resume:
-        edge_id, inf_id = extract_image_ids(fetch_metrics(gl))
+        edge_id, inf_id = glh.get_edge_and_inference_images(gl)
         update_image_ids(run_dir / METADATA_FILE_NAME, edge_id, inf_id)
 
     detectors = provision_all(gl_cloud, specs)

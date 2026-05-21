@@ -104,30 +104,19 @@ Below are some commands that are commonly run to evaluate the performance of the
 ### Detector Resource Benchmark
 
 #### Purpose
-Measures per-detector VRAM and RAM consumption on a running Edge Endpoint for a list of edge pipeline configs. For each `(mode, pipeline)` entry, the script provisions a (trained) detector, configures the Edge Endpoint to run it, and samples `/status/resources.json`.
+Measures per-detector VRAM and RAM on a running Edge Endpoint across a YAML-defined matrix of `(mode, pipeline, n, image_size)`.
 
 #### Usage
 ```
-uv run python measure_ram_and_vram_usage.py PIPELINES_YAML [options]
+uv run python measure_ram_and_vram_usage.py PIPELINES_YAML --device-name DEVICE [options]
 ```
 
-The pipelines YAML lists the edge pipeline configs to benchmark, grouped by mode.
+See `benchmark_pipelines.example.yaml` for the input format. Each mode block requires `image_sizes` and `pipelines`; non-BINARY modes may also set `n`. The script expands the cartesian product into one measurement per combination.
 
-```yaml
-BINARY:
-  - generic-cached-timm-efficientnetv2s-calibrated-mlp
-MULTI_CLASS:
-  - multiclass-generic-cached-timm-efficientnetv2s-calibrated-mlp
-COUNT:
-  - count-step-centernet
-BOUNDING_BOX:
-  - bounding-boxes-step-yolox
-```
-
-The first run for any pipeline can take several minutes per detector because the script primes and waits for the edge pipeline to train. Cloud training runs concurrently across all detectors, so total wall-time is bounded by the slowest single training, not the sum. Subsequent runs reuse the already-trained detectors.
+The first run per pipeline can take several minutes while detectors train. Cloud training runs concurrently, so wall-time is bounded by the slowest detector, not the sum. Subsequent runs reuse already-trained detectors.
 
 #### Outputs
-A timestamped CSV under `load-testing/benchmark_results/`, with one row per `(mode, pipeline, n)` triple containing per-detector VRAM and RAM (primary / oodd / total) and the system-level VRAM and RAM totals at sample time.
+A timestamped run directory under `load-testing/benchmark_results/` with `results.csv` (one row per `(mode, pipeline, n, image_width, image_height)`), run metadata, an input snapshot, and a breakdown plot updated after each batch.
 
 #### Resuming
-Pass `--resume <existing.csv>` to skip rows already recorded in the file and append only the missing pipelines. Useful for long sweeps and for incrementally adding new pipelines to the YAML.
+Pass `--resume <run-dir>` to skip measurements already recorded in that run's CSV.
