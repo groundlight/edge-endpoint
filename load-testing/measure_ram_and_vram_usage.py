@@ -149,6 +149,26 @@ def detector_resource_row(resources: dict, detector_id: str) -> Optional[dict]:
     return None
 
 
+def csv_resource_fields(det_entry: dict, system: dict) -> dict:
+    """Extract per-detector and system RAM/VRAM byte counts from a /status/resources.json payload."""
+    ram = det_entry.get("ram_bytes") or {}
+    vram = ((det_entry.get("gpu") or {}).get("vram_bytes") or {})
+    system_ram = system.get("ram_bytes") or {}
+    system_vram = ((system.get("gpu") or {}).get("vram_bytes") or {})
+    return {
+        "primary_vram_bytes": vram.get("primary"),
+        "oodd_vram_bytes": vram.get("oodd"),
+        "total_vram_bytes": vram.get("total"),
+        "primary_ram_bytes": ram.get("primary"),
+        "oodd_ram_bytes": ram.get("oodd"),
+        "total_ram_bytes": ram.get("total"),
+        "system_vram_used_bytes": system_vram.get("used"),
+        "system_vram_total_bytes": system_vram.get("total"),
+        "system_ram_used_bytes": system_ram.get("used"),
+        "system_ram_total_bytes": system_ram.get("total"),
+    }
+
+
 def write_run_metadata(
     path: Path,
     *,
@@ -280,6 +300,9 @@ def parse_args() -> argparse.Namespace:
         if args.device_name is None:
             parser.error("--device-name is required for new runs (or use --resume <run-dir>).")
 
+    if args.batch_size < 1:
+        parser.error("--batch-size must be >= 1")
+
     return args
 
 
@@ -343,14 +366,10 @@ def measure_batch(
     readiness_by_id = {d.id: bool(readiness_map.get(d.id, False)) for d in batch_detectors}
     resources = fetch_resources(gl)
     system = resources.get("system", {}) or {}
-    system_vram = system.get("vram", {}) or {}
-    system_ram = system.get("ram", {}) or {}
 
     rows: list[dict] = []
     for spec, detector in zip(batch_specs, batch_detectors):
         det_entry = detector_resource_row(resources, detector.id) or {}
-        vram = det_entry.get("vram") or {}
-        ram = det_entry.get("ram") or {}
         rows.append({
             "mode": spec["detector_mode"],
             "n": spec["n"] if spec["n"] is not None else "",
@@ -359,16 +378,7 @@ def measure_batch(
             "image_height": spec["image_height"],
             "detector_id": detector.id,
             "ready": readiness_by_id.get(detector.id, False),
-            "primary_vram_bytes": vram.get("primary_bytes"),
-            "oodd_vram_bytes": vram.get("oodd_bytes"),
-            "total_vram_bytes": vram.get("total_bytes"),
-            "primary_ram_bytes": ram.get("primary_bytes"),
-            "oodd_ram_bytes": ram.get("oodd_bytes"),
-            "total_ram_bytes": ram.get("total_bytes"),
-            "system_vram_used_bytes": system_vram.get("used_bytes"),
-            "system_vram_total_bytes": system_vram.get("total_bytes"),
-            "system_ram_used_bytes": system_ram.get("used_bytes"),
-            "system_ram_total_bytes": system_ram.get("total_bytes"),
+            **csv_resource_fields(det_entry, system),
         })
     return rows
 
