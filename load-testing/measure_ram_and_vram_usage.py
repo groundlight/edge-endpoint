@@ -54,8 +54,8 @@ def _parse_n_list(raw: Any, mode: str) -> list[int]:
 def load_detector_specs(path: Path) -> list[dict]:
     """Parse the YAML and expand each mode block into the cartesian product of n x image_size x pipeline.
 
-    Each returned dict matches the kwargs of `glh.provision_detector`, so callers can
-    splat it directly: `glh.provision_detector(gl_cloud, **spec, ...)`.
+    Each returned dict matches the kwargs of `glh.provision_detector` / `glh.provision_detectors`,
+    so callers can splat it directly.
     """
     with open(path) as f:
         data = yaml.safe_load(f) or {}
@@ -306,42 +306,6 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-def provision_all(
-    gl_cloud: ExperimentalApi,
-    specs: list[dict],
-) -> list[Detector]:
-    """Phase 1: get-or-create + prime every detector that isn't yet sufficiently trained."""
-    print(f"\n=== Phase 1: provisioning {len(specs)} detector(s) ===")
-    detectors: list[Detector] = []
-    for spec in specs:
-        detector = glh.provision_detector(
-            gl_cloud=gl_cloud,
-            detector_name_prefix=NAME_PREFIX,
-            group_name=GROUP_NAME,
-            wait_for_training=False,
-            **spec,
-        )
-        print(f'Got or created {detector.id}')
-        detectors.append(detector)
-    return detectors
-
-
-def wait_for_all_trained(
-    gl_cloud: ExperimentalApi,
-    detectors: list[Detector],
-    *,
-    training_timeout_sec: float,
-) -> None:
-    """Phase 2: wait for every detector's edge pipeline to finish training. Cloud training runs concurrently."""
-    print(f"\n=== Phase 2: waiting for {len(detectors)} detector(s) to finish training ===")
-    for detector in detectors:
-        num_labels = glh.num_priming_labels_for_detector(detector)
-        min_training_labels = int(num_labels * 0.75)
-        glh.wait_for_edge_pipeline_trained(
-            gl_cloud, detector, min_training_labels, timeout_sec=training_timeout_sec
-        )
-
-
 def measure_batch(
     gl: ExperimentalApi,
     batch_specs: list[dict],
@@ -414,13 +378,15 @@ def main() -> None:
         edge_id, inf_id = glh.get_edge_and_inference_images(gl)
         update_image_ids(run_dir / METADATA_FILE_NAME, edge_id, inf_id)
 
-    detectors = provision_all(gl_cloud, specs)
-    wait_for_all_trained(
-        gl_cloud, detectors,
-        training_timeout_sec=args.training_timeout_sec,
+    detectors = glh.provision_detectors(
+        gl_cloud,
+        specs,
+        detector_name_prefix=NAME_PREFIX,
+        group_name=GROUP_NAME,
+        training_sec_timeout=args.training_timeout_sec,
     )
 
-    print(f"\n=== Phase 3: measuring resources in batches of {args.batch_size} ===")
+    print(f"\n=== Measuring resources in batches of {args.batch_size} ===")
     for i in range(0, len(detectors), args.batch_size):
         batch_specs = specs[i : i + args.batch_size]
         batch_detectors = detectors[i : i + args.batch_size]

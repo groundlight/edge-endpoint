@@ -487,6 +487,52 @@ def provision_detector(
     return detector
 
 
+DEFAULT_TRAINING_SEC_TIMEOUT: float = 60 * 20
+
+
+def provision_detectors(
+    gl_cloud: Groundlight,
+    specs: list[dict],
+    *,
+    detector_name_prefix: str = "Load Test",
+    group_name: str = "Load Testing",
+    training_sec_timeout: float | None = None,
+) -> list[Detector]:
+    """Get-or-create and prime many detectors, then wait for all pipelines to finish training.
+
+    If your goal is to provision multiple detectors, use this instead of provision_detector; provision_detectors
+    is faster because it parallelizes training. 
+
+    Specs are dicts of kwargs for `provision_detector` (e.g. detector_mode, n,
+    image_width, image_height, edge_pipeline_config).
+    """
+    if training_sec_timeout is None:
+        training_sec_timeout = DEFAULT_TRAINING_SEC_TIMEOUT
+
+    print(f"\n=== Provisioning {len(specs)} detector(s) ===")
+    detectors: list[Detector] = []
+    for spec in specs:
+        detector = provision_detector(
+            gl_cloud=gl_cloud,
+            detector_name_prefix=detector_name_prefix,
+            group_name=group_name,
+            wait_for_training=False,
+            **spec,
+        )
+        print(f"Got or created {detector.id}")
+        detectors.append(detector)
+
+    print(f"\n=== Waiting for {len(detectors)} detector(s) to finish training ===")
+    for detector in detectors:
+        num_labels = num_priming_labels_for_detector(detector)
+        min_training_labels = int(num_labels * 0.75)
+        wait_for_edge_pipeline_trained(
+            gl_cloud, detector, min_training_labels, timeout_sec=training_sec_timeout
+        )
+
+    return detectors
+
+
 def edge_pipeline_is_sufficiently_trained(pipeline_details: dict, min_training_labels: int) -> bool:
     """Return True if the edge pipeline has trained with enough labels.
 
