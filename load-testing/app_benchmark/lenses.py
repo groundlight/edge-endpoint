@@ -175,9 +175,9 @@ def run_single_bbox(  # noqa: PLR0913
 ) -> None:
     """multiprocessing.Process target for a `single_bbox` lens worker.
 
-    Generates a fresh image containing up to `n` random objects per
-    frame and submits one bounding-box inference. The actual object
-    count per frame is `randint(0, n)` inside the image helper.
+    Generates a fresh image containing exactly `n` placed objects per
+    frame (via image_helpers.generate_fixed_objects_image) and submits
+    one bounding-box inference.
 
     Args:
         worker_number: Global worker index, recorded on every log line.
@@ -185,10 +185,11 @@ def run_single_bbox(  # noqa: PLR0913
         lens_name: Logged on every event; matched against config in the
             report.
         detector_id: Cloud detector ID for the bbox inference.
-        n: Upper bound on object count in the synthesized image for this
+        n: Exact object count placed in each synthesized image for this
             run. The detector itself was provisioned once with
-            max_num_bboxes = max(lens.n), so a per-run `n` smaller than
-            the max only affects image content, not inference cost.
+            max_num_bboxes = max(lens.n), so the per-run `n` only
+            changes the image content (and any downstream cost on the
+            model that scales with detected count).
         edge_url: Edge endpoint URL; the SDK client is built from this.
         image_size: (width, height) of the synthetic image to generate.
         target_fps: Per-frame pace target. 0 = saturate.
@@ -232,8 +233,9 @@ def run_bbox_to_binary(  # noqa: PLR0913
     """multiprocessing.Process target for a `bbox_to_binary` lens worker.
 
     Per frame:
-      1. Generate a fresh `image_size` image with up to `n` random
-         objects and submit one bbox inference (logged with stage=bbox).
+      1. Generate a fresh `image_size` image with exactly `n` placed
+         objects (via image_helpers.generate_fixed_objects_image) and
+         submit one bbox inference (logged with stage=bbox).
       2. Submit a cached small (224x224) binary image `n` times in a
          row (each logged with stage=binary).
 
@@ -248,8 +250,8 @@ def run_bbox_to_binary(  # noqa: PLR0913
         bbox_detector_id: Cloud detector ID for the upstream bbox stage.
         binary_detector_id: Cloud detector ID for the downstream binary
             stage.
-        n: Both the upper bound on object count in the bbox image AND
-            the number of downstream binary calls to issue per frame.
+        n: Both the exact object count placed in the bbox image AND the
+            number of downstream binary calls issued per frame.
         edge_url: Edge endpoint URL; the SDK client is built from this.
         image_size: (width, height) of the upstream bbox image.
         target_fps: Per-frame pace target (one frame = 1 bbox + n binary

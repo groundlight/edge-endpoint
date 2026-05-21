@@ -45,7 +45,7 @@ def ensure_host_clean(gl_edge: ExperimentalApi, *, allow: bool = False) -> None:
         return
 
     det_entries = getattr(edge_config, "detectors", None) or []
-    det_ids = [d.detector_id for d in det_entries if hasattr(d, "detector_id")]
+    det_ids = [d.detector_id for d in det_entries]
     if not det_ids:
         logger.info("host clean check passed — no detectors configured")
         return

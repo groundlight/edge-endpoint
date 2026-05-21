@@ -55,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     det_entries = getattr(current, "detectors", None) or []
-    det_ids = [d.detector_id for d in det_entries if hasattr(d, "detector_id")]
+    det_ids = [d.detector_id for d in det_entries]
     logger.info("Edge has %d detector(s) configured:", len(det_ids))
     for det_id in det_ids:
         logger.info("  - %s", det_id)
