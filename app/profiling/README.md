@@ -18,6 +18,15 @@ ENABLE_PROFILING=true
 
 When enabled, the profiling middleware creates a trace per request. Functions decorated with `@trace_span` automatically create child spans. Traces are written as JSONL to `/opt/groundlight/device/edge-profiling/` with 5-minute file rotation and 24-hour automatic cleanup.
 
+## Traced Spans
+
+The full set of instrumented functions lives in the source: look for `@trace_span` decorators across `app/` and `app/profiling/instrumentation.py` for the `run_in_threadpool` wrapping.
+
+Two naming conventions are worth knowing when reading waterfalls:
+
+- **`run_in_threadpool[<funcname>]`** -- wraps every synchronous FastAPI dependency and synchronous Starlette BackgroundTask. The duration covers both the wait for an `anyio` worker thread (default pool size 40 per process) and the function's actual execution. The inner `@trace_span` on the function itself covers only execution, so the difference between the two is anyio threadpool queue wait time -- which under load can dominate pre-handler latency.
+- **`response_sent_ms`** -- an annotation on the root `request` span marking when the last response byte was flushed to the client. Anything in the trace past that timestamp (e.g. the `refresh_detector_metadata_if_needed` background task) is post-response work and should be analyzed separately from user-visible latency.
+
 ## Profiling Dashboard
 
 A [Marimo](https://marimo.io/) notebook provides interactive visualization of trace data. Marimo and plotly live in an **optional** `profiling` dependency group, so they are **not** installed by default — you'll need to install them wherever you launch the dashboard.
