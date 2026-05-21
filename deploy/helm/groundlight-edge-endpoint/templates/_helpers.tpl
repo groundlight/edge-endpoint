@@ -137,3 +137,19 @@ Never
 {{- end -}}
 {{- end -}}
 
+{{/*
+  Validate that the model-updater's rollout-ready timeout stays strictly under the
+  inference pod's startupProbe ceiling (failureThreshold * 10s). If it doesn't,
+  kubelet can kill the inference pod for a failed startup probe while the
+  model-updater is still polling for it to become Ready — pods can effectively
+  never start up. Catch the misconfiguration at `helm install/upgrade` rather
+  than 45 min later when pods start crash-looping.
+*/}}
+{{- define "validate.timeouts" -}}
+{{- $rollout := int .Values.modelUpdater.rolloutReadyTimeoutSeconds -}}
+{{- $ceiling := mul (int .Values.inferenceDeployment.startupProbe.failureThreshold) 10 -}}
+{{- if ge $rollout $ceiling -}}
+  {{- fail (printf "modelUpdater.rolloutReadyTimeoutSeconds (%ds) must be less than inferenceDeployment.startupProbe.failureThreshold × 10s (%ds). Raise inferenceDeployment.startupProbe.failureThreshold proportionally when increasing modelUpdater.rolloutReadyTimeoutSeconds." $rollout $ceiling) -}}
+{{- end -}}
+{{- end -}}
+

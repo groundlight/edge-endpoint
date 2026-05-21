@@ -21,3 +21,14 @@ $K describe pod edge-endpoint
 $K logs deployment/edge-endpoint -c edge-endpoint
 $K logs deployment/edge-endpoint -c inference-model-updater
 
+if [ -n "$NAMESPACE" ]; then
+    HOOK_JOB="validate-api-token-$NAMESPACE"
+
+    kubectl -n default get job "$HOOK_JOB"
+    kubectl -n default describe job "$HOOK_JOB"
+    kubectl -n default get pods -l job-name="$HOOK_JOB" -o wide
+    kubectl -n default describe pods -l job-name="$HOOK_JOB"
+    kubectl -n default logs job/"$HOOK_JOB" --all-containers=true
+fi
+
+exit 0

@@ -11,7 +11,7 @@ You may want to configure both the edge endpoint and the inference server contai
 
 **To configure edge endpoint workers**: Edit the `--workers` parameter in [launch-edge-logic-server.sh](/app/bin/launch-edge-logic-server.sh). Change from the default:
 ```bash
-poetry run uvicorn \
+uv run --no-sync uvicorn \
     --workers 8 \  # You can tweak this for load testing
     --host 0.0.0.0 \
     --port ${APP_PORT} \
@@ -131,4 +131,3 @@ A timestamped CSV under `load-testing/benchmark_results/`, with one row per `(mo
 
 #### Resuming
 Pass `--resume <existing.csv>` to skip rows already recorded in the file and append only the missing pipelines. Useful for long sweeps and for incrementally adding new pipelines to the YAML.
-
