@@ -43,11 +43,6 @@ class RunConfig(BaseModel):
             or any context where contamination is unacceptable.
         set_config_timeout_seconds: How long to wait for `edge.set_config`
             to finish (cold edges with many models need more).
-        detector_provision_concurrency: Max number of detectors to
-            provision (create + train) in parallel. The bottleneck is
-            edge-pipeline training, so 4-way parallelism saves real
-            wall-clock on multi-lens configs. Raise carefully — too high
-            and the cloud API rate-limits.
     """
     name: str = Field(pattern=r"^[a-zA-Z0-9_-]+$", max_length=64)
     output_dir: str = "./benchmark_results/{name}-{ts}/"
@@ -56,7 +51,6 @@ class RunConfig(BaseModel):
     detector_name_prefix: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{1,15}$")
     refuse_if_host_not_clean: bool = False
     set_config_timeout_seconds: int = Field(default=900, ge=30)
-    detector_provision_concurrency: int = Field(default=4, ge=1, le=16)
 
     @model_validator(mode="after")
     def _derive_prefix(self) -> "RunConfig":

@@ -7,7 +7,6 @@ import os
 import requests
 import json
 import time
-import urllib3.exceptions
 import yaml
 from tqdm import trange
 
@@ -46,95 +45,6 @@ class APIError(Exception):
     """Any response from the Groundlight API that is not 200
     """
     pass
-
-
-# Network / HTTP exception classes that we treat as transient and retry.
-# urllib3.exceptions.TimeoutError is the base of ReadTimeoutError and
-# ConnectTimeoutError, which the SDK raises when calls exceed its
-# default ~10s timeout — common under concurrent priming load.
-_RETRYABLE_NETWORK_EXCEPTIONS = (
-    urllib3.exceptions.TimeoutError,
-    urllib3.exceptions.MaxRetryError,
-    urllib3.exceptions.NewConnectionError,
-    urllib3.exceptions.ProtocolError,
-    requests.exceptions.Timeout,
-    requests.exceptions.ConnectionError,
-)
-# HTTP statuses we treat as retryable when surfaced by the SDK / call_api.
-# 429 is rate limit; 502/503/504 are gateway timeouts / unavailability that
-# the cloud occasionally returns under load.
-_RETRYABLE_HTTP_STATUSES = (429, 502, 503, 504)
-
-
-def _is_transient_error(exc: BaseException) -> bool:
-    """Return True if the exception looks transient enough to retry.
-
-    Covers three cases:
-      - Network-level transients (read/connect timeouts, refused
-        connections, mid-stream protocol errors).
-      - SDK ApiException with a retryable HTTP status (429/5xx).
-      - The custom APIError raised by call_api, which only carries the
-        response text in its message — string-match for status codes.
-
-    Errs on the side of false-positive — a few extra retries are
-    cheaper than crashing a long benchmark partway through provisioning.
-    """
-    if isinstance(exc, _RETRYABLE_NETWORK_EXCEPTIONS):
-        return True
-    if isinstance(exc, ApiException) and getattr(exc, "status", None) in _RETRYABLE_HTTP_STATUSES:
-        return True
-    if isinstance(exc, APIError):
-        msg = str(exc)
-        if any(str(s) in msg for s in _RETRYABLE_HTTP_STATUSES):
-            return True
-        if "Too Many Requests" in msg or "rate limit" in msg.lower():
-            return True
-    return False
-
-
-def retry_on_transient_error(
-    func,
-    *args,
-    max_attempts: int = 5,
-    base_delay: float = 2.0,
-    **kwargs,
-):
-    """Call func with exponential backoff on transient errors.
-
-    Sleep schedule with defaults: 2s, 4s, 8s, 16s (total ≤30s before
-    giving up). Retries on rate-limit responses (429), gateway
-    instability (502/503/504), and network-level transients (read /
-    connect timeouts, refused connections, protocol errors). Other
-    exceptions propagate immediately.
-
-    Args:
-        func: Callable to invoke.
-        *args, **kwargs: Forwarded to func.
-        max_attempts: Total tries including the first. Default 5.
-        base_delay: Seconds for the first backoff; doubles each attempt.
-
-    Returns:
-        Whatever func returns on the first successful call.
-
-    Raises:
-        The underlying exception from the final attempt, or any
-        non-transient exception from any attempt.
-    """
-    for attempt in range(max_attempts):
-        try:
-            return func(*args, **kwargs)
-        except Exception as exc:
-            if not _is_transient_error(exc):
-                raise
-            if attempt == max_attempts - 1:
-                raise
-            delay = base_delay * (2 ** attempt)
-            print(
-                f"Transient error ({type(exc).__name__}: {exc}); retrying in {delay:.0f}s "
-                f"(attempt {attempt + 1}/{max_attempts})"
-            )
-            time.sleep(delay)
-
 
 def call_api(url: str, params: dict, timeout: float | None = None) -> dict:
     """Perform a GET request with API token and return decoded JSON or raise APIError."""
@@ -361,17 +271,10 @@ def prime_detector(
     """Submit synthetic labels in bounded concurrent batches to trigger model training."""
 
     def _prime_one() -> None:
-        """Generate one sample, submit it, and attach the synthetic label.
-
-        Submission and labelling are each wrapped in `retry_on_transient_error`
-        so 429s from concurrent priming across detectors don't fail the
-        whole benchmark — they just slow it down.
-        """
+        """Generate one sample, submit it, and attach the synthetic label."""
         image, label, rois = imgh.generate_random_image(detector, image_width, image_height)
-        iq = retry_on_transient_error(
-            gl.submit_image_query, detector, image, **IQ_KWARGS_FOR_NO_ESCALATION
-        )
-        retry_on_transient_error(gl.add_label, iq, label, rois)
+        iq = gl.submit_image_query(detector, image, **IQ_KWARGS_FOR_NO_ESCALATION)
+        gl.add_label(iq, label, rois)
 
     remaining = num_labels
     with trange(num_labels, desc=f"Priming {detector.id} with {num_labels} labels.", unit="label") as progress:
@@ -568,15 +471,10 @@ def wait_for_edge_pipeline_trained(
     timeout_sec: float,
     poll_interval_sec: float = 5.0,
 ) -> dict:
-    """Poll until the edge pipeline has trained with enough labels, or timeout.
-
-    Each poll is wrapped in retry_on_transient_error so concurrent polling
-    across many detectors won't fail the whole benchmark on a transient
-    429 — the retry's own sleep stacks on top of poll_interval_sec.
-    """
+    """Poll until the edge pipeline has trained with enough labels, or timeout."""
     start = time.time()
     while True:
-        pipeline_details = retry_on_transient_error(get_edge_pipeline_details, gl, detector.id)
+        pipeline_details = get_edge_pipeline_details(gl, detector.id)
         if edge_pipeline_is_sufficiently_trained(pipeline_details, min_training_labels):
             return pipeline_details
 

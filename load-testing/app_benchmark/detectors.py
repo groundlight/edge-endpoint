@@ -12,8 +12,6 @@ binary calls in `bbox_to_binary`.
 
 import hashlib
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Callable
 
 from groundlight import Detector, ExperimentalApi
 from groundlight.edge import NO_CLOUD, EdgeEndpointConfig
@@ -186,209 +184,131 @@ class DetectorManager:
         creation + training are skipped. External detectors are also
         skipped during cleanup (see delete_all).
 
-        Provisioning runs in parallel up to
-        `run.detector_provision_concurrency` workers; the bottleneck is
-        edge-pipeline training (minutes per detector), so 4-way
-        parallelism saves meaningful wall-clock on multi-lens configs.
+        Provisioning is serial. PR #373 introduces a `provision_detectors`
+        helper that overlaps the edge-pipeline training wait across
+        detectors; we'll route through it once it merges. For now, a
+        multi-lens benchmark pays the full per-detector training time
+        sequentially on a cold cache (a few minutes per detector), which
+        is fine for the typical 3–4-lens config.
 
         Returns:
             The flat list of StageDetector objects for the whole
-            benchmark, in stable lens-order (so reporting is
-            deterministic across parallelization). Stored on
+            benchmark, in lens-order. Stored on
             `self._all_stage_detectors` for push_edge_config and
             delete_all to use, and returned for the caller to hand to
             the worker spawner.
         """
-        tasks = self._build_provision_tasks()
-        if not tasks:
-            self._all_stage_detectors = []
-            return []
-        concurrency = min(self.cfg.run.detector_provision_concurrency, len(tasks))
-        logger.info("provisioning %d detector(s) with %d-way parallelism", len(tasks), concurrency)
-        for i, (_, label) in enumerate(tasks):
-            logger.info("  [%d] %s", i, label)
-
-        results: list[StageDetector | None] = [None] * len(tasks)
-        with ThreadPoolExecutor(max_workers=concurrency, thread_name_prefix="provision") as pool:
-            future_to_idx = {pool.submit(task): i for i, (task, _) in enumerate(tasks)}
-            try:
-                for future in as_completed(future_to_idx):
-                    idx = future_to_idx[future]
-                    # If one future raises, surface immediately and let the
-                    # other in-flight provisions finish (or fail) — we don't
-                    # have a clean way to cancel an in-progress training
-                    # wait, so just let them complete and surface our error.
-                    results[idx] = future.result()
-            except Exception:
-                # Cancel any futures we haven't started yet and re-raise.
-                for fut in future_to_idx:
-                    fut.cancel()
-                raise
-
-        stage_detectors = [r for r in results if r is not None]
-        self._all_stage_detectors = stage_detectors
-        return stage_detectors
-
-    def _build_provision_tasks(
-        self,
-    ) -> list[tuple[Callable[[], StageDetector], str]]:
-        """Build the list of provisioning callables, one per detector
-        stage, in lens-order. Each callable returns a StageDetector when
-        invoked; the tuple's second element is a short human-readable
-        label for logging.
-
-        External (`*_detector_id`) stages produce a fetch-and-verify
-        callable; internal stages produce a create-and-train callable.
-        """
         run_name = self.cfg.run.name
         name_prefix = self.cfg.run.detector_name_prefix
-        tasks: list[tuple[Callable[[], StageDetector], str]] = []
+        stage_detectors: list[StageDetector] = []
 
         for lens in self.cfg.lenses:
             image_size = lens.image_size if lens.image_size is not None else self.cfg.globals_.image_size
             max_n = max(lens.n) if hasattr(lens, "n") else None
             if isinstance(lens, SingleBinaryLens):
                 if lens.binary_detector_id is not None:
-                    tasks.append((
-                        self._make_external_task(
-                            lens.name, "single",
-                            detector_id=lens.binary_detector_id,
-                            expected_pipeline=lens.pipeline,
-                        ),
-                        f"{lens.name} (external BINARY {lens.binary_detector_id})",
+                    stage_detectors.append(self._fetch_external(
+                        lens.name, "single",
+                        detector_id=lens.binary_detector_id,
+                        expected_pipeline=lens.pipeline,
                     ))
                 else:
-                    tasks.append((
-                        self._make_create_task(
-                            lens.name, "single",
-                            prefix=_name_prefix(name_prefix, run_name, lens.name),
-                            mode="BINARY", image_size=image_size,
-                            pipeline=lens.pipeline, n=None,
-                        ),
-                        f"{lens.name} (BINARY)",
+                    det = self._provision(
+                        prefix=_name_prefix(name_prefix, run_name, lens.name),
+                        mode="BINARY", image_size=image_size,
+                        pipeline=lens.pipeline, n=None,
+                    )
+                    stage_detectors.append(StageDetector(
+                        lens_name=lens.name, stage="single",
+                        detector=det, detector_id=det.id,
                     ))
             elif isinstance(lens, SingleBboxLens):
                 assert max_n is not None
                 if lens.bbox_detector_id is not None:
-                    tasks.append((
-                        self._make_external_task(
-                            lens.name, "single",
-                            detector_id=lens.bbox_detector_id,
-                            expected_pipeline=lens.pipeline,
-                        ),
-                        f"{lens.name} (external BOUNDING_BOX {lens.bbox_detector_id})",
+                    stage_detectors.append(self._fetch_external(
+                        lens.name, "single",
+                        detector_id=lens.bbox_detector_id,
+                        expected_pipeline=lens.pipeline,
                     ))
                 else:
-                    tasks.append((
-                        self._make_create_task(
-                            lens.name, "single",
-                            prefix=_name_prefix(name_prefix, run_name, lens.name),
-                            mode="BOUNDING_BOX", image_size=image_size,
-                            pipeline=lens.pipeline, n=max_n,
-                        ),
-                        f"{lens.name} (BOUNDING_BOX n={max_n})",
+                    det = self._provision(
+                        prefix=_name_prefix(name_prefix, run_name, lens.name),
+                        mode="BOUNDING_BOX", image_size=image_size,
+                        pipeline=lens.pipeline, n=max_n,
+                    )
+                    stage_detectors.append(StageDetector(
+                        lens_name=lens.name, stage="single",
+                        detector=det, detector_id=det.id,
                     ))
             elif isinstance(lens, BboxToBinaryLens):
                 assert max_n is not None
                 if lens.bbox_detector_id is not None:
-                    tasks.append((
-                        self._make_external_task(
-                            lens.name, "bbox",
-                            detector_id=lens.bbox_detector_id,
-                            expected_pipeline=lens.bbox_pipeline,
-                        ),
-                        f"{lens.name}.bbox (external {lens.bbox_detector_id})",
+                    stage_detectors.append(self._fetch_external(
+                        lens.name, "bbox",
+                        detector_id=lens.bbox_detector_id,
+                        expected_pipeline=lens.bbox_pipeline,
                     ))
                 else:
-                    tasks.append((
-                        self._make_create_task(
-                            lens.name, "bbox",
-                            prefix=_name_prefix(name_prefix, run_name, lens.name, "bbox"),
-                            mode="BOUNDING_BOX", image_size=image_size,
-                            pipeline=lens.bbox_pipeline, n=max_n,
-                        ),
-                        f"{lens.name}.bbox (BOUNDING_BOX n={max_n})",
+                    bbox_det = self._provision(
+                        prefix=_name_prefix(name_prefix, run_name, lens.name, "bbox"),
+                        mode="BOUNDING_BOX", image_size=image_size,
+                        pipeline=lens.bbox_pipeline, n=max_n,
+                    )
+                    stage_detectors.append(StageDetector(
+                        lens_name=lens.name, stage="bbox",
+                        detector=bbox_det, detector_id=bbox_det.id,
                     ))
                 if lens.binary_detector_id is not None:
-                    tasks.append((
-                        self._make_external_task(
-                            lens.name, "binary",
-                            detector_id=lens.binary_detector_id,
-                            expected_pipeline=lens.binary_pipeline,
-                        ),
-                        f"{lens.name}.binary (external {lens.binary_detector_id})",
+                    stage_detectors.append(self._fetch_external(
+                        lens.name, "binary",
+                        detector_id=lens.binary_detector_id,
+                        expected_pipeline=lens.binary_pipeline,
                     ))
                 else:
-                    tasks.append((
-                        self._make_create_task(
-                            lens.name, "binary",
-                            # The downstream binary stage actually serves
-                            # BINARY_DOWNSTREAM_SIZE-sized images at runtime,
-                            # so prime the detector with images of that same
-                            # shape — priming on the upstream `image_size`
-                            # (e.g. 1920x1080) trained the model on a
-                            # distribution it never sees in practice.
-                            prefix=_name_prefix(name_prefix, run_name, lens.name, "binary"),
-                            mode="BINARY", image_size=BINARY_DOWNSTREAM_SIZE,
-                            pipeline=lens.binary_pipeline, n=None,
-                        ),
-                        f"{lens.name}.binary (BINARY)",
+                    bin_det = self._provision(
+                        # The downstream binary stage actually serves
+                        # BINARY_DOWNSTREAM_SIZE-sized images at runtime, so prime
+                        # the detector with images of that same shape — priming on
+                        # the upstream `image_size` (e.g. 1920x1080) trained the
+                        # model on a distribution it never sees in practice.
+                        prefix=_name_prefix(name_prefix, run_name, lens.name, "binary"),
+                        mode="BINARY", image_size=BINARY_DOWNSTREAM_SIZE,
+                        pipeline=lens.binary_pipeline, n=None,
+                    )
+                    stage_detectors.append(StageDetector(
+                        lens_name=lens.name, stage="binary",
+                        detector=bin_det, detector_id=bin_det.id,
                     ))
             else:
                 raise RuntimeError(f"unknown lens type: {type(lens).__name__}")
-        return tasks
+        self._all_stage_detectors = stage_detectors
+        return stage_detectors
 
-    def _make_create_task(
-        self,
-        lens_name: str,
-        stage: str,
-        *,
-        prefix: str,
-        mode: str,
-        image_size: tuple[int, int],
-        pipeline: str | None,
-        n: int | None,
-    ) -> Callable[[], StageDetector]:
-        """Build a zero-arg callable that creates + trains one detector
-        and returns the corresponding StageDetector."""
-        def _run() -> StageDetector:
-            det = self._provision(
-                prefix=prefix, mode=mode, image_size=image_size,
-                pipeline=pipeline, n=n,
-            )
-            return StageDetector(
-                lens_name=lens_name, stage=stage,
-                detector=det, detector_id=det.id, is_external=False,
-            )
-        return _run
-
-    def _make_external_task(
+    def _fetch_external(
         self,
         lens_name: str,
         stage: str,
         *,
         detector_id: str,
         expected_pipeline: str | None,
-    ) -> Callable[[], StageDetector]:
-        """Build a zero-arg callable that fetches an existing detector by
-        ID, verifies its pipeline matches the configured one, and
-        returns a StageDetector flagged is_external=True. Training and
-        cleanup are skipped for this stage."""
-        def _run() -> StageDetector:
-            logger.info("fetching external detector %s for %s.%s", detector_id, lens_name, stage)
-            det = self.gl_cloud.get_detector(detector_id)
-            if expected_pipeline is not None:
-                # The SDK has no way to override a detector's pipeline, so
-                # config-vs-actual mismatch silently routes inference to
-                # the wrong model. Verify up front and fail loudly.
-                glh.assert_configured_edge_pipeline_matches_provided(
-                    self.gl_cloud, det.id, expected_pipeline,
-                )
-            return StageDetector(
-                lens_name=lens_name, stage=stage,
-                detector=det, detector_id=det.id, is_external=True,
+    ) -> StageDetector:
+        """Fetch a pre-existing detector by ID, verify its pipeline
+        matches the configured one, and return a StageDetector flagged
+        is_external=True. Training and cleanup are skipped for the
+        returned detector. The SDK has no way to override a detector's
+        pipeline, so a config-vs-actual mismatch silently routes
+        inference to the wrong model — we verify up front and fail loudly.
+        """
+        logger.info("fetching external detector %s for %s.%s", detector_id, lens_name, stage)
+        det = self.gl_cloud.get_detector(detector_id)
+        if expected_pipeline is not None:
+            glh.assert_configured_edge_pipeline_matches_provided(
+                self.gl_cloud, det.id, expected_pipeline,
             )
-        return _run
+        return StageDetector(
+            lens_name=lens_name, stage=stage,
+            detector=det, detector_id=det.id, is_external=True,
+        )
 
     def _provision(
         self,
