@@ -12,3 +12,26 @@ dependencies = [
     "setuptools>=75.1.0",
     "tqdm>=4.67.1",
 ]
+
+[project.scripts]
+app_benchmark = "app_benchmark.cli:main"
+
+[build-system]
+requires = ["setuptools>=75.1.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app_benchmark*"]
+
+# Top-level helper modules in load-testing/ that the app_benchmark package
+# imports directly (e.g. `import system_helpers`, `import groundlight_helpers`).
+# Without these the installed `app_benchmark` script can't find them at
+# runtime, since the cwd is no longer on sys.path.
+[tool.setuptools]
+py-modules = [
+    "constants",
+    "groundlight_helpers",
+    "image_helpers",
+    "parse_load_test_logs",
+    "system_helpers",
+]
