@@ -43,6 +43,11 @@ class RunConfig(BaseModel):
             or any context where contamination is unacceptable.
         set_config_timeout_seconds: How long to wait for `edge.set_config`
             to finish (cold edges with many models need more).
+        detector_provision_concurrency: Max number of detectors to
+            provision (create + train) in parallel. The bottleneck is
+            edge-pipeline training, so 4-way parallelism saves real
+            wall-clock on multi-lens configs. Raise carefully — too high
+            and the cloud API rate-limits.
     """
     name: str = Field(pattern=r"^[a-zA-Z0-9_-]+$", max_length=64)
     output_dir: str = "./benchmark_results/{name}-{ts}/"
@@ -51,6 +56,7 @@ class RunConfig(BaseModel):
     detector_name_prefix: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{1,15}$")
     refuse_if_host_not_clean: bool = False
     set_config_timeout_seconds: int = Field(default=900, ge=30)
+    detector_provision_concurrency: int = Field(default=4, ge=1, le=16)
 
     @model_validator(mode="after")
     def _derive_prefix(self) -> "RunConfig":
@@ -145,10 +151,28 @@ class SingleBinaryLens(_LensBase):
 
     Attributes:
         pipeline: Optional Groundlight pipeline config name. None uses
-            the cloud's default binary pipeline.
+            the cloud's default binary pipeline. Required when
+            binary_detector_id is set (we verify it matches the
+            existing detector's actual pipeline).
+        binary_detector_id: Optional pre-existing detector ID. When set,
+            the harness skips creation + training for this lens and uses
+            the detector as-is. The detector is also skipped during
+            cleanup so the cloud copy is preserved across runs. Edge
+            inference still runs in NO_CLOUD mode so training data
+            isn't polluted.
     """
     type: Literal["single_binary"]
     pipeline: str | None = Field(default=None, max_length=100)
+    binary_detector_id: str | None = Field(default=None, max_length=64)
+
+    @model_validator(mode="after")
+    def _check_detector_id_pipeline(self) -> "SingleBinaryLens":
+        if self.binary_detector_id is not None and self.pipeline is None:
+            raise ValueError(
+                "`pipeline` is required when `binary_detector_id` is set "
+                "(we verify the existing detector's pipeline matches)."
+            )
+        return self
 
 
 class SingleBboxLens(_LensBase):
@@ -158,20 +182,33 @@ class SingleBboxLens(_LensBase):
 
     Attributes:
         pipeline: Optional Groundlight pipeline config name. None uses
-            the cloud's default bbox pipeline.
+            the cloud's default bbox pipeline. Required when
+            bbox_detector_id is set.
         n: List of integer values to sweep across runs. Zipped with other
             lenses' n lists; must share the same length when multiple
             lenses declare n.
+        bbox_detector_id: Optional pre-existing detector ID. When set,
+            the harness skips creation + training for this lens and uses
+            the detector as-is. The detector is also skipped during
+            cleanup. Note: max_num_bboxes is fixed on the existing
+            detector — `n` only affects worker-side image synthesis,
+            not detector provisioning.
     """
     type: Literal["single_bbox"]
     pipeline: str | None = Field(default=None, max_length=100)
     n: list[int] = Field(min_length=1)
+    bbox_detector_id: str | None = Field(default=None, max_length=64)
 
     @model_validator(mode="after")
     def _check_n(self) -> "SingleBboxLens":
         for value in self.n:
             if value < 1:
                 raise ValueError(f"single_bbox.n entries must be >= 1 (got {value})")
+        if self.bbox_detector_id is not None and self.pipeline is None:
+            raise ValueError(
+                "`pipeline` is required when `bbox_detector_id` is set "
+                "(we verify the existing detector's pipeline matches)."
+            )
         return self
 
 
@@ -183,23 +220,42 @@ class BboxToBinaryLens(_LensBase):
 
     Attributes:
         bbox_pipeline: Optional pipeline config for the bbox stage.
+            Required when bbox_detector_id is set.
         binary_pipeline: Optional pipeline config for the downstream
-            binary stage.
+            binary stage. Required when binary_detector_id is set.
         n: List of integer values to sweep across runs. n controls BOTH
             the bbox detector's `max_num_bboxes` (set to max(n) once at
             provisioning) AND the number of downstream binary calls
             issued per frame in this run.
+        bbox_detector_id: Optional pre-existing bbox-stage detector ID.
+            When set, the bbox stage skips creation + training and is
+            preserved at cleanup. Independent of binary_detector_id —
+            users can mix existing bbox + freshly-trained binary, or
+            vice versa.
+        binary_detector_id: Optional pre-existing binary-stage detector ID.
+            Same semantics as bbox_detector_id but for the downstream
+            stage.
     """
     type: Literal["bbox_to_binary"]
     bbox_pipeline: str | None = Field(default=None, max_length=100)
     binary_pipeline: str | None = Field(default=None, max_length=100)
     n: list[int] = Field(min_length=1)
+    bbox_detector_id: str | None = Field(default=None, max_length=64)
+    binary_detector_id: str | None = Field(default=None, max_length=64)
 
     @model_validator(mode="after")
     def _check_n(self) -> "BboxToBinaryLens":
         for value in self.n:
             if value < 1:
                 raise ValueError(f"bbox_to_binary.n entries must be >= 1 (got {value})")
+        if self.bbox_detector_id is not None and self.bbox_pipeline is None:
+            raise ValueError(
+                "`bbox_pipeline` is required when `bbox_detector_id` is set."
+            )
+        if self.binary_detector_id is not None and self.binary_pipeline is None:
+            raise ValueError(
+                "`binary_pipeline` is required when `binary_detector_id` is set."
+            )
         return self
 
 

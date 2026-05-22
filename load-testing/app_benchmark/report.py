@@ -405,6 +405,138 @@ def _target_label(target_fps: float | None) -> str:
     return f"{target_fps:.1f}"
 
 
+def summarize_lenses_config(cfg, stage_detectors) -> list[dict[str, Any]]:
+    """Build the per-lens configuration summary surfaced in summary.md /
+    summary.json.
+
+    Combines the YAML config (per-lens shape and pipelines) with the
+    resolved StageDetector list (which carries the actual detector_id
+    and the is_external flag from Feature 1). The result is the
+    authoritative "what actually ran" record — it makes pipeline-vs-ID
+    mismatches obvious when reviewing past benchmarks and lets
+    downstream tooling diff configurations across runs.
+
+    Args:
+        cfg: BenchmarkConfig (passed positionally to avoid a circular
+            import; we only read public attributes).
+        stage_detectors: Flat list of StageDetector with lens_name,
+            stage, detector_id, is_external.
+
+    Returns:
+        A list of dicts, one per lens, in config order. Each entry:
+            {
+              "name": str,
+              "type": "single_binary" | "single_bbox" | "bbox_to_binary",
+              "cameras": int,
+              "n": list[int] | None,
+              "image_size": [w, h] | None,           # only if overridden
+              "target_fps": float | None,            # only if overridden
+              "stages": [
+                {
+                  "stage": "single" | "bbox" | "binary",
+                  "pipeline": str | None,
+                  "detector_id": str,
+                  "is_external": bool,
+                },
+                ...
+              ],
+            }
+    """
+    stages_by_lens: dict[str, list] = defaultdict(list)
+    for sd in stage_detectors:
+        stages_by_lens[sd.lens_name].append(sd)
+
+    out: list[dict[str, Any]] = []
+    for lens in cfg.lenses:
+        sds = stages_by_lens.get(lens.name, [])
+        sd_by_stage = {sd.stage: sd for sd in sds}
+        ltype = getattr(lens, "type", "?")
+
+        stage_entries: list[dict[str, Any]] = []
+        if ltype in ("single_binary", "single_bbox"):
+            sd = sd_by_stage.get("single")
+            stage_entries.append({
+                "stage": "single",
+                "pipeline": getattr(lens, "pipeline", None),
+                "detector_id": sd.detector_id if sd else None,
+                "is_external": sd.is_external if sd else False,
+            })
+        elif ltype == "bbox_to_binary":
+            sd_bbox = sd_by_stage.get("bbox")
+            sd_bin = sd_by_stage.get("binary")
+            stage_entries.append({
+                "stage": "bbox",
+                "pipeline": getattr(lens, "bbox_pipeline", None),
+                "detector_id": sd_bbox.detector_id if sd_bbox else None,
+                "is_external": sd_bbox.is_external if sd_bbox else False,
+            })
+            stage_entries.append({
+                "stage": "binary",
+                "pipeline": getattr(lens, "binary_pipeline", None),
+                "detector_id": sd_bin.detector_id if sd_bin else None,
+                "is_external": sd_bin.is_external if sd_bin else False,
+            })
+
+        entry: dict[str, Any] = {
+            "name": lens.name,
+            "type": ltype,
+            "cameras": lens.cameras,
+            "n": list(lens.n) if hasattr(lens, "n") else None,
+            "stages": stage_entries,
+        }
+        if lens.image_size is not None:
+            entry["image_size"] = list(lens.image_size)
+        if lens.target_fps is not None:
+            entry["target_fps"] = lens.target_fps
+        out.append(entry)
+    return out
+
+
+def _render_lens_config_section(lenses: list[dict[str, Any]]) -> list[str]:
+    """Render the lens-configuration table for summary.md.
+
+    One row per stage (chained lenses produce two rows). The detector_id
+    column shows the resolved detector along with an `(external)` tag
+    for stages backed by a pre-existing detector — those are the ones
+    whose pipeline was verified at startup, not created or trained by
+    the benchmark.
+    """
+    if not lenses:
+        return []
+    lines = [
+        "## Lens configuration",
+        "",
+        "Resolved configuration for each lens — pipeline and detector ID "
+        "as actually used at runtime. Stages tagged `(external)` were "
+        "supplied via `*_detector_id` in the YAML; their pipeline was "
+        "verified to match the config before the benchmark ran, and they "
+        "are preserved at cleanup.",
+        "",
+        "| Lens | Type | Stage | Pipeline | Detector ID | Cameras | n |",
+        "|---|---|---|---|---|---:|---|",
+    ]
+    for lens in lenses:
+        n_label = ",".join(str(v) for v in lens["n"]) if lens.get("n") else "—"
+        for i, stage in enumerate(lens["stages"]):
+            pipeline = stage.get("pipeline") or "(default)"
+            det_id = stage.get("detector_id") or "—"
+            if stage.get("is_external"):
+                det_id = f"{det_id} (external)"
+            # Repeat the lens-level columns only on the first stage row so
+            # chained lenses read as a single logical entry.
+            if i == 0:
+                lines.append(
+                    f"| {lens['name']} | {lens['type']} | {stage['stage']} | "
+                    f"`{pipeline}` | `{det_id}` | {lens['cameras']} | {n_label} |"
+                )
+            else:
+                lines.append(
+                    f"|  |  | {stage['stage']} | `{pipeline}` | `{det_id}` |  |  |"
+                )
+    lines.append("")
+    return lines
+
+
 def write_top_level(
     out_root: Path,
     summaries: list[dict[str, Any]],
@@ -432,6 +564,10 @@ def write_top_level(
         network_baseline_text: Pre-formatted version of the above for
             inline rendering.
     """
+    # `lenses` is the structured mirror of the Lens configuration section
+    # below; it captures the resolved (post-validation, post-detector-fetch)
+    # state of every lens so downstream tools can diff configs across runs.
+    lenses_config = benchmark_meta.get("lenses", [])
     payload = {
         "meta": benchmark_meta,
         "network_baseline": network_baseline,
@@ -456,6 +592,8 @@ def write_top_level(
             f"warmup `{cfg.get('warmup_seconds')}s`"
         )
     lines.append("")
+
+    lines.extend(_render_lens_config_section(lenses_config))
 
     if not summaries:
         lines.append("(no runs)")

@@ -46,6 +46,63 @@ class APIError(Exception):
     """
     pass
 
+
+def _is_rate_limit_error(exc: BaseException) -> bool:
+    """Return True if the exception looks like a 429 / rate-limit response.
+
+    Handles both the SDK's ApiException (which exposes .status) and the
+    custom APIError raised by call_api (which only carries the response
+    in the message). Errs on the side of false-positive — better to
+    retry once on an ambiguous error than to crash a long benchmark.
+    """
+    if isinstance(exc, ApiException) and getattr(exc, "status", None) == 429:
+        return True
+    if isinstance(exc, APIError):
+        msg = str(exc)
+        return "429" in msg or "Too Many Requests" in msg or "rate limit" in msg.lower()
+    return False
+
+
+def retry_on_rate_limit(
+    func,
+    *args,
+    max_attempts: int = 5,
+    base_delay: float = 2.0,
+    **kwargs,
+):
+    """Call func with exponential backoff on rate-limit responses.
+
+    Sleep schedule with defaults: 2s, 4s, 8s, 16s (total ≤30s before
+    giving up). Non-rate-limit exceptions propagate immediately.
+
+    Args:
+        func: Callable to invoke.
+        *args, **kwargs: Forwarded to func.
+        max_attempts: Total tries including the first. Default 5.
+        base_delay: Seconds for the first backoff; doubles each attempt.
+
+    Returns:
+        Whatever func returns on the first non-rate-limited call.
+
+    Raises:
+        The underlying exception from the final attempt, or any
+        non-rate-limit exception from any attempt.
+    """
+    for attempt in range(max_attempts):
+        try:
+            return func(*args, **kwargs)
+        except Exception as exc:
+            if not _is_rate_limit_error(exc):
+                raise
+            if attempt == max_attempts - 1:
+                raise
+            delay = base_delay * (2 ** attempt)
+            print(
+                f"Rate-limited ({type(exc).__name__}); retrying in {delay:.0f}s "
+                f"(attempt {attempt + 1}/{max_attempts})"
+            )
+            time.sleep(delay)
+
 def call_api(url: str, params: dict, timeout: float | None = None) -> dict:
     """Perform a GET request with API token and return decoded JSON or raise APIError."""
 
@@ -271,10 +328,17 @@ def prime_detector(
     """Submit synthetic labels in bounded concurrent batches to trigger model training."""
 
     def _prime_one() -> None:
-        """Generate one sample, submit it, and attach the synthetic label."""
+        """Generate one sample, submit it, and attach the synthetic label.
+
+        Submission and labelling are each wrapped in `retry_on_rate_limit`
+        so 429s from concurrent priming across detectors don't fail the
+        whole benchmark — they just slow it down.
+        """
         image, label, rois = imgh.generate_random_image(detector, image_width, image_height)
-        iq = gl.submit_image_query(detector, image, **IQ_KWARGS_FOR_NO_ESCALATION)
-        gl.add_label(iq, label, rois)
+        iq = retry_on_rate_limit(
+            gl.submit_image_query, detector, image, **IQ_KWARGS_FOR_NO_ESCALATION
+        )
+        retry_on_rate_limit(gl.add_label, iq, label, rois)
 
     remaining = num_labels
     with trange(num_labels, desc=f"Priming {detector.id} with {num_labels} labels.", unit="label") as progress:
@@ -471,10 +535,15 @@ def wait_for_edge_pipeline_trained(
     timeout_sec: float,
     poll_interval_sec: float = 5.0,
 ) -> dict:
-    """Poll until the edge pipeline has trained with enough labels, or timeout."""
+    """Poll until the edge pipeline has trained with enough labels, or timeout.
+
+    Each poll is wrapped in retry_on_rate_limit so concurrent polling
+    across many detectors won't fail the whole benchmark on a transient
+    429 — the retry's own sleep stacks on top of poll_interval_sec.
+    """
     start = time.time()
     while True:
-        pipeline_details = get_edge_pipeline_details(gl, detector.id)
+        pipeline_details = retry_on_rate_limit(get_edge_pipeline_details, gl, detector.id)
         if edge_pipeline_is_sufficiently_trained(pipeline_details, min_training_labels):
             return pipeline_details
 

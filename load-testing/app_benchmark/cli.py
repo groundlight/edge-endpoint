@@ -372,6 +372,7 @@ def main(argv: list[str] | None = None) -> int:
             "duration_seconds": cfg.globals_.duration_seconds,
             "warmup_seconds": cfg.globals_.warmup_seconds,
         },
+        "lenses": report.summarize_lenses_config(cfg, stage_detectors),
     }
     report.write_top_level(
         out_root, summaries,
