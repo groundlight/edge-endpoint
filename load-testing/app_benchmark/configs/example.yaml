@@ -4,6 +4,11 @@ run:
   output_dir: "./benchmark_results/{name}-{ts}/"   # default shown; {name} and {ts} are substituted at runtime
   detector_name_prefix: "sample_bench"             # optional; defaults to a slug of `name` (lowercased, dashes → underscores, ≤16 chars)
   refuse_if_host_not_clean: false                  # default; set true to hard-fail when the edge already has detectors loaded
+  preserve_detectors: false                        # default; set true to keep created detectors on the cloud after cleanup
+                                                   # so re-runs reuse them via get_or_create_detector (skips retraining if
+                                                   # the edge pipeline is already trained). Pipeline mismatches are still
+                                                   # caught at provision time. External (*_detector_id) detectors are
+                                                   # always preserved regardless of this flag.
 
 global:
   image_size: [1920, 1080]
