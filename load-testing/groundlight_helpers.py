@@ -7,6 +7,7 @@ import os
 import requests
 import json
 import time
+import types
 import yaml
 from tqdm import trange
 
@@ -250,6 +251,26 @@ def error_if_not_from_edge(iq: ImageQuery) -> None:
             'Got a non-edge answer from the Edge Endpoint. '
             f'Please configure your Edge Endpoint so that {iq.detector_id} always receives edge answers.'
         )
+
+def disable_transport_retries(gl: ExperimentalApi) -> None:
+    """Disable urllib3 transport-level retries on the SDK HTTP client."""
+    gl.configuration.retries = 0
+
+
+def disable_sdk_retries(gl: ExperimentalApi) -> None:
+    """Strip RequestsRetryDecorator from call_api so 5xx errors surface immediately.
+
+    Reaches into SDK internals; may break if the retry decorator changes.
+    """
+    api = gl.api_client
+    api.call_api = types.MethodType(api.call_api.__wrapped__, api)
+
+
+def disable_all_retries(gl: ExperimentalApi) -> None:
+    """Disable both urllib3 transport retries and SDK 5xx retries."""
+    disable_transport_retries(gl)
+    disable_sdk_retries(gl)
+
 
 def error_if_endpoint_is_cloud(gl: ExperimentalApi) -> None:
     """Raise if the connected endpoint appears to be the Groundlight cloud instead of an Edge Endpoint."""

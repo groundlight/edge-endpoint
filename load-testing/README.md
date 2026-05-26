@@ -74,6 +74,22 @@ After the load test finishes, it automatically parses the results and writes a t
 #### Evaluate
 Review the generated plots and `load_test_results.json`.
 
+### Post Set Config Inference Readiness Test
+
+#### Purpose
+Reproduces intermittent 5xx errors that can appear when inference requests start immediately after `gl.edge.set_config()` returns (all detectors reported ready). SDK retries are disabled so transient 503s are not masked.
+
+Each trial clears the edge config, re-applies the detector (forcing a fresh inference pod rollout), then fires a burst of image queries with no delay after `set_config` completes.
+
+#### Usage
+```
+uv run python post_set_config_inference_readiness_test.py [options]
+```
+
+Use `--trials` and `--burst-size` to tune how often the cycle runs and how many immediate queries follow each `set_config`. Exits with code 1 if any trial saw a failure.
+
+For the related rollout-under-load regression test (with a short post-config sleep to avoid a separate timing bug), see `rollouts_under_inference_load.py`.
+
 ### Memory Pressure Test
 
 #### Purpose
