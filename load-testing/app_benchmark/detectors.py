@@ -184,12 +184,19 @@ class DetectorManager:
         creation + training are skipped. External detectors are also
         skipped during cleanup (see delete_all).
 
-        Provisioning is serial. PR #373 introduces a `provision_detectors`
-        helper that overlaps the edge-pipeline training wait across
-        detectors; we'll route through it once it merges. For now, a
-        multi-lens benchmark pays the full per-detector training time
-        sequentially on a cold cache (a few minutes per detector), which
-        is fine for the typical 3–4-lens config.
+        Provisioning runs in two phases (mirroring
+        `groundlight_helpers.provision_detectors` but with per-lens
+        prefixes):
+          1. Serially create + prime every owned detector with
+             `wait_for_training=False`. The slow part — server-side
+             edge-pipeline training — kicks off but doesn't block.
+          2. Serially wait for each owned detector's edge pipeline to
+             finish training. Because training happens on the cloud
+             after step 1's priming, all detectors are training in
+             parallel during these waits — so total wall-clock is
+             dominated by the slowest single detector, not the sum.
+
+        External (`*_detector_id`) detectors skip both phases.
 
         Returns:
             The flat list of StageDetector objects for the whole
@@ -202,6 +209,8 @@ class DetectorManager:
         name_prefix = self.cfg.run.detector_name_prefix
         stage_detectors: list[StageDetector] = []
 
+        # Phase 1: create + prime, skip the training wait so the next
+        # detector can start priming while this one is training.
         for lens in self.cfg.lenses:
             image_size = lens.image_size if lens.image_size is not None else self.cfg.globals_.image_size
             max_n = max(lens.n) if hasattr(lens, "n") else None
@@ -217,6 +226,7 @@ class DetectorManager:
                         prefix=_name_prefix(name_prefix, run_name, lens.name),
                         mode="BINARY", image_size=image_size,
                         pipeline=lens.pipeline, n=None,
+                        wait_for_training=False,
                     )
                     stage_detectors.append(StageDetector(
                         lens_name=lens.name, stage="single",
@@ -235,6 +245,7 @@ class DetectorManager:
                         prefix=_name_prefix(name_prefix, run_name, lens.name),
                         mode="BOUNDING_BOX", image_size=image_size,
                         pipeline=lens.pipeline, n=max_n,
+                        wait_for_training=False,
                     )
                     stage_detectors.append(StageDetector(
                         lens_name=lens.name, stage="single",
@@ -253,6 +264,7 @@ class DetectorManager:
                         prefix=_name_prefix(name_prefix, run_name, lens.name, "bbox"),
                         mode="BOUNDING_BOX", image_size=image_size,
                         pipeline=lens.bbox_pipeline, n=max_n,
+                        wait_for_training=False,
                     )
                     stage_detectors.append(StageDetector(
                         lens_name=lens.name, stage="bbox",
@@ -274,6 +286,7 @@ class DetectorManager:
                         prefix=_name_prefix(name_prefix, run_name, lens.name, "binary"),
                         mode="BINARY", image_size=BINARY_DOWNSTREAM_SIZE,
                         pipeline=lens.binary_pipeline, n=None,
+                        wait_for_training=False,
                     )
                     stage_detectors.append(StageDetector(
                         lens_name=lens.name, stage="binary",
@@ -281,6 +294,23 @@ class DetectorManager:
                     ))
             else:
                 raise RuntimeError(f"unknown lens type: {type(lens).__name__}")
+
+        # Phase 2: wait for all owned detectors to finish training. Each
+        # wait_for_edge_pipeline_trained returns immediately if the
+        # pipeline is already sufficiently trained (the common case on
+        # re-runs with preserve_detectors=true), so this is cheap when
+        # nothing actually needed priming in phase 1.
+        owned = [sd for sd in stage_detectors if not sd.is_external]
+        if owned:
+            logger.info("waiting for %d owned detector(s) to finish edge-pipeline training", len(owned))
+            for sd in owned:
+                num_labels = glh.num_priming_labels_for_detector(sd.detector)
+                min_training_labels = int(num_labels * 0.75)
+                glh.wait_for_edge_pipeline_trained(
+                    self.gl_cloud, sd.detector, min_training_labels,
+                    timeout_sec=glh.DEFAULT_TRAINING_SEC_TIMEOUT,
+                )
+
         self._all_stage_detectors = stage_detectors
         return stage_detectors
 
@@ -318,6 +348,7 @@ class DetectorManager:
         image_size: tuple[int, int],
         pipeline: str | None,
         n: int | None,
+        wait_for_training: bool = True,
     ) -> Detector:
         """Thin wrapper over groundlight_helpers.provision_detector that
         tracks every created detector in `_all_created` for delete_all().
@@ -330,6 +361,10 @@ class DetectorManager:
                 default for the mode.
             n: Mode-specific knob (max_num_bboxes for BOUNDING_BOX,
                 max_count for COUNT, etc.); None for BINARY.
+            wait_for_training: When True (default), block until the edge
+                pipeline finishes training. When False, return as soon as
+                priming has been kicked off — caller is responsible for
+                waiting (see provision_all's two-phase path).
 
         Returns:
             The SDK Detector object (created or existing).
@@ -342,6 +377,7 @@ class DetectorManager:
             image_height=image_size[1],
             edge_pipeline_config=pipeline,
             n=n,
+            wait_for_training=wait_for_training,
         )
         self._all_created[det.name] = det
         return det
