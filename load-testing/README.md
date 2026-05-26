@@ -77,7 +77,7 @@ Review the generated plots and `load_test_results.json`.
 ### Edge vs Cloud Inference Comparison
 
 #### Purpose
-Compares edge vs cloud inference side-by-side for a MULTI_CLASS detector to investigate cases where the edge endpoint returns lower-confidence or different answers than cloud. Each run creates a fresh PrimingGroup seeded from a chosen MLPipeline MLB and a fresh primed detector, then re-runs recent source images through both and prints a comparison table.
+Compares edge vs cloud inference side-by-side for a MULTI_CLASS detector to investigate cases where the edge endpoint returns lower-confidence or different answers than cloud. Each run creates a fresh PrimingGroup seeded from the detector's edge pipeline MLB and a fresh primed detector, then re-runs recent source images through both and prints a comparison table.
 
 #### Usage
 ```
