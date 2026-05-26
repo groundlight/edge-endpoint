@@ -111,7 +111,7 @@ Measures per-detector VRAM and RAM on a running Edge Endpoint across a YAML-defi
 uv run python measure_ram_and_vram_usage.py PIPELINES_YAML --device-name DEVICE [options]
 ```
 
-See `benchmark_pipelines.example.yaml` for the input format. Each mode block requires `image_sizes` and `pipelines`; non-BINARY modes may also set `n`. The script expands the cartesian product into one measurement per combination.
+See `benchmark_pipelines.yaml` for the input format. Each mode block requires `image_sizes` and `pipelines`; non-BINARY modes may also set `n`. The script expands the cartesian product into one measurement per combination.
 
 The first run per pipeline can take several minutes while detectors train. Cloud training runs concurrently, so wall-time is bounded by the slowest detector, not the sum. Subsequent runs reuse already-trained detectors.
 
