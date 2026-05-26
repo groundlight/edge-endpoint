@@ -81,10 +81,10 @@ Compares edge vs cloud inference side-by-side for a MULTI_CLASS detector to inve
 
 #### Usage
 ```
-uv run python compare_edge_cloud_inference.py DETECTOR_ID --pipeline-id MLPIPE_ID
+uv run python compare_edge_cloud_inference.py DETECTOR_ID
 ```
 
-Run without `--pipeline-id` to list available pipelines on the detector. Requires `GROUNDLIGHT_API_TOKEN` and `GROUNDLIGHT_ENDPOINT` (edge). Fetches up to 50 recent image queries from the source detector via cloud (configurable with `--max-iqs`), then configures the edge endpoint for that detector in `NO_CLOUD` mode (edge-only inference, no cloud escalation). Creates cloud resources (PrimingGroup + primed detector) in the `Edge Endpoint Confidence Diagnosis` group. Run with `--help` for full details.
+Requires `GROUNDLIGHT_API_TOKEN` and `GROUNDLIGHT_ENDPOINT` (edge). Automatically uses the detector's designated edge pipeline (falls back to the active pipeline if none is set). Fetches up to 50 recent image queries from the source detector via cloud (configurable with `--max-iqs`), then configures the edge endpoint for that detector in `NO_CLOUD` mode (edge-only inference, no cloud escalation). Creates cloud resources (PrimingGroup + primed detector) in the `Edge Endpoint Confidence Diagnosis` group. Run with `--help` for full details.
 
 ### Memory Pressure Test
 

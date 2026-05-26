@@ -68,8 +68,8 @@ def _pipeline_role_tags(pipeline: dict) -> list[str]:
     return ["shadow"]
 
 
-def _format_pipelines_for_error(pipelines: list[dict]) -> str:
-    """Format pipeline rows for the missing --pipeline-id error message."""
+def _format_pipelines_for_display(pipelines: list[dict]) -> str:
+    """Format pipeline rows for display in error or info messages."""
     if not pipelines:
         return "  (no pipelines found for this detector)"
 
@@ -83,33 +83,36 @@ def _format_pipelines_for_error(pipelines: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _exit_missing_pipeline_id(gl: ExperimentalApi, detector_id: str) -> None:
-    """Print available pipeline IDs for the detector and exit."""
+def _select_pipeline(gl: ExperimentalApi, detector_id: str) -> dict:
+    """Return the pipeline the edge endpoint uses for this detector.
+
+    Prefers the designated edge pipeline; falls back to the active pipeline if
+    no edge pipeline is set. Exits with an error if no trained pipeline is found.
+    """
     try:
         pipelines = _fetch_all_detector_pipelines(gl, detector_id)
     except NotFoundError:
         print(f"Error: detector {detector_id!r} was not found.", file=sys.stderr)
         sys.exit(1)
 
+    for p in pipelines:
+        if p.get("is_edge_pipeline") and p.get("model_binary_id"):
+            return p
+
+    for p in pipelines:
+        if p.get("is_active_pipeline") and p.get("model_binary_id"):
+            print(
+                "Warning: no trained edge pipeline found; falling back to the active pipeline.",
+                file=sys.stderr,
+            )
+            return p
+
     print(
-        "Error: --pipeline-id is required.\n\n"
-        f"Available pipelines for detector {detector_id}:\n"
-        f"{_format_pipelines_for_error(pipelines)}\n\n"
-        "Pass one of the pipeline IDs above with --pipeline-id.",
+        f"Error: no trained edge or active pipeline found for detector {detector_id}.\n\n"
+        f"Available pipelines:\n{_format_pipelines_for_display(pipelines)}",
         file=sys.stderr,
     )
-    sys.exit(2)
-
-
-def _find_pipeline(pipelines: list[dict], pipeline_id: str) -> dict:
-    """Return the pipeline dict matching pipeline_id, or raise if not found."""
-    for p in pipelines:
-        if p.get("id") == pipeline_id:
-            return p
-    raise ValueError(
-        f"Pipeline {pipeline_id!r} not found on this detector. "
-        "Run without --pipeline-id to see available pipelines."
-    )
+    sys.exit(1)
 
 
 def _priming_group_name(runtime_hash: str) -> str:
@@ -319,7 +322,6 @@ def run_inference_comparison(
             primed_detector,
             image_bytes,
             wait=0.0,
-            confidence_threshold=0.0,
             human_review="NEVER",
             metadata={"diagnosis_source_image_query_id": source_iq.id},
         )
@@ -388,7 +390,8 @@ def _parse_args() -> argparse.Namespace:
             "\n"
             "Fetches recent image queries from the source detector, re-runs each image on\n"
             "the edge endpoint (NO_CLOUD -- no cloud escalation) and on a fresh primed cloud\n"
-            "detector built from the chosen MLPipeline MLB, then prints a comparison table."
+            "detector seeded from the detector's edge pipeline MLB, then prints a comparison\n"
+            "table of labels and confidence scores."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
@@ -396,8 +399,11 @@ def _parse_args() -> argparse.Namespace:
             "  GROUNDLIGHT_API_TOKEN   Groundlight API token (required)\n"
             "  GROUNDLIGHT_ENDPOINT    Edge endpoint URL, e.g. http://10.0.0.1:30101 (required)\n"
             "\n"
+            "pipeline selection: the detector's designated edge pipeline is used automatically\n"
+            "  (falls back to the active pipeline if no edge pipeline is set).\n"
+            "\n"
             f"cloud resources created each run (group: '{PRIMED_DETECTOR_GROUP_NAME}'):\n"
-            "  one PrimingGroup seeded from the chosen MLPipeline MLB\n"
+            "  one PrimingGroup seeded from the edge pipeline MLB\n"
             "  one primed MULTI_CLASS detector\n"
             "\n"
             "safety: edge queries run in NO_CLOUD mode (no cloud escalation);\n"
@@ -408,11 +414,6 @@ def _parse_args() -> argparse.Namespace:
         "detector_id",
         metavar="DETECTOR_ID",
         help="Groundlight detector ID (e.g. det_abc123). Must be MULTI_CLASS.",
-    )
-    parser.add_argument(
-        "--pipeline-id",
-        metavar="PIPELINE_ID",
-        help="MLPipeline ID to prime from (e.g. mlpipe_abc123). Omit to list available pipelines.",
     )
     parser.add_argument(
         "--max-iqs",
@@ -436,21 +437,9 @@ def main() -> None:
     glh.error_if_endpoint_is_cloud(gl_edge)
     gl_cloud = ExperimentalApi(endpoint=glh.CLOUD_ENDPOINT_PROD)
 
-    if not args.pipeline_id:
-        _exit_missing_pipeline_id(gl_cloud, detector_id)
-
-    pipeline_id = args.pipeline_id.strip()
-    pipelines = _fetch_all_detector_pipelines(gl_cloud, detector_id)
-    pipeline = _find_pipeline(pipelines, pipeline_id)
-
-    mlb_key = pipeline.get("model_binary_id")
-    if not mlb_key:
-        print(
-            f"Error: pipeline {pipeline_id!r} has no trained MLBinary yet. "
-            "Wait for training to complete before using it as a priming source.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    pipeline = _select_pipeline(gl_cloud, detector_id)
+    pipeline_id = pipeline["id"]
+    mlb_key = pipeline["model_binary_id"]
 
     source_detector = gl_cloud.get_detector(detector_id)
     if source_detector.mode != "MULTI_CLASS":
