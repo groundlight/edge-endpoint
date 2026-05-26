@@ -43,6 +43,15 @@ class RunConfig(BaseModel):
             or any context where contamination is unacceptable.
         set_config_timeout_seconds: How long to wait for `edge.set_config`
             to finish (cold edges with many models need more).
+        preserve_detectors: If True, skip deletion of created detectors at
+            cleanup. Re-runs of the same config will hit
+            `get_or_create_detector` and reuse the existing detectors,
+            skipping retraining if the cloud-side pipeline is already
+            sufficiently trained. Pipeline mismatches are still caught
+            by `assert_configured_edge_pipeline_matches_provided` inside
+            `provision_detector`, so a config change is detected on the
+            next run. External (`*_detector_id`) detectors are always
+            preserved regardless of this flag.
     """
     name: str = Field(pattern=r"^[a-zA-Z0-9_-]+$", max_length=64)
     output_dir: str = "./benchmark_results/{name}-{ts}/"
@@ -51,6 +60,7 @@ class RunConfig(BaseModel):
     detector_name_prefix: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{1,15}$")
     refuse_if_host_not_clean: bool = False
     set_config_timeout_seconds: int = Field(default=900, ge=30)
+    preserve_detectors: bool = False
 
     @model_validator(mode="after")
     def _derive_prefix(self) -> "RunConfig":

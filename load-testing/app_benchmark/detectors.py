@@ -381,6 +381,11 @@ class DetectorManager:
         added to `_all_created` in the first place, so this filter is
         implicit.
 
+        When `run.preserve_detectors` is True, ALL detectors we created
+        are also preserved. Re-running the same config picks them up via
+        `get_or_create_detector` and skips retraining if the edge
+        pipeline is already sufficiently trained.
+
         Returns:
             (deleted_count, failed_count). Never raises — runs from
             atexit and we don't want to mask any prior exception.
@@ -391,6 +396,13 @@ class DetectorManager:
         )
         if external_count:
             logger.info("skipping cleanup of %d external detector(s)", external_count)
+        if self.cfg.run.preserve_detectors:
+            logger.info(
+                "preserve_detectors=true: keeping %d created detector(s) on the cloud "
+                "for reuse on the next run",
+                len(self._all_created),
+            )
+            return 0, 0
         deleted = failed = 0
         for det in self._all_created.values():
             try:
