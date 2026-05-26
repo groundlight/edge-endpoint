@@ -1,7 +1,8 @@
 from groundlight import ExperimentalApi, Groundlight, Detector, ApiException, ImageQuery
-from groundlight.edge import EdgeEndpointConfig, InferenceConfig, NO_CLOUD
+from groundlight.edge import EdgeEndpointConfig, GlobalConfig, InferenceConfig, NO_CLOUD
 
 from concurrent.futures import ThreadPoolExecutor
+from functools import wraps
 import hashlib
 import os
 import requests
@@ -21,6 +22,12 @@ CLOUD_ENDPOINT_PROD = 'https://api.groundlight.ai/device-api'
 IQ_KWARGS_FOR_NO_ESCALATION = {'wait': 0.0, 'human_review': 'NEVER', 'confidence_threshold': 0.0}
 IQ_KWARGS_NON_HUMAN_CLOUD_ESCALATION = {'wait': 0.0, 'human_review': 'NEVER', 'confidence_threshold': 1.0}
 PRIMING_MAX_BATCH_SIZE = 10
+
+# Priming-label policy: the number of labels submitted during priming scales with `n`
+# (the mode's label-space size) so that even high-`n` detectors get enough samples per
+# class to actually train.
+MIN_PRIMING_LABELS = 30
+PRIMING_LABELS_PER_CLASS = 5
 
 
 def hash_pipeline_config(pipeline_config: str) -> str:
@@ -262,6 +269,23 @@ def error_if_endpoint_is_cloud(gl: ExperimentalApi) -> None:
             'Please visit https://github.com/groundlight/edge-endpoint/blob/main/deploy/README.md to learn more about deploying an Edge Endpoint.'
         )
 
+def rate_limit_retry(max_retries: int = 10, wait_sec: float = 10.0):
+    """Decorator that retries a cloud API call on 429 rate-limit responses."""
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            for attempt in range(max_retries):
+                try:
+                    return fn(*args, **kwargs)
+                except ApiException as e:
+                    if e.status != 429 or attempt == max_retries - 1:
+                        raise
+                    print(f"429 rate limit, waiting {wait_sec:.0f}s...")
+                    time.sleep(wait_sec)
+        return wrapper
+    return decorator
+
+
 def prime_detector(
     gl: ExperimentalApi, 
     detector: Detector, 
@@ -270,6 +294,7 @@ def prime_detector(
     image_height: int) -> None:
     """Submit synthetic labels in bounded concurrent batches to trigger model training."""
 
+    @rate_limit_retry()
     def _prime_one() -> None:
         """Generate one sample, submit it, and attach the synthetic label."""
         image, label, rois = imgh.generate_random_image(detector, image_width, image_height)
@@ -307,7 +332,8 @@ def configure_edge_endpoint(
     """Push an edge config for one or more detectors and wait for readiness."""
     if isinstance(detectors, Detector):
         detectors = [detectors]
-    edge_config = EdgeEndpointConfig()
+    global_config = GlobalConfig(refresh_rate=5.0) # set a relatively fast refresh_rate to make loading detectors faster
+    edge_config = EdgeEndpointConfig(global_config=global_config)
     for detector in detectors:
         edge_config.add_detector(detector, edge_inference_config)
     detector_ids = ", ".join(d.id for d in detectors)
@@ -342,6 +368,25 @@ def default_n_for_mode(detector_mode: str) -> int:
     raise ValueError(f"Unsupported detector mode: {detector_mode}")
 
 
+def num_priming_labels_for_n(detector_mode: str, n: int) -> int:
+    """Number of priming labels to submit for a detector with the given mode and `n`.
+
+    Scales linearly with `n` so detectors with a large label space (many classes /
+    high max_count) still get enough samples per class to train. BINARY uses `n=2`.
+    """
+    return max(MIN_PRIMING_LABELS, n * PRIMING_LABELS_PER_CLASS)
+
+
+def num_priming_labels_for_detector(detector: Detector) -> int:
+    """Same as `num_priming_labels_for_n`, but derives `n` from the Detector itself."""
+    if detector.mode == "BINARY":
+        n = 2
+    else:
+        n_key = mode_configuration_key_for_n(detector.mode)
+        n = detector.mode_configuration[n_key]
+    return num_priming_labels_for_n(detector.mode, n)
+
+
 def validate_n_for_mode(detector_mode: str, n: int | None) -> None:
     """Raise ValueError if `n` is incompatible with this detector mode. No-op when n is None."""
     if n is None:
@@ -365,16 +410,15 @@ def provision_detector(
     image_height: int = 480,
     group_name: str = "Load Testing",
     edge_pipeline_config: str | None = None,
-    num_labels: int = 30,
     training_timeout_sec: float = 60 * 20,
     n: int | None = None,
+    wait_for_training: bool = True,
 ) -> Detector:
     """
-    Get or create a detector. If untrained, prime the detector with labels. Wait for training to finish and return the detector.
+    Get or create a detector. If untrained, prime the detector with labels and (by default)
+    wait for edge-pipeline training to finish before returning.
 
     gl_cloud: a `Groundlight` client that points at Groundlight cloud (not at an Edge Endpoint)
-
-    num_labels is the number of labels submitted during priming.
 
     n is a mode-specific integer knob:
         COUNT:        sets max_count
@@ -382,10 +426,17 @@ def provision_detector(
         MULTI_CLASS:  sets num_classes
         BINARY:       number of classes, must be 2
     If omitted, a mode-specific default is used.
+
+    The number of priming labels is computed from `n` (see `num_priming_labels_for_n`).
+
+    Set wait_for_training=False to return immediately after priming.
     """
     validate_n_for_mode(detector_mode, n)
     if n is None:
         n = default_n_for_mode(detector_mode)
+
+        
+    num_labels = num_priming_labels_for_n(detector_mode, n)
 
     detector_name = f"{detector_name_prefix} {image_width} x {image_height} - {detector_mode}"
     if detector_mode != "BINARY":
@@ -446,12 +497,59 @@ def provision_detector(
             f"Priming with {num_labels} labels."
         )
         prime_detector(gl_cloud, detector, num_labels, image_width, image_height)
-        print(f"Waiting up to {training_timeout_sec}s for edge pipeline training for {detector.id}...")
-        wait_for_edge_pipeline_trained(
-            gl_cloud, detector, min_training_labels, timeout_sec=training_timeout_sec
-        )
+
+        if wait_for_training:
+            wait_for_edge_pipeline_trained(
+                gl_cloud, detector, min_training_labels, timeout_sec=training_timeout_sec
+            )
 
     return detector
+
+
+DEFAULT_TRAINING_SEC_TIMEOUT: float = 60 * 20
+
+
+def provision_detectors(
+    gl_cloud: Groundlight,
+    specs: list[dict],
+    *,
+    detector_name_prefix: str = "Load Test",
+    group_name: str = "Load Testing",
+    training_sec_timeout: float | None = None,
+) -> list[Detector]:
+    """Get-or-create and prime many detectors, then wait for all pipelines to finish training.
+
+    If your goal is to provision multiple detectors, use this instead of provision_detector; provision_detectors
+    is faster because it parallelizes training. 
+
+    Specs are dicts of kwargs for `provision_detector` (e.g. detector_mode, n,
+    image_width, image_height, edge_pipeline_config).
+    """
+    if training_sec_timeout is None:
+        training_sec_timeout = DEFAULT_TRAINING_SEC_TIMEOUT
+
+    print(f"\n=== Provisioning {len(specs)} detector(s) ===")
+    detectors: list[Detector] = []
+    for spec in specs:
+        detector = provision_detector(
+            gl_cloud=gl_cloud,
+            detector_name_prefix=detector_name_prefix,
+            group_name=group_name,
+            wait_for_training=False,
+            **spec,
+        )
+        print(f"Got or created {detector.id}")
+        detectors.append(detector)
+
+    print(f"\n=== Waiting for {len(detectors)} detector(s) to finish training ===")
+    for detector in detectors:
+        num_labels = num_priming_labels_for_detector(detector)
+        min_training_labels = int(num_labels * 0.75)
+        wait_for_edge_pipeline_trained(
+            gl_cloud, detector, min_training_labels, timeout_sec=training_sec_timeout
+        )
+
+    return detectors
 
 
 def edge_pipeline_is_sufficiently_trained(pipeline_details: dict, min_training_labels: int) -> bool:
@@ -472,10 +570,12 @@ def wait_for_edge_pipeline_trained(
     poll_interval_sec: float = 5.0,
 ) -> dict:
     """Poll until the edge pipeline has trained with enough labels, or timeout."""
+    print(f"Waiting up to {timeout_sec}s for edge pipeline training for {detector.id}...")
     start = time.time()
     while True:
         pipeline_details = get_edge_pipeline_details(gl, detector.id)
         if edge_pipeline_is_sufficiently_trained(pipeline_details, min_training_labels):
+            print(f'Training completed for {detector.id}: {pipeline_details}')
             return pipeline_details
 
         if (time.time() - start) > timeout_sec:

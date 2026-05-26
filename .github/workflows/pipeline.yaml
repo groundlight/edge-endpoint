@@ -58,6 +58,12 @@ jobs:
           # fixtures (e.g. the in-memory SQLite test_client).
           uv run pytest -v -k "not _live" -n auto --dist loadfile
 
+      - name: Run load-testing unit tests
+        run: |
+          cd load-testing
+          uv sync --group dev
+          uv run pytest --rootdir=. tests/ -v
+
   test-integration-edge-endpoint:
     # Live tests that need a running edge-endpoint Docker container.
     # Pulls the image already built+pushed by call-build-push-ee-image instead of

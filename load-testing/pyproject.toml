@@ -35,3 +35,12 @@ py-modules = [
     "parse_load_test_logs",
     "system_helpers",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.3",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
