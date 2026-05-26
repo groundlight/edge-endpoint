@@ -74,6 +74,18 @@ After the load test finishes, it automatically parses the results and writes a t
 #### Evaluate
 Review the generated plots and `load_test_results.json`.
 
+### Edge vs Cloud Inference Diagnosis
+
+#### Purpose
+Helps investigate cases where an Edge Endpoint returns lower-confidence or different MULTI_CLASS answers than Groundlight cloud for the same detector. Each run creates a fresh PrimingGroup seeded from a chosen source MLPipeline MLB, then a fresh primed detector for side-by-side comparison work.
+
+#### Usage
+```
+uv run python diagnose_edge_cloud_inference.py DETECTOR_ID --pipeline-id MLPIPE_ID
+```
+
+Run without `--pipeline-id` to list available pipelines on the detector. Requires `GROUNDLIGHT_API_TOKEN`. Creates cloud resources (PrimingGroup + detector) in the `Edge Cloud Inference Diagnosis` group.
+
 ### Memory Pressure Test
 
 #### Purpose
