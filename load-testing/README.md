@@ -74,17 +74,17 @@ After the load test finishes, it automatically parses the results and writes a t
 #### Evaluate
 Review the generated plots and `load_test_results.json`.
 
-### Edge vs Cloud Inference Diagnosis
+### Edge vs Cloud Inference Comparison
 
 #### Purpose
-Helps investigate cases where an Edge Endpoint returns lower-confidence or different MULTI_CLASS answers than Groundlight cloud for the same detector. Each run creates a fresh PrimingGroup seeded from a chosen source MLPipeline MLB, then a fresh primed detector for side-by-side comparison work.
+Compares edge vs cloud inference side-by-side for a MULTI_CLASS detector to investigate cases where the edge endpoint returns lower-confidence or different answers than cloud. Each run creates a fresh PrimingGroup seeded from a chosen MLPipeline MLB and a fresh primed detector, then re-runs recent source images through both and prints a comparison table.
 
 #### Usage
 ```
-uv run python diagnose_edge_cloud_inference.py DETECTOR_ID --pipeline-id MLPIPE_ID
+uv run python compare_edge_cloud_inference.py DETECTOR_ID --pipeline-id MLPIPE_ID
 ```
 
-Run without `--pipeline-id` to list available pipelines on the detector. Requires `GROUNDLIGHT_API_TOKEN`. Creates cloud resources (PrimingGroup + detector) in the `Edge Cloud Inference Diagnosis` group.
+Run without `--pipeline-id` to list available pipelines on the detector. Requires `GROUNDLIGHT_API_TOKEN` and `GROUNDLIGHT_ENDPOINT` (edge). Fetches up to 50 recent image queries from the source detector via cloud (configurable with `--max-iqs`), then configures the edge endpoint for that detector in `NO_CLOUD` mode (edge-only inference, no cloud escalation). Creates cloud resources (PrimingGroup + primed detector) in the `Edge Endpoint Confidence Diagnosis` group. Run with `--help` for full details.
 
 ### Memory Pressure Test
 
