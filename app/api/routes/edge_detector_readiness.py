@@ -12,8 +12,7 @@ async def get_edge_detector_readiness(app_state: AppState = Depends(get_app_stat
     """Return readiness status for each configured detector.
 
     Checks whether the primary inference pod (and OODD pod, if applicable) for each
-    detector is responding to health checks. Results are never cached so that
-    set_config() polling always sees the current pod state.
+    detector is responding to health checks.
     """
     config = EdgeConfigManager.active()
     detector_ids = [d.detector_id for d in config.detectors]

@@ -5,10 +5,10 @@ then swaps to the real detector under test. This guarantees the real
 detector's pod goes through a complete fresh rollout on every run:
   - While the placeholder is active, any pre-existing pod for the real
     detector is fully evicted.
-  - When set_config() returns for the real detector, the pod has just
-    become ready for the first time this run.
+  - When configuration finishes applying for the real detector, the pod
+    has just become ready for the first time this run.
 
-Immediately after that second set_config() returns, the script hammers
+Immediately after that second configuration is applied, the script hammers
 the real detector with inference requests as fast as possible for
 VICTORY_DURATION_SEC seconds. SDK and transport retries are both disabled
 so any transient 5xx errors surface immediately.
@@ -27,6 +27,7 @@ VICTORY_DURATION_SEC = 10.0
 
 
 def main() -> None:
+    """Run the fresh-pod readiness check against the configured Edge Endpoint."""
     gl = ExperimentalApi()
     glh.error_if_endpoint_is_cloud(gl)
     gl_cloud = Groundlight(endpoint=glh.CLOUD_ENDPOINT_PROD)
@@ -57,7 +58,7 @@ def main() -> None:
     glh.configure_edge_endpoint(gl, detector)
 
     print(
-        f"\ngl.edge.set_config() returned. "
+        "\nDetector configuration has been applied. "
         f"Hammering detector for {VICTORY_DURATION_SEC}s with all retries disabled...\n"
     )
 

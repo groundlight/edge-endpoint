@@ -44,9 +44,8 @@ def _check_url_ready(url: str) -> bool:
 
 
 def check_inference_ready(detector_id: str, separate_oodd_inference: bool) -> bool:
-    """Live check (no cache) whether inference pods for this detector are ready to serve.
+    """Checks if inference pods for this detector are ready to serve.
 
-    Called by the /edge-detector-readiness endpoint, which is polled by set_config().
     Returns True only when all required pods respond to /health/ready.
     """
     primary_url = get_edge_inference_service_name(detector_id) + ":8000"
