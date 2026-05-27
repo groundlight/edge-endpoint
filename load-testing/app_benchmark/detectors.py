@@ -61,19 +61,24 @@ class ResolvedRun(BaseModel):
     """Per-run binding handed to the worker spawner.
 
     Detectors are provisioned ONCE for the whole benchmark, so
-    `stage_detectors` is identical across every run; the only thing that
-    varies between runs is `lens_n`, which the workers consume to vary
-    image synthesis and (for chained lenses) the downstream call count.
+    `stage_detectors` is identical across every run. What varies between
+    runs are the per-lens sweep values: `lens_n` controls image synthesis
+    and chained-call counts; `lens_cameras` controls how many worker
+    processes to spawn for the lens.
 
     Attributes:
-        run_index: 0-based index into the n-list sweep.
+        run_index: 0-based index into the sweep.
         lens_n: Mapping from lens_name -> the `n` value for this run.
             Lenses without an `n` field are absent from the dict.
+        lens_cameras: Mapping from lens_name -> the camera count for
+            this run. Every lens is present (scalar `cameras` resolves
+            to the same value across every run).
         stage_detectors: Shared list of detectors registered on the edge.
     """
     model_config = ConfigDict(arbitrary_types_allowed=True)
     run_index: int
     lens_n: dict[str, int]
+    lens_cameras: dict[str, int]
     stage_detectors: list[StageDetector]
 
 

@@ -47,6 +47,23 @@ def _lens_n_for_run(cfg: BenchmarkConfig, run_index: int) -> dict[str, int]:
     return out
 
 
+def _lens_cameras_for_run(cfg: BenchmarkConfig, run_index: int) -> dict[str, int]:
+    """Resolve every lens's camera count for this run.
+
+    Scalar `cameras` resolves to the same value across every run; list
+    `cameras` picks element `run_index`. Every lens is present in the
+    result (unlike `_lens_n_for_run`, which omits lenses without `n`),
+    so worker spawning has a single source of truth for the count.
+    """
+    out: dict[str, int] = {}
+    for lens in cfg.lenses:
+        if isinstance(lens.cameras, list):
+            out[lens.name] = lens.cameras[run_index]
+        else:
+            out[lens.name] = lens.cameras
+    return out
+
+
 def _build_worker_args(
     lens,
     sds: list[StageDetector],
@@ -135,7 +152,8 @@ def _spawn_lens_workers(
     worker_number = 0
     for lens in cfg.lenses:
         sds = by_lens[lens.name]
-        for cam_idx in range(lens.cameras):
+        cameras_this_run = run.lens_cameras[lens.name]
+        for cam_idx in range(cameras_this_run):
             log_path = run_dir / f"camera_{lens.name}_{cam_idx}.log"
             target, kwargs = _build_worker_args(
                 lens, sds, run.lens_n.get(lens.name), cfg, edge_url,
@@ -241,11 +259,16 @@ def _run_one(
     run_meta = {
         "run_index": run.run_index,
         "lens_n": run.lens_n,
+        "lens_cameras": run.lens_cameras,
         "lenses": [
             {
                 "name": l.name,
                 "type": l.type,
-                "cameras": l.cameras,
+                # Per-run camera count, not the raw config field — so the
+                # report's per-run table iterates over exactly the cameras
+                # that ran in this iteration (relevant when `cameras` is a
+                # ramp list).
+                "cameras": run.lens_cameras[l.name],
                 "target_fps": (l.target_fps if l.target_fps is not None
                                else cfg.globals_.target_fps),
                 "image_size": list(l.image_size if l.image_size is not None
@@ -352,8 +375,12 @@ def main(argv: list[str] | None = None) -> int:
         dm.push_edge_config(stage_detectors)
         for i in range(n_runs):
             lens_n = _lens_n_for_run(cfg, i)
-            logger.info("[run %d/%d] lens_n=%s", i + 1, n_runs, lens_n)
-            run = ResolvedRun(run_index=i, lens_n=lens_n, stage_detectors=stage_detectors)
+            lens_cameras = _lens_cameras_for_run(cfg, i)
+            logger.info("[run %d/%d] lens_n=%s lens_cameras=%s", i + 1, n_runs, lens_n, lens_cameras)
+            run = ResolvedRun(
+                run_index=i, lens_n=lens_n, lens_cameras=lens_cameras,
+                stage_detectors=stage_detectors,
+            )
             summaries.append(_run_one(cfg, run, out_root))
     except KeyboardInterrupt:
         logger.warning("interrupted; running cleanup via atexit")

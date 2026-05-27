@@ -16,9 +16,10 @@ global:
   duration_seconds: 180   # the measurement window after warmup; FPS / latency / errors are computed over this
   warmup_seconds: 20      # workers run for this long BEFORE the window opens, letting caches warm + pods reach steady state
 
-# Lenses run CONCURRENTLY inside each run. Lenses that declare an `n` list
-# sweep across runs — every `n` list must share the same length and is
-# zipped element-wise (run i uses index i from each list).
+# Lenses run CONCURRENTLY inside each run. Sweep dimensions (`n` and
+# `cameras`) declared as lists are zipped element-wise across runs —
+# every list in the config must share the same length. A scalar
+# `cameras` value stays fixed across every run.
 #
 # Per-lens overrides: `image_size` and `target_fps` may be set on any lens
 # to override the global value for that lens only.
@@ -42,7 +43,8 @@ lenses:
     type: single_bbox
     pipeline: bounding-boxes-step-rfdetr-primed
     n: [1, 3, 5, 7]
-    cameras: 1
+    cameras: 1               # scalar — fixed at 1 across all 4 runs
+    # cameras: [1, 2, 4, 8]  # alternative: ramp camera count zipped with n
     target_fps: 0            # saturate — go as fast as the edge can serve
 
 monitoring:

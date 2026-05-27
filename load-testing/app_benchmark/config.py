@@ -130,7 +130,10 @@ class _LensBase(BaseModel):
         name: Lens identifier; appears in detector names, log records,
             plot filenames, and summary tables.
         cameras: How many independent worker processes to run for this
-            lens. Each camera generates and submits its own frames.
+            lens. Either a single int (fixed across every run) or a list
+            of ints (sweep dimension — zipped element-wise with every
+            other sweep list in the config). Each camera generates and
+            submits its own frames.
         image_size: Optional override for this lens; falls back to global
             image_size when None.
         target_fps: Optional override; falls back to global target_fps.
@@ -138,7 +141,7 @@ class _LensBase(BaseModel):
     """
     model_config = ConfigDict(extra="forbid")
     name: str = Field(pattern=_LENS_NAME_PATTERN, max_length=64)
-    cameras: int = Field(default=1, ge=1, le=64)
+    cameras: int | list[int] = Field(default=1)
     image_size: tuple[int, int] | None = None
     target_fps: float | None = Field(default=None, ge=0)  # 0 = saturate (no pacing)
 
@@ -146,6 +149,15 @@ class _LensBase(BaseModel):
     def _check_overrides(self) -> "_LensBase":
         if self.image_size is not None:
             _check_image_size(self.image_size)
+        if isinstance(self.cameras, list):
+            if len(self.cameras) < 1:
+                raise ValueError("cameras list must not be empty")
+            for v in self.cameras:
+                if v < 1 or v > 64:
+                    raise ValueError(f"cameras list entries must be in [1, 64] (got {v})")
+        else:
+            if self.cameras < 1 or self.cameras > 64:
+                raise ValueError(f"cameras must be in [1, 64] (got {self.cameras})")
         return self
 
 
@@ -301,6 +313,20 @@ class BenchmarkConfig(BaseModel):
     monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
 
 
+def _sweep_lists(cfg: BenchmarkConfig) -> list[tuple[str, str, list[int]]]:
+    """Collect every list-typed sweep field across the config as a flat
+    list of `(lens_name, field_label, values)` triples. `field_label` is
+    'n' or 'cameras' — used to render a clear length-mismatch error.
+    """
+    out: list[tuple[str, str, list[int]]] = []
+    for lens in cfg.lenses:
+        if hasattr(lens, "n"):
+            out.append((lens.name, "n", lens.n))
+        if isinstance(lens.cameras, list):
+            out.append((lens.name, "cameras", lens.cameras))
+    return out
+
+
 def validate_config(cfg: BenchmarkConfig) -> None:
     """Cross-lens invariants that don't fit inside a single Pydantic model.
 
@@ -312,21 +338,25 @@ def validate_config(cfg: BenchmarkConfig) -> None:
 
     Raises:
         ConfigError: When two lenses share a name, or when two or more
-            lenses declare `n` lists of different lengths.
+            sweep lists (`n`, `cameras`) across the whole config have
+            different lengths.
     """
     names = [l.name for l in cfg.lenses]
     duplicates = sorted({n for n in names if names.count(n) > 1})
     if duplicates:
         raise ConfigError(f"duplicate lens names: {duplicates}")
 
-    n_lists = [(l.name, l.n) for l in cfg.lenses if hasattr(l, "n")]
-    if len(n_lists) >= 2:
-        lengths = {len(ns) for _, ns in n_lists}
+    sweep_lists = _sweep_lists(cfg)
+    if len(sweep_lists) >= 2:
+        lengths = {len(values) for _, _, values in sweep_lists}
         if len(lengths) > 1:
-            detail = ", ".join(f"{name}=len({len(ns)})" for name, ns in n_lists)
+            detail = ", ".join(
+                f"{name}.{field}=len({len(values)})"
+                for name, field, values in sweep_lists
+            )
             raise ConfigError(
-                f"all lens `n` lists must share the same length (they are zipped "
-                f"across runs); got {detail}"
+                f"all sweep lists (`n`, `cameras`) must share the same length "
+                f"(they are zipped across runs); got {detail}"
             )
 
 
@@ -337,12 +367,13 @@ def num_runs(cfg: BenchmarkConfig) -> int:
         cfg: A validated BenchmarkConfig.
 
     Returns:
-        len(lens.n) for any lens that declares n (all n lists share a
-        length per validate_config), or 1 when no lens has n.
+        Length of any sweep list (`n` or `cameras`) — all sweep lists
+        share a length per `validate_config`. Returns 1 when no lens
+        declares either as a list.
     """
-    for lens in cfg.lenses:
-        if hasattr(lens, "n"):
-            return len(lens.n)
+    sweep_lists = _sweep_lists(cfg)
+    if sweep_lists:
+        return len(sweep_lists[0][2])
     return 1
 
 

@@ -517,6 +517,8 @@ def _render_lens_config_section(lenses: list[dict[str, Any]]) -> list[str]:
     ]
     for lens in lenses:
         n_label = ",".join(str(v) for v in lens["n"]) if lens.get("n") else "—"
+        cams = lens["cameras"]
+        cams_label = ",".join(str(v) for v in cams) if isinstance(cams, list) else str(cams)
         for i, stage in enumerate(lens["stages"]):
             pipeline = stage.get("pipeline") or "(default)"
             det_id = stage.get("detector_id") or "—"
@@ -527,7 +529,7 @@ def _render_lens_config_section(lenses: list[dict[str, Any]]) -> list[str]:
             if i == 0:
                 lines.append(
                     f"| {lens['name']} | {lens['type']} | {stage['stage']} | "
-                    f"`{pipeline}` | `{det_id}` | {lens['cameras']} | {n_label} |"
+                    f"`{pipeline}` | `{det_id}` | {cams_label} | {n_label} |"
                 )
             else:
                 lines.append(
@@ -604,17 +606,30 @@ def write_top_level(
     lines.append("")
     lens_names = sorted({c["lens_name"] for s in summaries for c in s.get("cameras", [])})
     per_lens_cols = [c for lens in lens_names for c in (f"{lens} FPS", f"{lens} Hit")]
+    # Surface the per-run camera count only when there's a cameras ramp
+    # anywhere in the config — otherwise the column would be constant
+    # noise. Detected by checking if any lens has a list-typed `cameras`
+    # in the Lens configuration block.
+    cameras_ramped = any(
+        isinstance(l.get("cameras"), list) for l in lenses_config
+    )
     lines.append(
         f"Per-lens FPS = mean across that lens's camera processes. "
         f"Hit = `yes` if every camera hit ≥{int(_FPS_HIT_TOLERANCE * 100)}% of its target."
+        + (" `lens_cameras` shows the per-run camera count per lens." if cameras_ramped else "")
     )
     lines.append("")
-    header = ["run", "lens_n"] + per_lens_cols
+    header = ["run", "lens_n"]
+    if cameras_ramped:
+        header.append("lens_cameras")
+    header += per_lens_cols
     lines.append("| " + " | ".join(header) + " |")
     lines.append("|" + "|".join(["---"] * len(header)) + "|")
     for s in summaries:
         meta = s["meta"]
         cells = [str(meta.get("run_index", "?")), f"`{meta.get('lens_n', {})}`"]
+        if cameras_ramped:
+            cells.append(f"`{meta.get('lens_cameras', {})}`")
         cams_by_lens: dict[str, list[dict]] = defaultdict(list)
         for cam in s.get("cameras", []):
             cams_by_lens[cam["lens_name"]].append(cam)
@@ -798,7 +813,8 @@ def _write_combined_plots(
     boundaries = [
         (s["meta"]["main_start_ts"] - benchmark_t0,
          int(s["meta"]["run_index"]),
-         s["meta"].get("lens_n", {}))
+         s["meta"].get("lens_n", {}),
+         s["meta"].get("lens_cameras", {}))
         for s in summaries
     ]
     target_by_lens: dict[str, float] = {}
@@ -829,7 +845,7 @@ def _write_combined_plots(
 
 def _draw_boundary_lines(
     ax,
-    boundaries: list[tuple[float, int, dict[str, int]]],
+    boundaries: list[tuple[float, int, dict[str, int], dict[str, int]]],
 ) -> None:
     """Draw a dotted vertical line on `ax` at each run boundary, no labels.
 
@@ -839,16 +855,16 @@ def _draw_boundary_lines(
 
     Args:
         ax: Matplotlib axis to draw on.
-        boundaries: List of (x_offset_seconds, run_index, lens_n_dict).
-            Only the first element matters here; the rest are ignored.
+        boundaries: List of (x_offset_seconds, run_index, lens_n_dict,
+            lens_cameras_dict). Only the first element matters here.
     """
-    for offset, _run_idx, _lens_n in boundaries:
+    for offset, *_ in boundaries:
         ax.axvline(offset, color="gray", linestyle=":", alpha=0.6, linewidth=1.0)
 
 
 def _annotate_boundaries(
     ax,
-    boundaries: list[tuple[float, int, dict[str, int]]],
+    boundaries: list[tuple[float, int, dict[str, int], dict[str, int]]],
     lens_name: str | None = None,
 ) -> None:
     """Draw vertical lines at run boundaries AND rotated labels below the axis.
@@ -859,19 +875,32 @@ def _annotate_boundaries(
 
     Args:
         ax: Matplotlib axis to annotate.
-        boundaries: List of (x_offset_seconds, run_index, lens_n_dict)
-            for each run.
+        boundaries: List of (x_offset_seconds, run_index, lens_n_dict,
+            lens_cameras_dict) for each run.
         lens_name: When set, labels look like "Run i (n=X)" using
-            `lens_n_dict[lens_name]`. When None, labels are just
-            "Run i" (used on the global system util plot since
-            different lenses can have different n values).
+            `lens_n_dict[lens_name]`, and additionally include
+            `, cams=Y` from `lens_cameras_dict[lens_name]` when the
+            camera count varies across runs (a cameras-ramp). When
+            None, labels are just "Run i" (used on the global system
+            util plot since different lenses can have different sweep
+            values).
     """
-    for offset, run_idx, lens_n in boundaries:
+    # Detect once whether any lens has a varying camera count — drives
+    # whether we annotate cameras on each label.
+    cameras_ramped = (
+        lens_name is not None
+        and len({b[3].get(lens_name) for b in boundaries if b[3]}) > 1
+    )
+    for offset, run_idx, lens_n, lens_cameras in boundaries:
         ax.axvline(offset, color="gray", linestyle=":", alpha=0.6, linewidth=1.0)
+        parts: list[str] = []
         if lens_name is not None and lens_name in lens_n:
-            label = f"Run {run_idx} (n={lens_n[lens_name]})"
-        else:
-            label = f"Run {run_idx}"
+            parts.append(f"n={lens_n[lens_name]}")
+        if cameras_ramped and lens_name in lens_cameras:
+            parts.append(f"cams={lens_cameras[lens_name]}")
+        label = f"Run {run_idx}"
+        if parts:
+            label += f" ({', '.join(parts)})"
         # xy=(offset, 0) in (data, axes) coords; xytext nudges well below the
         # x-axis label so the rotated text doesn't collide with "seconds since
         # benchmark start". Pair with subplots_adjust(bottom=...) at the caller.
