@@ -164,7 +164,8 @@ benchmark_results/{name}-{ts}/
 │   ├── system_utilization.png          # 2×2 grid (CPU%, GPU%, RAM GB, VRAM GB)
 │   ├── fps_all_lenses.png              # 2-column mosaic of per-lens overlays
 │   ├── fps_{lens}.png                  # per-lens overlay, cameras as colored lines
-│   └── fps_{lens}_camera_{N}.png       # per (lens, camera) detail (files only)
+│   └── per_camera/                     # per-(lens, camera) detail (files only)
+│       └── fps_{lens}_camera_{N}.png
 ├── run_00/
 │   ├── system.log                      # JSONL: cpu/gpu events (SystemMonitor)
 │   ├── camera_{lens}_{N}.log           # JSONL: request events, one file per camera process
@@ -201,9 +202,13 @@ benchmark_results/{name}-{ts}/
   `Errors`, `FPS`, `Target`, `Hit`, `p50`, `p95`; callouts for any worker
   that exited non-zero or any camera that produced no events.
 
-Per-(lens, camera) detail PNGs are still written to `plots/` for ad-hoc
-deep dives — they're just no longer embedded in `summary.md` (the per-lens
-overlay covers the common case).
+Per-(lens, camera) detail PNGs are still written to `plots/per_camera/`
+for ad-hoc deep dives — they're just no longer embedded in `summary.md`
+(the per-lens overlay covers the common case). The per-camera subfolder
+keeps the top-level `plots/` clean: only the summary-relevant plots
+(`fps_all_lenses.png`, `fps_{lens}.png`, `system_utilization.png`) sit
+at the top, with the high-cardinality detail files tucked one level
+down.
 
 Plot boundary labels read `Run i (objects=X)` when `objects` varies, and
 add `, cams=Y` when `cameras` also varies across runs.

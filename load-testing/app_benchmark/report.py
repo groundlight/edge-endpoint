@@ -8,7 +8,8 @@ Output layout under each benchmark's output_dir:
         system_utilization.png    ← 2x2 grid: CPU%, GPU%, RAM GB, VRAM GB
         fps_all_lenses.png        ← mosaic of every lens's overlay plot
         fps_{lens}.png            ← per-lens overlay (cameras as colored lines)
-        fps_{lens}_camera_{N}.png ← per-(lens, camera) detail (on disk only)
+        per_camera/
+            fps_{lens}_camera_{N}.png ← per-(lens, camera) detail (on disk only)
     run_NN/
         load_test.log
         summary.json    ← per-run machine-readable
@@ -697,8 +698,8 @@ def write_top_level(
         if plot_refs.get("fps_per_camera"):
             lines.append(
                 f"_Per-(lens, camera) detail PNGs live under "
-                f"`plots/fps_{{lens}}_camera_{{N}}.png` for ad-hoc "
-                f"inspection — {len(plot_refs['fps_per_camera'])} file(s)._"
+                f"`plots/per_camera/fps_{{lens}}_camera_{{N}}.png` for "
+                f"ad-hoc inspection — {len(plot_refs['fps_per_camera'])} file(s)._"
             )
             lines.append("")
 
@@ -769,8 +770,9 @@ def _write_combined_plots(
       - plots/system_utilization.png  — 2x2 CPU%, GPU%, RAM GB, VRAM GB
       - plots/fps_all_lenses.png      — mosaic of per-lens FPS overlays
       - plots/fps_{lens}.png          — one per lens, cameras overlaid
-      - plots/fps_{lens}_camera_{N}.png — per (lens, camera) detail files
-        (kept on disk for ad-hoc inspection, not embedded in summary.md)
+      - plots/per_camera/fps_{lens}_camera_{N}.png — per (lens, camera)
+        detail files (kept on disk for ad-hoc inspection, not embedded
+        in summary.md)
 
     Each plot has dotted vertical lines at every run's main_start with
     labels below the x-axis (system plot: "Run i"; FPS plots:
@@ -872,16 +874,21 @@ def _write_combined_plots(
     ):
         refs["system"] = f"plots/{sys_path.name}"
 
-    # Per-(lens, camera) detail plots — files only, not embedded.
+    # Per-(lens, camera) detail plots live in a dedicated subfolder so
+    # they don't clutter `plots/` alongside the high-level mosaic +
+    # per-lens overlays + system util. Files only, not embedded.
+    per_camera_dir = plots_dir / "per_camera"
     fps_per_camera_refs: list[tuple[tuple[str, int], str]] = []
+    if by_camera_frames:
+        per_camera_dir.mkdir(exist_ok=True)
     for (lens, camera), buckets in sorted(by_camera_frames.items()):
-        fps_path = plots_dir / f"fps_{lens}_camera_{camera}.png"
+        fps_path = per_camera_dir / f"fps_{lens}_camera_{camera}.png"
         if _plot_combined_camera_fps(
             fps_path, lens, camera, buckets,
             by_camera_errors.get((lens, camera), {}),
             target_by_lens.get(lens), boundaries,
         ):
-            fps_per_camera_refs.append(((lens, camera), f"plots/{fps_path.name}"))
+            fps_per_camera_refs.append(((lens, camera), f"plots/per_camera/{fps_path.name}"))
     refs["fps_per_camera"] = fps_per_camera_refs
 
     # Regroup per-camera buckets into per-lens shape so the overlay
@@ -974,14 +981,19 @@ def _annotate_boundaries(
         label = f"Run {run_idx}"
         if parts:
             label += f" ({', '.join(parts)})"
-        # xy=(offset, 0) in (data, axes) coords; xytext nudges well below the
-        # x-axis label so the rotated text doesn't collide with "seconds since
-        # benchmark start". Pair with subplots_adjust(bottom=...) at the caller.
+        # xy=(offset, 0) in (data, axes) coords; xytext nudges well below
+        # the x-axis label so the rotated text doesn't collide with
+        # "seconds since benchmark start". ha="center" makes the label
+        # straddle its boundary line, so the leftmost (anchored at x=0)
+        # and rightmost (anchored just inside the right edge) labels
+        # both fit within the figure — neither extends a full label
+        # width past either edge. Pair with subplots_adjust(bottom=…)
+        # at the caller; ≥0.30 is needed at the typical 4.5"-tall figsize.
         ax.annotate(
             label, xy=(offset, 0), xycoords=("data", "axes fraction"),
-            xytext=(2, -38), textcoords="offset points",
+            xytext=(0, -55), textcoords="offset points",
             fontsize=8, color="dimgray",
-            rotation=30, ha="right", va="top", rotation_mode="anchor",
+            rotation=-30, ha="center", va="top", rotation_mode="anchor",
             annotation_clip=False,
         )
 
@@ -1014,7 +1026,7 @@ def _plot_combined_system(
     # Reserve space below the bottom-row xlabels for the rotated
     # "Run i" labels — without this they collide with "seconds since
     # benchmark start".
-    fig.subplots_adjust(bottom=0.18)
+    fig.subplots_adjust(bottom=0.22)
     fig.savefig(path, dpi=120)
     plt.close(fig)
     return True
@@ -1062,7 +1074,7 @@ def _plot_combined_camera_fps(
     ax.legend(handles=handles, loc="lower right")
     fig.tight_layout()
     # Reserve space below the xlabel for the rotated "Run i (objects=X)" labels.
-    fig.subplots_adjust(bottom=0.28)
+    fig.subplots_adjust(bottom=0.32)
     fig.savefig(path, dpi=120)
     plt.close(fig)
     return True
@@ -1182,7 +1194,7 @@ def _plot_combined_lens_fps(
         plt.close(fig)
         return False
     fig.tight_layout()
-    fig.subplots_adjust(bottom=0.28)
+    fig.subplots_adjust(bottom=0.32)
     fig.savefig(path, dpi=120)
     plt.close(fig)
     return True
