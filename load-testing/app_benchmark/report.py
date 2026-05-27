@@ -4,12 +4,17 @@ Output layout under each benchmark's output_dir:
 
     summary.md          ← single consolidated doc (overview + per-run sections)
     summary.json        ← cross-run machine-readable
+    plots/
+        system_utilization.png    ← 2x2 grid: CPU%, GPU%, RAM GB, VRAM GB
+        fps_all_lenses.png        ← mosaic of every lens's overlay plot
+        fps_{lens}.png            ← per-lens overlay (cameras as colored lines)
+        fps_{lens}_camera_{N}.png ← per-(lens, camera) detail (on disk only)
     run_NN/
         load_test.log
         summary.json    ← per-run machine-readable
         plots/
             fps_{lens}_camera_{N}.png
-            system_utilization.png   ← 2x2 grid: CPU%, GPU%, RAM GB, VRAM GB
+            system_utilization.png
 
 Everything is plotted on a benchmark-relative time axis (seconds since the
 post-warmup main start) so plots line up across cameras and resources.
@@ -657,13 +662,35 @@ def write_top_level(
         lines.append(f"![system utilization]({plot_refs['system']})")
         lines.append("")
 
-    if plot_refs.get("fps_per_camera"):
-        lines.append("## Cross-run FPS per camera")
+    if plot_refs.get("fps_mosaic") or plot_refs.get("fps_per_lens"):
+        lines.append("## Cross-run FPS")
         lines.append("")
-        for (lens, camera), rel_path in plot_refs["fps_per_camera"]:
-            lines.append(f"### {lens} — camera {camera}")
+        if plot_refs.get("fps_mosaic"):
+            lines.append(
+                "Overview of every lens at a glance. Each cell shows that "
+                "lens's FPS with one colored line per camera (viridis, "
+                "blue→yellow with camera index). Cameras that only existed "
+                "in later runs start partway through the time axis. "
+                "Aggregate failed-requests rate is overlaid in red on a "
+                "secondary axis."
+            )
             lines.append("")
-            lines.append(f"![{lens} cam {camera}]({rel_path})")
+            lines.append(f"![FPS overview]({plot_refs['fps_mosaic']})")
+            lines.append("")
+        if plot_refs.get("fps_per_lens"):
+            lines.append("### Per-lens detail")
+            lines.append("")
+            for lens, rel_path in plot_refs["fps_per_lens"]:
+                lines.append(f"#### {lens}")
+                lines.append("")
+                lines.append(f"![{lens} fps]({rel_path})")
+                lines.append("")
+        if plot_refs.get("fps_per_camera"):
+            lines.append(
+                f"_Per-(lens, camera) detail PNGs live under "
+                f"`plots/fps_{{lens}}_camera_{{N}}.png` for ad-hoc "
+                f"inspection — {len(plot_refs['fps_per_camera'])} file(s)._"
+            )
             lines.append("")
 
     lines.append("## Run details")
@@ -730,12 +757,16 @@ def _write_combined_plots(
 
     Reads every run's load_test.log, re-bases events on the benchmark
     wall-clock (`offset = ts - first_run.main_start_ts`), and writes:
-      - plots/system_utilization.png — 2x2 CPU%, GPU%, RAM GB, VRAM GB
-      - plots/fps_{lens}_camera_{N}.png — one per camera process
+      - plots/system_utilization.png  — 2x2 CPU%, GPU%, RAM GB, VRAM GB
+      - plots/fps_all_lenses.png      — mosaic of per-lens FPS overlays
+      - plots/fps_{lens}.png          — one per lens, cameras overlaid
+      - plots/fps_{lens}_camera_{N}.png — per (lens, camera) detail files
+        (kept on disk for ad-hoc inspection, not embedded in summary.md)
 
     Each plot has dotted vertical lines at every run's main_start with
     labels below the x-axis (system plot: "Run i"; FPS plots:
-    "Run i (n=X)" using that lens's own n).
+    "Run i (n=X)" using that lens's own n, plus ", cams=Y" when the
+    camera count varies across runs).
 
     Args:
         out_root: Top-level benchmark output dir.
@@ -745,8 +776,10 @@ def _write_combined_plots(
     Returns:
         Dict with keys:
             - "system": "plots/system_utilization.png" or absent
+            - "fps_mosaic": "plots/fps_all_lenses.png" or absent
+            - "fps_per_lens": list of (lens, relative_path) — one per lens
             - "fps_per_camera": list of ((lens, camera), relative_path)
-              for embedding into summary.md
+              (files exist on disk but not embedded in summary.md)
     """
     plots_dir = out_root / "plots"
     plots_dir.mkdir(exist_ok=True)
@@ -830,7 +863,8 @@ def _write_combined_plots(
     ):
         refs["system"] = f"plots/{sys_path.name}"
 
-    fps_refs: list[tuple[tuple[str, int], str]] = []
+    # Per-(lens, camera) detail plots — files only, not embedded.
+    fps_per_camera_refs: list[tuple[tuple[str, int], str]] = []
     for (lens, camera), buckets in sorted(by_camera_frames.items()):
         fps_path = plots_dir / f"fps_{lens}_camera_{camera}.png"
         if _plot_combined_camera_fps(
@@ -838,8 +872,37 @@ def _write_combined_plots(
             by_camera_errors.get((lens, camera), {}),
             target_by_lens.get(lens), boundaries,
         ):
-            fps_refs.append(((lens, camera), f"plots/{fps_path.name}"))
-    refs["fps_per_camera"] = fps_refs
+            fps_per_camera_refs.append(((lens, camera), f"plots/{fps_path.name}"))
+    refs["fps_per_camera"] = fps_per_camera_refs
+
+    # Regroup per-camera buckets into per-lens shape so the overlay
+    # plots can render each lens's cameras as colored lines on one axis.
+    frames_by_lens: dict[str, dict[int, dict[int, int]]] = defaultdict(dict)
+    errors_by_lens: dict[str, dict[int, dict[int, int]]] = defaultdict(dict)
+    for (lens, camera), buckets in by_camera_frames.items():
+        frames_by_lens[lens][camera] = buckets
+    for (lens, camera), buckets in by_camera_errors.items():
+        errors_by_lens[lens][camera] = buckets
+
+    # Per-lens overlay plots (one PNG per lens, cameras as colored lines).
+    fps_per_lens_refs: list[tuple[str, str]] = []
+    lenses_data: list[tuple[str, dict[int, dict[int, int]],
+                            dict[int, dict[int, int]], float | None]] = []
+    for lens in sorted(frames_by_lens.keys()):
+        cam_frames = frames_by_lens[lens]
+        cam_errors = errors_by_lens.get(lens, {})
+        target = target_by_lens.get(lens)
+        lens_path = plots_dir / f"fps_{lens}.png"
+        if _plot_combined_lens_fps(lens_path, lens, cam_frames, cam_errors, target, boundaries):
+            fps_per_lens_refs.append((lens, f"plots/{lens_path.name}"))
+        lenses_data.append((lens, cam_frames, cam_errors, target))
+    refs["fps_per_lens"] = fps_per_lens_refs
+
+    # Mosaic — single image showing every lens's overlay plot at once.
+    mosaic_path = plots_dir / "fps_all_lenses.png"
+    if _plot_all_lenses_mosaic(mosaic_path, lenses_data, boundaries):
+        refs["fps_mosaic"] = f"plots/{mosaic_path.name}"
+
     return refs
 
 
@@ -990,6 +1053,177 @@ def _plot_combined_camera_fps(
     fig.tight_layout()
     # Reserve space below the xlabel for the rotated "Run i (n=X)" labels.
     fig.subplots_adjust(bottom=0.28)
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+    return True
+
+
+def _draw_lens_fps_on_axis(
+    ax,
+    lens_name: str,
+    cameras_frame_buckets: dict[int, dict[int, int]],
+    cameras_error_buckets: dict[int, dict[int, int]],
+    target_fps: float | None,
+    boundaries,
+    *,
+    annotate_runs: bool = True,
+    show_legend: bool = True,
+) -> bool:
+    """Draw a lens's FPS overlay on the given axis.
+
+    One colored line per camera (viridis colormap, blue → yellow with
+    increasing camera index). Cameras that only existed in later runs
+    naturally start partway through the time axis. Errors from all
+    cameras of the lens are summed and drawn as a single red line on a
+    twin y-axis (per-camera error curves would be too crowded in the
+    overlay).
+
+    Args:
+        ax: Matplotlib axis to draw on.
+        lens_name: Lens identifier (used in title + boundary labels).
+        cameras_frame_buckets: Mapping camera_idx -> {second: frame_count}.
+        cameras_error_buckets: Mapping camera_idx -> {second: error_count}.
+        target_fps: Optional target FPS line.
+        boundaries: Run-boundary tuples (see _annotate_boundaries).
+        annotate_runs: Whether to draw the rotated "Run i (n=X)" labels
+            below the axis. Disable in mosaic subplots where label space
+            is tight.
+        show_legend: Whether to draw the camera legend. Disable in
+            mosaic subplots if the figure-level legend covers it.
+
+    Returns:
+        True if any frame data was plotted, False if the lens had no
+        events at all (caller should treat as no-data).
+    """
+    if not cameras_frame_buckets:
+        return False
+    camera_indices = sorted(cameras_frame_buckets.keys())
+    cmap = plt.get_cmap("viridis")
+    handles: list = []
+    for i, cam in enumerate(camera_indices):
+        buckets = cameras_frame_buckets[cam]
+        if not buckets:
+            continue
+        seconds = sorted(buckets.keys())
+        fps_values = [buckets[s] for s in seconds]
+        # Edge case: single camera → use the colormap's mid value so the
+        # line is visible against the default theme rather than nearly
+        # white at the top of viridis.
+        color_pos = i / (len(camera_indices) - 1) if len(camera_indices) > 1 else 0.4
+        line, = ax.plot(seconds, fps_values, color=cmap(color_pos),
+                        marker="o", markersize=2.0, linewidth=1.1,
+                        label=f"cam {cam}")
+        handles.append(line)
+    if target_fps is not None and target_fps > 0:
+        line_target = ax.axhline(target_fps, color="tab:orange", linestyle="--", alpha=0.8,
+                                 label=f"target {target_fps:.1f} fps")
+        handles.append(line_target)
+    ax.set_title(f"{lens_name} — FPS per camera (all runs)")
+    ax.set_xlabel("seconds since benchmark start")
+    ax.set_ylabel("frames per second")
+    ax.set_ylim(bottom=0)
+    ax.grid(True, alpha=0.3)
+
+    # Aggregate errors across every camera for this lens — a single red
+    # line on a twin y-axis keeps the overlay readable.
+    all_err_seconds: set[int] = set()
+    for buckets in cameras_error_buckets.values():
+        all_err_seconds.update(buckets.keys())
+    if all_err_seconds:
+        ax_err = ax.twinx()
+        err_seconds = sorted(all_err_seconds)
+        err_values = [
+            sum(cameras_error_buckets[cam].get(s, 0)
+                for cam in cameras_error_buckets)
+            for s in err_seconds
+        ]
+        line_err, = ax_err.plot(err_seconds, err_values, color="tab:red",
+                                linewidth=1.2, label="failed requests / sec (sum)")
+        ax_err.set_ylabel("failed requests / sec (sum)", color="tab:red")
+        ax_err.tick_params(axis="y", labelcolor="tab:red")
+        ax_err.set_ylim(bottom=0)
+        handles.append(line_err)
+
+    if annotate_runs:
+        _annotate_boundaries(ax, boundaries, lens_name=lens_name)
+    else:
+        _draw_boundary_lines(ax, boundaries)
+    if show_legend:
+        ax.legend(handles=handles, loc="lower right", fontsize=8)
+    return True
+
+
+def _plot_combined_lens_fps(
+    path: Path,
+    lens_name: str,
+    cameras_frame_buckets: dict[int, dict[int, int]],
+    cameras_error_buckets: dict[int, dict[int, int]],
+    target_fps: float | None,
+    boundaries,
+) -> bool:
+    """Single-axis lens overlay plot. Returns False if no frames were
+    captured for any camera of the lens (no file written)."""
+    fig, ax = plt.subplots(figsize=(13, 4.5))
+    had_data = _draw_lens_fps_on_axis(
+        ax, lens_name, cameras_frame_buckets, cameras_error_buckets,
+        target_fps, boundaries, annotate_runs=True, show_legend=True,
+    )
+    if not had_data:
+        plt.close(fig)
+        return False
+    fig.tight_layout()
+    fig.subplots_adjust(bottom=0.28)
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+    return True
+
+
+def _plot_all_lenses_mosaic(
+    path: Path,
+    lenses_data: list[tuple[str, dict[int, dict[int, int]],
+                            dict[int, dict[int, int]], float | None]],
+    boundaries,
+) -> bool:
+    """2-column mosaic of per-lens FPS overlay plots.
+
+    `lenses_data` is a list of (lens_name, cameras_frame_buckets,
+    cameras_error_buckets, target_fps) — one entry per lens.
+
+    Layout: 2 columns × ceil(N/2) rows. Unused cells (when N is odd)
+    are hidden. Each subplot gets its own legend; the mosaic is meant
+    to be the "see everything at once" view at the top of the
+    Cross-run FPS section.
+    """
+    if not lenses_data:
+        return False
+    n_lenses = len(lenses_data)
+    ncols = 2 if n_lenses > 1 else 1
+    nrows = (n_lenses + ncols - 1) // ncols
+    fig, axes = plt.subplots(
+        nrows, ncols,
+        figsize=(13 * ncols / 2, 4.0 * nrows),
+        squeeze=False,
+    )
+    flat_axes = axes.flatten()
+    any_drawn = False
+    for i, (lens_name, frame_buckets, error_buckets, target_fps) in enumerate(lenses_data):
+        ax = flat_axes[i]
+        drawn = _draw_lens_fps_on_axis(
+            ax, lens_name, frame_buckets, error_buckets, target_fps, boundaries,
+            # Mosaic cells are tight — skip the rotated boundary labels
+            # (lines only) and use a compact legend.
+            annotate_runs=False, show_legend=True,
+        )
+        if drawn:
+            any_drawn = True
+    # Hide any unused cells (odd N).
+    for j in range(n_lenses, len(flat_axes)):
+        flat_axes[j].axis("off")
+    if not any_drawn:
+        plt.close(fig)
+        return False
+    fig.suptitle("FPS overview — all lenses", fontsize=14)
+    fig.tight_layout()
     fig.savefig(path, dpi=120)
     plt.close(fig)
     return True
