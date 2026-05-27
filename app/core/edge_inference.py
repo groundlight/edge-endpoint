@@ -70,7 +70,9 @@ def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, co
         headers["X-GL-Parent-Span-Id"] = span.span_id
     try:
         logger.debug(f"Submitting image for inference to {inference_url}")
-        response = requests.post(inference_url, data=image_bytes, headers=headers, timeout=(INFERENCE_CONNECT_TIMEOUT_SEC, None))
+        response = requests.post(
+            inference_url, data=image_bytes, headers=headers, timeout=(INFERENCE_CONNECT_TIMEOUT_SEC, None)
+        )
         if response.status_code != status.HTTP_200_OK:
             logger.error(f"Inference server returned an error: {response.status_code} - {response.text}")
             raise RuntimeError(f"Inference server error: {response.status_code} - {response.text}")
