@@ -17,7 +17,4 @@ async def get_edge_detector_readiness(app_state: AppState = Depends(get_app_stat
     """
     config = EdgeConfigManager.active()
     detector_ids = [d.detector_id for d in config.detectors]
-    return {
-        did: {"ready": check_inference_ready(did, app_state.separate_oodd_inference)}
-        for did in detector_ids
-    }
+    return {did: {"ready": check_inference_ready(did, app_state.separate_oodd_inference)} for did in detector_ids}
