@@ -37,13 +37,21 @@ def _resolve_output_dir(template: str, run_name: str) -> Path:
     return Path(template.format(name=run_name, ts=ts))
 
 
-def _lens_n_for_run(cfg: BenchmarkConfig, run_index: int) -> dict[str, int]:
-    """Pick the `n` value at position `run_index` from every lens that
-    declares an `n` list. Lenses without `n` are absent from the result."""
+def _lens_objects_for_run(cfg: BenchmarkConfig, run_index: int) -> dict[str, int]:
+    """Pick the `objects` value at position `run_index` from every lens
+    that declares an `objects` field.
+
+    Scalar values resolve to the same value across every run; list
+    values pick element `run_index`. Lenses without `objects` (e.g.
+    single_binary) are absent from the result.
+    """
     out: dict[str, int] = {}
     for lens in cfg.lenses:
-        if hasattr(lens, "n"):
-            out[lens.name] = lens.n[run_index]
+        if hasattr(lens, "objects"):
+            if isinstance(lens.objects, list):
+                out[lens.name] = lens.objects[run_index]
+            else:
+                out[lens.name] = lens.objects
     return out
 
 
@@ -52,8 +60,9 @@ def _lens_cameras_for_run(cfg: BenchmarkConfig, run_index: int) -> dict[str, int
 
     Scalar `cameras` resolves to the same value across every run; list
     `cameras` picks element `run_index`. Every lens is present in the
-    result (unlike `_lens_n_for_run`, which omits lenses without `n`),
-    so worker spawning has a single source of truth for the count.
+    result (unlike `_lens_objects_for_run`, which omits lenses without
+    `objects`), so worker spawning has a single source of truth for the
+    count.
     """
     out: dict[str, int] = {}
     for lens in cfg.lenses:
@@ -67,7 +76,7 @@ def _lens_cameras_for_run(cfg: BenchmarkConfig, run_index: int) -> dict[str, int
 def _build_worker_args(
     lens,
     sds: list[StageDetector],
-    n: int | None,
+    objects: int | None,
     cfg: BenchmarkConfig,
     edge_url: str,
     log_file: str,
@@ -85,8 +94,8 @@ def _build_worker_args(
         lens: A LensSpec subtype (SingleBinaryLens, SingleBboxLens, or
             BboxToBinaryLens).
         sds: Stage detectors for THIS lens (typically 1 or 2 entries).
-        n: This run's `n` value for the lens, or None if the lens has
-            no `n` (single_binary case).
+        objects: This run's `objects` value for the lens, or None if the
+            lens has no `objects` (single_binary case).
         cfg: Full benchmark config — used to resolve global defaults.
         edge_url: Edge endpoint URL the worker should hit.
         log_file: JSONL log path the worker should append to.
@@ -109,7 +118,7 @@ def _build_worker_args(
         return lenses.run_single_binary, {**common, "detector_id": single.detector_id}
     if isinstance(lens, SingleBboxLens):
         single = next(sd for sd in sds if sd.stage == "single")
-        return lenses.run_single_bbox, {**common, "detector_id": single.detector_id, "n": n}
+        return lenses.run_single_bbox, {**common, "detector_id": single.detector_id, "objects": objects}
     if isinstance(lens, BboxToBinaryLens):
         bbox = next(sd for sd in sds if sd.stage == "bbox")
         binary = next(sd for sd in sds if sd.stage == "binary")
@@ -117,7 +126,7 @@ def _build_worker_args(
             **common,
             "bbox_detector_id": bbox.detector_id,
             "binary_detector_id": binary.detector_id,
-            "n": n,
+            "objects": objects,
         }
     raise RuntimeError(f"unknown lens type: {type(lens).__name__}")
 
@@ -137,7 +146,8 @@ def _spawn_lens_workers(
 
     Args:
         cfg: Benchmark config (for lens list and overrides).
-        run: ResolvedRun providing lens_n and the shared stage_detectors.
+        run: ResolvedRun providing lens_objects, lens_cameras, and the
+            shared stage_detectors.
         edge_url: Edge endpoint URL passed into each worker.
         run_dir: Per-run output directory; per-camera log files live here.
         duration_seconds: How long each worker should run before exiting.
@@ -156,7 +166,7 @@ def _spawn_lens_workers(
         for cam_idx in range(cameras_this_run):
             log_path = run_dir / f"camera_{lens.name}_{cam_idx}.log"
             target, kwargs = _build_worker_args(
-                lens, sds, run.lens_n.get(lens.name), cfg, edge_url,
+                lens, sds, run.lens_objects.get(lens.name), cfg, edge_url,
                 str(log_path), duration_seconds, worker_number, cam_idx,
             )
             p = mp.Process(target=target, kwargs=kwargs, name=f"{lens.name}_cam{cam_idx}")
@@ -258,7 +268,7 @@ def _run_one(
 
     run_meta = {
         "run_index": run.run_index,
-        "lens_n": run.lens_n,
+        "lens_objects": run.lens_objects,
         "lens_cameras": run.lens_cameras,
         "lenses": [
             {
@@ -374,11 +384,14 @@ def main(argv: list[str] | None = None) -> int:
         logger.info("pushing edge config (%d detector(s))", len(stage_detectors))
         dm.push_edge_config(stage_detectors)
         for i in range(n_runs):
-            lens_n = _lens_n_for_run(cfg, i)
+            lens_objects = _lens_objects_for_run(cfg, i)
             lens_cameras = _lens_cameras_for_run(cfg, i)
-            logger.info("[run %d/%d] lens_n=%s lens_cameras=%s", i + 1, n_runs, lens_n, lens_cameras)
+            logger.info(
+                "[run %d/%d] lens_objects=%s lens_cameras=%s",
+                i + 1, n_runs, lens_objects, lens_cameras,
+            )
             run = ResolvedRun(
-                run_index=i, lens_n=lens_n, lens_cameras=lens_cameras,
+                run_index=i, lens_objects=lens_objects, lens_cameras=lens_cameras,
                 stage_detectors=stage_detectors,
             )
             summaries.append(_run_one(cfg, run, out_root))

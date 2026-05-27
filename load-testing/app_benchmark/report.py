@@ -486,7 +486,10 @@ def summarize_lenses_config(cfg, stage_detectors) -> list[dict[str, Any]]:
             "name": lens.name,
             "type": ltype,
             "cameras": lens.cameras,
-            "n": list(lens.n) if hasattr(lens, "n") else None,
+            "objects": (
+                list(lens.objects) if hasattr(lens, "objects") and isinstance(lens.objects, list)
+                else (lens.objects if hasattr(lens, "objects") else None)
+            ),
             "stages": stage_entries,
         }
         if lens.image_size is not None:
@@ -517,11 +520,17 @@ def _render_lens_config_section(lenses: list[dict[str, Any]]) -> list[str]:
         "verified to match the config before the benchmark ran, and they "
         "are preserved at cleanup.",
         "",
-        "| Lens | Type | Stage | Pipeline | Detector ID | Cameras | n |",
+        "| Lens | Type | Stage | Pipeline | Detector ID | Cameras | Objects |",
         "|---|---|---|---|---|---:|---|",
     ]
     for lens in lenses:
-        n_label = ",".join(str(v) for v in lens["n"]) if lens.get("n") else "—"
+        objs = lens.get("objects")
+        if isinstance(objs, list):
+            objects_label = ",".join(str(v) for v in objs)
+        elif objs is None:
+            objects_label = "—"
+        else:
+            objects_label = str(objs)
         cams = lens["cameras"]
         cams_label = ",".join(str(v) for v in cams) if isinstance(cams, list) else str(cams)
         for i, stage in enumerate(lens["stages"]):
@@ -534,7 +543,7 @@ def _render_lens_config_section(lenses: list[dict[str, Any]]) -> list[str]:
             if i == 0:
                 lines.append(
                     f"| {lens['name']} | {lens['type']} | {stage['stage']} | "
-                    f"`{pipeline}` | `{det_id}` | {cams_label} | {n_label} |"
+                    f"`{pipeline}` | `{det_id}` | {cams_label} | {objects_label} |"
                 )
             else:
                 lines.append(
@@ -624,7 +633,7 @@ def write_top_level(
         + (" `lens_cameras` shows the per-run camera count per lens." if cameras_ramped else "")
     )
     lines.append("")
-    header = ["run", "lens_n"]
+    header = ["run", "lens_objects"]
     if cameras_ramped:
         header.append("lens_cameras")
     header += per_lens_cols
@@ -632,7 +641,7 @@ def write_top_level(
     lines.append("|" + "|".join(["---"] * len(header)) + "|")
     for s in summaries:
         meta = s["meta"]
-        cells = [str(meta.get("run_index", "?")), f"`{meta.get('lens_n', {})}`"]
+        cells = [str(meta.get("run_index", "?")), f"`{meta.get('lens_objects', {})}`"]
         if cameras_ramped:
             cells.append(f"`{meta.get('lens_cameras', {})}`")
         cams_by_lens: dict[str, list[dict]] = defaultdict(list)
@@ -712,7 +721,7 @@ def _render_run_section(s: dict[str, Any]) -> list[str]:
     lines = [
         f"### Run {run_index}",
         "",
-        f"- **lens_n**: `{meta.get('lens_n', {})}`",
+        f"- **lens_objects**: `{meta.get('lens_objects', {})}`",
         f"- **duration**: `{meta.get('duration_seconds')}s`  "
         f"**warmup**: `{meta.get('warmup_seconds')}s`",
     ]
@@ -765,8 +774,8 @@ def _write_combined_plots(
 
     Each plot has dotted vertical lines at every run's main_start with
     labels below the x-axis (system plot: "Run i"; FPS plots:
-    "Run i (n=X)" using that lens's own n, plus ", cams=Y" when the
-    camera count varies across runs).
+    "Run i (objects=X)" using that lens's own value, plus ", cams=Y"
+    when the camera count varies across runs).
 
     Args:
         out_root: Top-level benchmark output dir.
@@ -846,7 +855,7 @@ def _write_combined_plots(
     boundaries = [
         (s["meta"]["main_start_ts"] - benchmark_t0,
          int(s["meta"]["run_index"]),
-         s["meta"].get("lens_n", {}),
+         s["meta"].get("lens_objects", {}),
          s["meta"].get("lens_cameras", {}))
         for s in summaries
     ]
@@ -918,8 +927,9 @@ def _draw_boundary_lines(
 
     Args:
         ax: Matplotlib axis to draw on.
-        boundaries: List of (x_offset_seconds, run_index, lens_n_dict,
-            lens_cameras_dict). Only the first element matters here.
+        boundaries: List of (x_offset_seconds, run_index,
+            lens_objects_dict, lens_cameras_dict). Only the first
+            element matters here.
     """
     for offset, *_ in boundaries:
         ax.axvline(offset, color="gray", linestyle=":", alpha=0.6, linewidth=1.0)
@@ -938,10 +948,10 @@ def _annotate_boundaries(
 
     Args:
         ax: Matplotlib axis to annotate.
-        boundaries: List of (x_offset_seconds, run_index, lens_n_dict,
-            lens_cameras_dict) for each run.
-        lens_name: When set, labels look like "Run i (n=X)" using
-            `lens_n_dict[lens_name]`, and additionally include
+        boundaries: List of (x_offset_seconds, run_index,
+            lens_objects_dict, lens_cameras_dict) for each run.
+        lens_name: When set, labels look like "Run i (objects=X)" using
+            `lens_objects_dict[lens_name]`, and additionally include
             `, cams=Y` from `lens_cameras_dict[lens_name]` when the
             camera count varies across runs (a cameras-ramp). When
             None, labels are just "Run i" (used on the global system
@@ -954,11 +964,11 @@ def _annotate_boundaries(
         lens_name is not None
         and len({b[3].get(lens_name) for b in boundaries if b[3]}) > 1
     )
-    for offset, run_idx, lens_n, lens_cameras in boundaries:
+    for offset, run_idx, lens_objects, lens_cameras in boundaries:
         ax.axvline(offset, color="gray", linestyle=":", alpha=0.6, linewidth=1.0)
         parts: list[str] = []
-        if lens_name is not None and lens_name in lens_n:
-            parts.append(f"n={lens_n[lens_name]}")
+        if lens_name is not None and lens_name in lens_objects:
+            parts.append(f"objects={lens_objects[lens_name]}")
         if cameras_ramped and lens_name in lens_cameras:
             parts.append(f"cams={lens_cameras[lens_name]}")
         label = f"Run {run_idx}"
@@ -1051,7 +1061,7 @@ def _plot_combined_camera_fps(
     _annotate_boundaries(ax, boundaries, lens_name=lens_name)
     ax.legend(handles=handles, loc="lower right")
     fig.tight_layout()
-    # Reserve space below the xlabel for the rotated "Run i (n=X)" labels.
+    # Reserve space below the xlabel for the rotated "Run i (objects=X)" labels.
     fig.subplots_adjust(bottom=0.28)
     fig.savefig(path, dpi=120)
     plt.close(fig)
@@ -1085,7 +1095,7 @@ def _draw_lens_fps_on_axis(
         cameras_error_buckets: Mapping camera_idx -> {second: error_count}.
         target_fps: Optional target FPS line.
         boundaries: Run-boundary tuples (see _annotate_boundaries).
-        annotate_runs: Whether to draw the rotated "Run i (n=X)" labels
+        annotate_runs: Whether to draw the rotated "Run i (objects=X)" labels
             below the axis. Disable in mosaic subplots where label space
             is tight.
         show_legend: Whether to draw the camera legend. Disable in

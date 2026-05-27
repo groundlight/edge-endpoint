@@ -1,13 +1,13 @@
 """Detector lifecycle: one-shot cloud provision (with training) + one-shot
 edge config push.
 
-For n-bearing lenses, the bbox detector is created once with
-`max_num_bboxes = max(lens.n)` — the upper bound. The model's inference
-cost is essentially independent of `max_num_bboxes` (it processes the
-whole image regardless; only NMS post-processing depends on actual
-detected count, which is negligible). The per-run `n` variation lives
-entirely in the worker: image synthesis bounds + number of downstream
-binary calls in `bbox_to_binary`.
+For lenses that declare `objects` as a list, the bbox detector is
+created once with `max_num_bboxes = max(lens.objects)` — the upper
+bound. The model's inference cost is essentially independent of
+`max_num_bboxes` (it processes the whole image regardless; only NMS
+post-processing depends on actual detected count, which is negligible).
+The per-run `objects` variation lives entirely in the worker: image
+synthesis bounds + number of downstream binary calls in `bbox_to_binary`.
 """
 
 import hashlib
@@ -62,14 +62,16 @@ class ResolvedRun(BaseModel):
 
     Detectors are provisioned ONCE for the whole benchmark, so
     `stage_detectors` is identical across every run. What varies between
-    runs are the per-lens sweep values: `lens_n` controls image synthesis
-    and chained-call counts; `lens_cameras` controls how many worker
-    processes to spawn for the lens.
+    runs are the per-lens sweep values: `lens_objects` controls image
+    synthesis and chained-call counts; `lens_cameras` controls how many
+    worker processes to spawn for the lens.
 
     Attributes:
         run_index: 0-based index into the sweep.
-        lens_n: Mapping from lens_name -> the `n` value for this run.
-            Lenses without an `n` field are absent from the dict.
+        lens_objects: Mapping from lens_name -> the `objects` value for
+            this run (objects placed per synthetic frame, and downstream
+            binary-call count for chained lenses). Lenses without an
+            `objects` field are absent from the dict.
         lens_cameras: Mapping from lens_name -> the camera count for
             this run. Every lens is present (scalar `cameras` resolves
             to the same value across every run).
@@ -77,7 +79,7 @@ class ResolvedRun(BaseModel):
     """
     model_config = ConfigDict(arbitrary_types_allowed=True)
     run_index: int
-    lens_n: dict[str, int]
+    lens_objects: dict[str, int]
     lens_cameras: dict[str, int]
     stage_detectors: list[StageDetector]
 
@@ -177,7 +179,7 @@ class DetectorManager:
         Called exactly once before the run loop. Each lens stage maps to
         one detector:
             single_binary:     1 BINARY detector
-            single_bbox:       1 BOUNDING_BOX detector with max_num_bboxes = max(lens.n)
+            single_bbox:       1 BOUNDING_BOX detector with max_num_bboxes = max(lens.objects)
             bbox_to_binary:    1 BOUNDING_BOX (upstream) + 1 BINARY (downstream)
         Detectors are named deterministically from the run name + lens
         name + stage suffix, so re-running the same config reuses the
@@ -218,7 +220,16 @@ class DetectorManager:
         # detector can start priming while this one is training.
         for lens in self.cfg.lenses:
             image_size = lens.image_size if lens.image_size is not None else self.cfg.globals_.image_size
-            max_n = max(lens.n) if hasattr(lens, "n") else None
+            # Bbox detectors need max_num_bboxes set at creation time;
+            # use the upper bound of the sweep so the same detector
+            # serves every run.
+            if hasattr(lens, "objects"):
+                objects_values = (
+                    lens.objects if isinstance(lens.objects, list) else [lens.objects]
+                )
+                max_objects = max(objects_values)
+            else:
+                max_objects = None
             if isinstance(lens, SingleBinaryLens):
                 if lens.binary_detector_id is not None:
                     stage_detectors.append(self._fetch_external(
@@ -238,7 +249,7 @@ class DetectorManager:
                         detector=det, detector_id=det.id,
                     ))
             elif isinstance(lens, SingleBboxLens):
-                assert max_n is not None
+                assert max_objects is not None
                 if lens.bbox_detector_id is not None:
                     stage_detectors.append(self._fetch_external(
                         lens.name, "single",
@@ -249,7 +260,7 @@ class DetectorManager:
                     det = self._provision(
                         prefix=_name_prefix(name_prefix, run_name, lens.name),
                         mode="BOUNDING_BOX", image_size=image_size,
-                        pipeline=lens.pipeline, n=max_n,
+                        pipeline=lens.pipeline, n=max_objects,
                         wait_for_training=False,
                     )
                     stage_detectors.append(StageDetector(
@@ -257,7 +268,7 @@ class DetectorManager:
                         detector=det, detector_id=det.id,
                     ))
             elif isinstance(lens, BboxToBinaryLens):
-                assert max_n is not None
+                assert max_objects is not None
                 if lens.bbox_detector_id is not None:
                     stage_detectors.append(self._fetch_external(
                         lens.name, "bbox",
@@ -268,7 +279,7 @@ class DetectorManager:
                     bbox_det = self._provision(
                         prefix=_name_prefix(name_prefix, run_name, lens.name, "bbox"),
                         mode="BOUNDING_BOX", image_size=image_size,
-                        pipeline=lens.bbox_pipeline, n=max_n,
+                        pipeline=lens.bbox_pipeline, n=max_objects,
                         wait_for_training=False,
                     )
                     stage_detectors.append(StageDetector(

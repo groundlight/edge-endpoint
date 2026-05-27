@@ -1,24 +1,28 @@
 # app_benchmark — Lens-sweep benchmark for the edge-endpoint
 
-A simplified harness that runs **three fixed lens shapes** concurrently and
-sweeps over a per-lens `n` parameter to characterize how throughput and
-latency change as more crops are forwarded into a binary stage.
+A harness that runs **three fixed lens shapes** concurrently and sweeps
+two independent dimensions across runs:
+
+- **`objects`** per frame — how many objects appear in each synthetic image (and, for chained lenses, how many downstream binary calls run per frame).
+- **`cameras`** per lens — how many independent worker processes hit the lens in parallel.
+
+Both ramps are optional. When you don't ramp anything, the harness runs once. When you ramp one or both, every list in the config must share the same length — the dimensions are **zipped** (run `i` uses element `i` from every list).
 
 ## Lens shapes
 
-| `type` | Stages | `n`? | What `n` controls |
+| `type` | Stages | `objects`? | What `objects` controls |
 |---|---|---|---|
 | `single_binary` | 1 binary call per frame | no | — |
-| `single_bbox` | 1 bbox call per frame | yes | (a) the bbox detector's `max_num_bboxes`, set once to `max(lens.n)` at provisioning; (b) the synthetic image's **exact** object count — each frame contains exactly `n` placed objects |
-| `bbox_to_binary` | 1 bbox + N binary calls per frame | yes | (a) the upstream bbox detector's `max_num_bboxes` = `max(lens.n)`; (b) the synthetic image's **exact** object count = the run's `n`; (c) the exact number of downstream binary calls issued per frame |
+| `single_bbox` | 1 bbox call per frame | yes | (a) the bbox detector's `max_num_bboxes`, set once to `max(lens.objects)` at provisioning; (b) the synthetic image's **exact** object count — each frame contains exactly `objects` placed entities |
+| `bbox_to_binary` | 1 bbox + `objects` binary calls per frame | yes | (a) the upstream bbox detector's `max_num_bboxes` = `max(lens.objects)`; (b) the synthetic image's **exact** object count; (c) the exact number of downstream binary calls issued per frame |
 
 Workers generate a fresh synthetic image per frame via the helpers in
 `load-testing/image_helpers.py` and pass the ndarray directly to
 `gl.ask_ml` — the SDK handles JPEG encoding internally.
 
 For `bbox_to_binary`, one small (224×224) binary image is generated once at
-worker startup and resubmitted `n` times per frame; the SDK re-encodes per
-call, which at that size is negligible.
+worker startup and resubmitted `objects` times per frame; the SDK re-encodes
+per call, which at that size is negligible.
 
 ### Per-lens overrides
 
@@ -27,28 +31,98 @@ values. Anything left unset on a lens falls back to global. Set
 `target_fps: 0` (either globally or per-lens) to disable pacing — the lens
 will issue requests as fast as the edge can serve them.
 
-`target_fps` is the *lens* iteration rate (one loop = 1 bbox + N binary for
-chained lenses, or just 1 inference for single-stage). It is **not** a
-per-stage rate.
+`target_fps` is the *lens* iteration rate (one loop = 1 bbox + `objects`
+binary for chained lenses, or just 1 inference for single-stage). It is
+**not** a per-stage rate.
 
-## Run model
+## Run model — sweeps zip element-wise
 
-The config defines a list of lenses. Lenses with `type: single_bbox` or
-`bbox_to_binary` carry an `n: [...]` list; that's the **sweep dimension**.
+Every list-typed field across the config (`objects`, `cameras`) is a sweep
+dimension. They are zipped together — all lists must share the same length.
+Scalar values stay fixed across every run.
 
-All `n` lists in the config must share the same length — they are **zipped**
-across runs. With two lenses where one has `n=[2,4,6,8]` and the other
-`n=[1,3,5,7]`, the harness produces 4 runs: `(n_a=2, n_b=1)`,
-`(n_a=4, n_b=3)`, etc.
+```yaml
+lenses:
+  - name: door_lens
+    cameras: [1, 2, 4, 8]      # ramps camera count
 
-Within each run, every lens runs its full `cameras` count in parallel as
-independent OS processes.
+  - name: person_lens
+    objects: [2, 4, 6, 8]      # ramps objects per frame
+    cameras: 1                 # fixed at 1
+```
 
-**Detector lifecycle is one-shot, not per-run.** Each n-bearing lens
-provisions a single bbox detector with `max_num_bboxes = max(lens.n)` and
-trains it once before any run starts. The per-run `n` value only affects
-worker behavior — image synthesis bounds and, for chained lenses,
-downstream call count.
+→ 4 runs. Run 0 = (door×1cam, person×1cam objects=2); Run 3 = (door×8cam,
+person×1cam objects=8).
+
+A 2×2 matrix is expressed by listing the cells explicitly:
+```yaml
+objects: [2, 2, 4, 4]
+cameras: [1, 2, 1, 2]
+```
+
+Within each run, every lens runs its `cameras_for_this_run` count in
+parallel as independent OS processes.
+
+## Detector lifecycle
+
+**Two-phase provisioning, one-shot per benchmark.** Detectors are created
+once before any run starts and reused for every run.
+
+1. **Phase 1 (serial create + prime)** — each lens stage is fetched (or
+   created) by deterministic name, then primed with synthetic labels. The
+   bbox detector's `max_num_bboxes` is set to `max(lens.objects)` so the
+   same detector serves every run in the sweep.
+2. **Phase 2 (parallel training wait)** — workers serially poll each
+   detector's edge-pipeline training status. Because training is happening
+   cloud-side after phase 1's priming, all detectors train in parallel
+   during these waits. Total wall-clock is dominated by the slowest
+   single detector, not the sum.
+
+This mirrors PR #373's `provision_detectors` pattern but uses per-lens
+prefixes so detector names stay distinct.
+
+### Using pre-existing detectors (`*_detector_id`)
+
+Any lens stage can be backed by a pre-existing cloud detector instead of
+creating + training one. Set the appropriate ID:
+
+```yaml
+- name: production_door
+  type: single_binary
+  pipeline: generic-cached-timm-efficientnetv2s-calibrated-mlp
+  binary_detector_id: det_2abc123XYZ
+  cameras: 1
+
+- name: hybrid_chain
+  type: bbox_to_binary
+  bbox_pipeline: bounding-boxes-step-rfdetr-primed
+  binary_pipeline: generic-cached-timm-efficientnetv2s-calibrated-mlp
+  bbox_detector_id: det_4def456ABC    # existing bbox stage
+  # binary_detector_id omitted → harness trains a fresh binary detector
+  objects: [2, 4]
+  cameras: 1
+```
+
+The harness fetches the detector by ID, **verifies** its actual cloud-side
+pipeline matches the `pipeline:` declared in the YAML, and skips creation
++ training. The detector is also preserved at cleanup. Edge inference still
+runs in `NO_CLOUD` mode so the existing detector's training data isn't
+polluted.
+
+A pipeline mismatch fails fast with both pipelines printed inline — before
+any edge config is pushed — so silent routing to the wrong model isn't
+possible.
+
+### Preserving owned detectors across runs
+
+Set `run.preserve_detectors: true` to skip cloud-side deletion of detectors
+the harness created. Re-runs of the same config hit `get_or_create_detector`
+and reuse the existing detectors, skipping retraining when the edge pipeline
+is already sufficiently trained. Pipeline mismatches are still caught:
+changing `pipeline:` in the YAML between runs fails fast on the next run.
+
+External (`*_detector_id`) detectors are always preserved regardless of
+this flag.
 
 ## Hard dependencies
 
@@ -69,8 +143,11 @@ uv sync
 
 ```bash
 cd load-testing
-GROUNDLIGHT_API_TOKEN=... uv run --python 3.13 python -m app_benchmark app_benchmark/configs/example.yaml
+GROUNDLIGHT_API_TOKEN=... uv run app_benchmark app_benchmark/configs/example.yaml
 ```
+
+(The longer form `uv run --python 3.13 python -m app_benchmark <config>`
+still works if you prefer to pin the interpreter explicitly.)
 
 Flags:
 - `--no-cleanup` — skip detector deletion + edge-config restore at end
@@ -83,9 +160,11 @@ Flags:
 benchmark_results/{name}-{ts}/
 ├── summary.md                          # consolidated doc — primary view
 ├── summary.json                        # cross-run machine-readable
-├── plots/                              # combined cross-run plots
+├── plots/                              # cross-run plots
 │   ├── system_utilization.png          # 2×2 grid (CPU%, GPU%, RAM GB, VRAM GB)
-│   └── fps_{lens}_camera_{N}.png       # one per camera process
+│   ├── fps_all_lenses.png              # 2-column mosaic of per-lens overlays
+│   ├── fps_{lens}.png                  # per-lens overlay, cameras as colored lines
+│   └── fps_{lens}_camera_{N}.png       # per (lens, camera) detail (files only)
 ├── run_00/
 │   ├── system.log                      # JSONL: cpu/gpu events (SystemMonitor)
 │   ├── camera_{lens}_{N}.log           # JSONL: request events, one file per camera process
@@ -99,24 +178,35 @@ benchmark_results/{name}-{ts}/
 
 `summary.md` is the primary view. It contains:
 
-- An environment block: run name, started_at, edge URL, ICMP **ping baseline**
-  measured before the benchmark starts, and the global defaults.
-- A cross-run overview table with per-lens mean FPS + Hit verdict per run
+- **Environment block** — run name, started_at, edge URL, ICMP **ping
+  baseline** measured before the benchmark starts, and the global defaults.
+- **Lens configuration table** — resolved per-lens config: pipeline,
+  detector ID (with `(external)` tag for pre-existing detectors), camera
+  count (or ramp list), objects (or ramp list). The authoritative
+  "what actually ran" record.
+- **Overview table** — one row per run with per-lens mean FPS + Hit verdict
   (`yes` if every camera in the lens hit ≥95% of its target, `no` otherwise,
-  `—` for saturate-mode lenses).
-- Combined cross-run plots embedded inline. Each plot spans the whole
-  benchmark wall-clock with vertical dotted lines + labels at each run's
-  start. System plot labels: `Run i`. FPS plots: `Run i (n=X)` using
-  that lens's own `n` for the run.
-- Per-run sections with a per-camera table — `Frames`, `Errors`, `FPS`,
-  `Target`, `Hit`, `p50`, `p95` — and a callout for any worker that
-  exited non-zero or any camera that produced no events.
+  `—` for saturate-mode lenses). Gets a `lens_cameras` column when any lens
+  has a cameras ramp.
+- **Cross-run system utilization** — 2×2 plot spanning the whole benchmark.
+- **Cross-run FPS overview** — mosaic image showing every lens at a glance.
+  Each cell is one lens with all its cameras overlaid (viridis colormap,
+  blue→yellow with camera index). Cameras that only existed in later runs
+  start partway through the time axis — visualizes the cameras-ramp scaling
+  story directly.
+- **Per-lens detail** — one larger plot per lens, same overlay layout.
+  Aggregated failed-requests rate (sum across cameras) on a secondary
+  axis in red.
+- **Per-run sections** — collapsible per-camera table with `Frames`,
+  `Errors`, `FPS`, `Target`, `Hit`, `p50`, `p95`; callouts for any worker
+  that exited non-zero or any camera that produced no events.
 
-The FPS plots show frames-per-second on the left y-axis (blue), target FPS
-as a dashed orange line, and failed requests / sec on a right y-axis (red).
-The errors axis counts every failed **request** — for `bbox_to_binary`
-each frame produces `1 + n` requests, any of which can be counted as a
-failure independently of the lens's frame rate.
+Per-(lens, camera) detail PNGs are still written to `plots/` for ad-hoc
+deep dives — they're just no longer embedded in `summary.md` (the per-lens
+overlay covers the common case).
+
+Plot boundary labels read `Run i (objects=X)` when `objects` varies, and
+add `, cams=Y` when `cameras` also varies across runs.
 
 The measurement window is fixed at `[main_start_ts, main_start_ts +
 duration)`. Events before `main_start_ts` (warmup) or at/after
@@ -126,27 +216,28 @@ the summary, so FPS reflects exactly `total_frames / duration`.
 ## Cleanup utilities
 
 The benchmark cleans up its own detectors (cloud-side delete + edge-config
-restore) at exit. If a run is hard-killed (`kill -9`, OOM) the cleanup
-doesn't run — delete cloud detectors via the Groundlight dashboard and wipe
-the edge-side stuck pods:
+restore) at exit. External (`*_detector_id`) and `preserve_detectors: true`
+detectors skip the delete. If a run is hard-killed (`kill -9`, OOM) the
+cleanup doesn't run — delete cloud detectors via the Groundlight dashboard
+and wipe the edge-side stuck pods:
 
 ```bash
 # List currently-configured detectors:
-python -m app_benchmark.cleanup_edge --edge-endpoint http://EDGE:30101
+uv run python -m app_benchmark.cleanup_edge --edge-endpoint http://EDGE:30101
 
 # Wipe (asks for confirmation):
-python -m app_benchmark.cleanup_edge --edge-endpoint http://EDGE:30101 --wipe
+uv run python -m app_benchmark.cleanup_edge --edge-endpoint http://EDGE:30101 --wipe
 
 # Wipe without confirmation (scripted use):
-python -m app_benchmark.cleanup_edge --edge-endpoint http://EDGE:30101 --wipe --force
+uv run python -m app_benchmark.cleanup_edge --edge-endpoint http://EDGE:30101 --wipe --force
 ```
 
 ## Process topology
 
 ```
-main                   (cli.py — orchestrates runs)
-├─ SystemMonitor       (samples /status/resources.json on the edge)
-└─ Σ lens.cameras workers across all lenses (per-camera frame loop)
+main                       (cli.py — orchestrates runs)
+├─ SystemMonitor           (samples /status/resources.json on the edge)
+└─ Σ cameras_for_run workers across all lenses (per-camera frame loop)
 ```
 
 For each run: workers run for `warmup + duration` seconds. After the warmup
@@ -177,7 +268,7 @@ T1  snapshot captures [detA, detB]
 T2  push ONLY ours: edge ← [benchX, benchY]     ← detA, detB pods torn down
 T3  benchmark runs against a clean edge
 T4  restore snapshot: edge ← [detA, detB]       ← detA, detB pods cold-start back
-T5  delete benchX, benchY from cloud
+T5  delete benchX, benchY from cloud (skipped for external + preserve_detectors)
 ```
 
 By default the benchmark logs a warning and proceeds when the edge already

@@ -166,7 +166,7 @@ def run_single_bbox(  # noqa: PLR0913
     camera: int,
     lens_name: str,
     detector_id: str,
-    n: int,
+    objects: int,
     edge_url: str,
     image_size: tuple[int, int],
     target_fps: float,
@@ -175,9 +175,9 @@ def run_single_bbox(  # noqa: PLR0913
 ) -> None:
     """multiprocessing.Process target for a `single_bbox` lens worker.
 
-    Generates a fresh image containing exactly `n` placed objects per
-    frame (via image_helpers.generate_fixed_objects_image) and submits
-    one bounding-box inference.
+    Generates a fresh image containing exactly `objects` placed entities
+    per frame (via image_helpers.generate_fixed_objects_image) and
+    submits one bounding-box inference.
 
     Args:
         worker_number: Global worker index, recorded on every log line.
@@ -185,11 +185,11 @@ def run_single_bbox(  # noqa: PLR0913
         lens_name: Logged on every event; matched against config in the
             report.
         detector_id: Cloud detector ID for the bbox inference.
-        n: Exact object count placed in each synthesized image for this
-            run. The detector itself was provisioned once with
-            max_num_bboxes = max(lens.n), so the per-run `n` only
-            changes the image content (and any downstream cost on the
-            model that scales with detected count).
+        objects: Exact object count placed in each synthesized image for
+            this run. The detector itself was provisioned once with
+            max_num_bboxes = max(lens.objects), so the per-run value
+            only changes the image content (and any downstream cost on
+            the model that scales with detected count).
         edge_url: Edge endpoint URL; the SDK client is built from this.
         image_size: (width, height) of the synthetic image to generate.
         target_fps: Per-frame pace target. 0 = saturate.
@@ -206,7 +206,7 @@ def run_single_bbox(  # noqa: PLR0913
     with open(log_file, "a", buffering=1, encoding="utf-8") as log:
         while time.time() < deadline:
             frame_start = time.time()
-            image, _, _ = imgh.generate_fixed_objects_image(w, h, count=n)
+            image, _, _ = imgh.generate_fixed_objects_image(w, h, count=objects)
             _submit_and_log(
                 gl, detector_id, image,
                 log_handle=log, lens_name=lens_name, camera=camera,
@@ -223,7 +223,7 @@ def run_bbox_to_binary(  # noqa: PLR0913
     lens_name: str,
     bbox_detector_id: str,
     binary_detector_id: str,
-    n: int,
+    objects: int,
     edge_url: str,
     image_size: tuple[int, int],
     target_fps: float,
@@ -233,11 +233,11 @@ def run_bbox_to_binary(  # noqa: PLR0913
     """multiprocessing.Process target for a `bbox_to_binary` lens worker.
 
     Per frame:
-      1. Generate a fresh `image_size` image with exactly `n` placed
-         objects (via image_helpers.generate_fixed_objects_image) and
-         submit one bbox inference (logged with stage=bbox).
-      2. Submit a cached small (224x224) binary image `n` times in a
-         row (each logged with stage=binary).
+      1. Generate a fresh `image_size` image with exactly `objects`
+         placed entities (via image_helpers.generate_fixed_objects_image)
+         and submit one bbox inference (logged with stage=bbox).
+      2. Submit a cached small (224x224) binary image `objects` times
+         in a row (each logged with stage=binary).
 
     The cached downstream image is generated once at worker startup; the
     SDK re-encodes it per call, which at 224x224 is cheap.
@@ -250,12 +250,12 @@ def run_bbox_to_binary(  # noqa: PLR0913
         bbox_detector_id: Cloud detector ID for the upstream bbox stage.
         binary_detector_id: Cloud detector ID for the downstream binary
             stage.
-        n: Both the exact object count placed in the bbox image AND the
-            number of downstream binary calls issued per frame.
+        objects: Both the exact object count placed in the bbox image
+            AND the number of downstream binary calls issued per frame.
         edge_url: Edge endpoint URL; the SDK client is built from this.
         image_size: (width, height) of the upstream bbox image.
-        target_fps: Per-frame pace target (one frame = 1 bbox + n binary
-            calls). 0 = saturate.
+        target_fps: Per-frame pace target (one frame = 1 bbox +
+            `objects` binary calls). 0 = saturate.
         duration_seconds: How long this worker runs before exiting.
         log_file: Append-only JSONL log path; one file per camera process
             (the runner opens it once and writes for its whole lifetime).
@@ -273,14 +273,14 @@ def run_bbox_to_binary(  # noqa: PLR0913
     with open(log_file, "a", buffering=1, encoding="utf-8") as log:
         while time.time() < deadline:
             frame_start = time.time()
-            bbox_image, _, _ = imgh.generate_fixed_objects_image(w, h, count=n)
+            bbox_image, _, _ = imgh.generate_fixed_objects_image(w, h, count=objects)
             _submit_and_log(
                 gl, bbox_detector_id, bbox_image,
                 log_handle=log, lens_name=lens_name, camera=camera,
                 worker_number=worker_number, request_number=request_number, stage="bbox",
             )
             request_number += 1
-            for _ in range(n):
+            for _ in range(objects):
                 _submit_and_log(
                     gl, binary_detector_id, binary_image,
                     log_handle=log, lens_name=lens_name, camera=camera,

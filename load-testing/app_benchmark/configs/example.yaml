@@ -16,13 +16,22 @@ global:
   duration_seconds: 180   # the measurement window after warmup; FPS / latency / errors are computed over this
   warmup_seconds: 20      # workers run for this long BEFORE the window opens, letting caches warm + pods reach steady state
 
-# Lenses run CONCURRENTLY inside each run. Sweep dimensions (`n` and
-# `cameras`) declared as lists are zipped element-wise across runs —
-# every list in the config must share the same length. A scalar
-# `cameras` value stays fixed across every run.
+# Lenses run CONCURRENTLY inside each run. Sweep dimensions (`objects`
+# and `cameras`) declared as lists are zipped element-wise across runs
+# — every list in the config must share the same length. A scalar value
+# stays fixed across every run.
 #
 # Per-lens overrides: `image_size` and `target_fps` may be set on any lens
 # to override the global value for that lens only.
+#
+# Optional per-lens fields:
+#   bbox_detector_id / binary_detector_id — supply a pre-existing
+#     cloud detector ID instead of letting the harness create + train
+#     one. The detector's pipeline is verified against the configured
+#     `pipeline` (or `bbox_pipeline` / `binary_pipeline`) at startup,
+#     and the detector is preserved at cleanup. Edge inference still
+#     runs in NO_CLOUD mode so the existing detector's training data
+#     isn't polluted.
 lenses:
   - name: door_lens
     type: single_binary
@@ -35,16 +44,16 @@ lenses:
     type: bbox_to_binary
     bbox_pipeline: bounding-boxes-step-rfdetr-primed
     binary_pipeline: generic-cached-timm-efficientnetv2s-calibrated-mlp
-    n: [2, 4, 6, 8]
+    objects: [2, 4, 6, 8]    # also the count of downstream binary calls per frame
     cameras: 1
     # uses global image_size + target_fps
 
   - name: object_lens
     type: single_bbox
     pipeline: bounding-boxes-step-rfdetr-primed
-    n: [1, 3, 5, 7]
+    objects: [1, 3, 5, 7]    # number of objects placed in each synthetic frame
     cameras: 1               # scalar — fixed at 1 across all 4 runs
-    # cameras: [1, 2, 4, 8]  # alternative: ramp camera count zipped with n
+    # cameras: [1, 2, 4, 8]  # alternative: ramp camera count zipped with objects
     target_fps: 0            # saturate — go as fast as the edge can serve
 
 monitoring:
