@@ -65,7 +65,6 @@ def _():
         "detector_config": "#BCBD22",
         "get_detector_metadata": "#EF553B",
         "refresh_detector_metadata_if_needed": "#D62728",
-        "inference_is_available": "#00CC96",
         "run_inference": "#3CB371",
         "_submit_primary_inference": "#AB63FA",
         "_submit_oodd_inference": "#FFA15A",
