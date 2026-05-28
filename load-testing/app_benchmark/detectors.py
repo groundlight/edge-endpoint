@@ -39,6 +39,11 @@ class StageDetector(BaseModel):
         stage: One of "single" (used by both single_binary and single_bbox
             lenses), "bbox", or "binary" (the two stages of a
             bbox_to_binary lens).
+        copy_index: Which copy of the lens this detector backs.
+            Zero-based; lenses with no copies-ramp always use copy 0.
+            Each copy is an independently-trained detector with the
+            same pipeline as its siblings — useful for measuring the
+            server's capacity to juggle multiple distinct detectors.
         detector: SDK Detector instance — used when (re)pushing the edge
             config. Not a Pydantic model, hence arbitrary_types_allowed.
         detector_id: Convenience handle (== detector.id) for the worker
@@ -47,11 +52,13 @@ class StageDetector(BaseModel):
             `*_detector_id` in the config. External detectors skip
             creation + training at startup and skip cloud deletion at
             cleanup; everything else (edge config push, NO_CLOUD
-            inference) is identical.
+            inference) is identical. External + copies > 1 is rejected
+            by the schema validator.
     """
     model_config = ConfigDict(arbitrary_types_allowed=True, frozen=True)
     lens_name: str
     stage: str  # "single", "bbox", or "binary"
+    copy_index: int = 0
     detector: Detector
     detector_id: str
     is_external: bool = False
@@ -64,7 +71,8 @@ class ResolvedRun(BaseModel):
     `stage_detectors` is identical across every run. What varies between
     runs are the per-lens sweep values: `lens_objects` controls image
     synthesis and chained-call counts; `lens_cameras` controls how many
-    worker processes to spawn for the lens.
+    worker processes to spawn per (lens, copy); `lens_copies` controls
+    how many distinct detector copies of the lens are active.
 
     Attributes:
         run_index: 0-based index into the sweep.
@@ -75,16 +83,30 @@ class ResolvedRun(BaseModel):
         lens_cameras: Mapping from lens_name -> the camera count for
             this run. Every lens is present (scalar `cameras` resolves
             to the same value across every run).
-        stage_detectors: Shared list of detectors registered on the edge.
+        lens_copies: Mapping from lens_name -> the copy count for this
+            run. Every lens is present (scalar `copies` resolves to the
+            same value across every run). Workers spawn for copies 0
+            through `lens_copies[lens] - 1`; the harness pre-provisions
+            `max(lens.copies)` detectors per stage but only activates
+            the first `lens_copies[lens]` of them in any given run.
+        stage_detectors: Shared list of detectors registered on the edge
+            (max(copies) per stage per lens).
     """
     model_config = ConfigDict(arbitrary_types_allowed=True)
     run_index: int
     lens_objects: dict[str, int]
     lens_cameras: dict[str, int]
+    lens_copies: dict[str, int]
     stage_detectors: list[StageDetector]
 
 
-def _name_prefix(detector_name_prefix: str, run_name: str, lens_name: str, suffix: str = "") -> str:
+def _name_prefix(
+    detector_name_prefix: str,
+    run_name: str,
+    lens_name: str,
+    suffix: str = "",
+    copy_index: int = 0,
+) -> str:
     """Build a cloud detector name prefix.
 
     The SDK's provision_detector appends roughly 30 chars of suffix
@@ -100,6 +122,10 @@ def _name_prefix(detector_name_prefix: str, run_name: str, lens_name: str, suffi
         lens_name: The lens this detector serves.
         suffix: Optional stage qualifier ("bbox" or "binary") for chained
             lenses where one lens has two detectors.
+        copy_index: Index into the copies-ramp; zero means "the default
+            copy" and is omitted from the prefix to keep names compact
+            for the common case. Non-zero copies append `_copy{k}` so
+            every copy gets a deterministic, unique cloud-side name.
 
     Returns:
         Prefix string of length ≤28 chars.
@@ -108,9 +134,15 @@ def _name_prefix(detector_name_prefix: str, run_name: str, lens_name: str, suffi
     candidate = f"{detector_name_prefix}_{run_hash}_{lens_name}"
     if suffix:
         candidate += f"_{suffix}"
+    if copy_index:
+        candidate += f"_copy{copy_index}"
     if len(candidate) <= _MAX_PREFIX_LEN:
         return candidate
-    lens_hash = hashlib.sha256(f"{lens_name}_{suffix}".encode()).hexdigest()[:8]
+    # Hash-fold the long parts so the final name still fits. Include
+    # copy_index in the hash key so each copy gets a unique hash.
+    lens_hash = hashlib.sha256(
+        f"{lens_name}_{suffix}_copy{copy_index}".encode()
+    ).hexdigest()[:8]
     return f"{detector_name_prefix}_{run_hash}_{lens_hash}"
 
 
@@ -176,20 +208,25 @@ class DetectorManager:
     def provision_all(self) -> list[StageDetector]:
         """Create + train (if needed) every detector the benchmark uses.
 
-        Called exactly once before the run loop. Each lens stage maps to
-        one detector:
-            single_binary:     1 BINARY detector
-            single_bbox:       1 BOUNDING_BOX detector with max_num_bboxes = max(lens.objects)
-            bbox_to_binary:    1 BOUNDING_BOX (upstream) + 1 BINARY (downstream)
-        Detectors are named deterministically from the run name + lens
-        name + stage suffix, so re-running the same config reuses the
-        existing detectors (no retraining).
+        Called exactly once before the run loop. Each lens stage × copy
+        maps to one detector:
+            single_binary:     `max(copies)` BINARY detectors
+            single_bbox:       `max(copies)` BOUNDING_BOX detectors with
+                               max_num_bboxes = max(lens.objects)
+            bbox_to_binary:    `max(copies)` × (BOUNDING_BOX + BINARY)
+        Detector names are deterministic — `{prefix}_{run_hash}_{lens}`
+        with a `_copy{k}` suffix when copy_index > 0 — so re-running the
+        same config reuses the existing detectors (no retraining). Copy
+        0 keeps the unsuffixed name for back-compat with v1 detectors.
 
         When a lens declares `*_detector_id` in the config, that stage
         uses the pre-existing detector instead of creating one — its
         pipeline is verified against the configured `*_pipeline` and
         creation + training are skipped. External detectors are also
-        skipped during cleanup (see delete_all).
+        skipped during cleanup (see delete_all). The schema validator
+        forbids combining `*_detector_id` with `copies > 1`, so the
+        external branch only ever fires at copy_index 0 of a lens whose
+        max_copies is 1.
 
         Provisioning runs in two phases (mirroring
         `groundlight_helpers.provision_detectors` but with per-lens
@@ -207,7 +244,7 @@ class DetectorManager:
 
         Returns:
             The flat list of StageDetector objects for the whole
-            benchmark, in lens-order. Stored on
+            benchmark, ordered by lens then copy. Stored on
             `self._all_stage_detectors` for push_edge_config and
             delete_all to use, and returned for the caller to hand to
             the worker spawner.
@@ -230,86 +267,90 @@ class DetectorManager:
                 max_objects = max(objects_values)
             else:
                 max_objects = None
-            if isinstance(lens, SingleBinaryLens):
-                if lens.binary_detector_id is not None:
-                    stage_detectors.append(self._fetch_external(
-                        lens.name, "single",
-                        detector_id=lens.binary_detector_id,
-                        expected_pipeline=lens.pipeline,
-                    ))
+            max_copies = lens._max_copies()
+            for copy_idx in range(max_copies):
+                if isinstance(lens, SingleBinaryLens):
+                    if copy_idx == 0 and lens.binary_detector_id is not None:
+                        # External path only valid when max_copies == 1
+                        # (validator enforces this). Goes through copy 0.
+                        stage_detectors.append(self._fetch_external(
+                            lens.name, "single", copy_index=copy_idx,
+                            detector_id=lens.binary_detector_id,
+                            expected_pipeline=lens.pipeline,
+                        ))
+                    else:
+                        det = self._provision(
+                            prefix=_name_prefix(name_prefix, run_name, lens.name, copy_index=copy_idx),
+                            mode="BINARY", image_size=image_size,
+                            pipeline=lens.pipeline, n=None,
+                            wait_for_training=False,
+                        )
+                        stage_detectors.append(StageDetector(
+                            lens_name=lens.name, stage="single", copy_index=copy_idx,
+                            detector=det, detector_id=det.id,
+                        ))
+                elif isinstance(lens, SingleBboxLens):
+                    assert max_objects is not None
+                    if copy_idx == 0 and lens.bbox_detector_id is not None:
+                        stage_detectors.append(self._fetch_external(
+                            lens.name, "single", copy_index=copy_idx,
+                            detector_id=lens.bbox_detector_id,
+                            expected_pipeline=lens.pipeline,
+                        ))
+                    else:
+                        det = self._provision(
+                            prefix=_name_prefix(name_prefix, run_name, lens.name, copy_index=copy_idx),
+                            mode="BOUNDING_BOX", image_size=image_size,
+                            pipeline=lens.pipeline, n=max_objects,
+                            wait_for_training=False,
+                        )
+                        stage_detectors.append(StageDetector(
+                            lens_name=lens.name, stage="single", copy_index=copy_idx,
+                            detector=det, detector_id=det.id,
+                        ))
+                elif isinstance(lens, BboxToBinaryLens):
+                    assert max_objects is not None
+                    if copy_idx == 0 and lens.bbox_detector_id is not None:
+                        stage_detectors.append(self._fetch_external(
+                            lens.name, "bbox", copy_index=copy_idx,
+                            detector_id=lens.bbox_detector_id,
+                            expected_pipeline=lens.bbox_pipeline,
+                        ))
+                    else:
+                        bbox_det = self._provision(
+                            prefix=_name_prefix(name_prefix, run_name, lens.name, "bbox", copy_index=copy_idx),
+                            mode="BOUNDING_BOX", image_size=image_size,
+                            pipeline=lens.bbox_pipeline, n=max_objects,
+                            wait_for_training=False,
+                        )
+                        stage_detectors.append(StageDetector(
+                            lens_name=lens.name, stage="bbox", copy_index=copy_idx,
+                            detector=bbox_det, detector_id=bbox_det.id,
+                        ))
+                    if copy_idx == 0 and lens.binary_detector_id is not None:
+                        stage_detectors.append(self._fetch_external(
+                            lens.name, "binary", copy_index=copy_idx,
+                            detector_id=lens.binary_detector_id,
+                            expected_pipeline=lens.binary_pipeline,
+                        ))
+                    else:
+                        bin_det = self._provision(
+                            # The downstream binary stage actually serves
+                            # BINARY_DOWNSTREAM_SIZE-sized images at runtime, so prime
+                            # the detector with images of that same shape — priming on
+                            # the upstream `image_size` (e.g. 1920x1080) trained the
+                            # model on a distribution it never sees in practice.
+                            prefix=_name_prefix(name_prefix, run_name, lens.name, "binary", copy_index=copy_idx),
+                            mode="BINARY", image_size=BINARY_DOWNSTREAM_SIZE,
+                            pipeline=lens.binary_pipeline, n=None,
+                            wait_for_training=False,
+                        )
+                        stage_detectors.append(StageDetector(
+                            lens_name=lens.name, stage="binary", copy_index=copy_idx,
+                            detector=bin_det, detector_id=bin_det.id,
+                        ))
                 else:
-                    det = self._provision(
-                        prefix=_name_prefix(name_prefix, run_name, lens.name),
-                        mode="BINARY", image_size=image_size,
-                        pipeline=lens.pipeline, n=None,
-                        wait_for_training=False,
-                    )
-                    stage_detectors.append(StageDetector(
-                        lens_name=lens.name, stage="single",
-                        detector=det, detector_id=det.id,
-                    ))
-            elif isinstance(lens, SingleBboxLens):
-                assert max_objects is not None
-                if lens.bbox_detector_id is not None:
-                    stage_detectors.append(self._fetch_external(
-                        lens.name, "single",
-                        detector_id=lens.bbox_detector_id,
-                        expected_pipeline=lens.pipeline,
-                    ))
-                else:
-                    det = self._provision(
-                        prefix=_name_prefix(name_prefix, run_name, lens.name),
-                        mode="BOUNDING_BOX", image_size=image_size,
-                        pipeline=lens.pipeline, n=max_objects,
-                        wait_for_training=False,
-                    )
-                    stage_detectors.append(StageDetector(
-                        lens_name=lens.name, stage="single",
-                        detector=det, detector_id=det.id,
-                    ))
-            elif isinstance(lens, BboxToBinaryLens):
-                assert max_objects is not None
-                if lens.bbox_detector_id is not None:
-                    stage_detectors.append(self._fetch_external(
-                        lens.name, "bbox",
-                        detector_id=lens.bbox_detector_id,
-                        expected_pipeline=lens.bbox_pipeline,
-                    ))
-                else:
-                    bbox_det = self._provision(
-                        prefix=_name_prefix(name_prefix, run_name, lens.name, "bbox"),
-                        mode="BOUNDING_BOX", image_size=image_size,
-                        pipeline=lens.bbox_pipeline, n=max_objects,
-                        wait_for_training=False,
-                    )
-                    stage_detectors.append(StageDetector(
-                        lens_name=lens.name, stage="bbox",
-                        detector=bbox_det, detector_id=bbox_det.id,
-                    ))
-                if lens.binary_detector_id is not None:
-                    stage_detectors.append(self._fetch_external(
-                        lens.name, "binary",
-                        detector_id=lens.binary_detector_id,
-                        expected_pipeline=lens.binary_pipeline,
-                    ))
-                else:
-                    bin_det = self._provision(
-                        # The downstream binary stage actually serves
-                        # BINARY_DOWNSTREAM_SIZE-sized images at runtime, so prime
-                        # the detector with images of that same shape — priming on
-                        # the upstream `image_size` (e.g. 1920x1080) trained the
-                        # model on a distribution it never sees in practice.
-                        prefix=_name_prefix(name_prefix, run_name, lens.name, "binary"),
-                        mode="BINARY", image_size=BINARY_DOWNSTREAM_SIZE,
-                        pipeline=lens.binary_pipeline, n=None,
-                        wait_for_training=False,
-                    )
-                    stage_detectors.append(StageDetector(
-                        lens_name=lens.name, stage="binary",
-                        detector=bin_det, detector_id=bin_det.id,
-                    ))
-            else:
-                raise RuntimeError(f"unknown lens type: {type(lens).__name__}")
+                    raise RuntimeError(f"unknown lens type: {type(lens).__name__}")
 
         # Phase 2: wait for all owned detectors to finish training. Each
         # wait_for_edge_pipeline_trained returns immediately if the
@@ -337,13 +378,16 @@ class DetectorManager:
         *,
         detector_id: str,
         expected_pipeline: str | None,
+        copy_index: int = 0,
     ) -> StageDetector:
         """Fetch a pre-existing detector by ID, verify its pipeline
         matches the configured one, and return a StageDetector flagged
         is_external=True. Training and cleanup are skipped for the
         returned detector. The SDK has no way to override a detector's
         pipeline, so a config-vs-actual mismatch silently routes
-        inference to the wrong model — we verify up front and fail loudly.
+        inference to the wrong model — we verify up front and fail
+        loudly. External detectors are only valid at copy_index 0 with
+        max_copies == 1 (enforced by the schema validator).
         """
         logger.info("fetching external detector %s for %s.%s", detector_id, lens_name, stage)
         det = self.gl_cloud.get_detector(detector_id)
@@ -352,7 +396,7 @@ class DetectorManager:
                 self.gl_cloud, det.id, expected_pipeline,
             )
         return StageDetector(
-            lens_name=lens_name, stage=stage,
+            lens_name=lens_name, stage=stage, copy_index=copy_index,
             detector=det, detector_id=det.id, is_external=True,
         )
 

@@ -33,6 +33,7 @@ def _submit_and_log(
     log_handle,
     lens_name: str,
     camera: int,
+    copy_index: int,
     worker_number: int,
     request_number: int,
     stage: str | None = None,
@@ -53,7 +54,10 @@ def _submit_and_log(
             runner opens it once at startup (one log file per camera
             process) and closes it on exit.
         lens_name: Identifies the lens in the log (and the report).
-        camera: Per-lens camera index (0..lens.cameras-1).
+        camera: Per-(lens, copy) camera index.
+        copy_index: Which copy of the lens this worker serves. Always
+            present in every event so the report can group by
+            (lens, copy) without parsing log filenames.
         worker_number: Global worker index across all lenses, useful for
             cross-process tagging.
         request_number: Monotonic counter within this worker — useful
@@ -78,6 +82,7 @@ def _submit_and_log(
         "event": "request",
         "lens_name": lens_name,
         "camera": camera,
+        "copy": copy_index,
         "worker_number": worker_number,
         "request_number": request_number,
         "latency": round(end - request_start, 4),
@@ -112,6 +117,7 @@ def run_single_binary(  # noqa: PLR0913
     worker_number: int,
     camera: int,
     lens_name: str,
+    copy_index: int,
     detector_id: str,
     edge_url: str,
     image_size: tuple[int, int],
@@ -154,6 +160,7 @@ def run_single_binary(  # noqa: PLR0913
             _submit_and_log(
                 gl, detector_id, image,
                 log_handle=log, lens_name=lens_name, camera=camera,
+                copy_index=copy_index,
                 worker_number=worker_number, request_number=request_number,
             )
             request_number += 1
@@ -165,6 +172,7 @@ def run_single_bbox(  # noqa: PLR0913
     worker_number: int,
     camera: int,
     lens_name: str,
+    copy_index: int,
     detector_id: str,
     objects: int,
     edge_url: str,
@@ -210,6 +218,7 @@ def run_single_bbox(  # noqa: PLR0913
             _submit_and_log(
                 gl, detector_id, image,
                 log_handle=log, lens_name=lens_name, camera=camera,
+                copy_index=copy_index,
                 worker_number=worker_number, request_number=request_number,
             )
             request_number += 1
@@ -221,6 +230,7 @@ def run_bbox_to_binary(  # noqa: PLR0913
     worker_number: int,
     camera: int,
     lens_name: str,
+    copy_index: int,
     bbox_detector_id: str,
     binary_detector_id: str,
     objects: int,
@@ -277,6 +287,7 @@ def run_bbox_to_binary(  # noqa: PLR0913
             _submit_and_log(
                 gl, bbox_detector_id, bbox_image,
                 log_handle=log, lens_name=lens_name, camera=camera,
+                copy_index=copy_index,
                 worker_number=worker_number, request_number=request_number, stage="bbox",
             )
             request_number += 1
@@ -284,6 +295,7 @@ def run_bbox_to_binary(  # noqa: PLR0913
                 _submit_and_log(
                     gl, binary_detector_id, binary_image,
                     log_handle=log, lens_name=lens_name, camera=camera,
+                    copy_index=copy_index,
                     worker_number=worker_number, request_number=request_number, stage="binary",
                 )
                 request_number += 1

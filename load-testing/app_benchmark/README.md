@@ -1,12 +1,13 @@
 # app_benchmark — Lens-sweep benchmark for the edge-endpoint
 
 A harness that runs **three fixed lens shapes** concurrently and sweeps
-two independent dimensions across runs:
+three independent dimensions across runs:
 
 - **`objects`** per frame — how many objects appear in each synthetic image (and, for chained lenses, how many downstream binary calls run per frame).
 - **`cameras`** per lens — how many independent worker processes hit the lens in parallel.
+- **`copies`** per lens — how many independently-trained detector copies of the lens are active. Each copy is its own cloud-side detector with the same pipeline and `objects` setting; ramping copies measures how throughput scales with the number of distinct detectors the server is juggling.
 
-Both ramps are optional. When you don't ramp anything, the harness runs once. When you ramp one or both, every list in the config must share the same length — the dimensions are **zipped** (run `i` uses element `i` from every list).
+All ramps are optional. When you don't ramp anything, the harness runs once. When you ramp one or more, every list in the config must share the same length — the dimensions are **zipped** (run `i` uses element `i` from every list).
 
 ## Lens shapes
 
@@ -37,9 +38,9 @@ binary for chained lenses, or just 1 inference for single-stage). It is
 
 ## Run model — sweeps zip element-wise
 
-Every list-typed field across the config (`objects`, `cameras`) is a sweep
-dimension. They are zipped together — all lists must share the same length.
-Scalar values stay fixed across every run.
+Every list-typed field across the config (`objects`, `cameras`,
+`copies`) is a sweep dimension. They are zipped together — all lists
+must share the same length. Scalar values stay fixed across every run.
 
 ```yaml
 lenses:
@@ -49,10 +50,14 @@ lenses:
   - name: person_lens
     objects: [2, 4, 6, 8]      # ramps objects per frame
     cameras: 1                 # fixed at 1
+
+  - name: scaling_lens
+    copies: [1, 2, 4, 8]       # ramps distinct detector copies
+    cameras: 1
 ```
 
-→ 4 runs. Run 0 = (door×1cam, person×1cam objects=2); Run 3 = (door×8cam,
-person×1cam objects=8).
+→ 4 runs. Run 0 = (door×1cam, person×1cam objects=2, scaling×1copy);
+Run 3 = (door×8cam, person×1cam objects=8, scaling×8copies).
 
 A 2×2 matrix is expressed by listing the cells explicitly:
 ```yaml
@@ -60,18 +65,35 @@ objects: [2, 2, 4, 4]
 cameras: [1, 2, 1, 2]
 ```
 
-Within each run, every lens runs its `cameras_for_this_run` count in
-parallel as independent OS processes.
+Within each run, every lens runs `copies_for_run × cameras_for_run`
+worker processes in parallel — one per (copy, camera) pair.
+
+### `copies` semantics
+
+For run `i`, the harness spawns workers against the first `copies[i]`
+detectors of the lens (out of `max(copies)` provisioned at startup).
+Each copy is a distinct cloud-side detector — same pipeline, same
+`objects` setting, independently trained. So `copies` ramps "how many
+detectors does the server handle", while `cameras` ramps "how many
+workers per detector".
+
+**Restriction**: `copies > 1` cannot be combined with `*_detector_id`.
+A single pre-existing detector ID can't back multiple independently-
+trained copies, so the schema validator rejects the combination
+upfront.
 
 ## Detector lifecycle
 
 **Two-phase provisioning, one-shot per benchmark.** Detectors are created
 once before any run starts and reused for every run.
 
-1. **Phase 1 (serial create + prime)** — each lens stage is fetched (or
-   created) by deterministic name, then primed with synthetic labels. The
-   bbox detector's `max_num_bboxes` is set to `max(lens.objects)` so the
-   same detector serves every run in the sweep.
+1. **Phase 1 (serial create + prime)** — each `(lens stage × copy)` is
+   fetched (or created) by deterministic name, then primed with
+   synthetic labels. The bbox detector's `max_num_bboxes` is set to
+   `max(lens.objects)` so the same detector serves every run in the
+   sweep. Copies > 1 multiply the per-stage detector count by
+   `max(lens.copies)` and append a `_copy{k}` suffix to each
+   detector's deterministic name.
 2. **Phase 2 (parallel training wait)** — workers serially poll each
    detector's edge-pipeline training status. Because training is happening
    cloud-side after phase 1's priming, all detectors train in parallel
@@ -163,9 +185,9 @@ benchmark_results/{name}-{ts}/
 ├── plots/                              # cross-run plots
 │   ├── system_utilization.png          # 2×2 grid (CPU%, GPU%, RAM GB, VRAM GB)
 │   ├── fps_all_lenses.png              # 2-column mosaic of per-lens overlays
-│   ├── fps_{lens}.png                  # per-lens overlay, cameras as colored lines
-│   └── per_camera/                     # per-(lens, camera) detail (files only)
-│       └── fps_{lens}_camera_{N}.png
+│   ├── fps_{lens}.png                  # per-lens overlay, cameras OR copies as colored lines
+│   └── per_camera/                     # per-(lens, copy, camera) detail (files only)
+│       └── fps_{lens}[_copy{k}]_camera_{N}.png
 ├── run_00/
 │   ├── system.log                      # JSONL: cpu/gpu events (SystemMonitor)
 │   ├── camera_{lens}_{N}.log           # JSONL: request events, one file per camera process
@@ -182,30 +204,37 @@ benchmark_results/{name}-{ts}/
 - **Environment block** — run name, started_at, edge URL, ICMP **ping
   baseline** measured before the benchmark starts, and the global defaults.
 - **Lens configuration table** — resolved per-lens config: pipeline,
-  detector ID (with `(external)` tag for pre-existing detectors), camera
-  count (or ramp list), objects (or ramp list). The authoritative
-  "what actually ran" record.
-- **Overview table** — one row per run with per-lens mean FPS + Hit verdict
-  (`yes` if every camera in the lens hit ≥95% of its target, `no` otherwise,
-  `—` for saturate-mode lenses). Gets a `lens_cameras` column when any lens
-  has a cameras ramp.
+  detector ID (with `(external)` tag for pre-existing detectors, or
+  `(+N more)` when copies > 1), camera count, copy count, objects.
+  The authoritative "what actually ran" record.
+- **Overview table** — one row per run with per-lens mean FPS + Hit
+  verdict (`yes` if every camera in the lens hit ≥95% of its target,
+  `no` otherwise, `—` for saturate-mode lenses). Gets a `lens_cameras`
+  column when any lens has a cameras ramp, and a `lens_copies` column
+  when any lens has a copies ramp.
 - **Cross-run system utilization** — 2×2 plot spanning the whole benchmark.
-- **Cross-run FPS overview** — mosaic image showing every lens at a glance.
-  Each cell is one lens with all its cameras overlaid (viridis colormap,
-  blue→yellow with camera index). Cameras that only existed in later runs
-  start partway through the time axis — visualizes the cameras-ramp scaling
-  story directly.
+- **Cross-run FPS overview** — mosaic image showing every lens at a
+  glance. Each cell is one lens; the colored lines are either
+  **cameras** (when the lens has no copies ramp) or **copies** (when
+  it does) — the dimension that's varying gets the focus. Viridis
+  colormap (blue → yellow). Lines that only existed in later runs
+  start partway through the time axis — visualizes the scaling story
+  directly.
 - **Per-lens detail** — one larger plot per lens, same overlay layout.
-  Aggregated failed-requests rate (sum across cameras) on a secondary
-  axis in red.
-- **Per-run sections** — collapsible per-camera table with `Frames`,
-  `Errors`, `FPS`, `Target`, `Hit`, `p50`, `p95`; callouts for any worker
-  that exited non-zero or any camera that produced no events.
+  Aggregated failed-requests rate (sum across all workers of the lens)
+  on a secondary axis in red.
+- **Per-run sections** — per-worker table with `Lens`, `Copy`, `Camera`,
+  `Frames`, `Errors`, `FPS`, `Target`, `Hit`, `p50`, `p95`; callouts
+  for any worker that exited non-zero or any worker that produced no
+  events.
 
-Per-(lens, camera) detail PNGs are still written to `plots/per_camera/`
-for ad-hoc deep dives — they're just no longer embedded in `summary.md`
-(the per-lens overlay covers the common case). The per-camera subfolder
-keeps the top-level `plots/` clean: only the summary-relevant plots
+Per-(lens, copy, camera) detail PNGs are still written to
+`plots/per_camera/` for ad-hoc deep dives — they're just no longer
+embedded in `summary.md` (the per-lens overlay covers the common
+case). Filenames are `fps_{lens}_camera_{N}.png` when copies are
+constant (back-compat) and `fps_{lens}_copy{k}_camera_{N}.png` when
+any lens ramps copies. The per-camera subfolder keeps the top-level
+`plots/` clean: only the summary-relevant plots
 (`fps_all_lenses.png`, `fps_{lens}.png`, `system_utilization.png`) sit
 at the top, with the high-cardinality detail files tucked one level
 down.

@@ -7,14 +7,18 @@ Output layout under each benchmark's output_dir:
     plots/
         system_utilization.png    ← 2x2 grid: CPU%, GPU%, RAM GB, VRAM GB
         fps_all_lenses.png        ← mosaic of every lens's overlay plot
-        fps_{lens}.png            ← per-lens overlay (cameras as colored lines)
+        fps_{lens}.png            ← per-lens overlay; lines = cameras OR
+                                    copies depending on which ramps for
+                                    this lens (viridis colormap)
         per_camera/
-            fps_{lens}_camera_{N}.png ← per-(lens, camera) detail (on disk only)
+            fps_{lens}_camera_{N}.png       ← detail; copies==1 case
+            fps_{lens}_copy{k}_camera_{N}.png ← detail; copies-ramp case
     run_NN/
         load_test.log
         summary.json    ← per-run machine-readable
         plots/
-            fps_{lens}_camera_{N}.png
+            fps_{lens}_camera_{N}.png       ← copies==1 case
+            fps_{lens}_copy{k}_camera_{N}.png ← copies-ramp case
             system_utilization.png
 
 Everything is plotted on a benchmark-relative time axis (seconds since the
@@ -223,24 +227,35 @@ def write_run_artifacts(
     duration_s = main_end_ts - main_start_ts
     events = _read_request_events(run_dir, start_ts=main_start_ts, end_ts=main_end_ts)
     target_by_lens: dict[str, float] = {l["name"]: l["target_fps"] for l in run_meta["lenses"]}
-    by_camera: dict[tuple[str, int], list[dict]] = defaultdict(list)
+    # Group by (lens, copy, camera) — the natural worker-process identity.
+    # Events from before Feature 4 land without a `copy` field, default to 0.
+    by_camera: dict[tuple[str, int, int], list[dict]] = defaultdict(list)
     for ev in events:
-        key = (ev.get("lens_name", "_"), int(ev.get("camera", 0)))
+        key = (
+            ev.get("lens_name", "_"),
+            int(ev.get("copy", 0)),
+            int(ev.get("camera", 0)),
+        )
         by_camera[key].append(ev)
 
-    # Expected (lens, camera) set from config — emit rows for missing ones too.
-    expected_cameras: list[tuple[str, int]] = []
+    # Expected (lens, copy, camera) set from config — emit rows for missing
+    # ones too so missing workers (likely crashed) are visible in the table.
+    expected_workers: list[tuple[str, int, int]] = []
     for lens in run_meta["lenses"]:
-        for cam_idx in range(int(lens["cameras"])):
-            expected_cameras.append((lens["name"], cam_idx))
+        copies = int(lens.get("copies", 1))
+        cameras = int(lens["cameras"])
+        for copy_idx in range(copies):
+            for cam_idx in range(cameras):
+                expected_workers.append((lens["name"], copy_idx, cam_idx))
 
     cameras_summary: list[dict[str, Any]] = []
-    for (lens_name, camera) in expected_cameras:
-        camera_events = by_camera.get((lens_name, camera), [])
+    for (lens_name, copy_idx, camera) in expected_workers:
+        camera_events = by_camera.get((lens_name, copy_idx, camera), [])
         stats = _summarize(camera_events, target_by_lens.get(lens_name), duration_s)
         stats["lens_name"] = lens_name
+        stats["copy"] = copy_idx
         stats["camera"] = camera
-        # If no events were observed for an expected camera, that worker
+        # If no events were observed for an expected worker, that worker
         # almost certainly crashed before its first request — flag it loudly
         # and override Hit to False so the run-level verdict reflects it.
         if not camera_events:
@@ -261,16 +276,24 @@ def write_run_artifacts(
 
 def _plot_run(
     run_dir: Path,
-    by_camera: dict[tuple[str, int], list[dict]],
+    by_camera: dict[tuple[str, int, int], list[dict]],
     target_by_lens: dict[str, float],
     main_start_ts: float,
     main_end_ts: float,
 ) -> None:
     plots_dir = run_dir / "plots"
     plots_dir.mkdir(exist_ok=True)
-    for (lens_name, camera), events in sorted(by_camera.items()):
-        _plot_camera_fps(plots_dir, lens_name, camera, events,
-                         target_by_lens.get(lens_name), main_start_ts)
+    # Each per-(lens, copy, camera) worker gets its own detail PNG so
+    # individual outliers can be inspected. Filenames omit the copy
+    # segment when only copy 0 exists, preserving the legacy
+    # `fps_{lens}_camera_{N}.png` shape for the no-copies case.
+    has_other_copies = any(copy_idx > 0 for (_, copy_idx, _) in by_camera)
+    for (lens_name, copy_idx, camera), events in sorted(by_camera.items()):
+        _plot_camera_fps(
+            plots_dir, lens_name, camera, events,
+            target_by_lens.get(lens_name), main_start_ts,
+            copy_index=copy_idx if has_other_copies else None,
+        )
     _plot_system_grid(plots_dir, run_dir, main_start_ts, main_end_ts)
 
 
@@ -281,8 +304,10 @@ def _plot_camera_fps(
     events: list[dict],
     target_fps: float | None,
     main_start_ts: float,
+    *,
+    copy_index: int | None = None,
 ) -> None:
-    """Write the per-run FPS plot for one (lens, camera).
+    """Write the per-run FPS plot for one (lens, copy, camera).
 
     The plot has two y-axes:
       - Left (blue): frames/sec, dotted markers per second, with an
@@ -320,7 +345,8 @@ def _plot_camera_fps(
         line_target = ax.axhline(target_fps, color="tab:orange", linestyle="--", alpha=0.8,
                                  label=f"target {target_fps:.1f} fps")
         handles.append(line_target)
-    ax.set_title(f"{lens_name} — camera {camera} — FPS over time")
+    copy_segment = f" — copy {copy_index}" if copy_index is not None else ""
+    ax.set_title(f"{lens_name}{copy_segment} — camera {camera} — FPS over time")
     ax.set_xlabel("seconds since main start")
     ax.set_ylabel("frames per second", color="tab:blue")
     ax.tick_params(axis="y", labelcolor="tab:blue")
@@ -339,7 +365,12 @@ def _plot_camera_fps(
 
     ax.legend(handles=handles, loc="lower right")
     fig.tight_layout()
-    fig.savefig(plots_dir / f"fps_{lens_name}_camera_{camera}.png", dpi=120)
+    filename = (
+        f"fps_{lens_name}_copy{copy_index}_camera_{camera}.png"
+        if copy_index is not None
+        else f"fps_{lens_name}_camera_{camera}.png"
+    )
+    fig.savefig(plots_dir / filename, dpi=120)
     plt.close(fig)
 
 
@@ -433,60 +464,55 @@ def summarize_lenses_config(cfg, stage_detectors) -> list[dict[str, Any]]:
             {
               "name": str,
               "type": "single_binary" | "single_bbox" | "bbox_to_binary",
-              "cameras": int,
-              "n": list[int] | None,
+              "cameras": int | list[int],
+              "copies": int | list[int],
+              "objects": int | list[int] | None,
               "image_size": [w, h] | None,           # only if overridden
               "target_fps": float | None,            # only if overridden
               "stages": [
                 {
                   "stage": "single" | "bbox" | "binary",
                   "pipeline": str | None,
-                  "detector_id": str,
+                  "detector_ids": list[str],        # one per copy, in copy_index order
                   "is_external": bool,
                 },
                 ...
               ],
             }
     """
-    stages_by_lens: dict[str, list] = defaultdict(list)
+    # Group stage detectors by (lens_name, stage) so each entry collects
+    # one detector_id per copy in copy_index order.
+    by_lens_stage: dict[tuple[str, str], list] = defaultdict(list)
     for sd in stage_detectors:
-        stages_by_lens[sd.lens_name].append(sd)
+        by_lens_stage[(sd.lens_name, sd.stage)].append(sd)
+    for key, sds in by_lens_stage.items():
+        sds.sort(key=lambda sd: sd.copy_index)
 
     out: list[dict[str, Any]] = []
     for lens in cfg.lenses:
-        sds = stages_by_lens.get(lens.name, [])
-        sd_by_stage = {sd.stage: sd for sd in sds}
         ltype = getattr(lens, "type", "?")
+
+        def _stage_entry(stage_name: str, pipeline: str | None) -> dict[str, Any]:
+            sds = by_lens_stage.get((lens.name, stage_name), [])
+            return {
+                "stage": stage_name,
+                "pipeline": pipeline,
+                "detector_ids": [sd.detector_id for sd in sds],
+                "is_external": sds[0].is_external if sds else False,
+            }
 
         stage_entries: list[dict[str, Any]] = []
         if ltype in ("single_binary", "single_bbox"):
-            sd = sd_by_stage.get("single")
-            stage_entries.append({
-                "stage": "single",
-                "pipeline": getattr(lens, "pipeline", None),
-                "detector_id": sd.detector_id if sd else None,
-                "is_external": sd.is_external if sd else False,
-            })
+            stage_entries.append(_stage_entry("single", getattr(lens, "pipeline", None)))
         elif ltype == "bbox_to_binary":
-            sd_bbox = sd_by_stage.get("bbox")
-            sd_bin = sd_by_stage.get("binary")
-            stage_entries.append({
-                "stage": "bbox",
-                "pipeline": getattr(lens, "bbox_pipeline", None),
-                "detector_id": sd_bbox.detector_id if sd_bbox else None,
-                "is_external": sd_bbox.is_external if sd_bbox else False,
-            })
-            stage_entries.append({
-                "stage": "binary",
-                "pipeline": getattr(lens, "binary_pipeline", None),
-                "detector_id": sd_bin.detector_id if sd_bin else None,
-                "is_external": sd_bin.is_external if sd_bin else False,
-            })
+            stage_entries.append(_stage_entry("bbox", getattr(lens, "bbox_pipeline", None)))
+            stage_entries.append(_stage_entry("binary", getattr(lens, "binary_pipeline", None)))
 
         entry: dict[str, Any] = {
             "name": lens.name,
             "type": ltype,
             "cameras": lens.cameras,
+            "copies": lens.copies,
             "objects": (
                 list(lens.objects) if hasattr(lens, "objects") and isinstance(lens.objects, list)
                 else (lens.objects if hasattr(lens, "objects") else None)
@@ -521,8 +547,8 @@ def _render_lens_config_section(lenses: list[dict[str, Any]]) -> list[str]:
         "verified to match the config before the benchmark ran, and they "
         "are preserved at cleanup.",
         "",
-        "| Lens | Type | Stage | Pipeline | Detector ID | Cameras | Objects |",
-        "|---|---|---|---|---|---:|---|",
+        "| Lens | Type | Stage | Pipeline | Detector ID | Cameras | Copies | Objects |",
+        "|---|---|---|---|---|---:|---:|---|",
     ]
     for lens in lenses:
         objs = lens.get("objects")
@@ -534,21 +560,33 @@ def _render_lens_config_section(lenses: list[dict[str, Any]]) -> list[str]:
             objects_label = str(objs)
         cams = lens["cameras"]
         cams_label = ",".join(str(v) for v in cams) if isinstance(cams, list) else str(cams)
+        copies = lens.get("copies", 1)
+        copies_label = ",".join(str(v) for v in copies) if isinstance(copies, list) else str(copies)
         for i, stage in enumerate(lens["stages"]):
             pipeline = stage.get("pipeline") or "(default)"
-            det_id = stage.get("detector_id") or "—"
+            # Detector ID column: show the first copy's ID inline; when
+            # multiple copies exist, append "(+N more)" so the table
+            # stays compact. Full per-copy list lives in summary.json.
+            det_ids = stage.get("detector_ids") or []
+            if not det_ids:
+                det_id_label = "—"
+            elif len(det_ids) == 1:
+                det_id_label = det_ids[0]
+            else:
+                det_id_label = f"{det_ids[0]} (+{len(det_ids) - 1} more)"
             if stage.get("is_external"):
-                det_id = f"{det_id} (external)"
+                det_id_label = f"{det_id_label} (external)"
             # Repeat the lens-level columns only on the first stage row so
             # chained lenses read as a single logical entry.
             if i == 0:
                 lines.append(
                     f"| {lens['name']} | {lens['type']} | {stage['stage']} | "
-                    f"`{pipeline}` | `{det_id}` | {cams_label} | {objects_label} |"
+                    f"`{pipeline}` | `{det_id_label}` | {cams_label} | "
+                    f"{copies_label} | {objects_label} |"
                 )
             else:
                 lines.append(
-                    f"|  |  | {stage['stage']} | `{pipeline}` | `{det_id}` |  |  |"
+                    f"|  |  | {stage['stage']} | `{pipeline}` | `{det_id_label}` |  |  |  |"
                 )
     lines.append("")
     return lines
@@ -621,22 +659,32 @@ def write_top_level(
     lines.append("")
     lens_names = sorted({c["lens_name"] for s in summaries for c in s.get("cameras", [])})
     per_lens_cols = [c for lens in lens_names for c in (f"{lens} FPS", f"{lens} Hit")]
-    # Surface the per-run camera count only when there's a cameras ramp
-    # anywhere in the config — otherwise the column would be constant
-    # noise. Detected by checking if any lens has a list-typed `cameras`
-    # in the Lens configuration block.
+    # Surface per-run camera/copy counts only when those dimensions
+    # actually ramp anywhere in the config — otherwise the columns
+    # would be constant noise. Detected by checking the Lens
+    # configuration block for list-typed values.
     cameras_ramped = any(
         isinstance(l.get("cameras"), list) for l in lenses_config
     )
+    copies_ramped = any(
+        isinstance(l.get("copies"), list) for l in lenses_config
+    )
+    extra_legend_parts: list[str] = []
+    if cameras_ramped:
+        extra_legend_parts.append("`lens_cameras` shows the per-run camera count per lens.")
+    if copies_ramped:
+        extra_legend_parts.append("`lens_copies` shows the per-run detector-copy count per lens.")
     lines.append(
         f"Per-lens FPS = mean across that lens's camera processes. "
         f"Hit = `yes` if every camera hit ≥{int(_FPS_HIT_TOLERANCE * 100)}% of its target."
-        + (" `lens_cameras` shows the per-run camera count per lens." if cameras_ramped else "")
+        + ("  " + " ".join(extra_legend_parts) if extra_legend_parts else "")
     )
     lines.append("")
     header = ["run", "lens_objects"]
     if cameras_ramped:
         header.append("lens_cameras")
+    if copies_ramped:
+        header.append("lens_copies")
     header += per_lens_cols
     lines.append("| " + " | ".join(header) + " |")
     lines.append("|" + "|".join(["---"] * len(header)) + "|")
@@ -645,6 +693,8 @@ def write_top_level(
         cells = [str(meta.get("run_index", "?")), f"`{meta.get('lens_objects', {})}`"]
         if cameras_ramped:
             cells.append(f"`{meta.get('lens_cameras', {})}`")
+        if copies_ramped:
+            cells.append(f"`{meta.get('lens_copies', {})}`")
         cams_by_lens: dict[str, list[dict]] = defaultdict(list)
         for cam in s.get("cameras", []):
             cams_by_lens[cam["lens_name"]].append(cam)
@@ -697,9 +747,9 @@ def write_top_level(
                 lines.append("")
         if plot_refs.get("fps_per_camera"):
             lines.append(
-                f"_Per-(lens, camera) detail PNGs live under "
-                f"`plots/per_camera/fps_{{lens}}_camera_{{N}}.png` for "
-                f"ad-hoc inspection — {len(plot_refs['fps_per_camera'])} file(s)._"
+                f"_Per-(lens, copy, camera) detail PNGs live under "
+                f"`plots/per_camera/fps_{{lens}}[_copy{{k}}]_camera_{{N}}.png` "
+                f"for ad-hoc inspection — {len(plot_refs['fps_per_camera'])} file(s)._"
             )
             lines.append("")
 
@@ -723,6 +773,8 @@ def _render_run_section(s: dict[str, Any]) -> list[str]:
         f"### Run {run_index}",
         "",
         f"- **lens_objects**: `{meta.get('lens_objects', {})}`",
+        f"- **lens_cameras**: `{meta.get('lens_cameras', {})}`  "
+        f"**lens_copies**: `{meta.get('lens_copies', {})}`",
         f"- **duration**: `{meta.get('duration_seconds')}s`  "
         f"**warmup**: `{meta.get('warmup_seconds')}s`",
     ]
@@ -734,18 +786,22 @@ def _render_run_section(s: dict[str, Any]) -> list[str]:
             + ", ".join(f"`{f['name']}` (exit={f['exitcode']})" for f in failures)
         )
     lines.append("")
-    lines.append("| Lens | Camera | Frames | Errors | FPS | Target | Hit | p50 (s) | p95 (s) | Note |")
-    lines.append("|---|---:|---:|---:|---:|---:|:---:|---:|---:|---|")
+    # Per-worker table — one row per (lens, copy, camera). The Copy
+    # column is always present; when no lens ramps copies it just shows
+    # 0 everywhere (consistent column count is worth the trivial noise).
+    lines.append("| Lens | Copy | Camera | Frames | Errors | FPS | Target | Hit | p50 (s) | p95 (s) | Note |")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|:---:|---:|---:|---|")
     for cam in s.get("cameras", []):
+        copy = cam.get("copy", 0)
         if cam.get("no_events"):
             lines.append(
-                f"| {cam['lens_name']} | {cam['camera']} | 0 | ? | 0.0 | "
+                f"| {cam['lens_name']} | {copy} | {cam['camera']} | 0 | ? | 0.0 | "
                 f"{_target_label(cam['target_fps'])} | {_hit_label(cam['hit_target'])} | "
                 f"— | — | ⚠ no events captured (worker likely crashed) |"
             )
             continue
         lines.append(
-            f"| {cam['lens_name']} | {cam['camera']} | {cam['total_frames']} | "
+            f"| {cam['lens_name']} | {copy} | {cam['camera']} | {cam['total_frames']} | "
             f"{cam['errors']} | {cam['achieved_fps']:.1f} | "
             f"{_target_label(cam['target_fps'])} | {_hit_label(cam['hit_target'])} | "
             f"{cam['latency_p50_sec']:.3f} | {cam['latency_p95_sec']:.3f} |  |"
@@ -802,9 +858,11 @@ def _write_combined_plots(
     ram_gb: dict[float, float] = {}
     vram_gb: dict[float, float] = {}
     ram_total = vram_total = 0.0
-    by_camera_frames: dict[tuple[str, int], dict[int, int]] = defaultdict(
+    # Keys are (lens_name, copy_index, camera_index). Events without a
+    # `copy` field (pre-Feature-4 logs) default to copy 0.
+    by_camera_frames: dict[tuple[str, int, int], dict[int, int]] = defaultdict(
         lambda: defaultdict(int))
-    by_camera_errors: dict[tuple[str, int], dict[int, int]] = defaultdict(
+    by_camera_errors: dict[tuple[str, int, int], dict[int, int]] = defaultdict(
         lambda: defaultdict(int))
 
     for s in summaries:
@@ -827,7 +885,11 @@ def _write_combined_plots(
                     if ts < run_t0 or ts >= run_end:
                         continue
                     offset = ts - benchmark_t0
-                    key = (payload.get("lens_name", "_"), int(payload.get("camera", 0)))
+                    key = (
+                        payload.get("lens_name", "_"),
+                        int(payload.get("copy", 0)),
+                        int(payload.get("camera", 0)),
+                    )
                     if _is_frame(payload):
                         by_camera_frames[key][int(offset)] += 1
                     if not payload.get("success", True):
@@ -858,7 +920,8 @@ def _write_combined_plots(
         (s["meta"]["main_start_ts"] - benchmark_t0,
          int(s["meta"]["run_index"]),
          s["meta"].get("lens_objects", {}),
-         s["meta"].get("lens_cameras", {}))
+         s["meta"].get("lens_cameras", {}),
+         s["meta"].get("lens_copies", {}))
         for s in summaries
     ]
     target_by_lens: dict[str, float] = {}
@@ -874,44 +937,72 @@ def _write_combined_plots(
     ):
         refs["system"] = f"plots/{sys_path.name}"
 
-    # Per-(lens, camera) detail plots live in a dedicated subfolder so
-    # they don't clutter `plots/` alongside the high-level mosaic +
-    # per-lens overlays + system util. Files only, not embedded.
+    # Per-(lens, copy, camera) detail plots live in a dedicated
+    # subfolder so they don't clutter `plots/` alongside the high-level
+    # mosaic + per-lens overlays + system util. Files only, not
+    # embedded. Detect whether any copy_index > 0 occurs at all — when
+    # nothing ramps copies, filenames use the legacy
+    # `fps_{lens}_camera_{N}.png` shape for back-compat.
+    has_other_copies = any(copy_idx > 0 for (_, copy_idx, _) in by_camera_frames)
     per_camera_dir = plots_dir / "per_camera"
-    fps_per_camera_refs: list[tuple[tuple[str, int], str]] = []
+    fps_per_camera_refs: list[tuple[tuple[str, int, int], str]] = []
     if by_camera_frames:
         per_camera_dir.mkdir(exist_ok=True)
-    for (lens, camera), buckets in sorted(by_camera_frames.items()):
-        fps_path = per_camera_dir / f"fps_{lens}_camera_{camera}.png"
+    for (lens, copy_idx, camera), buckets in sorted(by_camera_frames.items()):
+        if has_other_copies:
+            fname = f"fps_{lens}_copy{copy_idx}_camera_{camera}.png"
+        else:
+            fname = f"fps_{lens}_camera_{camera}.png"
+        fps_path = per_camera_dir / fname
         if _plot_combined_camera_fps(
             fps_path, lens, camera, buckets,
-            by_camera_errors.get((lens, camera), {}),
+            by_camera_errors.get((lens, copy_idx, camera), {}),
             target_by_lens.get(lens), boundaries,
         ):
-            fps_per_camera_refs.append(((lens, camera), f"plots/per_camera/{fps_path.name}"))
+            fps_per_camera_refs.append(((lens, copy_idx, camera), f"plots/per_camera/{fname}"))
     refs["fps_per_camera"] = fps_per_camera_refs
 
-    # Regroup per-camera buckets into per-lens shape so the overlay
-    # plots can render each lens's cameras as colored lines on one axis.
-    frames_by_lens: dict[str, dict[int, dict[int, int]]] = defaultdict(dict)
-    errors_by_lens: dict[str, dict[int, dict[int, int]]] = defaultdict(dict)
-    for (lens, camera), buckets in by_camera_frames.items():
-        frames_by_lens[lens][camera] = buckets
-    for (lens, camera), buckets in by_camera_errors.items():
-        errors_by_lens[lens][camera] = buckets
+    # Per-lens overlay regrouping. The series dimension is chosen per
+    # lens based on which dimension actually ramps:
+    #   - copies ramped (any copy_idx > 0 for this lens) → series = copy,
+    #     cameras within each copy aggregated to one curve per copy.
+    #   - copies constant at 1 → series = camera (existing behavior).
+    # This matches Option 1 of the visualization design: color the
+    # dimension you're sweeping.
+    lens_max_copy: dict[str, int] = defaultdict(int)
+    for (lens, copy_idx, _) in by_camera_frames:
+        lens_max_copy[lens] = max(lens_max_copy[lens], copy_idx)
 
-    # Per-lens overlay plots (one PNG per lens, cameras as colored lines).
+    # frames_by_lens[lens][series_idx] = {second: frames}
+    frames_by_lens: dict[str, dict[int, dict[int, int]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    errors_by_lens: dict[str, dict[int, dict[int, int]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    lens_prefix: dict[str, str] = {}
+    for (lens, copy_idx, camera), buckets in by_camera_frames.items():
+        series_idx = copy_idx if lens_max_copy[lens] > 0 else camera
+        lens_prefix[lens] = "copy" if lens_max_copy[lens] > 0 else "cam"
+        for sec, count in buckets.items():
+            frames_by_lens[lens][series_idx][sec] += count
+    for (lens, copy_idx, camera), buckets in by_camera_errors.items():
+        series_idx = copy_idx if lens_max_copy[lens] > 0 else camera
+        for sec, count in buckets.items():
+            errors_by_lens[lens][series_idx][sec] += count
+
+    # Per-lens overlay plots (one PNG per lens).
     fps_per_lens_refs: list[tuple[str, str]] = []
     lenses_data: list[tuple[str, dict[int, dict[int, int]],
-                            dict[int, dict[int, int]], float | None]] = []
+                            dict[int, dict[int, int]], float | None, str]] = []
     for lens in sorted(frames_by_lens.keys()):
-        cam_frames = frames_by_lens[lens]
-        cam_errors = errors_by_lens.get(lens, {})
+        series_frames = {k: dict(v) for k, v in frames_by_lens[lens].items()}
+        series_errors = {k: dict(v) for k, v in errors_by_lens.get(lens, {}).items()}
         target = target_by_lens.get(lens)
+        prefix = lens_prefix.get(lens, "cam")
         lens_path = plots_dir / f"fps_{lens}.png"
-        if _plot_combined_lens_fps(lens_path, lens, cam_frames, cam_errors, target, boundaries):
+        if _plot_combined_lens_fps(
+            lens_path, lens, series_frames, series_errors, target, boundaries,
+            line_label_prefix=prefix,
+        ):
             fps_per_lens_refs.append((lens, f"plots/{lens_path.name}"))
-        lenses_data.append((lens, cam_frames, cam_errors, target))
+        lenses_data.append((lens, series_frames, series_errors, target, prefix))
     refs["fps_per_lens"] = fps_per_lens_refs
 
     # Mosaic — single image showing every lens's overlay plot at once.
@@ -924,7 +1015,7 @@ def _write_combined_plots(
 
 def _draw_boundary_lines(
     ax,
-    boundaries: list[tuple[float, int, dict[str, int], dict[str, int]]],
+    boundaries: list[tuple[float, int, dict[str, int], dict[str, int], dict[str, int]]],
 ) -> None:
     """Draw a dotted vertical line on `ax` at each run boundary, no labels.
 
@@ -935,8 +1026,8 @@ def _draw_boundary_lines(
     Args:
         ax: Matplotlib axis to draw on.
         boundaries: List of (x_offset_seconds, run_index,
-            lens_objects_dict, lens_cameras_dict). Only the first
-            element matters here.
+            lens_objects_dict, lens_cameras_dict, lens_copies_dict).
+            Only the first element matters here.
     """
     for offset, *_ in boundaries:
         ax.axvline(offset, color="gray", linestyle=":", alpha=0.6, linewidth=1.0)
@@ -944,7 +1035,7 @@ def _draw_boundary_lines(
 
 def _annotate_boundaries(
     ax,
-    boundaries: list[tuple[float, int, dict[str, int], dict[str, int]]],
+    boundaries: list[tuple[float, int, dict[str, int], dict[str, int], dict[str, int]]],
     lens_name: str | None = None,
 ) -> None:
     """Draw vertical lines at run boundaries AND rotated labels below the axis.
@@ -956,28 +1047,36 @@ def _annotate_boundaries(
     Args:
         ax: Matplotlib axis to annotate.
         boundaries: List of (x_offset_seconds, run_index,
-            lens_objects_dict, lens_cameras_dict) for each run.
+            lens_objects_dict, lens_cameras_dict, lens_copies_dict)
+            for each run.
         lens_name: When set, labels look like "Run i (objects=X)" using
             `lens_objects_dict[lens_name]`, and additionally include
-            `, cams=Y` from `lens_cameras_dict[lens_name]` when the
-            camera count varies across runs (a cameras-ramp). When
-            None, labels are just "Run i" (used on the global system
-            util plot since different lenses can have different sweep
-            values).
+            `, cams=Y` and `, copies=Z` when those counts vary across
+            runs. When None, labels are just "Run i" (used on the
+            global system util plot since different lenses can have
+            different sweep values).
     """
-    # Detect once whether any lens has a varying camera count — drives
-    # whether we annotate cameras on each label.
+    # Detect once which dimensions actually vary across runs — drives
+    # which of cams=, copies= get appended to each label.
     cameras_ramped = (
         lens_name is not None
         and len({b[3].get(lens_name) for b in boundaries if b[3]}) > 1
     )
-    for offset, run_idx, lens_objects, lens_cameras in boundaries:
+    copies_ramped = (
+        lens_name is not None
+        and len({b[4].get(lens_name) for b in boundaries if len(b) > 4 and b[4]}) > 1
+    )
+    for boundary in boundaries:
+        offset, run_idx, lens_objects, lens_cameras = boundary[:4]
+        lens_copies = boundary[4] if len(boundary) > 4 else {}
         ax.axvline(offset, color="gray", linestyle=":", alpha=0.6, linewidth=1.0)
         parts: list[str] = []
         if lens_name is not None and lens_name in lens_objects:
             parts.append(f"objects={lens_objects[lens_name]}")
         if cameras_ramped and lens_name in lens_cameras:
             parts.append(f"cams={lens_cameras[lens_name]}")
+        if copies_ramped and lens_name in lens_copies:
+            parts.append(f"copies={lens_copies[lens_name]}")
         label = f"Run {run_idx}"
         if parts:
             label += f" ({', '.join(parts)})"
@@ -1083,80 +1182,89 @@ def _plot_combined_camera_fps(
 def _draw_lens_fps_on_axis(
     ax,
     lens_name: str,
-    cameras_frame_buckets: dict[int, dict[int, int]],
-    cameras_error_buckets: dict[int, dict[int, int]],
+    series_frame_buckets: dict[int, dict[int, int]],
+    series_error_buckets: dict[int, dict[int, int]],
     target_fps: float | None,
     boundaries,
     *,
     annotate_runs: bool = True,
     show_legend: bool = True,
+    line_label_prefix: str = "cam",
 ) -> bool:
     """Draw a lens's FPS overlay on the given axis.
 
-    One colored line per camera (viridis colormap, blue → yellow with
-    increasing camera index). Cameras that only existed in later runs
-    naturally start partway through the time axis. Errors from all
-    cameras of the lens are summed and drawn as a single red line on a
-    twin y-axis (per-camera error curves would be too crowded in the
-    overlay).
+    One colored line per series (viridis colormap, blue → yellow with
+    increasing series index). The series dimension is either cameras
+    (default — `line_label_prefix="cam"`) or copies (when the lens has
+    a copies-ramp — caller passes `line_label_prefix="copy"`). Series
+    that only existed in later runs naturally start partway through
+    the time axis. Errors from all series of the lens are summed and
+    drawn as a single red line on a twin y-axis (per-series error
+    curves would be too crowded in the overlay).
 
     Args:
         ax: Matplotlib axis to draw on.
         lens_name: Lens identifier (used in title + boundary labels).
-        cameras_frame_buckets: Mapping camera_idx -> {second: frame_count}.
-        cameras_error_buckets: Mapping camera_idx -> {second: error_count}.
+        series_frame_buckets: Mapping series_idx -> {second: frame_count}.
+            series_idx is either a camera index or a copy index, per
+            `line_label_prefix`.
+        series_error_buckets: Mapping series_idx -> {second: error_count}.
         target_fps: Optional target FPS line.
         boundaries: Run-boundary tuples (see _annotate_boundaries).
         annotate_runs: Whether to draw the rotated "Run i (objects=X)" labels
             below the axis. Disable in mosaic subplots where label space
             is tight.
-        show_legend: Whether to draw the camera legend. Disable in
-            mosaic subplots if the figure-level legend covers it.
+        show_legend: Whether to draw the legend. Disable in mosaic
+            subplots if the figure-level legend covers it.
+        line_label_prefix: Legend prefix for each line — "cam" or "copy".
+            Also controls the plot title ("FPS per camera" vs "FPS per
+            copy").
 
     Returns:
         True if any frame data was plotted, False if the lens had no
         events at all (caller should treat as no-data).
     """
-    if not cameras_frame_buckets:
+    if not series_frame_buckets:
         return False
-    camera_indices = sorted(cameras_frame_buckets.keys())
+    series_indices = sorted(series_frame_buckets.keys())
     cmap = plt.get_cmap("viridis")
     handles: list = []
-    for i, cam in enumerate(camera_indices):
-        buckets = cameras_frame_buckets[cam]
+    for i, series_idx in enumerate(series_indices):
+        buckets = series_frame_buckets[series_idx]
         if not buckets:
             continue
         seconds = sorted(buckets.keys())
         fps_values = [buckets[s] for s in seconds]
-        # Edge case: single camera → use the colormap's mid value so the
-        # line is visible against the default theme rather than nearly
-        # white at the top of viridis.
-        color_pos = i / (len(camera_indices) - 1) if len(camera_indices) > 1 else 0.4
+        # Edge case: single series → use the colormap's mid value so
+        # the line is visible against the default theme rather than
+        # nearly white at the top of viridis.
+        color_pos = i / (len(series_indices) - 1) if len(series_indices) > 1 else 0.4
         line, = ax.plot(seconds, fps_values, color=cmap(color_pos),
                         marker="o", markersize=2.0, linewidth=1.1,
-                        label=f"cam {cam}")
+                        label=f"{line_label_prefix} {series_idx}")
         handles.append(line)
     if target_fps is not None and target_fps > 0:
         line_target = ax.axhline(target_fps, color="tab:orange", linestyle="--", alpha=0.8,
                                  label=f"target {target_fps:.1f} fps")
         handles.append(line_target)
-    ax.set_title(f"{lens_name} — FPS per camera (all runs)")
+    series_word = "copy" if line_label_prefix == "copy" else "camera"
+    ax.set_title(f"{lens_name} — FPS per {series_word} (all runs)")
     ax.set_xlabel("seconds since benchmark start")
     ax.set_ylabel("frames per second")
     ax.set_ylim(bottom=0)
     ax.grid(True, alpha=0.3)
 
-    # Aggregate errors across every camera for this lens — a single red
+    # Aggregate errors across every series for this lens — a single red
     # line on a twin y-axis keeps the overlay readable.
     all_err_seconds: set[int] = set()
-    for buckets in cameras_error_buckets.values():
+    for buckets in series_error_buckets.values():
         all_err_seconds.update(buckets.keys())
     if all_err_seconds:
         ax_err = ax.twinx()
         err_seconds = sorted(all_err_seconds)
         err_values = [
-            sum(cameras_error_buckets[cam].get(s, 0)
-                for cam in cameras_error_buckets)
+            sum(series_error_buckets[idx].get(s, 0)
+                for idx in series_error_buckets)
             for s in err_seconds
         ]
         line_err, = ax_err.plot(err_seconds, err_values, color="tab:red",
@@ -1178,17 +1286,21 @@ def _draw_lens_fps_on_axis(
 def _plot_combined_lens_fps(
     path: Path,
     lens_name: str,
-    cameras_frame_buckets: dict[int, dict[int, int]],
-    cameras_error_buckets: dict[int, dict[int, int]],
+    series_frame_buckets: dict[int, dict[int, int]],
+    series_error_buckets: dict[int, dict[int, int]],
     target_fps: float | None,
     boundaries,
+    *,
+    line_label_prefix: str = "cam",
 ) -> bool:
     """Single-axis lens overlay plot. Returns False if no frames were
-    captured for any camera of the lens (no file written)."""
+    captured for any series of the lens (no file written)."""
     fig, ax = plt.subplots(figsize=(13, 4.5))
     had_data = _draw_lens_fps_on_axis(
-        ax, lens_name, cameras_frame_buckets, cameras_error_buckets,
-        target_fps, boundaries, annotate_runs=True, show_legend=True,
+        ax, lens_name, series_frame_buckets, series_error_buckets,
+        target_fps, boundaries,
+        annotate_runs=True, show_legend=True,
+        line_label_prefix=line_label_prefix,
     )
     if not had_data:
         plt.close(fig)
@@ -1203,13 +1315,16 @@ def _plot_combined_lens_fps(
 def _plot_all_lenses_mosaic(
     path: Path,
     lenses_data: list[tuple[str, dict[int, dict[int, int]],
-                            dict[int, dict[int, int]], float | None]],
+                            dict[int, dict[int, int]], float | None, str]],
     boundaries,
 ) -> bool:
     """2-column mosaic of per-lens FPS overlay plots.
 
-    `lenses_data` is a list of (lens_name, cameras_frame_buckets,
-    cameras_error_buckets, target_fps) — one entry per lens.
+    `lenses_data` is a list of (lens_name, series_frame_buckets,
+    series_error_buckets, target_fps, line_label_prefix) — one entry
+    per lens. `line_label_prefix` is "cam" or "copy" depending on
+    which dimension is colored for that lens (see Option 1 design in
+    the README).
 
     Layout: 2 columns × ceil(N/2) rows. Unused cells (when N is odd)
     are hidden. Each subplot gets its own legend; the mosaic is meant
@@ -1228,13 +1343,14 @@ def _plot_all_lenses_mosaic(
     )
     flat_axes = axes.flatten()
     any_drawn = False
-    for i, (lens_name, frame_buckets, error_buckets, target_fps) in enumerate(lenses_data):
+    for i, (lens_name, frame_buckets, error_buckets, target_fps, prefix) in enumerate(lenses_data):
         ax = flat_axes[i]
         drawn = _draw_lens_fps_on_axis(
             ax, lens_name, frame_buckets, error_buckets, target_fps, boundaries,
             # Mosaic cells are tight — skip the rotated boundary labels
             # (lines only) and use a compact legend.
             annotate_runs=False, show_legend=True,
+            line_label_prefix=prefix,
         )
         if drawn:
             any_drawn = True

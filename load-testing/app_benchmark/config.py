@@ -2,9 +2,9 @@
 
 Three lens types are supported (single_binary, single_bbox, bbox_to_binary).
 Lenses run concurrently inside each "run". Any list-typed sweep field
-across the config (`objects`, `cameras`) defines a sweep dimension — all
-such lists must share the same length and are zipped element-wise across
-runs (run i uses element i from every list).
+across the config (`objects`, `cameras`, `copies`) defines a sweep
+dimension — all such lists must share the same length and are zipped
+element-wise across runs (run i uses element i from every list).
 """
 
 from pathlib import Path
@@ -135,6 +135,15 @@ class _LensBase(BaseModel):
             of ints (sweep dimension — zipped element-wise with every
             other sweep list in the config). Each camera generates and
             submits its own frames.
+        copies: How many independently-trained detector copies of this
+            lens to spawn. Either a single int (fixed across every run)
+            or a list of ints (sweep dimension — zipped with other
+            sweep lists). Each copy is its own cloud detector with the
+            same pipeline and `objects` setting; useful for measuring
+            how throughput scales with the number of distinct detectors
+            the server is juggling. When `copies > 1` for any run, the
+            *_detector_id fields cannot be used (no way to share one
+            pre-existing detector across multiple copies).
         image_size: Optional override for this lens; falls back to global
             image_size when None.
         target_fps: Optional override; falls back to global target_fps.
@@ -143,6 +152,7 @@ class _LensBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(pattern=_LENS_NAME_PATTERN, max_length=64)
     cameras: int | list[int] = Field(default=1)
+    copies: int | list[int] = Field(default=1)
     image_size: tuple[int, int] | None = None
     target_fps: float | None = Field(default=None, ge=0)  # 0 = saturate (no pacing)
 
@@ -159,7 +169,25 @@ class _LensBase(BaseModel):
         else:
             if self.cameras < 1 or self.cameras > 64:
                 raise ValueError(f"cameras must be in [1, 64] (got {self.cameras})")
+        if isinstance(self.copies, list):
+            if len(self.copies) < 1:
+                raise ValueError("copies list must not be empty")
+            for v in self.copies:
+                if v < 1 or v > 32:
+                    raise ValueError(f"copies list entries must be in [1, 32] (got {v})")
+        else:
+            if self.copies < 1 or self.copies > 32:
+                raise ValueError(f"copies must be in [1, 32] (got {self.copies})")
         return self
+
+    def _max_copies(self) -> int:
+        """Largest `copies` value across the sweep — used by validators
+        on subclasses to enforce the `*_detector_id` ⊕ `copies > 1`
+        rule, and by detector provisioning to size the per-stage detector
+        pool."""
+        if isinstance(self.copies, list):
+            return max(self.copies)
+        return self.copies
 
 
 class SingleBinaryLens(_LensBase):
@@ -188,6 +216,12 @@ class SingleBinaryLens(_LensBase):
             raise ValueError(
                 "`pipeline` is required when `binary_detector_id` is set "
                 "(we verify the existing detector's pipeline matches)."
+            )
+        if self.binary_detector_id is not None and self._max_copies() > 1:
+            raise ValueError(
+                "`binary_detector_id` cannot be combined with `copies > 1`: "
+                "a single detector ID can't back multiple independently-trained "
+                "copies. Drop the ID or set copies to 1."
             )
         return self
 
@@ -233,6 +267,12 @@ class SingleBboxLens(_LensBase):
             raise ValueError(
                 "`pipeline` is required when `bbox_detector_id` is set "
                 "(we verify the existing detector's pipeline matches)."
+            )
+        if self.bbox_detector_id is not None and self._max_copies() > 1:
+            raise ValueError(
+                "`bbox_detector_id` cannot be combined with `copies > 1`: "
+                "a single detector ID can't back multiple independently-trained "
+                "copies. Drop the ID or set copies to 1."
             )
         return self
 
@@ -289,6 +329,14 @@ class BboxToBinaryLens(_LensBase):
             raise ValueError(
                 "`binary_pipeline` is required when `binary_detector_id` is set."
             )
+        if (
+            self.bbox_detector_id is not None or self.binary_detector_id is not None
+        ) and self._max_copies() > 1:
+            raise ValueError(
+                "*_detector_id cannot be combined with `copies > 1`: a single "
+                "detector ID can't back multiple independently-trained copies. "
+                "Drop the IDs or set copies to 1."
+            )
         return self
 
 
@@ -334,8 +382,8 @@ class BenchmarkConfig(BaseModel):
 def _sweep_lists(cfg: BenchmarkConfig) -> list[tuple[str, str, list[int]]]:
     """Collect every list-typed sweep field across the config as a flat
     list of `(lens_name, field_label, values)` triples. `field_label` is
-    'objects' or 'cameras' — used to render a clear length-mismatch
-    error.
+    one of 'objects', 'cameras', 'copies' — used to render a clear
+    length-mismatch error.
     """
     out: list[tuple[str, str, list[int]]] = []
     for lens in cfg.lenses:
@@ -343,6 +391,8 @@ def _sweep_lists(cfg: BenchmarkConfig) -> list[tuple[str, str, list[int]]]:
             out.append((lens.name, "objects", lens.objects))
         if isinstance(lens.cameras, list):
             out.append((lens.name, "cameras", lens.cameras))
+        if isinstance(lens.copies, list):
+            out.append((lens.name, "copies", lens.copies))
     return out
 
 
@@ -357,8 +407,8 @@ def validate_config(cfg: BenchmarkConfig) -> None:
 
     Raises:
         ConfigError: When two lenses share a name, or when two or more
-            sweep lists (`objects`, `cameras`) across the whole config
-            have different lengths.
+            sweep lists (`objects`, `cameras`, `copies`) across the
+            whole config have different lengths.
     """
     names = [l.name for l in cfg.lenses]
     duplicates = sorted({n for n in names if names.count(n) > 1})
@@ -374,8 +424,8 @@ def validate_config(cfg: BenchmarkConfig) -> None:
                 for name, field, values in sweep_lists
             )
             raise ConfigError(
-                f"all sweep lists (`objects`, `cameras`) must share the same "
-                f"length (they are zipped across runs); got {detail}"
+                f"all sweep lists (`objects`, `cameras`, `copies`) must share "
+                f"the same length (they are zipped across runs); got {detail}"
             )
 
 
@@ -386,9 +436,9 @@ def num_runs(cfg: BenchmarkConfig) -> int:
         cfg: A validated BenchmarkConfig.
 
     Returns:
-        Length of any sweep list (`objects` or `cameras`) — all sweep
-        lists share a length per `validate_config`. Returns 1 when no
-        lens declares either as a list.
+        Length of any sweep list (`objects`, `cameras`, or `copies`) —
+        all sweep lists share a length per `validate_config`. Returns
+        1 when no lens declares any as a list.
     """
     sweep_lists = _sweep_lists(cfg)
     if sweep_lists:

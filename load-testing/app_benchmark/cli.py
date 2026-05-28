@@ -73,6 +73,24 @@ def _lens_cameras_for_run(cfg: BenchmarkConfig, run_index: int) -> dict[str, int
     return out
 
 
+def _lens_copies_for_run(cfg: BenchmarkConfig, run_index: int) -> dict[str, int]:
+    """Resolve every lens's copy count for this run.
+
+    Same shape as `_lens_cameras_for_run`: scalar `copies` stays
+    constant across runs; list `copies` picks element `run_index`. The
+    harness pre-provisions `max(lens.copies)` detectors per stage at
+    startup but only activates the first `out[lens.name]` copies per
+    run.
+    """
+    out: dict[str, int] = {}
+    for lens in cfg.lenses:
+        if isinstance(lens.copies, list):
+            out[lens.name] = lens.copies[run_index]
+        else:
+            out[lens.name] = lens.copies
+    return out
+
+
 def _build_worker_args(
     lens,
     sds: list[StageDetector],
@@ -83,25 +101,30 @@ def _build_worker_args(
     duration_seconds: float,
     worker_number: int,
     camera: int,
+    copy_index: int,
 ):
     """Build the (target_fn, kwargs) pair for one camera process.
 
     Resolves per-lens overrides (image_size, target_fps) against globals
-    and picks the right runner function plus the right detector IDs from
-    `sds` (the stage detectors for this lens).
+    and picks the right runner function plus the right detector IDs
+    from `sds` (the stage detectors for THIS (lens, copy_index) pair —
+    caller filters before passing).
 
     Args:
         lens: A LensSpec subtype (SingleBinaryLens, SingleBboxLens, or
             BboxToBinaryLens).
-        sds: Stage detectors for THIS lens (typically 1 or 2 entries).
+        sds: Stage detectors for the (lens, copy) pair this worker
+            serves (typically 1 or 2 entries — one per stage).
         objects: This run's `objects` value for the lens, or None if the
             lens has no `objects` (single_binary case).
         cfg: Full benchmark config — used to resolve global defaults.
         edge_url: Edge endpoint URL the worker should hit.
         log_file: JSONL log path the worker should append to.
         duration_seconds: Total worker lifetime including warmup.
-        worker_number: Global worker index (across all lenses + cameras).
-        camera: Per-lens camera index.
+        worker_number: Global worker index (across all lenses + cameras + copies).
+        camera: Per-(lens, copy) camera index.
+        copy_index: Which copy of the lens this worker serves; passed
+            through to lens runners so events are tagged with `copy`.
 
     Returns:
         (target_fn, kwargs_dict) suitable for multiprocessing.Process.
@@ -110,6 +133,7 @@ def _build_worker_args(
     target_fps = lens.target_fps if lens.target_fps is not None else cfg.globals_.target_fps
     common = dict(
         worker_number=worker_number, camera=camera, lens_name=lens.name,
+        copy_index=copy_index,
         edge_url=edge_url, image_size=image_size, target_fps=target_fps,
         duration_seconds=duration_seconds, log_file=log_file,
     )
@@ -138,16 +162,19 @@ def _spawn_lens_workers(
     run_dir: Path,
     duration_seconds: float,
 ) -> list[mp.Process]:
-    """Start one Process per (lens × camera) and return them.
+    """Start one Process per (lens × copy × camera) and return them.
 
-    Workers are started in lens-config order; worker_number increments
-    monotonically. Each worker writes to its own `camera_{lens}_{N}.log`
-    in `run_dir` — no shared writer, so no inter-process race on the log.
+    Workers are started in lens-config order, then copy, then camera;
+    worker_number increments monotonically. Each worker writes to its
+    own log file in `run_dir` — no shared writer, so no inter-process
+    race on the log. Log filenames omit the copy suffix when the lens
+    has only one copy (back-compat with pre-copies layouts) and include
+    `_copy{k}` when multiple copies are active.
 
     Args:
         cfg: Benchmark config (for lens list and overrides).
-        run: ResolvedRun providing lens_objects, lens_cameras, and the
-            shared stage_detectors.
+        run: ResolvedRun providing lens_objects, lens_cameras,
+            lens_copies, and the shared stage_detectors.
         edge_url: Edge endpoint URL passed into each worker.
         run_dir: Per-run output directory; per-camera log files live here.
         duration_seconds: How long each worker should run before exiting.
@@ -155,25 +182,44 @@ def _spawn_lens_workers(
     Returns:
         List of started Process objects (already `.start()`ed).
     """
-    by_lens: dict[str, list[StageDetector]] = {}
+    # Group stage_detectors by (lens_name, copy_index) so worker spawn
+    # can hand each worker the correct subset for its (lens, copy) pair.
+    by_lens_copy: dict[tuple[str, int], list[StageDetector]] = {}
     for sd in run.stage_detectors:
-        by_lens.setdefault(sd.lens_name, []).append(sd)
+        by_lens_copy.setdefault((sd.lens_name, sd.copy_index), []).append(sd)
     procs: list[mp.Process] = []
     worker_number = 0
     for lens in cfg.lenses:
-        sds = by_lens[lens.name]
         cameras_this_run = run.lens_cameras[lens.name]
-        for cam_idx in range(cameras_this_run):
-            log_path = run_dir / f"camera_{lens.name}_{cam_idx}.log"
-            target, kwargs = _build_worker_args(
-                lens, sds, run.lens_objects.get(lens.name), cfg, edge_url,
-                str(log_path), duration_seconds, worker_number, cam_idx,
-            )
-            p = mp.Process(target=target, kwargs=kwargs, name=f"{lens.name}_cam{cam_idx}")
-            p.start()
-            procs.append(p)
-            worker_number += 1
+        copies_this_run = run.lens_copies[lens.name]
+        for copy_idx in range(copies_this_run):
+            sds = by_lens_copy[(lens.name, copy_idx)]
+            for cam_idx in range(cameras_this_run):
+                log_path = run_dir / _camera_log_name(lens.name, copy_idx, cam_idx, copies_this_run)
+                target, kwargs = _build_worker_args(
+                    lens, sds, run.lens_objects.get(lens.name), cfg, edge_url,
+                    str(log_path), duration_seconds, worker_number, cam_idx,
+                    copy_index=copy_idx,
+                )
+                proc_name = f"{lens.name}_copy{copy_idx}_cam{cam_idx}" if copies_this_run > 1 else f"{lens.name}_cam{cam_idx}"
+                p = mp.Process(target=target, kwargs=kwargs, name=proc_name)
+                p.start()
+                procs.append(p)
+                worker_number += 1
     return procs
+
+
+def _camera_log_name(lens_name: str, copy_idx: int, cam_idx: int, copies_in_run: int) -> str:
+    """JSONL log filename for one worker process.
+
+    With copies > 1, the filename includes `_copy{k}` so each copy's
+    workers write to distinct files. When copies == 1, the legacy
+    `camera_{lens}_{N}.log` shape is preserved — important for re-runs
+    that compare against existing baseline benchmarks.
+    """
+    if copies_in_run > 1:
+        return f"camera_{lens_name}_copy{copy_idx}_{cam_idx}.log"
+    return f"camera_{lens_name}_{cam_idx}.log"
 
 
 def _join_with_grace(procs: list[mp.Process], timeout_s: float) -> list[dict]:
@@ -270,15 +316,17 @@ def _run_one(
         "run_index": run.run_index,
         "lens_objects": run.lens_objects,
         "lens_cameras": run.lens_cameras,
+        "lens_copies": run.lens_copies,
         "lenses": [
             {
                 "name": l.name,
                 "type": l.type,
-                # Per-run camera count, not the raw config field — so the
-                # report's per-run table iterates over exactly the cameras
-                # that ran in this iteration (relevant when `cameras` is a
-                # ramp list).
+                # Per-run camera / copy counts, not the raw config fields
+                # — so the report's per-run table iterates over exactly
+                # the (copy, camera) pairs that ran in this iteration
+                # (relevant when `cameras` or `copies` ramps).
                 "cameras": run.lens_cameras[l.name],
+                "copies": run.lens_copies[l.name],
                 "target_fps": (l.target_fps if l.target_fps is not None
                                else cfg.globals_.target_fps),
                 "image_size": list(l.image_size if l.image_size is not None
@@ -386,12 +434,16 @@ def main(argv: list[str] | None = None) -> int:
         for i in range(n_runs):
             lens_objects = _lens_objects_for_run(cfg, i)
             lens_cameras = _lens_cameras_for_run(cfg, i)
+            lens_copies = _lens_copies_for_run(cfg, i)
             logger.info(
-                "[run %d/%d] lens_objects=%s lens_cameras=%s",
-                i + 1, n_runs, lens_objects, lens_cameras,
+                "[run %d/%d] lens_objects=%s lens_cameras=%s lens_copies=%s",
+                i + 1, n_runs, lens_objects, lens_cameras, lens_copies,
             )
             run = ResolvedRun(
-                run_index=i, lens_objects=lens_objects, lens_cameras=lens_cameras,
+                run_index=i,
+                lens_objects=lens_objects,
+                lens_cameras=lens_cameras,
+                lens_copies=lens_copies,
                 stage_detectors=stage_detectors,
             )
             summaries.append(_run_one(cfg, run, out_root))
