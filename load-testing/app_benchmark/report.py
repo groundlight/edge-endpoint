@@ -1198,9 +1198,12 @@ def _draw_lens_fps_on_axis(
     (default — `line_label_prefix="cam"`) or copies (when the lens has
     a copies-ramp — caller passes `line_label_prefix="copy"`). Series
     that only existed in later runs naturally start partway through
-    the time axis. Errors from all series of the lens are summed and
-    drawn as a single red line on a twin y-axis (per-series error
-    curves would be too crowded in the overlay).
+    the time axis. When there's more than one series, a bold black
+    "total (sum)" line shows the lens's aggregate throughput at each
+    second — the key metric for a throughput benchmark. Errors from all
+    series of the lens are summed and drawn as a single red line on a
+    twin y-axis (per-series error curves would be too crowded in the
+    overlay).
 
     Args:
         ax: Matplotlib axis to draw on.
@@ -1243,6 +1246,25 @@ def _draw_lens_fps_on_axis(
                         marker="o", markersize=2.0, linewidth=1.1,
                         label=f"{line_label_prefix} {series_idx}")
         handles.append(line)
+
+    # Total throughput: sum across all series at each second. Inactive
+    # series (e.g. copies that only come online in later runs) have no
+    # buckets at early seconds, so the sum naturally steps up at each run
+    # boundary — that staircase is the headline scaling story for a
+    # throughput benchmark. Only meaningful with >1 series; with a single
+    # series it would just duplicate the lone line.
+    if len(series_indices) > 1:
+        total_seconds_set: set[int] = set()
+        for buckets in series_frame_buckets.values():
+            total_seconds_set.update(buckets.keys())
+        total_seconds = sorted(total_seconds_set)
+        total_values = [
+            sum(series_frame_buckets[idx].get(s, 0) for idx in series_frame_buckets)
+            for s in total_seconds
+        ]
+        line_total, = ax.plot(total_seconds, total_values, color="black",
+                              linewidth=2.0, label="total (sum)")
+        handles.append(line_total)
     if target_fps is not None and target_fps > 0:
         line_target = ax.axhline(target_fps, color="tab:orange", linestyle="--", alpha=0.8,
                                  label=f"target {target_fps:.1f} fps")
