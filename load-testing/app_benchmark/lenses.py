@@ -10,12 +10,21 @@ load-testing/image_helpers.py and pass it straight to the Groundlight SDK
 chained `bbox_to_binary` lens, the small downstream binary image is built
 once at lens startup and re-submitted N times per frame — the SDK
 re-encodes per call, which at 224x224 is negligible.
+
+Within a `bbox_to_binary` frame the N downstream binary calls are
+submitted CONCURRENTLY (one bbox detect, then a parallel fan-out over
+the ROIs). The ROIs are independent, so parallelizing drives the edge
+to its real throughput ceiling instead of serializing on per-request
+round-trip latency. Frames themselves stay sequential, and `target_fps`
+still paces the whole loop (1 bbox + N binary) as a unit.
 """
 
 import json
 import os
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 import image_helpers as imgh
@@ -23,6 +32,12 @@ from groundlight import ExperimentalApi
 from groundlight_helpers import error_if_not_from_edge
 
 from app_benchmark.constants import BINARY_DOWNSTREAM_SIZE
+
+# Upper bound on concurrent in-flight binary requests per worker, so a
+# high `objects` value can't spawn an unbounded thread pool. Frames with
+# more ROIs than this still issue every request — just in waves of at
+# most this many at once.
+_MAX_BINARY_CONCURRENCY = 32
 
 
 def _submit_and_log(
@@ -37,6 +52,7 @@ def _submit_and_log(
     worker_number: int,
     request_number: int,
     stage: str | None = None,
+    log_lock: "threading.Lock | None" = None,
 ) -> None:
     """Submit one inference, time it, write one JSONL line to log_handle.
 
@@ -65,6 +81,11 @@ def _submit_and_log(
         stage: Optional "bbox" or "binary" tag for chained lenses;
             single-stage lenses leave this None. The report keys frame
             counting off the absence of `stage` OR `stage == "bbox"`.
+        log_lock: Optional lock guarding the log write. Required when
+            this function is called concurrently (the bbox_to_binary
+            parallel ROI fan-out) — the slow inference happens outside
+            the lock so calls still run in parallel; only the one-line
+            write is serialized. None when called from a single thread.
     """
     request_start = time.time()
     try:
@@ -92,7 +113,12 @@ def _submit_and_log(
         record["stage"] = stage
     if error is not None:
         record["error"] = error
-    log_handle.write(json.dumps(record) + "\n")
+    line = json.dumps(record) + "\n"
+    if log_lock is not None:
+        with log_lock:
+            log_handle.write(line)
+    else:
+        log_handle.write(line)
 
 
 def _silence_stderr() -> None:
@@ -247,10 +273,16 @@ def run_bbox_to_binary(  # noqa: PLR0913
          placed entities (via image_helpers.generate_fixed_objects_image)
          and submit one bbox inference (logged with stage=bbox).
       2. Submit a cached small (224x224) binary image `objects` times
-         in a row (each logged with stage=binary).
+         CONCURRENTLY (each logged with stage=binary). The ROIs are
+         independent, so the downstream calls fan out across a thread
+         pool and the frame waits for all of them — this drives the
+         edge to its real throughput ceiling rather than serializing
+         on per-request round-trip latency.
 
     The cached downstream image is generated once at worker startup; the
-    SDK re-encodes it per call, which at 224x224 is cheap.
+    SDK re-encodes it per call, which at 224x224 is cheap. The SDK
+    client is shared across the fan-out threads — the same pattern
+    groundlight_helpers.prime_detector already relies on.
 
     Args:
         worker_number: Global worker index, recorded on every log line.
@@ -280,10 +312,19 @@ def run_bbox_to_binary(  # noqa: PLR0913
     period = 1.0 / target_fps if target_fps > 0 else 0.0
     deadline = time.time() + duration_seconds
     request_number = 1
-    with open(log_file, "a", buffering=1, encoding="utf-8") as log:
+    # Thread pool + write lock for the per-frame binary fan-out. Sized to
+    # `objects` (capped) so every ROI of a frame can be in flight at once;
+    # reused across frames to avoid per-frame thread-creation overhead.
+    pool_size = max(1, min(objects, _MAX_BINARY_CONCURRENCY))
+    log_lock = threading.Lock()
+    with open(log_file, "a", buffering=1, encoding="utf-8") as log, \
+            ThreadPoolExecutor(max_workers=pool_size, thread_name_prefix="roi") as pool:
         while time.time() < deadline:
             frame_start = time.time()
             bbox_image, _, _ = imgh.generate_fixed_objects_image(w, h, count=objects)
+            # bbox detect runs once per frame and logically precedes the
+            # ROIs, so keep it sequential (single call, nothing to
+            # parallelize).
             _submit_and_log(
                 gl, bbox_detector_id, bbox_image,
                 log_handle=log, lens_name=lens_name, camera=camera,
@@ -291,14 +332,24 @@ def run_bbox_to_binary(  # noqa: PLR0913
                 worker_number=worker_number, request_number=request_number, stage="bbox",
             )
             request_number += 1
+            # Pre-assign request numbers before dispatch so they stay
+            # deterministic regardless of completion order, then fan the
+            # binary calls out across the pool and wait for the whole
+            # frame's ROIs to finish before pacing / starting the next.
+            futures = []
             for _ in range(objects):
-                _submit_and_log(
+                rn = request_number
+                request_number += 1
+                futures.append(pool.submit(
+                    _submit_and_log,
                     gl, binary_detector_id, binary_image,
                     log_handle=log, lens_name=lens_name, camera=camera,
                     copy_index=copy_index,
-                    worker_number=worker_number, request_number=request_number, stage="binary",
-                )
-                request_number += 1
+                    worker_number=worker_number, request_number=rn, stage="binary",
+                    log_lock=log_lock,
+                ))
+            for f in futures:
+                f.result()
             _pace(period, frame_start)
 
 

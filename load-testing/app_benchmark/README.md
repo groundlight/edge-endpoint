@@ -25,6 +25,16 @@ For `bbox_to_binary`, one small (224×224) binary image is generated once at
 worker startup and resubmitted `objects` times per frame; the SDK re-encodes
 per call, which at that size is negligible.
 
+The `objects` downstream binary calls within a frame are submitted
+**concurrently** (one bbox detect, then a parallel fan-out over the
+ROIs across a thread pool, capped at 32 in-flight per worker). The ROIs
+are independent, so parallelizing drives the edge to its real
+throughput ceiling instead of serializing on per-request round-trip
+latency. Frames stay sequential and `target_fps` still paces the whole
+loop (1 bbox + N binary) as one unit — so a frame's wall-clock is
+roughly `bbox_latency + max(binary_latencies)` rather than
+`bbox_latency + objects × binary_latency`.
+
 ### Per-lens overrides
 
 `image_size` and `target_fps` can be set per-lens to override the `global:`
