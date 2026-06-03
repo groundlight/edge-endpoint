@@ -59,3 +59,14 @@ jobs:
         working-directory: cicd/pulumi
         run: |
           ./sweep-destroy-eeut-stacks.sh
+
+      - name: Reap orphaned EEUT instances
+        # Safety net: terminates eeut-* EC2 instances whose `expires-<epoch>` tag
+        # has passed, independent of Pulumi state. Catches instances that outlived
+        # their stack (e.g. a `pulumi up` cancelled mid-create), which the
+        # stack-based sweeper above is structurally blind to. Runs even if the
+        # stack sweep failed, since it shares no state with it.
+        if: always()
+        working-directory: cicd/pulumi
+        run: |
+          ./reap-orphaned-eeut-instances.sh
