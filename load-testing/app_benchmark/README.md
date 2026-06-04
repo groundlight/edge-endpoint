@@ -94,8 +94,11 @@ upfront.
 
 ## Detector lifecycle
 
-**Two-phase provisioning, one-shot per benchmark.** Detectors are created
-once before any run starts and reused for every run.
+Cloud provisioning is **one-shot** (all detectors created + trained
+upfront); the **edge** config is **ramped per-run** (each run loads only
+the detectors it exercises).
+
+### Cloud provisioning — two phases, once per benchmark
 
 1. **Phase 1 (serial create + prime)** — each `(lens stage × copy)` is
    fetched (or created) by deterministic name, then primed with
@@ -112,6 +115,31 @@ once before any run starts and reused for every run.
 
 This mirrors PR #373's `provision_detectors` pattern but uses per-lens
 prefixes so detector names stay distinct.
+
+### Edge config — ramped per-run
+
+Before each run the harness pushes an edge config containing **only the
+detectors that run exercises** — for a `copies: [1,2,3,4]` ramp, run 0
+loads 1 copy's detectors, run 3 loads 4. So the edge's loaded-detector
+count (and its VRAM / compute footprint, visible in
+`system_utilization.png`) tracks the copies ramp instead of staying
+pinned at `max(copies)` for the whole benchmark.
+
+The push is skipped when the active set is unchanged from the previous
+run, so:
+- **No copies ramp** → the set is constant → pushed once at run 0 and
+  never again (identical to loading everything upfront).
+- **Copies ramp** → re-pushed whenever the active set changes. The edge
+  reconciles **incrementally** (verified on G4: already-loaded
+  detectors keep the same pod, no restart), so a ramp only cold-starts
+  the newly-added copies — the prior copies stay warm. Each detector
+  brings up two inference pods (primary + oodd), so `copies=N` loads
+  `2 × N × stages` pods per lens.
+
+If a per-run push fails — e.g. the edge runs out of VRAM at some copy
+count — the harness writes partial results for the runs that completed
+and reports which run hit the limit, rather than losing the whole
+benchmark. (That failure point is itself a useful capacity signal.)
 
 ### Using pre-existing detectors (`*_detector_id`)
 
@@ -250,7 +278,7 @@ at the top, with the high-cardinality detail files tucked one level
 down.
 
 Plot boundary labels read `Run i (objects=X)` when `objects` varies, and
-add `, cams=Y` when `cameras` also varies across runs.
+add `, cams=Y` / `, copies=Z` when those dimensions also vary across runs.
 
 The measurement window is fixed at `[main_start_ts, main_start_ts +
 duration)`. Events before `main_start_ts` (warmup) or at/after
@@ -281,20 +309,25 @@ uv run python -m app_benchmark.cleanup_edge --edge-endpoint http://EDGE:30101 --
 ```
 main                       (cli.py — orchestrates runs)
 ├─ SystemMonitor           (samples /status/resources.json on the edge)
-└─ Σ cameras_for_run workers across all lenses (per-camera frame loop)
+└─ Σ (copies_for_run × cameras_for_run) workers across all lenses (per-worker frame loop)
 ```
 
-For each run: workers run for `warmup + duration` seconds. After the warmup
-elapses we record `main_start_ts`; `main_end_ts = main_start_ts + duration`
-bounds the measurement window from above. `_join_with_grace` waits for
-workers to exit and collects any non-zero exit codes — these are surfaced
-as `worker_failures` in `summary.json` and as a callout in `summary.md`.
-Cameras that produced no events at all get a flagged row in the per-run
-table.
+For each run: the harness first pushes that run's active edge config
+(skipped when unchanged from the prior run), then workers run for
+`warmup + duration` seconds. After the warmup elapses we record
+`main_start_ts`; `main_end_ts = main_start_ts + duration` bounds the
+measurement window from above. The per-run edge push happens *before*
+the SystemMonitor starts and before warmup, so any cold-start spike for
+newly-loaded copies is excluded from the measurement window.
+`_join_with_grace` waits for workers to exit and collects any non-zero
+exit codes — these are surfaced as `worker_failures` in `summary.json`
+and as a callout in `summary.md`. Cameras that produced no events at all
+get a flagged row in the per-run table.
 
-Detectors are provisioned **once** at the start and reused across every
-run, so the run-to-run transition is just workers exiting + new workers
-spawning; no detector retraining and no edge-config swap between runs.
+Detectors are provisioned (cloud-side) **once** at the start and reused
+across every run; the run-to-run transition is workers exiting + new
+workers spawning, plus an incremental edge-config push when the active
+detector set changes (no detector retraining).
 
 ## Host check and edge-config lifecycle
 
@@ -304,15 +337,20 @@ run and restored at cleanup. This keeps the measurement clean — pre-existing
 detectors don't contaminate GPU / CPU / RAM during the benchmark — at the
 cost of disrupting any application using them while the benchmark runs.
 
+The benchmark's own edge config is itself ramped per-run (see "Edge
+config — ramped per-run" above), so `benchX`/`benchY` below stands for
+"the active subset for the current run", which grows/shrinks with a
+copies ramp.
+
 Sequence:
 
 ```
 T0  edge: [detA, detB]                          ← whatever was there
 T1  snapshot captures [detA, detB]
-T2  push ONLY ours: edge ← [benchX, benchY]     ← detA, detB pods torn down
-T3  benchmark runs against a clean edge
+T2  push ONLY ours: edge ← [run-0 active set]   ← detA, detB pods torn down
+T3  per run: push run's active set (if changed) ← ramps with copies; warm pods kept
 T4  restore snapshot: edge ← [detA, detB]       ← detA, detB pods cold-start back
-T5  delete benchX, benchY from cloud (skipped for external + preserve_detectors)
+T5  delete our detectors from cloud (skipped for external + preserve_detectors)
 ```
 
 By default the benchmark logs a warning and proceeds when the edge already

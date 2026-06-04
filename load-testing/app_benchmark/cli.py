@@ -427,10 +427,14 @@ def main(argv: list[str] | None = None) -> int:
 
     summaries: list[dict] = []
     try:
-        logger.info("provisioning detectors (one-shot, reused across all runs)")
+        # Cloud provisioning is one-shot (all detectors + copies created
+        # and trained upfront — parallel training stays). The EDGE config,
+        # however, ramps per-run: each run loads only the detectors it
+        # exercises, so the loaded count (and its VRAM/compute footprint)
+        # tracks the copies ramp instead of staying pinned at max(copies).
+        logger.info("provisioning detectors (one-shot cloud create+train, reused across all runs)")
         stage_detectors = dm.provision_all()
-        logger.info("pushing edge config (%d detector(s))", len(stage_detectors))
-        dm.push_edge_config(stage_detectors)
+        prev_active_ids: frozenset[str] | None = None
         for i in range(n_runs):
             lens_objects = _lens_objects_for_run(cfg, i)
             lens_cameras = _lens_cameras_for_run(cfg, i)
@@ -446,12 +450,48 @@ def main(argv: list[str] | None = None) -> int:
                 lens_copies=lens_copies,
                 stage_detectors=stage_detectors,
             )
+            # Push only this run's active detectors, and only when the
+            # set changes. With no copies ramp the set is constant, so
+            # this pushes once at run 0 and never again — identical to
+            # the old single-push behavior. The edge reconciles
+            # incrementally, so a ramp only cold-starts the new copies.
+            active = dm.active_detectors_for_run(stage_detectors, lens_copies)
+            active_ids = frozenset(sd.detector_id for sd in active)
+            if active_ids != prev_active_ids:
+                logger.info(
+                    "[run %d/%d] edge config: loading %d detector(s) (was %s)",
+                    i + 1, n_runs, len(active),
+                    "none" if prev_active_ids is None else len(prev_active_ids),
+                )
+                try:
+                    dm.push_edge_config(active)
+                except Exception:
+                    logger.exception(
+                        "[run %d/%d] edge set_config failed loading %d detector(s) — "
+                        "likely the edge hit a resource limit (e.g. VRAM) at this copy "
+                        "count. Writing partial results for the %d completed run(s).",
+                        i + 1, n_runs, len(active), len(summaries),
+                    )
+                    break
+                prev_active_ids = active_ids
             summaries.append(_run_one(cfg, run, out_root))
     except KeyboardInterrupt:
         logger.warning("interrupted; running cleanup via atexit")
         return 130
     except Exception:
         logger.exception("benchmark run failed")
+        if not summaries:
+            return 1
+        # An unexpected error after some runs completed: still write what
+        # we have so the partial data isn't lost, but exit non-zero so
+        # the failure is visible to callers / CI.
+        logger.warning("writing partial results for %d completed run(s)", len(summaries))
+        run_failed = True
+    else:
+        run_failed = False
+
+    if not summaries:
+        logger.error("no runs completed; nothing to report")
         return 1
 
     benchmark_meta = {
@@ -473,7 +513,7 @@ def main(argv: list[str] | None = None) -> int:
         network_baseline_text=network_baseline_text,
     )
     logger.info("done; results in %s", out_root)
-    return 0
+    return 1 if run_failed else 0
 
 
 if __name__ == "__main__":

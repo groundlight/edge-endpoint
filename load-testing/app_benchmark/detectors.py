@@ -442,9 +442,39 @@ class DetectorManager:
         self._all_created[det.name] = det
         return det
 
+    @staticmethod
+    def active_detectors_for_run(
+        stage_detectors: list[StageDetector],
+        lens_copies_for_run: dict[str, int],
+    ) -> list[StageDetector]:
+        """Subset of detectors that a given run actually exercises.
+
+        A detector is active in a run iff its `copy_index` is below the
+        run's copy count for that lens. Cameras don't affect the set —
+        every camera of a lens-copy shares the same detector(s). The
+        edge config is pushed per-run from this subset so the loaded
+        detector count (and its VRAM / compute footprint) tracks the
+        copies ramp instead of staying pinned at `max(copies)` the
+        whole benchmark.
+
+        Args:
+            stage_detectors: Full provisioned set from provision_all().
+            lens_copies_for_run: Mapping lens_name -> copy count for the
+                run (from ResolvedRun.lens_copies).
+
+        Returns:
+            The active StageDetectors, preserving input order.
+        """
+        return [
+            sd for sd in stage_detectors
+            if sd.copy_index < lens_copies_for_run.get(sd.lens_name, 1)
+        ]
+
     def push_edge_config(self, stage_detectors: list[StageDetector]) -> None:
-        """Push an edge config containing ONLY the benchmark detectors
-        in NO_CLOUD mode. Called once before the run loop.
+        """Push an edge config containing ONLY the given benchmark
+        detectors in NO_CLOUD mode. Called once per run with that run's
+        active subset (see active_detectors_for_run) — the caller skips
+        the push when the active set is unchanged from the previous run.
 
         This deliberately does NOT merge with the snapshotted pre-run
         config — pre-existing detectors are evicted for the duration of
@@ -454,11 +484,14 @@ class DetectorManager:
         restored config. Applications that depend on the pre-existing
         detectors will see errors for the duration of the benchmark.
 
-        Blocks until inference pods report ready (or
+        The edge reconciles incrementally: detectors already loaded from
+        the previous run's config stay warm (verified on G4 — same pod
+        UID, no restart), so a ramp only cold-starts the newly-added
+        copies. Blocks until inference pods report ready (or
         `set_config_timeout_seconds` elapses).
 
         Args:
-            stage_detectors: Result of provision_all().
+            stage_detectors: The detectors to load for this run.
         """
         edge_config = EdgeEndpointConfig()
         for sd in stage_detectors:
