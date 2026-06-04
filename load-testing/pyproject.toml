@@ -11,7 +11,11 @@ requires-python = ">=3.13,<3.14"
 dependencies = [
     "groundlight>=0.26.0",
     "matplotlib>=3.10.6",
-    "opencv-python>=4.12.0.88",
+    # Headless variant: same cv2 API but built without the GUI libs
+    # (libGL, libgtk, …). The harness only generates/encodes images —
+    # no cv2.imshow/windows — so this avoids needing `libGL.so.1` and
+    # friends on the (often headless) edge/benchmark hosts.
+    "opencv-python-headless>=4.12.0.88",
     "pydantic>=2.11.9",
     "pyyaml>=6.0.3",
     "setuptools>=75.1.0",
