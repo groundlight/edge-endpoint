@@ -2,7 +2,12 @@
 name = "load-testing"
 version = "0.1.0"
 description = "Scripts for testing the performance of the Groundlight Edge Endpoint"
-requires-python = ">=3.13"
+# Capped below 3.14: pydantic-core 2.33.2 (via pydantic 2.11.9) has no
+# cp314 wheel, so on a host where uv resolves Python 3.14 `uv sync`
+# falls back to compiling pydantic-core from Rust source and fails
+# (PyO3 0.24.1 supports up to 3.13). The `.python-version` file pins
+# 3.13 so `uv sync` / `uv run` pick it without an explicit --python flag.
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "groundlight>=0.26.0",
     "matplotlib>=3.10.6",
