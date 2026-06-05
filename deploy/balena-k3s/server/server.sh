@@ -12,6 +12,21 @@ set -eux
 # doesnt work well when the underlying storage is an sd card, like on raspberry pi.
 # If we ever do want multi-node we'd have to pass `--server` or `--cluster-init` args to k3s
 
+# cgroup v2 shim: on hosts using the unified cgroup hierarchy (balenaOS 7.x+),
+# the container is started in a private cgroup namespace whose root already
+# has controllers enabled in "domain" mode. kubelet then cannot create
+# /sys/fs/cgroup/kubepods as a controller cgroup ("cannot enter cgroupv2 ...
+# with domain controllers -- it is in an invalid state"), and k3s crash-loops.
+# Move PID 1 into a leaf cgroup and enable controllers in the root's
+# subtree_control so kubelet can create kubepods alongside it. No-op on
+# cgroup v1 hosts.
+if [ "$(stat -c %T -f /sys/fs/cgroup 2>/dev/null)" = "cgroup2fs" ]; then
+    mkdir -p /sys/fs/cgroup/init
+    echo 1 > /sys/fs/cgroup/init/cgroup.procs
+    sed -e "s/ / +/g" -e "s/^/+/" < /sys/fs/cgroup/cgroup.controllers \
+        > /sys/fs/cgroup/cgroup.subtree_control
+fi
+
 # Flush stale CNI portmap iptables rules left over from a previous K3s instance.
 # After a container restart (e.g. balena device purge), K3s starts fresh but old
 # CNI DNAT rules persist in the host kernel.  If a new pod gets a different IP

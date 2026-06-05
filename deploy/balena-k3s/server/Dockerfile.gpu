@@ -22,11 +22,13 @@
 FROM alpine:3.20 AS preloader
 ARG K3S_TAG="v1.28.8+k3s1"
 
-# Install crane for pulling container images without a Docker daemon
+# Install crane for pulling container images without a Docker daemon.
+# Pinned to a known-working release; bump deliberately after testing the build.
+ARG CRANE_VERSION=v0.21.5
 RUN apk add --no-cache curl tar && \
     ARCH=$(uname -m) && \
     if [ "$ARCH" = "aarch64" ]; then CRANE_ARCH="arm64"; else CRANE_ARCH="x86_64"; fi && \
-    curl -sL "https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Linux_${CRANE_ARCH}.tar.gz" | \
+    curl -sL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_${CRANE_ARCH}.tar.gz" | \
     tar -xzf - -C /usr/local/bin crane
 
 # Download k3s airgap images (contains coredns, metrics-server, local-path-provisioner, etc.)
