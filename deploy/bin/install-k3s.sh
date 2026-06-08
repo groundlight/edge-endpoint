@@ -134,25 +134,41 @@ check_nvidia_drivers_and_container_runtime() {
     echo "NVIDIA drivers for version $NVIDIA_VERSION are installed."
   fi
 
-  # Check if nvidia container runtime is already installed.
+  # Check if the NVIDIA container toolkit is already installed.
+  # (The nvidia-container-toolkit package provides the nvidia-container-runtime binary.)
   if ! command -v nvidia-container-runtime &> /dev/null; then
-    echo " NVIDIA container runtime is not installed. Installing..."
-    # Get distribution information
-    DISTRIBUTION=$(. /etc/os-release; echo "$ID$VERSION_ID")
+    echo " NVIDIA container toolkit is not installed. Installing..."
 
     if ! command -v curl &> /dev/null; then
       echo "Installing curl to retrieve NVIDIA repository info"
       sudo apt update -y && sudo apt install -y curl
     fi
 
-    # Add NVIDIA Docker repository
-    echo "Adding NVIDIA Docker repository..."
-    curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
-    curl -s -L "https://nvidia.github.io/nvidia-docker/$DISTRIBUTION/nvidia-docker.list" | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+    if ! command -v gpg &> /dev/null; then
+      echo "Installing gnupg to dearmor the NVIDIA repository key"
+      sudo apt update -y && sudo apt install -y gnupg
+    fi
 
-    sudo apt update -y && sudo apt install -y nvidia-container-runtime
+    # Add the NVIDIA container toolkit repository.
+    #
+    # NOTE: We deliberately use the modern, distribution-agnostic
+    # `libnvidia-container/stable/deb` repository rather than the legacy
+    # `nvidia.github.io/nvidia-docker/$DISTRIBUTION` repository (which also
+    # required the now-deprecated `apt-key add`). The legacy repo has no list
+    # files for newer releases -- e.g. Ubuntu 24.04 "noble" returns HTTP 404 --
+    # which left an invalid sources file and made `apt install` fail with
+    # "Unable to locate package nvidia-container-runtime". The `stable/deb` repo
+    # does not embed the distro version in its path and works across releases.
+    echo "Adding NVIDIA container toolkit repository..."
+    curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+      | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+    curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+      | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+      | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+    sudo apt update -y && sudo apt install -y nvidia-container-toolkit
   else
-    echo " NVIDIA container runtime is installed."
+    echo " NVIDIA container toolkit is installed."
   fi
 }
 
