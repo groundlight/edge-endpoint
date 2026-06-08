@@ -149,16 +149,7 @@ check_nvidia_drivers_and_container_runtime() {
       sudo apt update -y && sudo apt install -y gnupg
     fi
 
-    # Add the NVIDIA container toolkit repository.
-    #
-    # NOTE: We deliberately use the modern, distribution-agnostic
-    # `libnvidia-container/stable/deb` repository rather than the legacy
-    # `nvidia.github.io/nvidia-docker/$DISTRIBUTION` repository (which also
-    # required the now-deprecated `apt-key add`). The legacy repo has no list
-    # files for newer releases -- e.g. Ubuntu 24.04 "noble" returns HTTP 404 --
-    # which left an invalid sources file and made `apt install` fail with
-    # "Unable to locate package nvidia-container-runtime". The `stable/deb` repo
-    # does not embed the distro version in its path and works across releases.
+    # Add NVIDIA container toolkit repository
     echo "Adding NVIDIA container toolkit repository..."
     curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
       | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
