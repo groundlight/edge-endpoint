@@ -6,8 +6,16 @@ app = marimo.App(width="medium", app_title="Edge Endpoint Profiling Dashboard")
 
 @app.function
 def span_sort_key(name: str) -> tuple[int, str]:
-    """Sort key that puts the 'request' root span first, then alphabetical."""
-    return (0 if name == "request" else 1, name)
+    """Sort key that puts the 'request' root span first, then the derived
+    inference-request metrics ('inference_request' and 'edge_endpoint_pod'),
+    then alphabetical."""
+    if name == "request":
+        return (0, "")
+    if name == "inference_request":
+        return (1, "")
+    if name == "edge_endpoint_pod":
+        return (2, "")
+    return (3, name)
 
 
 @app.function
@@ -54,6 +62,8 @@ def _():
     # Deterministic color per span name; unknown spans fall back to FALLBACK_COLOR.
     SPAN_COLORS = {
         "request": "#636EFA",
+        "inference_request": "#AB63FA",
+        "edge_endpoint_pod": "#7F4FBF",
         "post_image_query": "#7F7FFF",
         "get_groundlight_sdk_instance": "#A5A5DD",
         "_get_groundlight_sdk_instance_internal": "#C5C5E8",
@@ -123,10 +133,14 @@ def _():
     import plotly.graph_objects as go
 
     from app.profiling.data_loader import (
+        compute_edge_pod_stats,
+        compute_inference_request_stats,
         compute_span_stats,
         compute_time_series,
+        edge_pod_durations,
         get_detector_ids,
         get_trace_detail,
+        inference_request_durations,
         load_traces,
         merge_traces_by_id,
     )
@@ -134,11 +148,15 @@ def _():
 
     return (
         PROFILING_DIR,
+        compute_edge_pod_stats,
+        compute_inference_request_stats,
         compute_span_stats,
         compute_time_series,
+        edge_pod_durations,
         get_detector_ids,
         get_trace_detail,
         go,
+        inference_request_durations,
         load_traces,
         merge_traces_by_id,
     )
@@ -439,8 +457,20 @@ def _(go, mo, traces):
 
 
 @app.cell
-def _(compute_span_stats, mo, traces):
+def _(compute_edge_pod_stats, compute_inference_request_stats, compute_span_stats, mo, traces):
     stats = compute_span_stats(traces)
+    # Two synthetic rows, both scoped to the same set of "inference requests"
+    # (traces that actually invoked at least one inference call), so the two
+    # metrics line up: inference_request = edge_endpoint_pod + union of
+    # inference-call intervals.
+    #   * inference_request   = total request time, restricted to inference requests
+    #   * edge_endpoint_pod  = that same total minus the union of inference-call intervals
+    _inference_request = compute_inference_request_stats(traces)
+    if _inference_request is not None:
+        stats["inference_request"] = _inference_request
+    _edge_pod = compute_edge_pod_stats(traces)
+    if _edge_pod is not None:
+        stats["edge_endpoint_pod"] = _edge_pod
 
     _table_data = []
     for _name in sorted(stats.keys(), key=span_sort_key):
@@ -473,7 +503,7 @@ def _(compute_span_stats, mo, traces):
 
 
 @app.cell
-def _(go, mo, traces):
+def _(edge_pod_durations, go, inference_request_durations, mo, traces):
     durations_by_span: dict[str, list[float]] = {}
     for _t in traces:
         for _s in _t.get("spans", []):
@@ -481,6 +511,16 @@ def _(go, mo, traces):
             _name = _s.get("name")
             if _name and _dur is not None and _dur >= 0:
                 durations_by_span.setdefault(_name, []).append(_dur)
+
+    # Inject the two inference-request-scoped derived metrics as pseudo-spans
+    # so they show up in the box plot and histogram dropdown alongside real
+    # spans. Both are sourced from the same trace set (see data_loader).
+    _inference_request_vals = inference_request_durations(traces)
+    if _inference_request_vals:
+        durations_by_span["inference_request"] = _inference_request_vals
+    _edge_pod_vals = edge_pod_durations(traces)
+    if _edge_pod_vals:
+        durations_by_span["edge_endpoint_pod"] = _edge_pod_vals
 
     _ordered_names = sorted(
         durations_by_span.keys(),
