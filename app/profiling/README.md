@@ -18,6 +18,15 @@ ENABLE_PROFILING=true
 
 When enabled, the profiling middleware creates a trace per request. Functions decorated with `@trace_span` automatically create child spans. Traces are written as JSONL to `/opt/groundlight/device/edge-profiling/` with 5-minute file rotation and 24-hour automatic cleanup.
 
+## Traced Spans
+
+The full set of instrumented functions lives in the source: look for `@trace_span` decorators across `app/` and `app/profiling/instrumentation.py` for the `run_in_threadpool` wrapping.
+
+Two naming conventions are worth knowing when reading waterfalls:
+
+- **`run_in_threadpool[<funcname>]`** -- wraps every synchronous FastAPI dependency and synchronous Starlette BackgroundTask. The duration covers both the wait for an `anyio` worker thread (default pool size 40 per process) and the function's actual execution. The inner `@trace_span` on the function itself covers only execution, so the difference between the two is anyio threadpool queue wait time -- which under load can dominate pre-handler latency.
+- **`response_sent_ms`** -- an annotation on the root `request` span marking when the last response byte was flushed to the client. Anything in the trace past that timestamp (e.g. the `refresh_detector_metadata_if_needed` background task) is post-response work and should be analyzed separately from user-visible latency.
+
 ## Profiling Dashboard
 
 A [Marimo](https://marimo.io/) notebook provides interactive visualization of trace data. Marimo and plotly live in an **optional** `profiling` dependency group, so they are **not** installed by default — you'll need to install them wherever you launch the dashboard.
@@ -33,8 +42,8 @@ ssh -L 2718:localhost:2718 user@<device>
 Then on the remote machine, install the dashboard dependencies and launch:
 
 ```bash
-poetry install --with profiling --no-root
-poetry run marimo run app/profiling/dashboard.py
+uv sync --no-install-project --no-default-groups --group profiling
+uv run marimo run app/profiling/dashboard.py
 ```
 
 Open `http://localhost:2718` in your laptop's browser. Marimo binds to localhost on the device by default; the SSH tunnel handles the rest. Stop with `Ctrl+C` on the remote; close the SSH session to tear the tunnel down.
@@ -51,11 +60,11 @@ A secondary workflow for offline analysis of trace files copied off a device.
    ```
 2. Install the optional dashboard dependencies in your local repo checkout:
    ```bash
-   poetry install --with profiling --no-root
+   uv sync --no-install-project --no-default-groups --group profiling
    ```
 3. Run the dashboard, pointing it at the copied trace directory:
    ```bash
-   PROFILING_TRACES_DIR=./traces poetry run marimo run app/profiling/dashboard.py
+   PROFILING_TRACES_DIR=./traces uv run marimo run app/profiling/dashboard.py
    ```
 
 Marimo starts a web server on port 2718 (or the next open port) and prints the URL.
@@ -97,22 +106,14 @@ Auto-refresh is off by default — click the refresh button in the top row, or p
 
 **Dashboard shows ModuleNotFoundError for marimo or plotly:**
 
-The optional `profiling` dependency group isn't installed. Run `poetry install --with profiling --no-root` from the repo root.
-
-**`poetry install` fails with `DBusErrorResponse`, `PromptDismissedException`, or "Failed to create the collection":**
-
-Common on headless devices with no keyring daemon. Disable the keyring backend:
-
-```bash
-PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring poetry install --with profiling --no-root
-```
+The optional `profiling` dependency group isn't installed. Run `uv sync --no-install-project --no-default-groups --group profiling` from the repo root.
 
 ### Editing the Notebook
 
 To add or modify visualizations interactively:
 
 ```bash
-poetry run marimo edit app/profiling/dashboard.py
+uv run marimo edit app/profiling/dashboard.py
 ```
 
 This opens the full Marimo notebook editor where you can add cells, tweak charts, and experiment. Changes are saved back to `dashboard.py` as plain Python. Marimo creates a `__marimo__/` session-state directory next to the notebook while editing — this is gitignored.

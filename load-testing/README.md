@@ -11,7 +11,7 @@ You may want to configure both the edge endpoint and the inference server contai
 
 **To configure edge endpoint workers**: Edit the `--workers` parameter in [launch-edge-logic-server.sh](/app/bin/launch-edge-logic-server.sh). Change from the default:
 ```bash
-poetry run uvicorn \
+uv run --no-sync uvicorn \
     --workers 8 \  # You can tweak this for load testing
     --host 0.0.0.0 \
     --port ${APP_PORT} \
@@ -74,6 +74,18 @@ After the load test finishes, it automatically parses the results and writes a t
 #### Evaluate
 Review the generated plots and `load_test_results.json`.
 
+### Edge vs Cloud Inference Comparison
+
+#### Purpose
+Compares edge vs cloud inference side-by-side for a MULTI_CLASS detector to investigate cases where the edge endpoint returns lower-confidence or different answers than cloud. Each run creates a fresh PrimingGroup seeded from the detector's edge pipeline MLB and a fresh primed detector, then re-runs recent source images through both and prints a comparison table.
+
+#### Usage
+```
+uv run python compare_edge_cloud_inference.py DETECTOR_ID
+```
+
+Requires `GROUNDLIGHT_API_TOKEN` and `GROUNDLIGHT_ENDPOINT` (edge). Automatically uses the detector's designated edge pipeline (falls back to the active pipeline if none is set). Fetches up to 50 recent image queries from the source detector via cloud (configurable with `--max-iqs`), then configures the edge endpoint for that detector in `NO_CLOUD` mode (edge-only inference, no cloud escalation). Creates cloud resources (PrimingGroup + primed detector) in the `Edge Endpoint Confidence Diagnosis` group. Run with `--help` for full details.
+
 ### Memory Pressure Test
 
 #### Purpose
@@ -101,3 +113,22 @@ Below are some commands that are commonly run to evaluate the performance of the
 1. GPU VRAM utilization: `nvtop`. Check that GPU VRAM utilization is evenly spread across all available GPUs. 
 1. Inference pod status: `watch kubectl get pods -n edge`. Check that all pods are online and that no restarts occurred.
 
+### Detector Resource Benchmark
+
+#### Purpose
+Measures per-detector VRAM and RAM on a running Edge Endpoint across a YAML-defined matrix of `(mode, pipeline, n, image_size)`.
+
+#### Usage
+```
+uv run python measure_ram_and_vram_usage.py PIPELINES_YAML --device-name DEVICE [options]
+```
+
+See `benchmark_pipelines.yaml` for the input format. Each mode block requires `image_sizes` and `pipelines`; non-BINARY modes may also set `n`. The script expands the cartesian product into one measurement per combination.
+
+The first run per pipeline can take several minutes while detectors train. Cloud training runs concurrently, so wall-time is bounded by the slowest detector, not the sum. Subsequent runs reuse already-trained detectors.
+
+#### Outputs
+A timestamped run directory under `load-testing/benchmark_results/` with `results.csv` (one row per `(mode, pipeline, n, image_width, image_height)`), run metadata, an input snapshot, and a breakdown plot updated after each batch.
+
+#### Resuming
+Pass `--resume <run-dir>` to skip measurements already recorded in that run's CSV.

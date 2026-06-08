@@ -64,12 +64,19 @@ def _():
         "request": "#636EFA",
         "inference_request": "#AB63FA",
         "edge_endpoint_pod": "#7F4FBF",
+        "post_image_query": "#7F7FFF",
+        "get_groundlight_sdk_instance": "#A5A5DD",
+        "_get_groundlight_sdk_instance_internal": "#C5C5E8",
+        "get_app_state": "#D6D6F0",
+        "validate_content_type": "#9EDAE5",
         "validate_image_bytes": "#1F77B4",
         "validate_query_params_for_edge": "#17BECF",
         "active": "#E377C2",
         "detector_config": "#BCBD22",
         "get_detector_metadata": "#EF553B",
+        "refresh_detector_metadata_if_needed": "#D62728",
         "inference_is_available": "#00CC96",
+        "run_inference": "#3CB371",
         "_submit_primary_inference": "#AB63FA",
         "_submit_oodd_inference": "#FFA15A",
         "parse_inference_response": "#2CA02C",
@@ -77,6 +84,7 @@ def _():
         "create_iq": "#FECB52",
         "record_activity_for_metrics": "#9467BD",
         "record_confidence_for_metrics": "#8C564B",
+        "escalation_cooldown_complete": "#C49C94",
         "safe_escalate_with_queue_write": "#FF6692",
         "write_escalation_to_queue": "#B6E880",
     }
@@ -523,15 +531,16 @@ def _(edge_pod_durations, go, inference_request_durations, mo, traces):
     if _ordered_names:
         _fig = go.Figure()
         for _name in _ordered_names:
-            _fig.add_trace(go.Box(y=durations_by_span[_name], name=_name, boxmean=True))
+            # Horizontal boxes (x=duration, y=span name) keep long run_in_threadpool[...] names
+            # readable without label rotation or truncation.
+            _fig.add_trace(go.Box(x=durations_by_span[_name], name=_name, boxmean=True, orientation="h"))
 
         _fig.update_layout(
             title="Latency Distribution by Span",
-            yaxis_title="Duration (ms)",
-            xaxis_title="Span",
-            xaxis=dict(categoryorder="array", categoryarray=_ordered_names),
+            xaxis_title="Duration (ms)",
+            yaxis=dict(categoryorder="array", categoryarray=_ordered_names),
             showlegend=True,
-            height=450,
+            height=max(350, 40 * len(_ordered_names) + 100),
         )
 
         _out = mo.vstack([mo.md("## Latency Distribution"), mo.ui.plotly(_fig)])

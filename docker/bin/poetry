@@ -1,0 +1,41 @@
+#!/bin/sh
+set -eu
+
+case "${1:-}" in
+  run)
+    shift
+    ;;
+  --version|-V|version)
+    echo "Poetry compatibility shim for edge-endpoint images"
+    exit 0
+    ;;
+  *)
+    echo "poetry compatibility shim only supports: poetry run <command>" >&2
+    exit 2
+    ;;
+esac
+
+if [ "$#" -eq 0 ]; then
+  echo "poetry compatibility shim requires a command after: poetry run" >&2
+  exit 2
+fi
+
+if [ "${1:-}" = "--" ]; then
+  shift
+fi
+
+if [ "$#" -eq 0 ]; then
+  echo "poetry compatibility shim requires a command after: poetry run" >&2
+  exit 2
+fi
+
+if [ -z "${VIRTUAL_ENV:-}" ]; then
+  python_path="$(command -v python || true)"
+  case "$python_path" in
+    */.venv/bin/python)
+      export VIRTUAL_ENV="${python_path%/bin/python}"
+      ;;
+  esac
+fi
+
+exec "$@"

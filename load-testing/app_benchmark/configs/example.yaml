@@ -1,0 +1,44 @@
+run:
+  name: "sample-bench"
+  edge_endpoint_url: "http://localhost:30101"
+  output_dir: "./benchmark_results/{name}-{ts}/"   # default shown; {name} and {ts} are substituted at runtime
+  detector_name_prefix: "sample_bench"             # optional; defaults to a slug of `name` (lowercased, dashes → underscores, ≤16 chars)
+  refuse_if_host_not_clean: false                  # default; set true to hard-fail when the edge already has detectors loaded
+
+global:
+  image_size: [1920, 1080]
+  target_fps: 5           # per-frame iteration rate; 0 = saturate (no pacing)
+  duration_seconds: 180   # the measurement window after warmup; FPS / latency / errors are computed over this
+  warmup_seconds: 20      # workers run for this long BEFORE the window opens, letting caches warm + pods reach steady state
+
+# Lenses run CONCURRENTLY inside each run. Lenses that declare an `n` list
+# sweep across runs — every `n` list must share the same length and is
+# zipped element-wise (run i uses index i from each list).
+#
+# Per-lens overrides: `image_size` and `target_fps` may be set on any lens
+# to override the global value for that lens only.
+lenses:
+  - name: door_lens
+    type: single_binary
+    pipeline: generic-cached-timm-efficientnetv2s-calibrated-mlp
+    cameras: 1
+    image_size: [640, 480]   # smaller image for the binary stage
+    target_fps: 10           # binary is cheap — push it harder
+
+  - name: person_lens
+    type: bbox_to_binary
+    bbox_pipeline: bounding-boxes-step-rfdetr-primed
+    binary_pipeline: generic-cached-timm-efficientnetv2s-calibrated-mlp
+    n: [2, 4, 6, 8]
+    cameras: 1
+    # uses global image_size + target_fps
+
+  - name: object_lens
+    type: single_bbox
+    pipeline: bounding-boxes-step-rfdetr-primed
+    n: [1, 3, 5, 7]
+    cameras: 1
+    target_fps: 0            # saturate — go as fast as the edge can serve
+
+monitoring:
+  sample_hz: 1.0

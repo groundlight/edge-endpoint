@@ -12,6 +12,7 @@ import groundlight_helpers as glh
 
 
 _ERROR_LOG_INTERVAL_SEC = 30.0
+_BYTES_PER_GB = 1_000_000_000  # decimal GB to match what nvidia-smi / cgroups report
 
 
 class SystemMonitor:
@@ -26,9 +27,10 @@ class SystemMonitor:
     are fresh-on-call. Sampling below 15s gives repeated CPU/RAM but fresher GPU.
     """
 
-    def __init__(self, log_file: str, sample_interval: float = 5.0):
+    def __init__(self, log_file: str, sample_interval: float = 5.0, endpoint: Optional[str] = None):
         self.log_file = log_file
         self.sample_interval = sample_interval
+        self.endpoint = endpoint
         self._stop_event = multiprocessing.Event()
         self._process: Optional[multiprocessing.Process] = None
 
@@ -41,7 +43,7 @@ class SystemMonitor:
         self._stop_event.clear()
         self._process = multiprocessing.Process(
             target=self._monitor_loop,
-            args=(self.log_file, self.sample_interval, self._stop_event),
+            args=(self.log_file, self.sample_interval, self._stop_event, self.endpoint),
         )
         self._process.start()
 
@@ -53,8 +55,8 @@ class SystemMonitor:
         self._process = None
 
     @staticmethod
-    def _monitor_loop(log_file: str, sample_interval: float, stop_event) -> None:
-        gl = ExperimentalApi()
+    def _monitor_loop(log_file: str, sample_interval: float, stop_event, endpoint: Optional[str]) -> None:
+        gl = ExperimentalApi(endpoint=endpoint) if endpoint else ExperimentalApi()
         last_error_log_ts = 0.0
 
         while not stop_event.is_set():
@@ -92,6 +94,10 @@ class SystemMonitor:
             vram_used = vram.get("used", 0)
             vram_percent = (vram_used / vram_total * 100) if vram_total else 0.0
 
+            ram_used_gb = ram_used / _BYTES_PER_GB
+            ram_total_gb = ram_total / _BYTES_PER_GB
+            vram_used_gb = vram_used / _BYTES_PER_GB
+            vram_total_gb = vram_total / _BYTES_PER_GB
             SystemMonitor._append_log(
                 log_file,
                 {
@@ -100,6 +106,8 @@ class SystemMonitor:
                     "event": "cpu",
                     "cpu_percent": round(cpu_total, 2),
                     "memory_percent": round(memory_percent, 2),
+                    "ram_used_gb": round(ram_used_gb, 3),
+                    "ram_total_gb": round(ram_total_gb, 3),
                 },
             )
             SystemMonitor._append_log(
@@ -110,6 +118,8 @@ class SystemMonitor:
                     "event": "gpu",
                     "gpu_utilization": round(gpu_compute_total, 2),
                     "vram_utilization": round(vram_percent, 2),
+                    "vram_used_gb": round(vram_used_gb, 3),
+                    "vram_total_gb": round(vram_total_gb, 3),
                 },
             )
 
