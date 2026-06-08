@@ -9,7 +9,7 @@ description = "Scripts for testing the performance of the Groundlight Edge Endpo
 # 3.13 so `uv sync` / `uv run` pick it without an explicit --python flag.
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "groundlight>=0.26.0",
+    "groundlight>=0.29.0",
     "matplotlib>=3.10.6",
     # Headless variant: same cv2 API but built without the GUI libs
     # (libGL, libgtk, …). The harness only generates/encodes images —

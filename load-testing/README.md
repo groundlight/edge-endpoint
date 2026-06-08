@@ -74,6 +74,18 @@ After the load test finishes, it automatically parses the results and writes a t
 #### Evaluate
 Review the generated plots and `load_test_results.json`.
 
+### Edge vs Cloud Inference Comparison
+
+#### Purpose
+Compares edge vs cloud inference side-by-side for a MULTI_CLASS detector to investigate cases where the edge endpoint returns lower-confidence or different answers than cloud. Each run creates a fresh PrimingGroup seeded from the detector's edge pipeline MLB and a fresh primed detector, then re-runs recent source images through both and prints a comparison table.
+
+#### Usage
+```
+uv run python compare_edge_cloud_inference.py DETECTOR_ID
+```
+
+Requires `GROUNDLIGHT_API_TOKEN` and `GROUNDLIGHT_ENDPOINT` (edge). Automatically uses the detector's designated edge pipeline (falls back to the active pipeline if none is set). Fetches up to 50 recent image queries from the source detector via cloud (configurable with `--max-iqs`), then configures the edge endpoint for that detector in `NO_CLOUD` mode (edge-only inference, no cloud escalation). Creates cloud resources (PrimingGroup + primed detector) in the `Edge Endpoint Confidence Diagnosis` group. Run with `--help` for full details.
+
 ### Memory Pressure Test
 
 #### Purpose
