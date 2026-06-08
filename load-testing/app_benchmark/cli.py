@@ -37,45 +37,94 @@ def _resolve_output_dir(template: str, run_name: str) -> Path:
     return Path(template.format(name=run_name, ts=ts))
 
 
-def _lens_n_for_run(cfg: BenchmarkConfig, run_index: int) -> dict[str, int]:
-    """Pick the `n` value at position `run_index` from every lens that
-    declares an `n` list. Lenses without `n` are absent from the result."""
+def _lens_objects_for_run(cfg: BenchmarkConfig, run_index: int) -> dict[str, int]:
+    """Pick the `objects` value at position `run_index` from every lens
+    that declares an `objects` field.
+
+    Scalar values resolve to the same value across every run; list
+    values pick element `run_index`. Lenses without `objects` (e.g.
+    single_binary) are absent from the result.
+    """
     out: dict[str, int] = {}
     for lens in cfg.lenses:
-        if hasattr(lens, "n"):
-            out[lens.name] = lens.n[run_index]
+        if hasattr(lens, "objects"):
+            if isinstance(lens.objects, list):
+                out[lens.name] = lens.objects[run_index]
+            else:
+                out[lens.name] = lens.objects
+    return out
+
+
+def _lens_cameras_for_run(cfg: BenchmarkConfig, run_index: int) -> dict[str, int]:
+    """Resolve every lens's camera count for this run.
+
+    Scalar `cameras` resolves to the same value across every run; list
+    `cameras` picks element `run_index`. Every lens is present in the
+    result (unlike `_lens_objects_for_run`, which omits lenses without
+    `objects`), so worker spawning has a single source of truth for the
+    count.
+    """
+    out: dict[str, int] = {}
+    for lens in cfg.lenses:
+        if isinstance(lens.cameras, list):
+            out[lens.name] = lens.cameras[run_index]
+        else:
+            out[lens.name] = lens.cameras
+    return out
+
+
+def _lens_copies_for_run(cfg: BenchmarkConfig, run_index: int) -> dict[str, int]:
+    """Resolve every lens's copy count for this run.
+
+    Same shape as `_lens_cameras_for_run`: scalar `copies` stays
+    constant across runs; list `copies` picks element `run_index`. The
+    harness pre-provisions `max(lens.copies)` detectors per stage at
+    startup but only activates the first `out[lens.name]` copies per
+    run.
+    """
+    out: dict[str, int] = {}
+    for lens in cfg.lenses:
+        if isinstance(lens.copies, list):
+            out[lens.name] = lens.copies[run_index]
+        else:
+            out[lens.name] = lens.copies
     return out
 
 
 def _build_worker_args(
     lens,
     sds: list[StageDetector],
-    n: int | None,
+    objects: int | None,
     cfg: BenchmarkConfig,
     edge_url: str,
     log_file: str,
     duration_seconds: float,
     worker_number: int,
     camera: int,
+    copy_index: int,
 ):
     """Build the (target_fn, kwargs) pair for one camera process.
 
     Resolves per-lens overrides (image_size, target_fps) against globals
-    and picks the right runner function plus the right detector IDs from
-    `sds` (the stage detectors for this lens).
+    and picks the right runner function plus the right detector IDs
+    from `sds` (the stage detectors for THIS (lens, copy_index) pair —
+    caller filters before passing).
 
     Args:
         lens: A LensSpec subtype (SingleBinaryLens, SingleBboxLens, or
             BboxToBinaryLens).
-        sds: Stage detectors for THIS lens (typically 1 or 2 entries).
-        n: This run's `n` value for the lens, or None if the lens has
-            no `n` (single_binary case).
+        sds: Stage detectors for the (lens, copy) pair this worker
+            serves (typically 1 or 2 entries — one per stage).
+        objects: This run's `objects` value for the lens, or None if the
+            lens has no `objects` (single_binary case).
         cfg: Full benchmark config — used to resolve global defaults.
         edge_url: Edge endpoint URL the worker should hit.
         log_file: JSONL log path the worker should append to.
         duration_seconds: Total worker lifetime including warmup.
-        worker_number: Global worker index (across all lenses + cameras).
-        camera: Per-lens camera index.
+        worker_number: Global worker index (across all lenses + cameras + copies).
+        camera: Per-(lens, copy) camera index.
+        copy_index: Which copy of the lens this worker serves; passed
+            through to lens runners so events are tagged with `copy`.
 
     Returns:
         (target_fn, kwargs_dict) suitable for multiprocessing.Process.
@@ -84,6 +133,7 @@ def _build_worker_args(
     target_fps = lens.target_fps if lens.target_fps is not None else cfg.globals_.target_fps
     common = dict(
         worker_number=worker_number, camera=camera, lens_name=lens.name,
+        copy_index=copy_index,
         edge_url=edge_url, image_size=image_size, target_fps=target_fps,
         duration_seconds=duration_seconds, log_file=log_file,
     )
@@ -92,7 +142,7 @@ def _build_worker_args(
         return lenses.run_single_binary, {**common, "detector_id": single.detector_id}
     if isinstance(lens, SingleBboxLens):
         single = next(sd for sd in sds if sd.stage == "single")
-        return lenses.run_single_bbox, {**common, "detector_id": single.detector_id, "n": n}
+        return lenses.run_single_bbox, {**common, "detector_id": single.detector_id, "objects": objects}
     if isinstance(lens, BboxToBinaryLens):
         bbox = next(sd for sd in sds if sd.stage == "bbox")
         binary = next(sd for sd in sds if sd.stage == "binary")
@@ -100,7 +150,7 @@ def _build_worker_args(
             **common,
             "bbox_detector_id": bbox.detector_id,
             "binary_detector_id": binary.detector_id,
-            "n": n,
+            "objects": objects,
         }
     raise RuntimeError(f"unknown lens type: {type(lens).__name__}")
 
@@ -112,15 +162,19 @@ def _spawn_lens_workers(
     run_dir: Path,
     duration_seconds: float,
 ) -> list[mp.Process]:
-    """Start one Process per (lens × camera) and return them.
+    """Start one Process per (lens × copy × camera) and return them.
 
-    Workers are started in lens-config order; worker_number increments
-    monotonically. Each worker writes to its own `camera_{lens}_{N}.log`
-    in `run_dir` — no shared writer, so no inter-process race on the log.
+    Workers are started in lens-config order, then copy, then camera;
+    worker_number increments monotonically. Each worker writes to its
+    own log file in `run_dir` — no shared writer, so no inter-process
+    race on the log. Log filenames omit the copy suffix when the lens
+    has only one copy (back-compat with pre-copies layouts) and include
+    `_copy{k}` when multiple copies are active.
 
     Args:
         cfg: Benchmark config (for lens list and overrides).
-        run: ResolvedRun providing lens_n and the shared stage_detectors.
+        run: ResolvedRun providing lens_objects, lens_cameras,
+            lens_copies, and the shared stage_detectors.
         edge_url: Edge endpoint URL passed into each worker.
         run_dir: Per-run output directory; per-camera log files live here.
         duration_seconds: How long each worker should run before exiting.
@@ -128,24 +182,44 @@ def _spawn_lens_workers(
     Returns:
         List of started Process objects (already `.start()`ed).
     """
-    by_lens: dict[str, list[StageDetector]] = {}
+    # Group stage_detectors by (lens_name, copy_index) so worker spawn
+    # can hand each worker the correct subset for its (lens, copy) pair.
+    by_lens_copy: dict[tuple[str, int], list[StageDetector]] = {}
     for sd in run.stage_detectors:
-        by_lens.setdefault(sd.lens_name, []).append(sd)
+        by_lens_copy.setdefault((sd.lens_name, sd.copy_index), []).append(sd)
     procs: list[mp.Process] = []
     worker_number = 0
     for lens in cfg.lenses:
-        sds = by_lens[lens.name]
-        for cam_idx in range(lens.cameras):
-            log_path = run_dir / f"camera_{lens.name}_{cam_idx}.log"
-            target, kwargs = _build_worker_args(
-                lens, sds, run.lens_n.get(lens.name), cfg, edge_url,
-                str(log_path), duration_seconds, worker_number, cam_idx,
-            )
-            p = mp.Process(target=target, kwargs=kwargs, name=f"{lens.name}_cam{cam_idx}")
-            p.start()
-            procs.append(p)
-            worker_number += 1
+        cameras_this_run = run.lens_cameras[lens.name]
+        copies_this_run = run.lens_copies[lens.name]
+        for copy_idx in range(copies_this_run):
+            sds = by_lens_copy[(lens.name, copy_idx)]
+            for cam_idx in range(cameras_this_run):
+                log_path = run_dir / _camera_log_name(lens.name, copy_idx, cam_idx, copies_this_run)
+                target, kwargs = _build_worker_args(
+                    lens, sds, run.lens_objects.get(lens.name), cfg, edge_url,
+                    str(log_path), duration_seconds, worker_number, cam_idx,
+                    copy_index=copy_idx,
+                )
+                proc_name = f"{lens.name}_copy{copy_idx}_cam{cam_idx}" if copies_this_run > 1 else f"{lens.name}_cam{cam_idx}"
+                p = mp.Process(target=target, kwargs=kwargs, name=proc_name)
+                p.start()
+                procs.append(p)
+                worker_number += 1
     return procs
+
+
+def _camera_log_name(lens_name: str, copy_idx: int, cam_idx: int, copies_in_run: int) -> str:
+    """JSONL log filename for one worker process.
+
+    With copies > 1, the filename includes `_copy{k}` so each copy's
+    workers write to distinct files. When copies == 1, the legacy
+    `camera_{lens}_{N}.log` shape is preserved — important for re-runs
+    that compare against existing baseline benchmarks.
+    """
+    if copies_in_run > 1:
+        return f"camera_{lens_name}_copy{copy_idx}_{cam_idx}.log"
+    return f"camera_{lens_name}_{cam_idx}.log"
 
 
 def _join_with_grace(procs: list[mp.Process], timeout_s: float) -> list[dict]:
@@ -240,12 +314,19 @@ def _run_one(
 
     run_meta = {
         "run_index": run.run_index,
-        "lens_n": run.lens_n,
+        "lens_objects": run.lens_objects,
+        "lens_cameras": run.lens_cameras,
+        "lens_copies": run.lens_copies,
         "lenses": [
             {
                 "name": l.name,
                 "type": l.type,
-                "cameras": l.cameras,
+                # Per-run camera / copy counts, not the raw config fields
+                # — so the report's per-run table iterates over exactly
+                # the (copy, camera) pairs that ran in this iteration
+                # (relevant when `cameras` or `copies` ramps).
+                "cameras": run.lens_cameras[l.name],
+                "copies": run.lens_copies[l.name],
                 "target_fps": (l.target_fps if l.target_fps is not None
                                else cfg.globals_.target_fps),
                 "image_size": list(l.image_size if l.image_size is not None
@@ -289,6 +370,15 @@ def main(argv: list[str] | None = None) -> int:
     """
     parser = argparse.ArgumentParser(description="Edge-endpoint application benchmarking harness.")
     parser.add_argument("config", help="Path to benchmark YAML config.")
+    parser.add_argument("--device-name", type=str, required=True,
+                        help="Short identifier for the machine the edge runs on "
+                             "(e.g. 'g4dn-xlarge-t4', 'm6i-2xlarge-cpu'). Required — "
+                             "automatic hardware detection is unreliable, so this is "
+                             "recorded verbatim in summary.md + plot subtitles to keep "
+                             "results traceable to the host they were measured on.")
+    parser.add_argument("--notes", type=str, default=None,
+                        help="Optional free-form notes about the run (driver version, "
+                             "power mode, concurrent load, etc.); recorded in summary.md.")
     parser.add_argument("--no-cleanup", action="store_true",
                         help="Skip detector deletion + edge-config restore at end (debug only).")
     args = parser.parse_args(argv)
@@ -346,24 +436,77 @@ def main(argv: list[str] | None = None) -> int:
 
     summaries: list[dict] = []
     try:
-        logger.info("provisioning detectors (one-shot, reused across all runs)")
+        # Cloud provisioning is one-shot (all detectors + copies created
+        # and trained upfront — parallel training stays). The EDGE config,
+        # however, ramps per-run: each run loads only the detectors it
+        # exercises, so the loaded count (and its VRAM/compute footprint)
+        # tracks the copies ramp instead of staying pinned at max(copies).
+        logger.info("provisioning detectors (one-shot cloud create+train, reused across all runs)")
         stage_detectors = dm.provision_all()
-        logger.info("pushing edge config (%d detector(s))", len(stage_detectors))
-        dm.push_edge_config(stage_detectors)
+        prev_active_ids: frozenset[str] | None = None
         for i in range(n_runs):
-            lens_n = _lens_n_for_run(cfg, i)
-            logger.info("[run %d/%d] lens_n=%s", i + 1, n_runs, lens_n)
-            run = ResolvedRun(run_index=i, lens_n=lens_n, stage_detectors=stage_detectors)
+            lens_objects = _lens_objects_for_run(cfg, i)
+            lens_cameras = _lens_cameras_for_run(cfg, i)
+            lens_copies = _lens_copies_for_run(cfg, i)
+            logger.info(
+                "[run %d/%d] lens_objects=%s lens_cameras=%s lens_copies=%s",
+                i + 1, n_runs, lens_objects, lens_cameras, lens_copies,
+            )
+            run = ResolvedRun(
+                run_index=i,
+                lens_objects=lens_objects,
+                lens_cameras=lens_cameras,
+                lens_copies=lens_copies,
+                stage_detectors=stage_detectors,
+            )
+            # Push only this run's active detectors, and only when the
+            # set changes. With no copies ramp the set is constant, so
+            # this pushes once at run 0 and never again — identical to
+            # the old single-push behavior. The edge reconciles
+            # incrementally, so a ramp only cold-starts the new copies.
+            active = dm.active_detectors_for_run(stage_detectors, lens_copies)
+            active_ids = frozenset(sd.detector_id for sd in active)
+            if active_ids != prev_active_ids:
+                logger.info(
+                    "[run %d/%d] edge config: loading %d detector(s) (was %s)",
+                    i + 1, n_runs, len(active),
+                    "none" if prev_active_ids is None else len(prev_active_ids),
+                )
+                try:
+                    dm.push_edge_config(active)
+                except Exception:
+                    logger.exception(
+                        "[run %d/%d] edge set_config failed loading %d detector(s) — "
+                        "likely the edge hit a resource limit (e.g. VRAM) at this copy "
+                        "count. Writing partial results for the %d completed run(s).",
+                        i + 1, n_runs, len(active), len(summaries),
+                    )
+                    break
+                prev_active_ids = active_ids
             summaries.append(_run_one(cfg, run, out_root))
     except KeyboardInterrupt:
         logger.warning("interrupted; running cleanup via atexit")
         return 130
     except Exception:
         logger.exception("benchmark run failed")
+        if not summaries:
+            return 1
+        # An unexpected error after some runs completed: still write what
+        # we have so the partial data isn't lost, but exit non-zero so
+        # the failure is visible to callers / CI.
+        logger.warning("writing partial results for %d completed run(s)", len(summaries))
+        run_failed = True
+    else:
+        run_failed = False
+
+    if not summaries:
+        logger.error("no runs completed; nothing to report")
         return 1
 
     benchmark_meta = {
         "name": cfg.run.name,
+        "device_name": args.device_name,
+        "notes": args.notes,
         "started_at": started_at_iso,
         "edge_endpoint_url": cfg.run.edge_endpoint_url,
         "config": {
@@ -372,6 +515,7 @@ def main(argv: list[str] | None = None) -> int:
             "duration_seconds": cfg.globals_.duration_seconds,
             "warmup_seconds": cfg.globals_.warmup_seconds,
         },
+        "lenses": report.summarize_lenses_config(cfg, stage_detectors),
     }
     report.write_top_level(
         out_root, summaries,
@@ -380,7 +524,7 @@ def main(argv: list[str] | None = None) -> int:
         network_baseline_text=network_baseline_text,
     )
     logger.info("done; results in %s", out_root)
-    return 0
+    return 1 if run_failed else 0
 
 
 if __name__ == "__main__":

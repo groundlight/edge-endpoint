@@ -10,12 +10,21 @@ load-testing/image_helpers.py and pass it straight to the Groundlight SDK
 chained `bbox_to_binary` lens, the small downstream binary image is built
 once at lens startup and re-submitted N times per frame — the SDK
 re-encodes per call, which at 224x224 is negligible.
+
+Within a `bbox_to_binary` frame the N downstream binary calls are
+submitted CONCURRENTLY (one bbox detect, then a parallel fan-out over
+the ROIs). The ROIs are independent, so parallelizing drives the edge
+to its real throughput ceiling instead of serializing on per-request
+round-trip latency. Frames themselves stay sequential, and `target_fps`
+still paces the whole loop (1 bbox + N binary) as a unit.
 """
 
 import json
 import os
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 import image_helpers as imgh
@@ -23,6 +32,12 @@ from groundlight import ExperimentalApi
 from groundlight_helpers import error_if_not_from_edge
 
 from app_benchmark.constants import BINARY_DOWNSTREAM_SIZE
+
+# Upper bound on concurrent in-flight binary requests per worker, so a
+# high `objects` value can't spawn an unbounded thread pool. Frames with
+# more ROIs than this still issue every request — just in waves of at
+# most this many at once.
+_MAX_BINARY_CONCURRENCY = 32
 
 
 def _submit_and_log(
@@ -33,9 +48,11 @@ def _submit_and_log(
     log_handle,
     lens_name: str,
     camera: int,
+    copy_index: int,
     worker_number: int,
     request_number: int,
     stage: str | None = None,
+    log_lock: "threading.Lock | None" = None,
 ) -> None:
     """Submit one inference, time it, write one JSONL line to log_handle.
 
@@ -53,7 +70,10 @@ def _submit_and_log(
             runner opens it once at startup (one log file per camera
             process) and closes it on exit.
         lens_name: Identifies the lens in the log (and the report).
-        camera: Per-lens camera index (0..lens.cameras-1).
+        camera: Per-(lens, copy) camera index.
+        copy_index: Which copy of the lens this worker serves. Always
+            present in every event so the report can group by
+            (lens, copy) without parsing log filenames.
         worker_number: Global worker index across all lenses, useful for
             cross-process tagging.
         request_number: Monotonic counter within this worker — useful
@@ -61,6 +81,11 @@ def _submit_and_log(
         stage: Optional "bbox" or "binary" tag for chained lenses;
             single-stage lenses leave this None. The report keys frame
             counting off the absence of `stage` OR `stage == "bbox"`.
+        log_lock: Optional lock guarding the log write. Required when
+            this function is called concurrently (the bbox_to_binary
+            parallel ROI fan-out) — the slow inference happens outside
+            the lock so calls still run in parallel; only the one-line
+            write is serialized. None when called from a single thread.
     """
     request_start = time.time()
     try:
@@ -78,6 +103,7 @@ def _submit_and_log(
         "event": "request",
         "lens_name": lens_name,
         "camera": camera,
+        "copy": copy_index,
         "worker_number": worker_number,
         "request_number": request_number,
         "latency": round(end - request_start, 4),
@@ -87,7 +113,12 @@ def _submit_and_log(
         record["stage"] = stage
     if error is not None:
         record["error"] = error
-    log_handle.write(json.dumps(record) + "\n")
+    line = json.dumps(record) + "\n"
+    if log_lock is not None:
+        with log_lock:
+            log_handle.write(line)
+    else:
+        log_handle.write(line)
 
 
 def _silence_stderr() -> None:
@@ -112,6 +143,7 @@ def run_single_binary(  # noqa: PLR0913
     worker_number: int,
     camera: int,
     lens_name: str,
+    copy_index: int,
     detector_id: str,
     edge_url: str,
     image_size: tuple[int, int],
@@ -154,6 +186,7 @@ def run_single_binary(  # noqa: PLR0913
             _submit_and_log(
                 gl, detector_id, image,
                 log_handle=log, lens_name=lens_name, camera=camera,
+                copy_index=copy_index,
                 worker_number=worker_number, request_number=request_number,
             )
             request_number += 1
@@ -165,8 +198,9 @@ def run_single_bbox(  # noqa: PLR0913
     worker_number: int,
     camera: int,
     lens_name: str,
+    copy_index: int,
     detector_id: str,
-    n: int,
+    objects: int,
     edge_url: str,
     image_size: tuple[int, int],
     target_fps: float,
@@ -175,9 +209,9 @@ def run_single_bbox(  # noqa: PLR0913
 ) -> None:
     """multiprocessing.Process target for a `single_bbox` lens worker.
 
-    Generates a fresh image containing exactly `n` placed objects per
-    frame (via image_helpers.generate_fixed_objects_image) and submits
-    one bounding-box inference.
+    Generates a fresh image containing exactly `objects` placed entities
+    per frame (via image_helpers.generate_fixed_objects_image) and
+    submits one bounding-box inference.
 
     Args:
         worker_number: Global worker index, recorded on every log line.
@@ -185,11 +219,11 @@ def run_single_bbox(  # noqa: PLR0913
         lens_name: Logged on every event; matched against config in the
             report.
         detector_id: Cloud detector ID for the bbox inference.
-        n: Exact object count placed in each synthesized image for this
-            run. The detector itself was provisioned once with
-            max_num_bboxes = max(lens.n), so the per-run `n` only
-            changes the image content (and any downstream cost on the
-            model that scales with detected count).
+        objects: Exact object count placed in each synthesized image for
+            this run. The detector itself was provisioned once with
+            max_num_bboxes = max(lens.objects), so the per-run value
+            only changes the image content (and any downstream cost on
+            the model that scales with detected count).
         edge_url: Edge endpoint URL; the SDK client is built from this.
         image_size: (width, height) of the synthetic image to generate.
         target_fps: Per-frame pace target. 0 = saturate.
@@ -206,10 +240,11 @@ def run_single_bbox(  # noqa: PLR0913
     with open(log_file, "a", buffering=1, encoding="utf-8") as log:
         while time.time() < deadline:
             frame_start = time.time()
-            image, _, _ = imgh.generate_fixed_objects_image(w, h, count=n)
+            image, _, _ = imgh.generate_fixed_objects_image(w, h, count=objects)
             _submit_and_log(
                 gl, detector_id, image,
                 log_handle=log, lens_name=lens_name, camera=camera,
+                copy_index=copy_index,
                 worker_number=worker_number, request_number=request_number,
             )
             request_number += 1
@@ -221,9 +256,10 @@ def run_bbox_to_binary(  # noqa: PLR0913
     worker_number: int,
     camera: int,
     lens_name: str,
+    copy_index: int,
     bbox_detector_id: str,
     binary_detector_id: str,
-    n: int,
+    objects: int,
     edge_url: str,
     image_size: tuple[int, int],
     target_fps: float,
@@ -233,14 +269,20 @@ def run_bbox_to_binary(  # noqa: PLR0913
     """multiprocessing.Process target for a `bbox_to_binary` lens worker.
 
     Per frame:
-      1. Generate a fresh `image_size` image with exactly `n` placed
-         objects (via image_helpers.generate_fixed_objects_image) and
-         submit one bbox inference (logged with stage=bbox).
-      2. Submit a cached small (224x224) binary image `n` times in a
-         row (each logged with stage=binary).
+      1. Generate a fresh `image_size` image with exactly `objects`
+         placed entities (via image_helpers.generate_fixed_objects_image)
+         and submit one bbox inference (logged with stage=bbox).
+      2. Submit a cached small (224x224) binary image `objects` times
+         CONCURRENTLY (each logged with stage=binary). The ROIs are
+         independent, so the downstream calls fan out across a thread
+         pool and the frame waits for all of them — this drives the
+         edge to its real throughput ceiling rather than serializing
+         on per-request round-trip latency.
 
     The cached downstream image is generated once at worker startup; the
-    SDK re-encodes it per call, which at 224x224 is cheap.
+    SDK re-encodes it per call, which at 224x224 is cheap. The SDK
+    client is shared across the fan-out threads — the same pattern
+    groundlight_helpers.prime_detector already relies on.
 
     Args:
         worker_number: Global worker index, recorded on every log line.
@@ -250,12 +292,12 @@ def run_bbox_to_binary(  # noqa: PLR0913
         bbox_detector_id: Cloud detector ID for the upstream bbox stage.
         binary_detector_id: Cloud detector ID for the downstream binary
             stage.
-        n: Both the exact object count placed in the bbox image AND the
-            number of downstream binary calls issued per frame.
+        objects: Both the exact object count placed in the bbox image
+            AND the number of downstream binary calls issued per frame.
         edge_url: Edge endpoint URL; the SDK client is built from this.
         image_size: (width, height) of the upstream bbox image.
-        target_fps: Per-frame pace target (one frame = 1 bbox + n binary
-            calls). 0 = saturate.
+        target_fps: Per-frame pace target (one frame = 1 bbox +
+            `objects` binary calls). 0 = saturate.
         duration_seconds: How long this worker runs before exiting.
         log_file: Append-only JSONL log path; one file per camera process
             (the runner opens it once and writes for its whole lifetime).
@@ -270,23 +312,44 @@ def run_bbox_to_binary(  # noqa: PLR0913
     period = 1.0 / target_fps if target_fps > 0 else 0.0
     deadline = time.time() + duration_seconds
     request_number = 1
-    with open(log_file, "a", buffering=1, encoding="utf-8") as log:
+    # Thread pool + write lock for the per-frame binary fan-out. Sized to
+    # `objects` (capped) so every ROI of a frame can be in flight at once;
+    # reused across frames to avoid per-frame thread-creation overhead.
+    pool_size = max(1, min(objects, _MAX_BINARY_CONCURRENCY))
+    log_lock = threading.Lock()
+    with open(log_file, "a", buffering=1, encoding="utf-8") as log, \
+            ThreadPoolExecutor(max_workers=pool_size, thread_name_prefix="roi") as pool:
         while time.time() < deadline:
             frame_start = time.time()
-            bbox_image, _, _ = imgh.generate_fixed_objects_image(w, h, count=n)
+            bbox_image, _, _ = imgh.generate_fixed_objects_image(w, h, count=objects)
+            # bbox detect runs once per frame and logically precedes the
+            # ROIs, so keep it sequential (single call, nothing to
+            # parallelize).
             _submit_and_log(
                 gl, bbox_detector_id, bbox_image,
                 log_handle=log, lens_name=lens_name, camera=camera,
+                copy_index=copy_index,
                 worker_number=worker_number, request_number=request_number, stage="bbox",
             )
             request_number += 1
-            for _ in range(n):
-                _submit_and_log(
+            # Pre-assign request numbers before dispatch so they stay
+            # deterministic regardless of completion order, then fan the
+            # binary calls out across the pool and wait for the whole
+            # frame's ROIs to finish before pacing / starting the next.
+            futures = []
+            for _ in range(objects):
+                rn = request_number
+                request_number += 1
+                futures.append(pool.submit(
+                    _submit_and_log,
                     gl, binary_detector_id, binary_image,
                     log_handle=log, lens_name=lens_name, camera=camera,
-                    worker_number=worker_number, request_number=request_number, stage="binary",
-                )
-                request_number += 1
+                    copy_index=copy_index,
+                    worker_number=worker_number, request_number=rn, stage="binary",
+                    log_lock=log_lock,
+                ))
+            for f in futures:
+                f.result()
             _pace(period, frame_start)
 
 

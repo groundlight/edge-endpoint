@@ -2,15 +2,47 @@
 name = "load-testing"
 version = "0.1.0"
 description = "Scripts for testing the performance of the Groundlight Edge Endpoint"
-requires-python = ">=3.13"
+# Capped below 3.14: pydantic-core 2.33.2 (via pydantic 2.11.9) has no
+# cp314 wheel, so on a host where uv resolves Python 3.14 `uv sync`
+# falls back to compiling pydantic-core from Rust source and fails
+# (PyO3 0.24.1 supports up to 3.13). The `.python-version` file pins
+# 3.13 so `uv sync` / `uv run` pick it without an explicit --python flag.
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "groundlight>=0.29.0",
     "matplotlib>=3.10.6",
-    "opencv-python>=4.12.0.88",
+    # Headless variant: same cv2 API but built without the GUI libs
+    # (libGL, libgtk, …). The harness only generates/encodes images —
+    # no cv2.imshow/windows — so this avoids needing `libGL.so.1` and
+    # friends on the (often headless) edge/benchmark hosts.
+    "opencv-python-headless>=4.12.0.88",
     "pydantic>=2.11.9",
     "pyyaml>=6.0.3",
     "setuptools>=75.1.0",
     "tqdm>=4.67.1",
+]
+
+[project.scripts]
+app_benchmark = "app_benchmark.cli:main"
+
+[build-system]
+requires = ["setuptools>=75.1.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app_benchmark*"]
+
+# Top-level helper modules in load-testing/ that the app_benchmark package
+# imports directly (e.g. `import system_helpers`, `import groundlight_helpers`).
+# Without these the installed `app_benchmark` script can't find them at
+# runtime, since the cwd is no longer on sys.path.
+[tool.setuptools]
+py-modules = [
+    "constants",
+    "groundlight_helpers",
+    "image_helpers",
+    "parse_load_test_logs",
+    "system_helpers",
 ]
 
 [dependency-groups]

@@ -1,44 +1,66 @@
 run:
-  name: "sample-bench"
-  edge_endpoint_url: "http://localhost:30101"
-  output_dir: "./benchmark_results/{name}-{ts}/"   # default shown; {name} and {ts} are substituted at runtime
-  detector_name_prefix: "sample_bench"             # optional; defaults to a slug of `name` (lowercased, dashes → underscores, ≤16 chars)
-  refuse_if_host_not_clean: false                  # default; set true to hard-fail when the edge already has detectors loaded
+  name: "sample-bench"                              # required; appears in output_dir, detector names, summary.md
+  edge_endpoint_url: "http://localhost:30101"       # required; HTTP(S) URL of the edge endpoint under test
+  output_dir: "./benchmark_results/{name}-{ts}/"    # where artifacts are written; {name} and {ts} are substituted at runtime, defaults to "./benchmark_results/{name}-{ts}/"
+  detector_name_prefix: "sample_bench"              # short prefix (≤16 chars) that all created detectors carry, defaults to a slug of `name` (lowercased, dashes → underscores)
+  refuse_if_host_not_clean: false                   # check if the edge-endpoint is not clean (has detectors configured) and stop if so, defaults to false
+  preserve_detectors: false                         # keep created detectors on the cloud after cleanup so re-runs reuse them via get_or_create_detector (skips retraining if the edge pipeline is already trained); pipeline mismatches are still caught at provision time; external (*_detector_id) detectors are always preserved regardless of this flag, defaults to false
+  # set_config_timeout_seconds: 900                 # how long to wait for edge.set_config to finish (cold edges with many models need more), defaults to 900
+  # cloud_endpoint: "https://api.groundlight.ai/"   # Groundlight cloud URL used for detector CRUD, defaults to "https://api.groundlight.ai/"
 
 global:
-  image_size: [1920, 1080]
-  target_fps: 5           # per-frame iteration rate; 0 = saturate (no pacing)
-  duration_seconds: 180   # the measurement window after warmup; FPS / latency / errors are computed over this
-  warmup_seconds: 20      # workers run for this long BEFORE the window opens, letting caches warm + pods reach steady state
+  image_size: [1920, 1080]   # (width, height) in pixels for the synthetic images each worker generates, defaults to [1920, 1080]
+  target_fps: 5              # per-frame iteration rate; 0 = saturate (no pacing), defaults to 5
+  duration_seconds: 180      # measurement window after warmup; FPS / latency / errors are computed over this, defaults to 180
+  warmup_seconds: 20         # workers run for this long BEFORE the window opens, letting caches warm + pods reach steady state, defaults to 20
 
-# Lenses run CONCURRENTLY inside each run. Lenses that declare an `n` list
-# sweep across runs — every `n` list must share the same length and is
-# zipped element-wise (run i uses index i from each list).
+# Lenses run CONCURRENTLY inside each run. Sweep dimensions (`objects`,
+# `cameras`, `copies`) declared as lists are zipped element-wise across
+# runs — every list in the config must share the same length. A scalar
+# value stays fixed across every run.
+#
+# `copies` provisions N independently-trained detectors of the lens
+# (each with the same pipeline + objects setting) — useful for
+# measuring how throughput scales with the number of distinct
+# detectors the server is juggling. Note: copies > 1 cannot be
+# combined with `*_detector_id` (one pre-existing ID can't back
+# multiple independently-trained copies).
 #
 # Per-lens overrides: `image_size` and `target_fps` may be set on any lens
 # to override the global value for that lens only.
+#
+# Optional per-lens fields:
+#   bbox_detector_id / binary_detector_id — supply a pre-existing
+#     cloud detector ID instead of letting the harness create + train
+#     one. The detector's pipeline is verified against the configured
+#     `pipeline` (or `bbox_pipeline` / `binary_pipeline`) at startup,
+#     and the detector is preserved at cleanup. Edge inference still
+#     runs in NO_CLOUD mode so the existing detector's training data
+#     isn't polluted.
 lenses:
-  - name: door_lens
-    type: single_binary
-    pipeline: generic-cached-timm-efficientnetv2s-calibrated-mlp
-    cameras: 1
-    image_size: [640, 480]   # smaller image for the binary stage
-    target_fps: 10           # binary is cheap — push it harder
+  - name: door_lens                                            # required; lens identifier, appears in detector names + log files + plots + tables
+    type: single_binary                                        # required; one of single_binary | single_bbox | bbox_to_binary
+    pipeline: generic-cached-timm-efficientnetv2s-calibrated-mlp  # Groundlight pipeline config name, defaults to None (cloud picks default for the mode)
+    cameras: 1                                                 # number of independent worker processes; scalar or list-to-ramp, defaults to 1
+    image_size: [640, 480]                                     # per-lens override, defaults to global image_size
+    target_fps: 10                                             # per-lens override; binary is cheap — push it harder, defaults to global target_fps
 
   - name: person_lens
     type: bbox_to_binary
-    bbox_pipeline: bounding-boxes-step-rfdetr-primed
-    binary_pipeline: generic-cached-timm-efficientnetv2s-calibrated-mlp
-    n: [2, 4, 6, 8]
-    cameras: 1
-    # uses global image_size + target_fps
+    bbox_pipeline: bounding-boxes-step-rfdetr-primed           # required when bbox_detector_id is set; defaults to None (cloud picks)
+    binary_pipeline: generic-cached-timm-efficientnetv2s-calibrated-mlp  # required when binary_detector_id is set; defaults to None (cloud picks)
+    objects: [2, 4, 6, 8]                                      # objects placed per synthetic frame AND number of downstream binary calls per frame; scalar or list-to-ramp, defaults to 1
+    cameras: 1                                                 # uses global image_size + target_fps below
 
   - name: object_lens
     type: single_bbox
     pipeline: bounding-boxes-step-rfdetr-primed
-    n: [1, 3, 5, 7]
-    cameras: 1
-    target_fps: 0            # saturate — go as fast as the edge can serve
+    objects: [1, 3, 5, 7]                                      # number of objects placed in each synthetic frame; scalar or list-to-ramp, defaults to 1
+    cameras: 1                                                 # scalar — fixed at 1 across all 4 runs
+    copies: 1                                                  # number of independently-trained detector copies; scalar or list-to-ramp, defaults to 1
+    # cameras: [1, 2, 4, 8]                                    # alternative: ramp camera count zipped with objects (must share length with other sweep lists)
+    # copies: [1, 2, 4, 8]                                     # alternative: ramp distinct detector copies — incompatible with *_detector_id
+    target_fps: 0                                              # saturate — go as fast as the edge can serve
 
 monitoring:
-  sample_hz: 1.0
+  sample_hz: 1.0   # how often (Hz) to poll /status/resources.json on the edge, defaults to 1.0
