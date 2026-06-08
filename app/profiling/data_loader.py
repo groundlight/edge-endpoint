@@ -15,6 +15,11 @@ from app.profiling.manager import PROFILING_DIR
 
 logger = logging.getLogger(__name__)
 
+# Spans whose duration is dominated by waiting on the inference pods — used to
+# subtract that wait time from total request time when computing how much of
+# the request was spent doing work inside the edge-endpoint pod itself.
+INFERENCE_CALL_SPAN_NAMES = frozenset({"_submit_primary_inference", "_submit_oodd_inference"})
+
 
 def load_traces(
     traces_dir: str = PROFILING_DIR,
@@ -101,6 +106,136 @@ def compute_span_stats(traces: list[dict]) -> dict[str, dict]:
     for name, durations in durations_by_name.items():
         result[name] = _stats_dict(durations)
     return result
+
+
+def _extract_request_ms_and_inference_intervals(
+    trace: dict,
+) -> tuple[float | None, list[tuple[int, int]]]:
+    """Single pass over ``trace["spans"]`` that pulls out the two things every
+    inference-request-scoped metric needs: the root ``request`` span's
+    duration (in ms) and the list of inference-call span intervals (start_ns,
+    end_ns), keyed by ``INFERENCE_CALL_SPAN_NAMES``.
+
+    Returns ``(None, [])`` for traces that contributed no root request span.
+    The intervals list may be empty when a request reached the edge endpoint
+    but never invoked inference (e.g., escalated straight to cloud, or a
+    health probe).
+    """
+    request_ms: float | None = None
+    intervals: list[tuple[int, int]] = []
+    for span in trace.get("spans", []):
+        name = span.get("name")
+        if name == "request" and span.get("parent_span_id") is None:
+            dur = span.get("duration_ms")
+            if dur is not None and dur >= 0:
+                request_ms = dur
+        elif name in INFERENCE_CALL_SPAN_NAMES:
+            start = span.get("start_time_ns")
+            end = span.get("end_time_ns")
+            if start is not None and end is not None and end > start:
+                intervals.append((start, end))
+    return request_ms, intervals
+
+
+def is_inference_request(trace: dict) -> bool:
+    """``True`` when this trace represents a request that actually invoked at
+    least one edge-inference call. Used to scope derived metrics like
+    ``edge_endpoint_pod`` and ``inference_request`` to the request shape
+    where the decomposition is meaningful (i.e., excludes health probes,
+    status polls, GET endpoints, and image-query POSTs that short-circuited
+    before reaching edge inference)."""
+    request_ms, intervals = _extract_request_ms_and_inference_intervals(trace)
+    return request_ms is not None and bool(intervals)
+
+
+def compute_edge_pod_ms(trace: dict) -> float | None:
+    """Wall time inside the edge-endpoint pod NOT spent waiting on inference calls.
+
+    Computed as the root request span's duration minus the union of all
+    inference-call span intervals (see ``INFERENCE_CALL_SPAN_NAMES``). Using the
+    union — not the sum — correctly handles the primary+OODD case where both
+    calls run in parallel via ``ThreadPoolExecutor``: the wait is the wall-clock
+    interval during which at least one call is outstanding.
+
+    Only "inference requests" — those that actually invoked at least one
+    inference call — produce a value. Health checks, status polling, GET
+    requests, and any image-query POSTs that short-circuited before reaching
+    edge inference all return ``None`` and are excluded from aggregation.
+
+    Returns ``None`` when:
+      * the trace has no root ``request`` span (e.g., a record contributed
+        only by the inference side of a cross-process trace), or
+      * no inference-call spans are present (this wasn't an inference request).
+    """
+    request_ms, intervals = _extract_request_ms_and_inference_intervals(trace)
+    if request_ms is None or not intervals:
+        return None
+
+    intervals.sort()
+    union_ns = 0
+    cur_start, cur_end = intervals[0]
+    for s, e in intervals[1:]:
+        if s <= cur_end:
+            cur_end = max(cur_end, e)
+        else:
+            union_ns += cur_end - cur_start
+            cur_start, cur_end = s, e
+    union_ns += cur_end - cur_start
+
+    # Clamp to zero: clock skew or partial trace records could in principle push
+    # this negative, and a negative "self time" would be confusing in the UI.
+    return max(0.0, request_ms - union_ns / 1_000_000)
+
+
+def compute_inference_request_ms(trace: dict) -> float | None:
+    """Total wall time of a request that invoked at least one inference call.
+
+    Same value as the root ``request`` span's ``duration_ms``, but scoped to
+    the same trace set used by ``compute_edge_pod_ms`` so the two derived
+    metrics can be compared apples-to-apples (i.e., ``inference_request`` ==
+    ``edge_endpoint_pod`` + union(inference-call intervals)). Returns
+    ``None`` for non-inference requests so they're dropped from aggregation.
+    """
+    request_ms, intervals = _extract_request_ms_and_inference_intervals(trace)
+    if request_ms is None or not intervals:
+        return None
+    return request_ms
+
+
+def compute_edge_pod_stats(traces: list[dict]) -> dict | None:
+    """Aggregate ``compute_edge_pod_ms`` across traces into a stats dict.
+
+    Returns the same ``{p50, p95, p99, mean, min, max, count}`` shape as the
+    per-name entries in ``compute_span_stats``, so the result can be slotted
+    in alongside real spans. Returns ``None`` when no trace has a usable
+    edge-pod value, mirroring ``compute_span_stats`` dropping empty entries.
+    """
+    values = [v for v in (compute_edge_pod_ms(t) for t in traces) if v is not None]
+    if not values:
+        return None
+    return _stats_dict(values)
+
+
+def compute_inference_request_stats(traces: list[dict]) -> dict | None:
+    """Aggregate ``compute_inference_request_ms`` across traces into a stats dict.
+
+    Same shape and contract as ``compute_edge_pod_stats`` — returns ``None``
+    when no trace has a usable inference-request duration.
+    """
+    values = [v for v in (compute_inference_request_ms(t) for t in traces) if v is not None]
+    if not values:
+        return None
+    return _stats_dict(values)
+
+
+def edge_pod_durations(traces: list[dict]) -> list[float]:
+    """Per-trace edge-endpoint self time values, dropping traces where it can't be computed."""
+    return [v for v in (compute_edge_pod_ms(t) for t in traces) if v is not None]
+
+
+def inference_request_durations(traces: list[dict]) -> list[float]:
+    """Per-trace inference-request durations, dropping non-inference requests."""
+    return [v for v in (compute_inference_request_ms(t) for t in traces) if v is not None]
 
 
 def compute_time_series(
