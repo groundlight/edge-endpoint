@@ -632,9 +632,15 @@ def write_top_level(
 
     plot_refs: dict[str, Any] = {}
     if summaries:
-        plot_refs = _write_combined_plots(out_root, summaries)
+        plot_refs = _write_combined_plots(
+            out_root, summaries,
+            device_name=benchmark_meta.get("device_name"),
+        )
 
     lines = [f"# Benchmark: {benchmark_meta.get('name', '?')}", ""]
+    lines.append(f"- **Device**: `{benchmark_meta.get('device_name', '?')}`")
+    if benchmark_meta.get("notes"):
+        lines.append(f"- **Notes**: {benchmark_meta['notes']}")
     lines.append(f"- **Started**: {benchmark_meta.get('started_at', '?')}")
     lines.append(f"- **Edge endpoint**: `{benchmark_meta.get('edge_endpoint_url', '?')}`")
     lines.append(f"- **Network ping baseline**: {network_baseline_text}")
@@ -818,6 +824,8 @@ def _render_run_section(s: dict[str, Any]) -> list[str]:
 def _write_combined_plots(
     out_root: Path,
     summaries: list[dict[str, Any]],
+    *,
+    device_name: str | None = None,
 ) -> dict[str, Any]:
     """Build cross-run combined plots and return their relative paths.
 
@@ -934,6 +942,7 @@ def _write_combined_plots(
     sys_path = plots_dir / "system_utilization.png"
     if _plot_combined_system(
         sys_path, cpu_pct, gpu_pct, ram_gb, ram_total, vram_gb, vram_total, boundaries,
+        device_name=device_name,
     ):
         refs["system"] = f"plots/{sys_path.name}"
 
@@ -958,6 +967,7 @@ def _write_combined_plots(
             fps_path, lens, camera, buckets,
             by_camera_errors.get((lens, copy_idx, camera), {}),
             target_by_lens.get(lens), boundaries,
+            device_name=device_name,
         ):
             fps_per_camera_refs.append(((lens, copy_idx, camera), f"plots/per_camera/{fname}"))
     refs["fps_per_camera"] = fps_per_camera_refs
@@ -999,7 +1009,7 @@ def _write_combined_plots(
         lens_path = plots_dir / f"fps_{lens}.png"
         if _plot_combined_lens_fps(
             lens_path, lens, series_frames, series_errors, target, boundaries,
-            line_label_prefix=prefix,
+            line_label_prefix=prefix, device_name=device_name,
         ):
             fps_per_lens_refs.append((lens, f"plots/{lens_path.name}"))
         lenses_data.append((lens, series_frames, series_errors, target, prefix))
@@ -1007,7 +1017,7 @@ def _write_combined_plots(
 
     # Mosaic — single image showing every lens's overlay plot at once.
     mosaic_path = plots_dir / "fps_all_lenses.png"
-    if _plot_all_lenses_mosaic(mosaic_path, lenses_data, boundaries):
+    if _plot_all_lenses_mosaic(mosaic_path, lenses_data, boundaries, device_name=device_name):
         refs["fps_mosaic"] = f"plots/{mosaic_path.name}"
 
     return refs
@@ -1097,10 +1107,18 @@ def _annotate_boundaries(
         )
 
 
+def _device_suffix(device_name: str | None) -> str:
+    """Render a ` — device: X` title suffix, or empty when unset. Keeps
+    every cross-run plot self-identifying with the host it ran on."""
+    return f" — device: {device_name}" if device_name else ""
+
+
 def _plot_combined_system(
     path: Path,
     cpu_pct, gpu_pct, ram_gb, ram_total, vram_gb, vram_total,
     boundaries,
+    *,
+    device_name: str | None = None,
 ) -> bool:
     if not any((cpu_pct, gpu_pct, ram_gb, vram_gb)):
         return False
@@ -1120,7 +1138,7 @@ def _plot_combined_system(
         _annotate_boundaries(ax, boundaries)
         ax.set_xlabel("seconds since benchmark start")
         ax.grid(True, alpha=0.3)
-    fig.suptitle("System utilization (all runs)", fontsize=14)
+    fig.suptitle(f"System utilization (all runs){_device_suffix(device_name)}", fontsize=14)
     fig.tight_layout()
     # Reserve space below the bottom-row xlabels for the rotated
     # "Run i" labels — without this they collide with "seconds since
@@ -1139,6 +1157,8 @@ def _plot_combined_camera_fps(
     error_buckets: dict[int, int],
     target_fps: float | None,
     boundaries,
+    *,
+    device_name: str | None = None,
 ) -> bool:
     if not frame_buckets:
         return False
@@ -1152,7 +1172,7 @@ def _plot_combined_camera_fps(
         line_target = ax.axhline(target_fps, color="tab:orange", linestyle="--", alpha=0.8,
                                  label=f"target {target_fps:.1f} fps")
         handles.append(line_target)
-    ax.set_title(f"{lens_name} — camera {camera} — FPS (all runs)")
+    ax.set_title(f"{lens_name} — camera {camera} — FPS (all runs){_device_suffix(device_name)}")
     ax.set_xlabel("seconds since benchmark start")
     ax.set_ylabel("frames per second", color="tab:blue")
     ax.tick_params(axis="y", labelcolor="tab:blue")
@@ -1190,6 +1210,7 @@ def _draw_lens_fps_on_axis(
     annotate_runs: bool = True,
     show_legend: bool = True,
     line_label_prefix: str = "cam",
+    device_name: str | None = None,
 ) -> bool:
     """Draw a lens's FPS overlay on the given axis.
 
@@ -1270,7 +1291,7 @@ def _draw_lens_fps_on_axis(
                                  label=f"target {target_fps:.1f} fps")
         handles.append(line_target)
     series_word = "copy" if line_label_prefix == "copy" else "camera"
-    ax.set_title(f"{lens_name} — FPS per {series_word} (all runs)")
+    ax.set_title(f"{lens_name} — FPS per {series_word} (all runs){_device_suffix(device_name)}")
     ax.set_xlabel("seconds since benchmark start")
     ax.set_ylabel("frames per second")
     ax.set_ylim(bottom=0)
@@ -1314,6 +1335,7 @@ def _plot_combined_lens_fps(
     boundaries,
     *,
     line_label_prefix: str = "cam",
+    device_name: str | None = None,
 ) -> bool:
     """Single-axis lens overlay plot. Returns False if no frames were
     captured for any series of the lens (no file written)."""
@@ -1323,6 +1345,7 @@ def _plot_combined_lens_fps(
         target_fps, boundaries,
         annotate_runs=True, show_legend=True,
         line_label_prefix=line_label_prefix,
+        device_name=device_name,
     )
     if not had_data:
         plt.close(fig)
@@ -1339,6 +1362,8 @@ def _plot_all_lenses_mosaic(
     lenses_data: list[tuple[str, dict[int, dict[int, int]],
                             dict[int, dict[int, int]], float | None, str]],
     boundaries,
+    *,
+    device_name: str | None = None,
 ) -> bool:
     """2-column mosaic of per-lens FPS overlay plots.
 
@@ -1382,7 +1407,8 @@ def _plot_all_lenses_mosaic(
     if not any_drawn:
         plt.close(fig)
         return False
-    fig.suptitle("FPS overview — all lenses", fontsize=14)
+    # Device goes in the suptitle (once) rather than on every cell title.
+    fig.suptitle(f"FPS overview — all lenses{_device_suffix(device_name)}", fontsize=14)
     fig.tight_layout()
     fig.savefig(path, dpi=120)
     plt.close(fig)

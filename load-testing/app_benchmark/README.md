@@ -203,13 +203,22 @@ uv sync
 
 ```bash
 cd load-testing
-GROUNDLIGHT_API_TOKEN=... uv run app_benchmark app_benchmark/configs/example.yaml
+GROUNDLIGHT_API_TOKEN=... uv run app_benchmark app_benchmark/configs/example.yaml \
+    --device-name g4dn-xlarge-t4
 ```
 
 (The longer form `uv run --python 3.13 python -m app_benchmark <config>`
 still works if you prefer to pin the interpreter explicitly.)
 
 Flags:
+- `--device-name` (**required**) — short identifier for the machine the
+  edge runs on (e.g. `g4dn-xlarge-t4`, `m6i-2xlarge-cpu`). Automatic
+  hardware detection is unreliable, so this is recorded verbatim in
+  `summary.md`, `summary.json`, and every cross-run plot's title — so a
+  result is always traceable to the host it was measured on. Make it
+  specific enough to disambiguate (instance type + accelerator).
+- `--notes` — optional free-form notes (driver version, power mode,
+  concurrent load, …); recorded in `summary.md`.
 - `--no-cleanup` — skip detector deletion + edge-config restore at end
   (debug only — leaves the edge in the merged state and detectors in the
   cloud).
@@ -239,8 +248,9 @@ benchmark_results/{name}-{ts}/
 
 `summary.md` is the primary view. It contains:
 
-- **Environment block** — run name, started_at, edge URL, ICMP **ping
-  baseline** measured before the benchmark starts, and the global defaults.
+- **Environment block** — run name, **device** (`--device-name`) and
+  optional **notes**, started_at, edge URL, ICMP **ping baseline**
+  measured before the benchmark starts, and the global defaults.
 - **Lens configuration table** — resolved per-lens config: pipeline,
   detector ID (with `(external)` tag for pre-existing detectors, or
   `(+N more)` when copies > 1), camera count, copy count, objects.

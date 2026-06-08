@@ -370,6 +370,15 @@ def main(argv: list[str] | None = None) -> int:
     """
     parser = argparse.ArgumentParser(description="Edge-endpoint application benchmarking harness.")
     parser.add_argument("config", help="Path to benchmark YAML config.")
+    parser.add_argument("--device-name", type=str, required=True,
+                        help="Short identifier for the machine the edge runs on "
+                             "(e.g. 'g4dn-xlarge-t4', 'm6i-2xlarge-cpu'). Required — "
+                             "automatic hardware detection is unreliable, so this is "
+                             "recorded verbatim in summary.md + plot subtitles to keep "
+                             "results traceable to the host they were measured on.")
+    parser.add_argument("--notes", type=str, default=None,
+                        help="Optional free-form notes about the run (driver version, "
+                             "power mode, concurrent load, etc.); recorded in summary.md.")
     parser.add_argument("--no-cleanup", action="store_true",
                         help="Skip detector deletion + edge-config restore at end (debug only).")
     args = parser.parse_args(argv)
@@ -496,6 +505,8 @@ def main(argv: list[str] | None = None) -> int:
 
     benchmark_meta = {
         "name": cfg.run.name,
+        "device_name": args.device_name,
+        "notes": args.notes,
         "started_at": started_at_iso,
         "edge_endpoint_url": cfg.run.edge_endpoint_url,
         "config": {
