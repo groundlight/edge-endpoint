@@ -9,7 +9,6 @@ from typing import Optional
 
 import requests
 import yaml
-from cachetools import TTLCache, cached
 from fastapi import HTTPException, status
 from groundlight.edge import EdgeEndpointConfig, InferenceConfig
 from jinja2 import Template
@@ -29,20 +28,34 @@ from app.profiling.context import get_current_span, get_current_tracer, trace_sp
 
 logger = logging.getLogger(__name__)
 
-# Simple TTL cache for is_edge_inference_ready checks to avoid having to re-check every time a request is processed.
-# This will be process-specific, so each edge-endpoint worker will have its own cache instance.
-ttl_cache = TTLCache(maxsize=128, ttl=5)
+# Short connect timeout for inference requests. If the K8s Service has no ready endpoints,
+# connections will hang indefinitely without a timeout. The read timeout is left unbounded
+# since inference latency varies widely across model sizes and hardware.
+INFERENCE_CONNECT_TIMEOUT_SEC = 1.0
 
 
-@cached(ttl_cache)
-def is_edge_inference_ready(inference_client_url: str) -> bool:
-    model_ready_url = f"http://{inference_client_url}/health/ready"
+def _check_url_ready(url: str) -> bool:
+    """GET /health/ready on a single inference service URL and return True on HTTP 200."""
     try:
-        response = requests.get(model_ready_url)
+        response = requests.get(f"http://{url}/health/ready", timeout=INFERENCE_CONNECT_TIMEOUT_SEC)
         return response.status_code == status.HTTP_200_OK
-    except requests.exceptions.RequestException as e:
-        logger.warning(f"Failed to connect to {model_ready_url}: {e}")
+    except requests.exceptions.RequestException:
         return False
+
+
+def check_inference_ready(detector_id: str, separate_oodd_inference: bool) -> bool:
+    """Checks if inference pods for this detector are ready to serve.
+
+    Returns True only when all required pods respond to /health/ready.
+    """
+    primary_url = get_edge_inference_service_name(detector_id) + ":8000"
+    if not _check_url_ready(primary_url):
+        return False
+    if separate_oodd_inference:
+        oodd_url = get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
+        if not _check_url_ready(oodd_url):
+            return False
+    return True
 
 
 def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, content_type: str) -> dict:
@@ -56,7 +69,9 @@ def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, co
         headers["X-GL-Parent-Span-Id"] = span.span_id
     try:
         logger.debug(f"Submitting image for inference to {inference_url}")
-        response = requests.post(inference_url, data=image_bytes, headers=headers)
+        response = requests.post(
+            inference_url, data=image_bytes, headers=headers, timeout=(INFERENCE_CONNECT_TIMEOUT_SEC, None)
+        )
         if response.status_code != status.HTTP_200_OK:
             logger.error(f"Inference server returned an error: {response.status_code} - {response.text}")
             raise RuntimeError(f"Inference server error: {response.status_code} - {response.text}")
@@ -265,26 +280,6 @@ class EdgeInferenceManager:
         self.speedmon = SpeedMonitor()
         self.separate_oodd_inference = separate_oodd_inference
         self.last_escalation_times: dict[str, float | None] = {}
-
-    @trace_span
-    def inference_is_available(self, detector_id: str) -> bool:
-        """Check whether inference pods for this detector are ready to serve."""
-        primary_url = get_edge_inference_service_name(detector_id) + ":8000"
-        oodd_url = (
-            get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
-            if self.separate_oodd_inference
-            else None
-        )
-
-        ready = is_edge_inference_ready(primary_url) and (
-            not self.separate_oodd_inference or is_edge_inference_ready(oodd_url)
-        )
-        if not ready:
-            logger.debug(
-                f"Edge inference server and/or OODD inference server is not ready. {primary_url=}, {oodd_url=}"
-            )
-            return False
-        return True
 
     @trace_span
     def run_inference(self, detector_id: str, image_bytes: bytes, content_type: str, mode: ModeEnum) -> dict:
