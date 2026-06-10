@@ -234,6 +234,9 @@ def manage_update_models(
                 logger.debug(f"Successfully updated model for detector_id: {detector_id}")
             except Exception as e:
                 logger.info(f"Failed to update model for detector_id: {detector_id}. Error: {e}", exc_info=True)
+            if db_manager.get_pending_deletions() or db_manager.get_active_detector_ids() != deployed_detector_ids:
+                logger.info("Detector config changed mid-cycle; restarting update loop.")
+                break
 
         elapsed_s = time.time() - start
         refresh_rate = EdgeConfigManager.active().global_config.refresh_rate
