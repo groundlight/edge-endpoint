@@ -35,8 +35,7 @@ def sleep_forever(message: str | None = None):
 def _wait_for_next_cycle(db_manager: DatabaseManager, wait: float | None) -> None:
     """Sleep for up to `wait` seconds, returning early if set_config added or removed a detector.
 
-    wait=None means wait indefinitely until such a change appears. The baseline is captured
-    once at entry (edge-triggered), so a permanently-failing deployment never causes a busy loop.
+    wait=None means wait indefinitely until such a change appears.
     """
     baseline_detectors = db_manager.get_active_detector_ids()
     deadline = None if wait is None else time.time() + wait
