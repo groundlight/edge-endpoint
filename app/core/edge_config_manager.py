@@ -68,9 +68,8 @@ class EdgeConfigManager:
 
 
 def get_active_detector_ids(db_manager: DatabaseManager) -> set[str]:
-    """Return detector IDs from the DB that are not pending deletion."""
-    all_records = db_manager.get_inference_deployment_records()
-    return {r.detector_id for r in all_records if not r.pending_deletion}
+    """Return detector IDs that are not pending deletion."""
+    return db_manager.get_active_detector_ids()
 
 
 def apply_detector_changes(removed: set[str], added: set[str], db_manager: DatabaseManager) -> None:
