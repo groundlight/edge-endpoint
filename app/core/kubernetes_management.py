@@ -85,9 +85,7 @@ class InferenceDeploymentManager:
                 else:
                     raise e
 
-    def _substitute_placeholders(
-        self, service_name: str, deployment_name: str, model_name: str, image: str
-    ) -> str:
+    def _substitute_placeholders(self, service_name: str, deployment_name: str, model_name: str, image: str) -> str:
         inference_deployment = self._inference_deployment_template
         inference_deployment = inference_deployment.replace("placeholder-inference-service-name", service_name)
         inference_deployment = inference_deployment.replace("placeholder-inference-deployment-name", deployment_name)

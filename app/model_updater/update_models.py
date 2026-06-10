@@ -58,8 +58,8 @@ def _redeploy_for_flavor_swap(
     the two, the next cycle re-deletes (404-tolerant) and recreates fresh, so there's no
     partial-state recovery needed.
     """
-    edge_deployment_name = get_edge_inference_deployment_name(detector_id)
-    oodd_deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd=True)
+    get_edge_inference_deployment_name(detector_id)
+    get_edge_inference_deployment_name(detector_id, is_oodd=True)
     logger.warning(
         f"Flavor swap for {detector_id}: redeploying to {desired_image} "
         f"(separate_oodd={desired_separate_oodd}). Tearing down primary+OODD."
@@ -77,8 +77,7 @@ def _redeploy_for_flavor_swap(
         time.sleep(2)
     else:
         logger.error(
-            f"Timed out waiting for {detector_id} pods to terminate during flavor swap. "
-            "Next cycle will retry."
+            f"Timed out waiting for {detector_id} pods to terminate during flavor swap. " "Next cycle will retry."
         )
         return
 
@@ -117,9 +116,7 @@ def _check_new_models_and_inference_deployments(
 
     edge_deployment_name = get_edge_inference_deployment_name(detector_id)
     oodd_deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd=True)
-    deployment_names = (
-        f"{edge_deployment_name} and {oodd_deployment_name}" if separate_oodd else edge_deployment_name
-    )
+    deployment_names = f"{edge_deployment_name} and {oodd_deployment_name}" if separate_oodd else edge_deployment_name
 
     # Hot-swap check: if the running primary's image differs from desired, redeploy.
     # Done before the create-if-missing path so that a stale-flavor deployment is replaced

@@ -23,9 +23,11 @@ def _db_with(minimal_compatible):
 
 
 def test_all_sites_agree_for_minimal_compatible_detector():
-    with mock.patch.object(inference_image, "INFERENCE_IMAGE_MODE", "minimal_if_compatible"), \
-         mock.patch.object(inference_image, "INFERENCE_IMAGE_MINIMAL", "ecr/minimal:tag"), \
-         mock.patch.object(inference_image, "INFERENCE_IMAGE_FULL", "ecr/full:tag"):
+    with (
+        mock.patch.object(inference_image, "INFERENCE_IMAGE_MODE", "minimal_if_compatible"),
+        mock.patch.object(inference_image, "INFERENCE_IMAGE_MINIMAL", "ecr/minimal:tag"),
+        mock.patch.object(inference_image, "INFERENCE_IMAGE_FULL", "ecr/full:tag"),
+    ):
 
         db = _db_with(minimal_compatible=True)
 
@@ -46,9 +48,11 @@ def test_all_sites_agree_for_minimal_compatible_detector():
 
 
 def test_all_sites_agree_for_incompatible_detector():
-    with mock.patch.object(inference_image, "INFERENCE_IMAGE_MODE", "minimal_if_compatible"), \
-         mock.patch.object(inference_image, "INFERENCE_IMAGE_MINIMAL", "ecr/minimal:tag"), \
-         mock.patch.object(inference_image, "INFERENCE_IMAGE_FULL", "ecr/full:tag"):
+    with (
+        mock.patch.object(inference_image, "INFERENCE_IMAGE_MODE", "minimal_if_compatible"),
+        mock.patch.object(inference_image, "INFERENCE_IMAGE_MINIMAL", "ecr/minimal:tag"),
+        mock.patch.object(inference_image, "INFERENCE_IMAGE_FULL", "ecr/full:tag"),
+    ):
 
         db = _db_with(minimal_compatible=False)
 

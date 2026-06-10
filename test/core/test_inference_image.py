@@ -11,7 +11,6 @@ import pytest
 
 from app.core import inference_image
 
-
 FULL = "ecr/gl-edge-inference:tag"
 MINIMAL = "ecr/gl-edge-inference-minimal:tag"
 
@@ -34,8 +33,10 @@ def _db_with(minimal_compatible):
 @pytest.fixture(autouse=True)
 def _patch_image_uris():
     """Pin the full/minimal URIs to known values regardless of import-time env."""
-    with mock.patch.object(inference_image, "INFERENCE_IMAGE_FULL", FULL), \
-         mock.patch.object(inference_image, "INFERENCE_IMAGE_MINIMAL", MINIMAL):
+    with (
+        mock.patch.object(inference_image, "INFERENCE_IMAGE_FULL", FULL),
+        mock.patch.object(inference_image, "INFERENCE_IMAGE_MINIMAL", MINIMAL),
+    ):
         yield
 
 
@@ -82,7 +83,7 @@ def test_minimal_if_compatible_missing_row_defaults_full():
 def test_minimal_if_compatible_null_minimal_compatible_defaults_full():
     """Row exists but minimal_compatible is NULL (not yet written by the model-updater) → False."""
     with mock.patch.object(inference_image, "INFERENCE_IMAGE_MODE", "minimal_if_compatible"):
-        db = _db_with(None)  # record None → also covers; explicitly test the NULL case below
+        _db_with(None)  # record None → also covers; explicitly test the NULL case below
         db2 = mock.Mock()
         record = mock.Mock()
         record.minimal_compatible = None

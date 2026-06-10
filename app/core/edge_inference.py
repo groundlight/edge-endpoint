@@ -277,15 +277,9 @@ class EdgeInferenceManager:
         """Check whether inference pods for this detector are ready to serve."""
         separate_oodd = self.uses_separate_oodd(detector_id)
         primary_url = get_edge_inference_service_name(detector_id) + ":8000"
-        oodd_url = (
-            get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
-            if separate_oodd
-            else None
-        )
+        oodd_url = get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000" if separate_oodd else None
 
-        ready = is_edge_inference_ready(primary_url) and (
-            not separate_oodd or is_edge_inference_ready(oodd_url)
-        )
+        ready = is_edge_inference_ready(primary_url) and (not separate_oodd or is_edge_inference_ready(oodd_url))
         if not ready:
             logger.debug(
                 f"Edge inference server and/or OODD inference server is not ready. {primary_url=}, {oodd_url=}"
@@ -390,6 +384,7 @@ class EdgeInferenceManager:
         # it flips to False on this cycle we'll fetch the OODD model right away so the next
         # rollout has it in the repo.
         from app.core.inference_image import INFERENCE_IMAGE_MODE, MODE_FULLY_MINIMAL, MODE_STANDARD
+
         if INFERENCE_IMAGE_MODE == MODE_FULLY_MINIMAL:
             run_separate_oodd = False
         elif INFERENCE_IMAGE_MODE == MODE_STANDARD:

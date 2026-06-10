@@ -203,8 +203,10 @@ class TestEdgeInferenceManager:
             "secondary_predictions": None,
         }
 
-        with mock.patch("app.core.inference_image.INFERENCE_IMAGE_MODE", "minimal_if_compatible"), \
-             mock.patch("app.core.edge_inference.submit_image_for_inference") as mock_submit:
+        with (
+            mock.patch("app.core.inference_image.INFERENCE_IMAGE_MODE", "minimal_if_compatible"),
+            mock.patch("app.core.edge_inference.submit_image_for_inference") as mock_submit,
+        ):
             mock_submit.return_value = mock_response
             edge_manager = EdgeInferenceManager(db_manager=_fake_db(minimal_compatible=True))
             edge_manager.run_inference("test_detector", b"test_image", "image/jpeg", mode=ModeEnum.BINARY)
@@ -255,8 +257,10 @@ class TestEdgeInferenceManager:
             detector_id = "test_detector"
             self._write_model_id(temp_dir, detector_id, 1, "prim_ksuid_only")
 
-            with mock.patch("app.core.inference_image.INFERENCE_IMAGE_MODE", "minimal_if_compatible"), \
-                 mock.patch("app.core.edge_inference.submit_image_for_inference") as mock_submit:
+            with (
+                mock.patch("app.core.inference_image.INFERENCE_IMAGE_MODE", "minimal_if_compatible"),
+                mock.patch("app.core.edge_inference.submit_image_for_inference") as mock_submit,
+            ):
                 mock_submit.return_value = mock_response
                 edge_manager = EdgeInferenceManager(db_manager=_fake_db(minimal_compatible=True))
                 edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore

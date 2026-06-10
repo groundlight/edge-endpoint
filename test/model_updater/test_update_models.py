@@ -35,6 +35,7 @@ def _make_db(records_by_did_and_oodd):
             if rec is None:
                 continue
             from app.core.naming import get_edge_inference_model_name
+
             if get_edge_inference_model_name(did, is_oodd=oodd) == model_name:
                 for k, v in fields_to_update.items():
                     setattr(rec, k, v)
@@ -64,16 +65,19 @@ def _make_deployment_manager(initial_images=None):
 
     def create(detector_id, is_oodd=False):
         from app.core.naming import get_edge_inference_deployment_name
+
         name = get_edge_inference_deployment_name(detector_id, is_oodd=is_oodd)
         # Whatever the per-detector image is at the moment of creation:
         state[name] = mgr._desired_image_for_create(detector_id, is_oodd)
 
     def delete(detector_id, is_oodd=False):
         from app.core.naming import get_edge_inference_deployment_name
+
         state.pop(get_edge_inference_deployment_name(detector_id, is_oodd=is_oodd), None)
 
     def fully_deleted(detector_id, is_oodd=False):
         from app.core.naming import get_edge_inference_deployment_name
+
         return get_edge_inference_deployment_name(detector_id, is_oodd=is_oodd) not in state
 
     def rollout_complete(deployment_name):
@@ -96,8 +100,10 @@ MINIMAL = "ecr/gl-edge-inference-minimal:tag"
 
 @pytest.fixture(autouse=True)
 def _pin_images():
-    with mock.patch.object(inference_image, "INFERENCE_IMAGE_FULL", FULL), \
-         mock.patch.object(inference_image, "INFERENCE_IMAGE_MINIMAL", MINIMAL):
+    with (
+        mock.patch.object(inference_image, "INFERENCE_IMAGE_FULL", FULL),
+        mock.patch.object(inference_image, "INFERENCE_IMAGE_MINIMAL", MINIMAL),
+    ):
         yield
 
 
@@ -127,6 +133,7 @@ class TestPerDetectorFlavor:
             )
 
             from app.core.naming import get_edge_inference_deployment_name
+
             primary_name = get_edge_inference_deployment_name("detA", is_oodd=False)
             oodd_name = get_edge_inference_deployment_name("detA", is_oodd=True)
             assert dm._state.get(primary_name) == MINIMAL
@@ -134,7 +141,9 @@ class TestPerDetectorFlavor:
 
     def test_incompatible_detector_gets_full_image_and_oodd(self, edge_inference_manager_returning):
         with mock.patch.object(inference_image, "INFERENCE_IMAGE_MODE", "minimal_if_compatible"):
-            db = _make_db({("detB", False): _detector_record("detB", False), ("detB", True): _detector_record("detB", None)})
+            db = _make_db(
+                {("detB", False): _detector_record("detB", False), ("detB", True): _detector_record("detB", None)}
+            )
             dm = _make_deployment_manager()
             dm._desired_image_for_create = lambda did, oodd: FULL
 
@@ -144,6 +153,7 @@ class TestPerDetectorFlavor:
             )
 
             from app.core.naming import get_edge_inference_deployment_name
+
             assert dm._state.get(get_edge_inference_deployment_name("detB", is_oodd=False)) == FULL
             assert dm._state.get(get_edge_inference_deployment_name("detB", is_oodd=True)) == FULL
 
@@ -152,8 +162,11 @@ class TestHotSwap:
     def test_full_to_minimal_redeploys(self, edge_inference_manager_returning):
         """A live full-image deployment is torn down and recreated on minimal when minimal_compatible flips True."""
         with mock.patch.object(inference_image, "INFERENCE_IMAGE_MODE", "minimal_if_compatible"):
-            db = _make_db({("detA", False): _detector_record("detA", False), ("detA", True): _detector_record("detA", None)})
+            db = _make_db(
+                {("detA", False): _detector_record("detA", False), ("detA", True): _detector_record("detA", None)}
+            )
             from app.core.naming import get_edge_inference_deployment_name
+
             primary_name = get_edge_inference_deployment_name("detA", is_oodd=False)
             oodd_name = get_edge_inference_deployment_name("detA", is_oodd=True)
             dm = _make_deployment_manager(initial_images={primary_name: FULL, oodd_name: FULL})
@@ -173,6 +186,7 @@ class TestHotSwap:
         with mock.patch.object(inference_image, "INFERENCE_IMAGE_MODE", "minimal_if_compatible"):
             db = _make_db({("detA", False): _detector_record("detA", False)})
             from app.core.naming import get_edge_inference_deployment_name
+
             primary_name = get_edge_inference_deployment_name("detA", is_oodd=False)
             # Simulate post-crash state: previous cycle deleted the primary but never created the new one.
             dm = _make_deployment_manager(initial_images={})
