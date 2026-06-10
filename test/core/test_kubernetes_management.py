@@ -7,6 +7,7 @@ def _make_manager():
         from app.core.kubernetes_management import InferenceDeploymentManager
 
         mgr = InferenceDeploymentManager()
+        mgr._db_manager = MagicMock()
         mgr._core_kube_client = MagicMock()
         mgr._app_kube_client = MagicMock()
         mgr._target_namespace = "edge"
@@ -60,3 +61,34 @@ class TestIsInferenceDeploymentRolloutComplete:
         mgr.get_inference_deployment = MagicMock(return_value=_make_deployment())
         mgr._core_kube_client.list_namespaced_pod.return_value = _make_pod_list(2)
         assert mgr.is_inference_deployment_rollout_complete("test-dep") is False
+
+
+class TestSubstitutePlaceholders:
+    def test_image_placeholder_replaced(self):
+        """The placeholder-inference-image string is replaced with the per-detector image URI."""
+        mgr = _make_manager()
+        mgr._inference_deployment_template = (
+            "kind: Deployment\nspec:\n  containers:\n  - image: placeholder-inference-image\n"
+        )
+        out = mgr._substitute_placeholders(
+            service_name="svc", deployment_name="dep", model_name="det/primary", image="ecr/full:tag"
+        )
+        assert "placeholder-inference-image" not in out
+        assert "ecr/full:tag" in out
+
+
+class TestGetDeploymentImage:
+    def test_returns_inference_server_image(self):
+        mgr = _make_manager()
+        container = MagicMock()
+        container.name = "inference-server"
+        container.image = "ecr/full:tag"
+        dep = MagicMock()
+        dep.spec.template.spec.containers = [container]
+        mgr.get_inference_deployment = MagicMock(return_value=dep)
+        assert mgr.get_deployment_image("dep") == "ecr/full:tag"
+
+    def test_returns_none_when_missing(self):
+        mgr = _make_manager()
+        mgr.get_inference_deployment = MagicMock(return_value=None)
+        assert mgr.get_deployment_image("dep") is None

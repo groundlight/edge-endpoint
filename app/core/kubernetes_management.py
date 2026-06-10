@@ -8,15 +8,18 @@ from kubernetes import client as kube_client
 from kubernetes import config
 from kubernetes.client import V1Deployment
 
+from .database import DatabaseManager
 from .edge_inference import get_current_model_version
 from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH, MODEL_REPOSITORY_PATH
+from .inference_image import detector_image
 from .naming import get_edge_inference_deployment_name, get_edge_inference_model_name, get_edge_inference_service_name
 
 logger = logging.getLogger(__name__)
 
 
 class InferenceDeploymentManager:
-    def __init__(self) -> None:
+    def __init__(self, db_manager: DatabaseManager) -> None:
+        self._db_manager = db_manager
         self._setup_kube_client()
         self._inference_deployment_template = self._load_inference_deployment_template()
 
@@ -82,7 +85,9 @@ class InferenceDeploymentManager:
                 else:
                     raise e
 
-    def _substitute_placeholders(self, service_name: str, deployment_name: str, model_name: str) -> str:
+    def _substitute_placeholders(
+        self, service_name: str, deployment_name: str, model_name: str, image: str
+    ) -> str:
         inference_deployment = self._inference_deployment_template
         inference_deployment = inference_deployment.replace("placeholder-inference-service-name", service_name)
         inference_deployment = inference_deployment.replace("placeholder-inference-deployment-name", deployment_name)
@@ -92,6 +97,7 @@ class InferenceDeploymentManager:
         )
 
         inference_deployment = inference_deployment.replace("placeholder-model-name", model_name)
+        inference_deployment = inference_deployment.replace("placeholder-inference-image", image)
         return inference_deployment.strip()
 
     def create_inference_deployment(self, detector_id: str, is_oodd: bool = False) -> None:
@@ -110,8 +116,9 @@ class InferenceDeploymentManager:
         deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd)
         service_name = get_edge_inference_service_name(detector_id, is_oodd)
         model_name = get_edge_inference_model_name(detector_id, is_oodd)
+        image = detector_image(detector_id, self._db_manager)
         inference_deployment = self._substitute_placeholders(
-            service_name=service_name, deployment_name=deployment_name, model_name=model_name
+            service_name=service_name, deployment_name=deployment_name, model_name=model_name, image=image
         )
 
         model_version = get_current_model_version(MODEL_REPOSITORY_PATH, detector_id, is_oodd=is_oodd)
@@ -144,6 +151,17 @@ class InferenceDeploymentManager:
                 )
                 return None
             raise e
+
+    def get_deployment_image(self, deployment_name: str) -> str | None:
+        """Return the image (including tag) on the running Deployment, or None if the Deployment is absent."""
+        deployment = self.get_inference_deployment(deployment_name)
+        if deployment is None:
+            return None
+        containers = deployment.spec.template.spec.containers
+        for c in containers:
+            if c.name == "inference-server":
+                return c.image
+        return containers[0].image if containers else None
 
     def get_or_create_inference_deployment(self, detector_id: str, is_oodd: bool = False) -> V1Deployment | None:
         """
