@@ -21,7 +21,7 @@ POD_DELETION_TIMEOUT_SECONDS = 60 * 3
 # slowest link the device must support; otherwise the next outer-loop pass can stack a
 # second rollout on top of the still-loading first one (memory doubles → eviction cascade).
 ROLLOUT_READY_TIMEOUT_S = int(os.environ.get("ROLLOUT_READY_TIMEOUT_S", 60 * 30))
-WORK_POLL_INTERVAL_S = 2.0
+DETECTOR_CHANGE_POLL_INTERVAL_S = 2.0
 
 USE_MINIMAL_IMAGE = os.environ.get("USE_MINIMAL_IMAGE", "false") == "true"
 
@@ -43,7 +43,7 @@ def _wait_for_next_cycle(db_manager: DatabaseManager, wait: float | None) -> Non
     while deadline is None or time.time() < deadline:
         if db_manager.get_pending_deletions() or db_manager.get_active_detector_ids() != baseline_detectors:
             return
-        nap = WORK_POLL_INTERVAL_S if deadline is None else min(WORK_POLL_INTERVAL_S, deadline - time.time())
+        nap = DETECTOR_CHANGE_POLL_INTERVAL_S if deadline is None else min(DETECTOR_CHANGE_POLL_INTERVAL_S, deadline - time.time())
         time.sleep(max(0.0, nap))
 
 
