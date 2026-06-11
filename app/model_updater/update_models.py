@@ -39,7 +39,7 @@ def _wait_for_next_cycle(
 ) -> None:
     """Sleep for up to `wait` seconds, returning early if detector config or refresh_rate changes.
 
-    wait=None means wait indefinitely until such a change appears. 
+    wait=None means wait indefinitely until such a change appears.
     """
     baseline_detectors = db_manager.get_active_detector_ids()
     deadline = None if wait is None else time.time() + wait
@@ -49,7 +49,9 @@ def _wait_for_next_cycle(
             return
         current_refresh_rate = EdgeConfigManager.active().global_config.refresh_rate
         if current_refresh_rate != refresh_rate:
-            logger.info(f"refresh_rate changed from {refresh_rate} to {current_refresh_rate}; restarting inference model update loop.")
+            logger.info(
+                f"refresh_rate changed from {refresh_rate} to {current_refresh_rate}; restarting inference model update loop."
+            )
             return
         nap = (
             DETECTOR_CHANGE_POLL_INTERVAL_S
