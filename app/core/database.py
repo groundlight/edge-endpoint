@@ -130,6 +130,10 @@ class DatabaseManager:
             query = select(InferenceDeployment.detector_id).filter_by(pending_deletion=True).distinct()
             return list(session.execute(query).scalars().all())
 
+    def get_active_detector_ids(self) -> set[str]:
+        """Return detector IDs that are not pending deletion."""
+        return {r.detector_id for r in self.get_inference_deployment_records() if not r.pending_deletion}
+
     def delete_inference_deployment_records(self, detector_id: str) -> None:
         """Delete all records for a given detector_id."""
         with self.session_maker() as session:
