@@ -14,6 +14,7 @@ from app.core.app_state import (
     refresh_detector_metadata_if_needed,
 )
 from app.core.edge_config_manager import EdgeConfigManager
+from app.core.inference_image import INFERENCE_IMAGE_MODE, MODE_FULLY_MINIMAL
 from app.core.naming import get_edge_inference_model_name
 from app.core.utils import create_iq, generate_iq_id, generate_metadata_dict, generate_request_id
 from app.escalation_queue.models import SubmitImageQueryParams
@@ -288,7 +289,12 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             }
         )
 
-        if app_state.separate_oodd_inference:
+        # In fully_minimal mode we never need a separate OODD pod, so skip the OODD row entirely.
+        # In minimal_if_compatible we don't yet know per-detector eligibility (the model-updater
+        # hasn't fetched it), so create the row optimistically; if the cloud later reports the
+        # primary as minimal-compatible, the OODD row remains with deployment_created=False
+        # while no OODD deployment is ever created. Harmless.
+        if INFERENCE_IMAGE_MODE != MODE_FULLY_MINIMAL:
             oodd_model_name = get_edge_inference_model_name(detector_id=detector_id, is_oodd=True)
             app_state.db_manager.create_or_update_inference_deployment_record(
                 deployment={

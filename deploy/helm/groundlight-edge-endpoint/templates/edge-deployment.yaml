@@ -193,8 +193,12 @@ spec:
           value: "1"
         - name: GROUNDLIGHT_ENDPOINT
           value: "{{ .Values.upstreamEndpoint }}"
-        - name: USE_MINIMAL_IMAGE
-          value: "{{ .Values.useMinimalImage }}"
+        - name: INFERENCE_IMAGE_MODE
+          value: "{{ include "groundlight-edge-endpoint.inferenceImageMode" . }}"
+        - name: INFERENCE_IMAGE_FULL
+          value: "{{ include "groundlight-edge-endpoint.inferenceImageFull" . }}"
+        - name: INFERENCE_IMAGE_MINIMAL
+          value: "{{ include "groundlight-edge-endpoint.inferenceImageMinimal" . }}"
         - name: ENABLE_PROFILING
           value: "{{ .Values.enableProfiling }}"
         volumeMounts:
@@ -306,8 +310,12 @@ spec:
             secretKeyRef:
               name: groundlight-api-token
               key: GROUNDLIGHT_API_TOKEN
-        - name: USE_MINIMAL_IMAGE
-          value: "{{ .Values.useMinimalImage }}"
+        - name: INFERENCE_IMAGE_MODE
+          value: "{{ include "groundlight-edge-endpoint.inferenceImageMode" . }}"
+        - name: INFERENCE_IMAGE_FULL
+          value: "{{ include "groundlight-edge-endpoint.inferenceImageFull" . }}"
+        - name: INFERENCE_IMAGE_MINIMAL
+          value: "{{ include "groundlight-edge-endpoint.inferenceImageMinimal" . }}"
         - name: ROLLOUT_READY_TIMEOUT_S
           value: "{{ .Values.modelUpdater.rolloutReadyTimeoutSeconds }}"
         volumeMounts:

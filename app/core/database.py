@@ -102,6 +102,16 @@ class DatabaseManager:
                     setattr(detector_record, field, value)
             session.commit()
 
+    def get_inference_deployment_record(self, detector_id: str, is_oodd: bool = False) -> InferenceDeployment | None:
+        """Return the primary or OODD record for a detector, or None if it doesn't exist."""
+        # Import here to avoid a circular import via app.core.naming -> ...
+        from app.core.naming import get_edge_inference_model_name
+
+        model_name = get_edge_inference_model_name(detector_id, is_oodd=is_oodd)
+        with self.session_maker() as session:
+            query = select(InferenceDeployment).filter_by(model_name=model_name)
+            return session.execute(query).scalar_one_or_none()
+
     def get_inference_deployment_records(self, **kwargs) -> Sequence[InferenceDeployment]:
         """
         Query the database table for detectors based on a given query predicate.
