@@ -32,15 +32,24 @@ def sleep_forever(message: str | None = None):
         time.sleep(TEN_MINUTES)
 
 
-def _wait_for_next_cycle(db_manager: DatabaseManager, wait: float | None) -> None:
-    """Sleep for up to `wait` seconds, returning early if set_config added or removed a detector.
+def _wait_for_next_cycle(
+    db_manager: DatabaseManager,
+    wait: float | None,
+    refresh_rate: float | None,
+) -> None:
+    """Sleep for up to `wait` seconds, returning early if detector config or refresh_rate changes.
 
-    wait=None means wait indefinitely until such a change appears.
+    wait=None means wait indefinitely until such a change appears. 
     """
     baseline_detectors = db_manager.get_active_detector_ids()
     deadline = None if wait is None else time.time() + wait
     while deadline is None or time.time() < deadline:
         if db_manager.get_pending_deletions() or db_manager.get_active_detector_ids() != baseline_detectors:
+            logger.info("Detector configuration changed. Restarting inference model update loop.")
+            return
+        current_refresh_rate = EdgeConfigManager.active().global_config.refresh_rate
+        if current_refresh_rate != refresh_rate:
+            logger.info(f"refresh_rate changed from {refresh_rate} to {current_refresh_rate}; restarting inference model update loop.")
             return
         nap = (
             DETECTOR_CHANGE_POLL_INTERVAL_S
@@ -241,11 +250,13 @@ def manage_update_models(
                 logger.info("Detector config changed mid-cycle; restarting update loop.")
                 break
 
+        # Calculate time to wait
         elapsed_s = time.time() - start
         refresh_rate = EdgeConfigManager.active().global_config.refresh_rate
         logger.debug(f"Model update check completed in {elapsed_s:.2f} seconds.")
         wait = max(0.0, refresh_rate - elapsed_s) if refresh_rate is not None else None
-        _wait_for_next_cycle(db_manager, wait)
+
+        _wait_for_next_cycle(db_manager, wait, refresh_rate)
 
         # Update the status of the inference deployments in the database
         deployment_records = db_manager.get_inference_deployment_records()
