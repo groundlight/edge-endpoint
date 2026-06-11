@@ -49,7 +49,9 @@ def _wait_for_next_cycle(
             return
         current_refresh_rate = EdgeConfigManager.active().global_config.refresh_rate
         if current_refresh_rate != refresh_rate:
-            logger.info(f"refresh_rate changed from {refresh_rate} to {current_refresh_rate}; restarting inference model update loop.")
+            logger.info(
+                f"refresh_rate changed from {refresh_rate} to {current_refresh_rate}; restarting inference model update loop."
+            )
             return
         nap = (
             DETECTOR_CHANGE_POLL_INTERVAL_S
