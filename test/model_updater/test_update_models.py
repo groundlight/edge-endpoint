@@ -181,6 +181,26 @@ class TestHotSwap:
             assert dm._state.get(primary_name) == MINIMAL
             assert oodd_name not in dm._state  # the OODD pod was torn down by the swap
 
+    def test_minimal_to_full_redeploys(self, edge_inference_manager_returning):
+        """A live minimal-image deployment is torn down and recreated on full when minimal_compatible flips False."""
+        with mock.patch.object(inference_image, "INFERENCE_IMAGE_MODE", "minimal_if_compatible"):
+            db = _make_db({("detA", False): _detector_record("detA", True)})  # was minimal_compatible=True
+            from app.core.naming import get_edge_inference_deployment_name
+
+            primary_name = get_edge_inference_deployment_name("detA", is_oodd=False)
+            oodd_name = get_edge_inference_deployment_name("detA", is_oodd=True)
+            dm = _make_deployment_manager(initial_images={primary_name: MINIMAL})
+            # After the swap, new pods come up with FULL because minimal_compatible flipped False
+            dm._desired_image_for_create = lambda did, oodd: FULL
+
+            eim = edge_inference_manager_returning(new_model=False, minimal_compatible=False)
+            update_models._check_new_models_and_inference_deployments(
+                detector_id="detA", edge_inference_manager=eim, deployment_manager=dm, db_manager=db
+            )
+
+            assert dm._state.get(primary_name) == FULL
+            assert dm._state.get(oodd_name) == FULL  # OODD pod created for full-image detector
+
     def test_crash_mid_swap_recovers(self, edge_inference_manager_returning):
         """If the updater 'crashes' after deletion (simulated by interrupting), the next cycle reaches steady state."""
         with mock.patch.object(inference_image, "INFERENCE_IMAGE_MODE", "minimal_if_compatible"):

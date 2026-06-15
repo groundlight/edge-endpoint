@@ -58,8 +58,6 @@ def _redeploy_for_flavor_swap(
     the two, the next cycle re-deletes (404-tolerant) and recreates fresh, so there's no
     partial-state recovery needed.
     """
-    get_edge_inference_deployment_name(detector_id)
-    get_edge_inference_deployment_name(detector_id, is_oodd=True)
     logger.warning(
         f"Flavor swap for {detector_id}: redeploying to {desired_image} "
         f"(separate_oodd={desired_separate_oodd}). Tearing down primary+OODD."

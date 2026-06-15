@@ -30,7 +30,7 @@ inferenceTag: ""
 #       every detector you'll deploy is supported by the minimal image.
 #
 # Legacy `useMinimalImage` is still honored for one release: true → fully_minimal,
-# false → standard. Setting both fails the install.
+# false → standard. Setting both with a non-default inferenceImageMode fails the install.
 inferenceImageMode: "standard"
 
 # Enable request-level tracing profiling for the edge endpoint.
