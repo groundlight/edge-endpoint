@@ -41,9 +41,9 @@ def _wait_for_next_cycle(
     db_manager: DatabaseManager,
     wait: float,
     refresh_rate: float,
+    baseline_detectors: set[str],
 ) -> None:
     """Sleep for up to `wait` seconds, returning early if detector config or refresh_rate changes."""
-    baseline_detectors = db_manager.get_active_detector_ids()
     deadline = time.time() + wait
     while time.time() < deadline:
         if _detector_config_changed(db_manager, baseline_detectors):
@@ -229,6 +229,7 @@ def manage_update_models(
 
         # Check for model updates and apply model updates
         start = time.time()
+        cycle_baseline = db_manager.get_active_detector_ids()
         deployed_records = db_manager.get_inference_deployment_records(pending_deletion=False)
         deployed_detector_ids = {r.detector_id for r in deployed_records}
         logger.debug(f"Starting model update check for {len(deployed_detector_ids)} detector(s).")
@@ -245,8 +246,7 @@ def manage_update_models(
                 logger.debug(f"Successfully updated model for detector_id: {detector_id}")
             except Exception as e:
                 logger.info(f"Failed to update model for detector_id: {detector_id}. Error: {e}", exc_info=True)
-            if _detector_config_changed(db_manager, deployed_detector_ids):
-                logger.info("Detector configuration changed; restarting inference model update loop.")
+            if _detector_config_changed(db_manager, cycle_baseline):
                 break
 
         # Calculate time to wait
@@ -254,8 +254,7 @@ def manage_update_models(
         refresh_rate = EdgeConfigManager.active().global_config.refresh_rate
         logger.debug(f"Model update check completed in {elapsed_s:.2f} seconds.")
         wait = max(0.0, refresh_rate - elapsed_s)
-
-        _wait_for_next_cycle(db_manager, wait, refresh_rate)
+        _wait_for_next_cycle(db_manager, wait, refresh_rate, cycle_baseline)
 
         # Update the status of the inference deployments in the database
         deployment_records = db_manager.get_inference_deployment_records()
