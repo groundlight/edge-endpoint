@@ -33,8 +33,6 @@ The global config contains parameters that affect the overall behavior of the ed
 
 `refresh_rate` is a float that defines how often the edge endpoint will attempt to fetch updated ML models (in seconds). Must be greater than 0 and at most 86400 (1 day). If not specified, the default is 60 seconds.
 
-Set `refresh_rate` to `null` to disable refresh polling entirely. When disabled, the model-updater will not periodically check the cloud for new model binaries. However, detector changes made via `gl.edge.set_config` (adding or removing detectors) are always applied immediately, regardless of this setting.
-
 Note that a lower value means models are checked more frequently, but in practice you likely won't want this below ~30 seconds due to the time it takes to train and publish new models.
 
 #### `confident_audit_rate`

@@ -32,19 +32,21 @@ def sleep_forever(message: str | None = None):
         time.sleep(TEN_MINUTES)
 
 
+def _detector_config_changed(db_manager: DatabaseManager, baseline: set[str]) -> bool:
+    """Return True if detectors have been added, removed, or marked for deletion since baseline was taken."""
+    return bool(db_manager.get_pending_deletions()) or db_manager.get_active_detector_ids() != baseline
+
+
 def _wait_for_next_cycle(
     db_manager: DatabaseManager,
-    wait: float | None,
-    refresh_rate: float | None,
+    wait: float,
+    refresh_rate: float,
 ) -> None:
-    """Sleep for up to `wait` seconds, returning early if detector config or refresh_rate changes.
-
-    wait=None means wait indefinitely until such a change appears.
-    """
+    """Sleep for up to `wait` seconds, returning early if detector config or refresh_rate changes."""
     baseline_detectors = db_manager.get_active_detector_ids()
-    deadline = None if wait is None else time.time() + wait
-    while deadline is None or time.time() < deadline:
-        if db_manager.get_pending_deletions() or db_manager.get_active_detector_ids() != baseline_detectors:
+    deadline = time.time() + wait
+    while time.time() < deadline:
+        if _detector_config_changed(db_manager, baseline_detectors):
             logger.info("Detector configuration changed; restarting inference model update loop.")
             return
         current_refresh_rate = EdgeConfigManager.active().global_config.refresh_rate
@@ -53,12 +55,7 @@ def _wait_for_next_cycle(
                 f"refresh_rate changed from {refresh_rate} to {current_refresh_rate}; restarting inference model update loop."
             )
             return
-        nap = (
-            DETECTOR_CHANGE_POLL_INTERVAL_S
-            if deadline is None
-            else min(DETECTOR_CHANGE_POLL_INTERVAL_S, deadline - time.time())
-        )
-        time.sleep(max(0.0, nap))
+        time.sleep(min(DETECTOR_CHANGE_POLL_INTERVAL_S, deadline - time.time()))
 
 
 def _check_new_models_and_inference_deployments(
@@ -248,7 +245,7 @@ def manage_update_models(
                 logger.debug(f"Successfully updated model for detector_id: {detector_id}")
             except Exception as e:
                 logger.info(f"Failed to update model for detector_id: {detector_id}. Error: {e}", exc_info=True)
-            if db_manager.get_pending_deletions() or db_manager.get_active_detector_ids() != deployed_detector_ids:
+            if _detector_config_changed(db_manager, deployed_detector_ids):
                 logger.info("Detector configuration changed; restarting inference model update loop.")
                 break
 
@@ -256,7 +253,7 @@ def manage_update_models(
         elapsed_s = time.time() - start
         refresh_rate = EdgeConfigManager.active().global_config.refresh_rate
         logger.debug(f"Model update check completed in {elapsed_s:.2f} seconds.")
-        wait = max(0.0, refresh_rate - elapsed_s) if refresh_rate is not None else None
+        wait = max(0.0, refresh_rate - elapsed_s)
 
         _wait_for_next_cycle(db_manager, wait, refresh_rate)
 

@@ -12,7 +12,7 @@ dependencies = [
     "SQLAlchemy==2.0.35",
     "cachetools>=5.3.1,<6.0.0",
     "fastapi>=0.115.0,<0.116.0",
-    "groundlight>=0.25.0,<0.26.0",
+    "groundlight>=0.29.0,<0.30.0",
     "httpx>=0.27.2,<0.28.0",
     "jinja2>=3.1.6,<4.0.0",
     "kubernetes>=27.2.0,<28.0.0",
