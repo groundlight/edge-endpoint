@@ -31,9 +31,7 @@ The global config contains parameters that affect the overall behavior of the ed
 
 #### `refresh_rate`
 
-`refresh_rate` is a float that defines how often the edge endpoint will attempt to fetch updated ML models (in seconds). Must be greater than 0 and at most 86400 (1 day). If not specified, the default is 60 seconds.
-
-If you expect a detector to frequently have a better model available, you can reduce this to ensure that improved models are quickly fetched and deployed. For example, you may want to label many image queries on a new detector -- a lower refresh rate will ensure that the latest model improvements from those labels are promptly deployed to the edge. In practice, you likely won't want this below ~30 seconds due to the time it takes to train and publish new models.
+`refresh_rate` is a float that defines how often the edge endpoint will attempt to fetch updated ML models (in seconds). If you expect a detector to frequently have a better model available, you can reduce this to ensure that the improved models will quickly be fetched and deployed. For example, you may want to label many image queries on a new detector. A higher refresh rate will ensure that the latest model improvements from these labels are promptly deployed to the edge. In practice, you likely won't want this to be lower than ~30 seconds due to the time it takes to train and fetch new models. If not specified, the default is 60 seconds.
 
 #### `confident_audit_rate`
 
