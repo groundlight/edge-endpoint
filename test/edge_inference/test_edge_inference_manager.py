@@ -330,8 +330,8 @@ class TestEdgeInferenceManager:
             rec_b.minimal_compatible = False  # detB is full → uses_separate_oodd=True
 
             db = mock.Mock()
-            db.get_inference_deployment_record.side_effect = (
-                lambda detector_id, is_oodd=False: rec_a if detector_id == "detA" else rec_b
+            db.get_inference_deployment_record.side_effect = lambda detector_id, is_oodd=False: (
+                rec_a if detector_id == "detA" else rec_b
             )
 
             edge_manager = EdgeInferenceManager(db_manager=db)

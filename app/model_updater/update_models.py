@@ -139,9 +139,7 @@ def _check_new_models_and_inference_deployments(
     observed_image = deployment_manager.get_deployment_image(edge_deployment_name)
     image_mismatch = observed_image is not None and observed_image != desired_image
     separate_oodd_mismatch = separate_oodd != oodd_exists
-    flip_affects_deployments = (
-        minimal_compatible_flipped and INFERENCE_IMAGE_MODE == MODE_MINIMAL_IF_COMPATIBLE
-    )
+    flip_affects_deployments = minimal_compatible_flipped and INFERENCE_IMAGE_MODE == MODE_MINIMAL_IF_COMPATIBLE
     swap_happened = False
 
     if flip_affects_deployments and (primary_exists or oodd_exists):

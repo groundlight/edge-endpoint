@@ -54,4 +54,8 @@ def detector_uses_minimal_image(detector_id: str, db_manager: DatabaseManager) -
 
 def detector_image(detector_id: str, db_manager: DatabaseManager) -> str:
     """The fully-qualified inference image (incl. tag) for ``detector_id``."""
-    return MINIMAL_INFERENCE_IMAGE_URI if detector_uses_minimal_image(detector_id, db_manager) else FULL_INFERENCE_IMAGE_URI
+    return (
+        MINIMAL_INFERENCE_IMAGE_URI
+        if detector_uses_minimal_image(detector_id, db_manager)
+        else FULL_INFERENCE_IMAGE_URI
+    )
