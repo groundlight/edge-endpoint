@@ -55,7 +55,9 @@ def _wait_for_next_cycle(
                 f"refresh_rate changed from {refresh_rate} to {current_refresh_rate}; restarting inference model update loop."
             )
             return
-        time.sleep(min(DETECTOR_CONFIG_CHANGE_POLL_INTERVAL_S, deadline - time.time()))
+        time_remaining = deadline - time.time()
+        sleep_duration = min(DETECTOR_CONFIG_CHANGE_POLL_INTERVAL_S, max(0.0, time_remaining))
+        time.sleep(sleep_duration)
 
 
 def _check_new_models_and_inference_deployments(
