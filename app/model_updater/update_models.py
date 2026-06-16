@@ -21,7 +21,7 @@ POD_DELETION_TIMEOUT_SECONDS = 60 * 3
 # slowest link the device must support; otherwise the next outer-loop pass can stack a
 # second rollout on top of the still-loading first one (memory doubles → eviction cascade).
 ROLLOUT_READY_TIMEOUT_S = int(os.environ.get("ROLLOUT_READY_TIMEOUT_S", 60 * 30))
-DETECTOR_CHANGE_POLL_INTERVAL_S = 2.0
+DETECTOR_CONFIG_CHANGE_POLL_INTERVAL_S = 2.0
 
 USE_MINIMAL_IMAGE = os.environ.get("USE_MINIMAL_IMAGE", "false") == "true"
 
@@ -55,7 +55,7 @@ def _wait_for_next_cycle(
                 f"refresh_rate changed from {refresh_rate} to {current_refresh_rate}; restarting inference model update loop."
             )
             return
-        time.sleep(min(DETECTOR_CHANGE_POLL_INTERVAL_S, deadline - time.time()))
+        time.sleep(min(DETECTOR_CONFIG_CHANGE_POLL_INTERVAL_S, deadline - time.time()))
 
 
 def _check_new_models_and_inference_deployments(
@@ -229,7 +229,7 @@ def manage_update_models(
 
         # Check for model updates and apply model updates
         start = time.time()
-        cycle_baseline = db_manager.get_active_detector_ids()
+        detector_config_baseline = db_manager.get_active_detector_ids()
         deployed_records = db_manager.get_inference_deployment_records(pending_deletion=False)
         deployed_detector_ids = {r.detector_id for r in deployed_records}
         logger.debug(f"Starting model update check for {len(deployed_detector_ids)} detector(s).")
@@ -246,7 +246,7 @@ def manage_update_models(
                 logger.debug(f"Successfully updated model for detector_id: {detector_id}")
             except Exception as e:
                 logger.info(f"Failed to update model for detector_id: {detector_id}. Error: {e}", exc_info=True)
-            if _detector_config_changed(db_manager, cycle_baseline):
+            if _detector_config_changed(db_manager, detector_config_baseline):
                 break
 
         # Calculate time to wait
@@ -254,7 +254,7 @@ def manage_update_models(
         refresh_rate = EdgeConfigManager.active().global_config.refresh_rate
         logger.debug(f"Model update check completed in {elapsed_s:.2f} seconds.")
         wait = max(0.0, refresh_rate - elapsed_s)
-        _wait_for_next_cycle(db_manager, wait, refresh_rate, cycle_baseline)
+        _wait_for_next_cycle(db_manager, wait, refresh_rate, detector_config_baseline)
 
         # Update the status of the inference deployments in the database
         deployment_records = db_manager.get_inference_deployment_records()
