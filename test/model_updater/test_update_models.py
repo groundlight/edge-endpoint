@@ -101,19 +101,19 @@ MINIMAL = "ecr/gl-edge-inference-minimal:tag"
 @pytest.fixture(autouse=True)
 def _pin_images():
     with (
-        mock.patch.object(inference_image, "INFERENCE_IMAGE_FULL", FULL),
-        mock.patch.object(inference_image, "INFERENCE_IMAGE_MINIMAL", MINIMAL),
+        mock.patch.object(inference_image, "FULL_INFERENCE_IMAGE_URI", FULL),
+        mock.patch.object(inference_image, "MINIMAL_INFERENCE_IMAGE_URI", MINIMAL),
     ):
         yield
 
 
 @pytest.fixture
 def edge_inference_manager_returning():
-    """Build an edge_inference_manager mock whose update_models_if_available returns a fixed value."""
+    """Build an edge_inference_manager mock whose sync_models_from_cloud returns a fixed value."""
 
     def _build(new_model: bool, minimal_compatible: bool):
         m = mock.Mock()
-        m.update_models_if_available.return_value = (new_model, minimal_compatible)
+        m.sync_models_from_cloud.return_value = (new_model, minimal_compatible)
         m.MODEL_REPOSITORY = "/tmp/no-such-path"
         return m
 
@@ -156,6 +156,29 @@ class TestPerDetectorFlavor:
 
             assert dm._state.get(get_edge_inference_deployment_name("detB", is_oodd=False)) == FULL
             assert dm._state.get(get_edge_inference_deployment_name("detB", is_oodd=True)) == FULL
+
+    def test_cloud_true_in_standard_mode_persists_without_redeploy(self, edge_inference_manager_returning):
+        """standard mode stores minimal_compatible but must not tear down deployments on a DB-only flip."""
+        with mock.patch.object(inference_image, "INFERENCE_IMAGE_MODE", "standard"):
+            db = _make_db(
+                {("detA", False): _detector_record("detA", False), ("detA", True): _detector_record("detA", None)}
+            )
+            from app.core.naming import get_edge_inference_deployment_name
+
+            primary_name = get_edge_inference_deployment_name("detA", is_oodd=False)
+            oodd_name = get_edge_inference_deployment_name("detA", is_oodd=True)
+            dm = _make_deployment_manager(initial_images={primary_name: FULL, oodd_name: FULL})
+            eim = edge_inference_manager_returning(new_model=False, minimal_compatible=True)
+
+            with mock.patch.object(update_models, "_redeploy_for_flavor_swap") as mock_swap:
+                update_models._check_new_models_and_inference_deployments(
+                    detector_id="detA", edge_inference_manager=eim, deployment_manager=dm, db_manager=db
+                )
+                mock_swap.assert_not_called()
+
+            assert db.get_inference_deployment_record("detA", is_oodd=False).minimal_compatible is True
+            assert dm._state.get(primary_name) == FULL
+            assert dm._state.get(oodd_name) == FULL
 
 
 class TestHotSwap:
@@ -201,6 +224,25 @@ class TestHotSwap:
             assert dm._state.get(primary_name) == FULL
             assert dm._state.get(oodd_name) == FULL  # OODD pod created for full-image detector
 
+    def test_stale_oodd_pod_removed_when_separate_oodd_mismatch(self, edge_inference_manager_returning):
+        """Primary already on minimal but a stale OODD pod remains — separate_oodd reconcile deletes it."""
+        with mock.patch.object(inference_image, "INFERENCE_IMAGE_MODE", "minimal_if_compatible"):
+            db = _make_db({("detA", False): _detector_record("detA", True)})
+            from app.core.naming import get_edge_inference_deployment_name
+
+            primary_name = get_edge_inference_deployment_name("detA", is_oodd=False)
+            oodd_name = get_edge_inference_deployment_name("detA", is_oodd=True)
+            dm = _make_deployment_manager(initial_images={primary_name: MINIMAL, oodd_name: MINIMAL})
+            dm._desired_image_for_create = lambda did, oodd: MINIMAL
+
+            eim = edge_inference_manager_returning(new_model=False, minimal_compatible=True)
+            update_models._check_new_models_and_inference_deployments(
+                detector_id="detA", edge_inference_manager=eim, deployment_manager=dm, db_manager=db
+            )
+
+            assert dm._state.get(primary_name) == MINIMAL
+            assert oodd_name not in dm._state
+
     def test_crash_mid_swap_recovers(self, edge_inference_manager_returning):
         """If the updater 'crashes' after deletion (simulated by interrupting), the next cycle reaches steady state."""
         with mock.patch.object(inference_image, "INFERENCE_IMAGE_MODE", "minimal_if_compatible"):
@@ -219,3 +261,27 @@ class TestHotSwap:
 
             # The next cycle's create-if-missing path brings the primary back up on the right image.
             assert dm._state.get(primary_name) == MINIMAL
+
+    def test_failed_redeploy_does_not_set_swap_happened(self, edge_inference_manager_returning):
+        """When flavor swap fails, swap_happened stays False so a pending model rollout is not skipped."""
+        with mock.patch.object(inference_image, "INFERENCE_IMAGE_MODE", "minimal_if_compatible"):
+            db = _make_db({("detA", False): _detector_record("detA", False)})
+            from app.core.naming import get_edge_inference_deployment_name
+
+            primary_name = get_edge_inference_deployment_name("detA", is_oodd=False)
+            oodd_name = get_edge_inference_deployment_name("detA", is_oodd=True)
+            dm = _make_deployment_manager(initial_images={primary_name: FULL, oodd_name: FULL})
+            eim = edge_inference_manager_returning(new_model=True, minimal_compatible=True)
+
+            # The mock's rollout_complete is always True when a deployment exists, which makes
+            # the "wait for rollout to start" poll spin forever.  Provide a controlled sequence:
+            # False (rollout in-progress) → True → True so both poll loops exit immediately
+            # and the final rollout-complete check proceeds to dm.update_inference_deployment.
+            dm.is_inference_deployment_rollout_complete.side_effect = [False, True, True]
+
+            with mock.patch.object(update_models, "_redeploy_for_flavor_swap", return_value=False):
+                update_models._check_new_models_and_inference_deployments(
+                    detector_id="detA", edge_inference_manager=eim, deployment_manager=dm, db_manager=db
+                )
+
+            dm.update_inference_deployment.assert_called()

@@ -35,7 +35,7 @@ helm install -n default ${HELM_RELEASE_NAME} deploy/helm/groundlight-edge-endpoi
     --set edgeEndpointPort=$EDGE_ENDPOINT_PORT \
     --set=edgeEndpointTag=$TAG \
     --set namespace=$DEPLOYMENT_NAMESPACE \
-    --set useMinimalImage=$USE_MINIMAL_IMAGE
+    --set inferenceImageMode=${INFERENCE_IMAGE_MODE:-standard}
 
 
 echo "Waiting for edge-endpoint pods to rollout in namespace $DEPLOYMENT_NAMESPACE..."

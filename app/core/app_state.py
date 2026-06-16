@@ -98,11 +98,6 @@ def get_detector_metadata(detector_id: str, gl: Groundlight) -> Detector:
 
 class AppState:
     def __init__(self):
-        # Image flavor (full vs minimal) is decided per-detector by app.core.inference_image,
-        # which combines the global INFERENCE_IMAGE_MODE with the per-row minimal_compatible
-        # flag. The same decision drives both the image we deploy and whether OODD runs as a
-        # separate pod, so the request path, model-updater, and deletion path all stay in
-        # agreement.
         self.db_manager = DatabaseManager()
         self.edge_inference_manager = EdgeInferenceManager(db_manager=self.db_manager)
         self.is_ready = False

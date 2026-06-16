@@ -17,15 +17,18 @@ def _base_response(**overrides) -> dict:
 
 class TestParseModelInfo:
     def test_minimal_compatible_true(self):
-        edge_info, _ = parse_model_info(_base_response(minimal_compatible=True))
+        edge_info, oodd_info = parse_model_info(_base_response(minimal_compatible=True))
         assert isinstance(edge_info, ModelInfoWithBinary)
         assert edge_info.minimal_compatible is True
+        assert oodd_info.minimal_compatible is False
 
     def test_minimal_compatible_false(self):
-        edge_info, _ = parse_model_info(_base_response(minimal_compatible=False))
+        edge_info, oodd_info = parse_model_info(_base_response(minimal_compatible=False))
         assert edge_info.minimal_compatible is False
+        assert oodd_info.minimal_compatible is False
 
     def test_minimal_compatible_missing_defaults_false(self):
         """When the cloud is older than the edge endpoint, the field is absent."""
-        edge_info, _ = parse_model_info(_base_response())
+        edge_info, oodd_info = parse_model_info(_base_response())
         assert edge_info.minimal_compatible is False
+        assert oodd_info.minimal_compatible is False

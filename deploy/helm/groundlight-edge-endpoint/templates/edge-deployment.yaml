@@ -195,9 +195,9 @@ spec:
           value: "{{ .Values.upstreamEndpoint }}"
         - name: INFERENCE_IMAGE_MODE
           value: "{{ include "groundlight-edge-endpoint.inferenceImageMode" . }}"
-        - name: INFERENCE_IMAGE_FULL
+        - name: FULL_INFERENCE_IMAGE_URI
           value: "{{ include "groundlight-edge-endpoint.inferenceImageFull" . }}"
-        - name: INFERENCE_IMAGE_MINIMAL
+        - name: MINIMAL_INFERENCE_IMAGE_URI
           value: "{{ include "groundlight-edge-endpoint.inferenceImageMinimal" . }}"
         - name: ENABLE_PROFILING
           value: "{{ .Values.enableProfiling }}"
@@ -312,9 +312,9 @@ spec:
               key: GROUNDLIGHT_API_TOKEN
         - name: INFERENCE_IMAGE_MODE
           value: "{{ include "groundlight-edge-endpoint.inferenceImageMode" . }}"
-        - name: INFERENCE_IMAGE_FULL
+        - name: FULL_INFERENCE_IMAGE_URI
           value: "{{ include "groundlight-edge-endpoint.inferenceImageFull" . }}"
-        - name: INFERENCE_IMAGE_MINIMAL
+        - name: MINIMAL_INFERENCE_IMAGE_URI
           value: "{{ include "groundlight-edge-endpoint.inferenceImageMinimal" . }}"
         - name: ROLLOUT_READY_TIMEOUT_S
           value: "{{ .Values.modelUpdater.rolloutReadyTimeoutSeconds }}"

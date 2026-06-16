@@ -103,25 +103,10 @@ Never
 {{- end -}}
 
 {{/*
-  Resolve the per-install inference image mode. The new knob is `inferenceImageMode`;
-  the legacy `useMinimalImage` boolean is honored for one release with explicit mapping:
-    useMinimalImage: true  → fully_minimal
-    useMinimalImage: false → standard
-  Setting both fails the install — last-wins would be too easy to misuse during migration.
+  Resolve the per-install inference image mode (standard / minimal_if_compatible / fully_minimal).
 */}}
 {{- define "groundlight-edge-endpoint.inferenceImageMode" -}}
-{{- /* `inferenceImageMode` default in values.yaml is "standard"; we treat a non-default
-       value as "user explicitly set". hasKey on `useMinimalImage` works because the
-       new chart no longer ships a default for it. Setting both fails the install. */ -}}
-{{- $newSet := and (hasKey .Values "inferenceImageMode") (ne (toString .Values.inferenceImageMode) "standard") -}}
-{{- $hasLegacy := hasKey .Values "useMinimalImage" -}}
-{{- if and $newSet $hasLegacy -}}
-  {{- fail "Both `inferenceImageMode` and the deprecated `useMinimalImage` are set. Remove `useMinimalImage` and use only `inferenceImageMode`." -}}
-{{- else if $hasLegacy -}}
-  {{- if .Values.useMinimalImage -}}fully_minimal{{- else -}}standard{{- end -}}
-{{- else -}}
-  {{- default "standard" .Values.inferenceImageMode -}}
-{{- end -}}
+{{- default "standard" .Values.inferenceImageMode -}}
 {{- end -}}
 
 {{/*

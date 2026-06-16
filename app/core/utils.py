@@ -375,11 +375,6 @@ class ModelInfoBase(BaseModel):
 
     pipeline_config: str
     predictor_metadata: str
-    # The cloud's assertion that this detector's primary pipeline can run on the minimal
-    # inference image (which folds OODD into the primary pipeline). Default False so that
-    # an older cloud (which omits the field) degrades minimal_if_compatible mode into
-    # standard for previously-unmigrated detectors. Only the primary ModelInfo's value is
-    # meaningful — the OODD ModelInfo's copy is unused.
     minimal_compatible: bool = False
 
 
@@ -432,9 +427,5 @@ def parse_model_info(
             pipeline_config=fetch_model_response["oodd_pipeline_config"],
             predictor_metadata=fetch_model_response["predictor_metadata"],
         )
-
-    # minimal_compatible is a primary-pipeline property — copy from the (just-parsed) primary
-    # ModelInfo so callers don't have to remember which side owns the flag.
-    edge_model_info.minimal_compatible = bool(fetch_model_response.get("minimal_compatible", False))
 
     return edge_model_info, oodd_model_info

@@ -6,10 +6,6 @@
       "type": "string",
       "enum": ["standard", "minimal_if_compatible", "fully_minimal"],
       "description": "Per-detector inference image selection mode. See values.yaml for full descriptions."
-    },
-    "useMinimalImage": {
-      "type": "boolean",
-      "description": "Deprecated. Use inferenceImageMode instead. Mapped to fully_minimal/standard when set alone; setting both fails the install."
     }
   }
 }

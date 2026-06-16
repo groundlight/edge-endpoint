@@ -20,17 +20,13 @@ edgeEndpointTag: ""
 inferenceTag: ""
 
 # Per-detector inference image flavor.
-#
-# - "standard": every detector runs on the full image (gl-edge-inference).
+# - "standard": every detector runs on the full inference image.
 # - "minimal_if_compatible": each detector runs on the minimal image when the cloud reports
 #       its primary pipeline as minimal-compatible, and the full image otherwise. The minimal
 #       image folds OODD into the primary pipeline (no separate OODD pod); the full image
 #       runs OODD as a separate pod.
-# - "fully_minimal": every detector runs on the minimal image. Use only if you've verified
-#       every detector you'll deploy is supported by the minimal image.
-#
-# Legacy `useMinimalImage` is still honored for one release: true → fully_minimal,
-# false → standard. Setting both with a non-default inferenceImageMode fails the install.
+# - "fully_minimal": every detector runs on the minimal image. Will only successfully deploy 
+#       pipelines that are supported by the minimal image.
 inferenceImageMode: "standard"
 
 # Enable request-level tracing profiling for the edge endpoint.

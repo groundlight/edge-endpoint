@@ -5,7 +5,12 @@ import time
 from app.core.database import DatabaseManager
 from app.core.edge_config_manager import EdgeConfigManager
 from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions
-from app.core.inference_image import detector_image, detector_uses_minimal_image
+from app.core.inference_image import (
+    INFERENCE_IMAGE_MODE,
+    MODE_MINIMAL_IF_COMPATIBLE,
+    detector_image,
+    detector_uses_minimal_image,
+)
 from app.core.kubernetes_management import InferenceDeploymentManager
 from app.core.naming import get_edge_inference_deployment_name, get_edge_inference_model_name
 
@@ -30,18 +35,24 @@ def sleep_forever(message: str | None = None):
         time.sleep(TEN_MINUTES)
 
 
-def _persist_minimal_compatible(db_manager: DatabaseManager, detector_id: str, minimal_compatible: bool) -> None:
-    """Write minimal_compatible onto the primary DB row when it has changed."""
+def _persist_minimal_compatible(db_manager: DatabaseManager, detector_id: str, minimal_compatible: bool) -> bool:
+    """Write minimal_compatible onto the primary DB row when it has changed.
+
+    Returns True when the effective value changed (NULL is treated as False, matching
+    ``detector_uses_minimal_image``).
+    """
     record = db_manager.get_inference_deployment_record(detector_id, is_oodd=False)
     if record is None:
-        return
+        return False
+    previous_effective = bool(record.minimal_compatible)
     if record.minimal_compatible == minimal_compatible:
-        return
+        return False
     primary_model_name = get_edge_inference_model_name(detector_id, is_oodd=False)
     db_manager.update_inference_deployment_record(
         model_name=primary_model_name,
         fields_to_update={"minimal_compatible": minimal_compatible},
     )
+    return previous_effective != minimal_compatible
 
 
 def _redeploy_for_flavor_swap(
@@ -49,18 +60,21 @@ def _redeploy_for_flavor_swap(
     desired_image: str,
     desired_separate_oodd: bool,
     deployment_manager: InferenceDeploymentManager,
-) -> None:
+) -> bool:
     """
-    Tear down both primary and OODD deployments and recreate them in the desired flavor.
+    Tear down both primary and OODD deployments and recreate them in the desired flavor. There will
+    be downtime during the swap.
 
     Deployment names are derived only from ``detector_id``, so primary-minimal and primary-full
     collide on name — surge update is impossible. Always delete-then-create; if we crash between
     the two, the next cycle re-deletes (404-tolerant) and recreates fresh, so there's no
     partial-state recovery needed.
+
+    Returns True when delete and recreate both succeed. Otherwise, returns False.
     """
     logger.warning(
         f"Flavor swap for {detector_id}: redeploying to {desired_image} "
-        f"(separate_oodd={desired_separate_oodd}). Tearing down primary+OODD."
+        f"(separate_oodd={desired_separate_oodd}). Tearing down primary+OODD pods."
     )
 
     deployment_manager.delete_inference_deployment(detector_id, is_oodd=False)
@@ -77,13 +91,14 @@ def _redeploy_for_flavor_swap(
         logger.error(
             f"Timed out waiting for {detector_id} pods to terminate during flavor swap. " "Next cycle will retry."
         )
-        return
+        return False
 
     logger.info(f"Flavor swap for {detector_id}: creating primary on {desired_image}")
     deployment_manager.create_inference_deployment(detector_id=detector_id, is_oodd=False)
     if desired_separate_oodd:
         logger.info(f"Flavor swap for {detector_id}: creating OODD on {desired_image}")
         deployment_manager.create_inference_deployment(detector_id=detector_id, is_oodd=True)
+    return True
 
 
 def _check_new_models_and_inference_deployments(
@@ -103,11 +118,11 @@ def _check_new_models_and_inference_deployments(
     from the same source.
     """
     # Download and write new model to model repo on disk
-    new_model, minimal_compatible = edge_inference_manager.update_models_if_available(detector_id=detector_id)
+    new_model, minimal_compatible = edge_inference_manager.sync_models_from_cloud(detector_id=detector_id)
 
     # Persist minimal_compatible before any read-back through inference_image so the per-detector
     # flavor lookup sees the latest value within this same iteration.
-    _persist_minimal_compatible(db_manager, detector_id, minimal_compatible)
+    minimal_compatible_flipped = _persist_minimal_compatible(db_manager, detector_id, minimal_compatible)
 
     separate_oodd = not detector_uses_minimal_image(detector_id, db_manager)
     desired_image = detector_image(detector_id, db_manager)
@@ -116,15 +131,23 @@ def _check_new_models_and_inference_deployments(
     oodd_deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd=True)
     deployment_names = f"{edge_deployment_name} and {oodd_deployment_name}" if separate_oodd else edge_deployment_name
 
-    # Hot-swap check: if the running primary's image differs from desired, redeploy.
-    # Done before the create-if-missing path so that a stale-flavor deployment is replaced
-    # rather than left in place. The swap creates fresh deployments; we then fall through to
-    # the create-if-missing path (which becomes a no-op) and the rollout-confirmation block
-    # at the end, with deployment_created=True so we skip the patch-and-rollout path.
+    # Reconcile running deployments with desired image and separate-OODD layout. A minimal_compatible
+    # flip triggers delete-and-recreate only in minimal_if_compatible mode (the only mode where the
+    # flag changes deployment behavior). We also redeploy on image mismatch or stale OODD presence.
+    primary_exists = deployment_manager.get_inference_deployment(edge_deployment_name) is not None
+    oodd_exists = deployment_manager.get_inference_deployment(oodd_deployment_name) is not None
     observed_image = deployment_manager.get_deployment_image(edge_deployment_name)
-    swap_happened = observed_image is not None and observed_image != desired_image
-    if swap_happened:
-        _redeploy_for_flavor_swap(detector_id, desired_image, separate_oodd, deployment_manager)
+    image_mismatch = observed_image is not None and observed_image != desired_image
+    separate_oodd_mismatch = separate_oodd != oodd_exists
+    flip_affects_deployments = (
+        minimal_compatible_flipped and INFERENCE_IMAGE_MODE == MODE_MINIMAL_IF_COMPATIBLE
+    )
+    swap_happened = False
+
+    if flip_affects_deployments and (primary_exists or oodd_exists):
+        swap_happened = _redeploy_for_flavor_swap(detector_id, desired_image, separate_oodd, deployment_manager)
+    elif primary_exists and (image_mismatch or separate_oodd_mismatch):
+        swap_happened = _redeploy_for_flavor_swap(detector_id, desired_image, separate_oodd, deployment_manager)
 
     edge_deployment = deployment_manager.get_inference_deployment(deployment_name=edge_deployment_name)
     deployment_created = swap_happened

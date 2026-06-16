@@ -18,7 +18,12 @@ from model import ModeEnum
 from app.core.database import DatabaseManager
 from app.core.edge_config_manager import EdgeConfigManager
 from app.core.file_paths import MODEL_REPOSITORY_PATH
-from app.core.inference_image import detector_uses_minimal_image
+from app.core.inference_image import (
+    INFERENCE_IMAGE_MODE,
+    MODE_FULLY_MINIMAL,
+    MODE_STANDARD,
+    detector_uses_minimal_image,
+)
 from app.core.naming import (
     get_detector_models_dir,
     get_edge_inference_service_name,
@@ -34,6 +39,16 @@ logger = logging.getLogger(__name__)
 # Simple TTL cache for is_edge_inference_ready checks to avoid having to re-check every time a request is processed.
 # This will be process-specific, so each edge-endpoint worker will have its own cache instance.
 ttl_cache = TTLCache(maxsize=128, ttl=5)
+
+# Per-worker TTL cache for the "run separate OODD?" decision. Keyed by detector_id only (db_manager dropped from key)
+# so repeated inference calls skip the DB read. TTL matches is_edge_inference_ready so staleness windows align;
+# a minimal_compatible flip triggers a pod redeployment that takes far longer than 5s to complete.
+_separate_oodd_cache: TTLCache = TTLCache(maxsize=128, ttl=5)
+
+
+@cached(_separate_oodd_cache, key=lambda detector_id, db_manager: detector_id)
+def _uses_separate_oodd_cached(detector_id: str, db_manager) -> bool:
+    return not detector_uses_minimal_image(detector_id, db_manager)
 
 
 @cached(ttl_cache)
@@ -270,7 +285,7 @@ class EdgeInferenceManager:
 
     def uses_separate_oodd(self, detector_id: str) -> bool:
         """Whether this detector runs OODD as a separate pod (full image) vs folded into primary (minimal image)."""
-        return not detector_uses_minimal_image(detector_id, self.db_manager)
+        return _uses_separate_oodd_cached(detector_id, self.db_manager)
 
     @trace_span
     def inference_is_available(self, detector_id: str) -> bool:
@@ -358,16 +373,13 @@ class EdgeInferenceManager:
         logger.info(f"Recent-average FPS for {detector_id=}: {fps:.2f}")
         return output_dict
 
-    def update_models_if_available(self, detector_id: str) -> tuple[bool, bool]:
+    def sync_models_from_cloud(self, detector_id: str) -> tuple[bool, bool]:
         """
-        Request a new model from Groundlight. If there is a new model available for primary or OODD
-        inference, download it and write it to the model repository as a new version.
+        Fetch model metadata from Groundlight and save new primary/OODD binaries when available.
 
-        Returns ``(new_model, minimal_compatible)`` where ``new_model`` is whether anything was
-        downloaded/saved this cycle and ``minimal_compatible`` is the cloud's latest assertion
-        for the primary pipeline. The caller persists ``minimal_compatible`` on the DB row and
-        uses it to decide image/OODD topology, avoiding a stale-DB-read race in this method
-        (which is the only place that knows the just-fetched value).
+        Returns ``(models_saved, minimal_compatible)`` where ``models_saved`` is whether anything
+        was downloaded and written to the model repository this cycle and ``minimal_compatible``
+        is the cloud's latest assertion for the primary pipeline (always from this fetch).
         """
         logger.debug(f"Checking if there are new models available for {detector_id}")
 
@@ -380,11 +392,6 @@ class EdgeInferenceManager:
         edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
 
         # Decide OODD update from the just-fetched flag rather than the (possibly stale) DB row.
-        # Honors a flavor flip in either direction: when the flag stays True we skip OODD; when
-        # it flips to False on this cycle we'll fetch the OODD model right away so the next
-        # rollout has it in the repo.
-        from app.core.inference_image import INFERENCE_IMAGE_MODE, MODE_FULLY_MINIMAL, MODE_STANDARD
-
         if INFERENCE_IMAGE_MODE == MODE_FULLY_MINIMAL:
             run_separate_oodd = False
         elif INFERENCE_IMAGE_MODE == MODE_STANDARD:

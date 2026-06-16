@@ -1,6 +1,6 @@
 """Selection matrix for the per-detector image-flavor decision.
 
-Covers 3 modes × {minimal_compatible=True, False, missing DB row}. Each cell asserts both
+Covers 3 modes: {minimal_compatible=True, False, missing DB row}. Each cell asserts both
 ``detector_image(...)`` and ``detector_uses_minimal_image(...)`` since both go through the
 same primitive — the two getters are required to agree.
 """
@@ -34,8 +34,8 @@ def _db_with(minimal_compatible):
 def _patch_image_uris():
     """Pin the full/minimal URIs to known values regardless of import-time env."""
     with (
-        mock.patch.object(inference_image, "INFERENCE_IMAGE_FULL", FULL),
-        mock.patch.object(inference_image, "INFERENCE_IMAGE_MINIMAL", MINIMAL),
+        mock.patch.object(inference_image, "FULL_INFERENCE_IMAGE_URI", FULL),
+        mock.patch.object(inference_image, "MINIMAL_INFERENCE_IMAGE_URI", MINIMAL),
     ):
         yield
 
@@ -83,7 +83,6 @@ def test_minimal_if_compatible_missing_row_defaults_full():
 def test_minimal_if_compatible_null_minimal_compatible_defaults_full():
     """Row exists but minimal_compatible is NULL (not yet written by the model-updater) → False."""
     with mock.patch.object(inference_image, "INFERENCE_IMAGE_MODE", "minimal_if_compatible"):
-        _db_with(None)  # record None → also covers; explicitly test the NULL case below
         db2 = mock.Mock()
         record = mock.Mock()
         record.minimal_compatible = None

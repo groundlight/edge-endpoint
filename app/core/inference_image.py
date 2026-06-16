@@ -1,6 +1,8 @@
 """Per-detector inference image flavor selection.
 
-Three modes set globally via ``INFERENCE_IMAGE_MODE``:
+Three modes set globally via ``INFERENCE_IMAGE_MODE``. The concrete container image URIs
+for each flavor are ``FULL_INFERENCE_IMAGE_URI`` and ``MINIMAL_INFERENCE_IMAGE_URI``
+(set by Helm from registry + tag):
 
 - ``standard``: every detector runs on the full image.
 - ``minimal_if_compatible``: per-detector — minimal when the cloud reported
@@ -36,8 +38,8 @@ if INFERENCE_IMAGE_MODE not in VALID_MODES:
         "env var was set manually outside of helm."
     )
 
-INFERENCE_IMAGE_FULL = os.environ.get("INFERENCE_IMAGE_FULL", "")
-INFERENCE_IMAGE_MINIMAL = os.environ.get("INFERENCE_IMAGE_MINIMAL", "")
+FULL_INFERENCE_IMAGE_URI = os.environ.get("FULL_INFERENCE_IMAGE_URI", "")
+MINIMAL_INFERENCE_IMAGE_URI = os.environ.get("MINIMAL_INFERENCE_IMAGE_URI", "")
 
 
 def detector_uses_minimal_image(detector_id: str, db_manager: DatabaseManager) -> bool:
@@ -52,4 +54,4 @@ def detector_uses_minimal_image(detector_id: str, db_manager: DatabaseManager) -
 
 def detector_image(detector_id: str, db_manager: DatabaseManager) -> str:
     """The fully-qualified inference image (incl. tag) for ``detector_id``."""
-    return INFERENCE_IMAGE_MINIMAL if detector_uses_minimal_image(detector_id, db_manager) else INFERENCE_IMAGE_FULL
+    return MINIMAL_INFERENCE_IMAGE_URI if detector_uses_minimal_image(detector_id, db_manager) else FULL_INFERENCE_IMAGE_URI
