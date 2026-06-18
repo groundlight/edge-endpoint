@@ -19,10 +19,15 @@ imageTag: "release"
 edgeEndpointTag: ""
 inferenceTag: ""
 
-# Whether to use the minimal image for the inference server. Currently, the minimal image only
-# supports binary and multiclass detectors, so be sure to keep this set to false if you're using
-# an object detection or counting model. 
-useMinimalImage: false
+# Per-detector inference image flavor.
+# - "standard": every detector runs on the full inference image.
+# - "minimal_if_compatible": each detector runs on the minimal image when the cloud reports
+#       its primary pipeline as minimal-compatible, and the full image otherwise. The minimal
+#       image folds OODD into the primary pipeline (no separate OODD pod); the full image
+#       runs OODD as a separate pod.
+# - "fully_minimal": every detector runs on the minimal image. Will only successfully deploy 
+#       pipelines that are supported by the minimal image.
+inferenceImageMode: "standard"
 
 # Enable request-level tracing profiling for the edge endpoint.
 # When enabled, per-request trace data (span timings, annotations) is written to

@@ -286,7 +286,7 @@ jobs:
       # associated with roxanne+test_edge account since for some reason it was failing with
       # prod biggies
       GROUNDLIGHT_API_TOKEN: ${{ secrets.K3S_TEST_GROUNDLIGHT_API_TOKEN }}
-      USE_MINIMAL_IMAGE: true
+      INFERENCE_IMAGE_MODE: fully_minimal
     steps:
       - name: Check out code
         uses: actions/checkout@v4

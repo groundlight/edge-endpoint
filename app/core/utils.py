@@ -375,6 +375,7 @@ class ModelInfoBase(BaseModel):
 
     pipeline_config: str
     predictor_metadata: str
+    minimal_compatible: bool = False
 
 
 class ModelInfoNoBinary(ModelInfoBase):

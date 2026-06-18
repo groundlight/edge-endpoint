@@ -11,6 +11,15 @@ from app.core.naming import get_edge_inference_service_name
 from app.core.utils import ModelInfoBase, ModelInfoNoBinary, ModelInfoWithBinary
 
 
+def _fake_db(minimal_compatible: bool = False):
+    """Build a DatabaseManager stub that returns a record with the given minimal_compatible flag."""
+    db = mock.Mock()
+    record = mock.Mock()
+    record.minimal_compatible = minimal_compatible
+    db.get_inference_deployment_record.return_value = record
+    return db
+
+
 def validate_model_directory(
     model_repository: str, detector_id: str, version: int, model_info: ModelInfoBase, is_oodd: bool = False
 ):
@@ -99,16 +108,24 @@ def oodd_model_info_no_binary() -> ModelInfoNoBinary:
 
 
 class TestEdgeInferenceManager:
+    @pytest.fixture(autouse=True)
+    def clear_oodd_cache(self):
+        import app.core.edge_inference as ei_mod
+
+        ei_mod._separate_oodd_cache.clear()
+        yield
+        ei_mod._separate_oodd_cache.clear()
+
     def test_update_model_with_binary(self, edge_model_info_with_binary, oodd_model_info_with_binary):
         with tempfile.TemporaryDirectory() as temp_dir:
             with mock.patch("app.core.edge_inference.fetch_model_info") as mock_fetch:
                 with mock.patch("app.core.edge_inference.get_object_using_presigned_url") as mock_get_from_s3:
                     mock_get_from_s3.return_value = b"test_model"
                     mock_fetch.return_value = (edge_model_info_with_binary, oodd_model_info_with_binary)
-                    edge_manager = EdgeInferenceManager()
+                    edge_manager = EdgeInferenceManager(db_manager=_fake_db())
                     edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
                     detector_id = "test_detector"
-                    edge_manager.update_models_if_available(detector_id)
+                    edge_manager.sync_models_from_cloud(detector_id)
 
                     validate_model_directory(temp_dir, detector_id, 1, edge_model_info_with_binary)
                     validate_model_directory(temp_dir, detector_id, 1, oodd_model_info_with_binary, is_oodd=True)
@@ -122,13 +139,13 @@ class TestEdgeInferenceManager:
                     oodd_model_info_with_binary_2.model_binary_id = "test_oodd_binary_id_2"
                     oodd_model_info_with_binary_2.model_binary_url = "test_oodd_model_binary_url_2"
                     mock_fetch.return_value = (edge_model_info_with_binary_2, oodd_model_info_with_binary_2)
-                    edge_manager.update_models_if_available(detector_id)
+                    edge_manager.sync_models_from_cloud(detector_id)
 
                     validate_model_directory(temp_dir, detector_id, 2, edge_model_info_with_binary_2)
                     validate_model_directory(temp_dir, detector_id, 2, oodd_model_info_with_binary_2, is_oodd=True)
 
                 with mock.patch("app.core.edge_inference.get_object_using_presigned_url") as mock_get_from_s3:
-                    edge_manager.update_models_if_available(detector_id)
+                    edge_manager.sync_models_from_cloud(detector_id)
                     # Shouldn't pull a model from s3 if there is no new binary available
                     mock_get_from_s3.assert_not_called()
                     # Should not create a new version for the same model info
@@ -139,10 +156,10 @@ class TestEdgeInferenceManager:
         with tempfile.TemporaryDirectory() as temp_dir:
             with mock.patch("app.core.edge_inference.fetch_model_info") as mock_fetch:
                 mock_fetch.return_value = (edge_model_info_no_binary, oodd_model_info_no_binary)
-                edge_manager = EdgeInferenceManager()
+                edge_manager = EdgeInferenceManager(db_manager=_fake_db())
                 edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
                 detector_id = "test_detector"
-                edge_manager.update_models_if_available(detector_id)
+                edge_manager.sync_models_from_cloud(detector_id)
 
                 validate_model_directory(temp_dir, detector_id, 1, edge_model_info_no_binary)
                 validate_model_directory(temp_dir, detector_id, 1, oodd_model_info_no_binary, is_oodd=True)
@@ -153,12 +170,12 @@ class TestEdgeInferenceManager:
                 oodd_model_info_no_binary_2 = oodd_model_info_no_binary
                 oodd_model_info_no_binary_2.pipeline_config = "test_oodd_pipeline_config_2"
                 mock_fetch.return_value = (edge_model_info_no_binary_2, oodd_model_info_no_binary_2)
-                edge_manager.update_models_if_available(detector_id)
+                edge_manager.sync_models_from_cloud(detector_id)
 
                 validate_model_directory(temp_dir, detector_id, 2, edge_model_info_no_binary_2)
                 validate_model_directory(temp_dir, detector_id, 2, oodd_model_info_no_binary_2, is_oodd=True)
 
-                edge_manager.update_models_if_available(detector_id)
+                edge_manager.sync_models_from_cloud(detector_id)
                 # Should not create a new version for the same pipeline config
                 assert not os.path.exists(os.path.join(temp_dir, detector_id, "primary", "3"))
                 assert not os.path.exists(os.path.join(temp_dir, detector_id, "oodd", "3"))
@@ -173,7 +190,7 @@ class TestEdgeInferenceManager:
         with mock.patch("app.core.edge_inference.submit_image_for_inference") as mock_submit:
             mock_submit.return_value = mock_response
             # separate_oodd_inference is True by default
-            edge_manager = EdgeInferenceManager()
+            edge_manager = EdgeInferenceManager(db_manager=_fake_db())
             edge_manager.run_inference("test_detector", b"test_image", "image/jpeg", mode=ModeEnum.BINARY)
             primary_inference_client_url = get_edge_inference_service_name("test_detector") + ":8000"
             oodd_inference_client_url = get_edge_inference_service_name("test_detector", is_oodd=True) + ":8000"
@@ -194,9 +211,12 @@ class TestEdgeInferenceManager:
             "secondary_predictions": None,
         }
 
-        with mock.patch("app.core.edge_inference.submit_image_for_inference") as mock_submit:
+        with (
+            mock.patch("app.core.inference_image.INFERENCE_IMAGE_MODE", "minimal_if_compatible"),
+            mock.patch("app.core.edge_inference.submit_image_for_inference") as mock_submit,
+        ):
             mock_submit.return_value = mock_response
-            edge_manager = EdgeInferenceManager(separate_oodd_inference=False)
+            edge_manager = EdgeInferenceManager(db_manager=_fake_db(minimal_compatible=True))
             edge_manager.run_inference("test_detector", b"test_image", "image/jpeg", mode=ModeEnum.BINARY)
             primary_inference_client_url = get_edge_inference_service_name("test_detector") + ":8000"
 
@@ -226,7 +246,7 @@ class TestEdgeInferenceManager:
 
             with mock.patch("app.core.edge_inference.submit_image_for_inference") as mock_submit:
                 mock_submit.return_value = mock_response
-                edge_manager = EdgeInferenceManager()
+                edge_manager = EdgeInferenceManager(db_manager=_fake_db())
                 edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
                 output = edge_manager.run_inference(detector_id, b"test_image", "image/jpeg", mode=ModeEnum.BINARY)
 
@@ -245,9 +265,12 @@ class TestEdgeInferenceManager:
             detector_id = "test_detector"
             self._write_model_id(temp_dir, detector_id, 1, "prim_ksuid_only")
 
-            with mock.patch("app.core.edge_inference.submit_image_for_inference") as mock_submit:
+            with (
+                mock.patch("app.core.inference_image.INFERENCE_IMAGE_MODE", "minimal_if_compatible"),
+                mock.patch("app.core.edge_inference.submit_image_for_inference") as mock_submit,
+            ):
                 mock_submit.return_value = mock_response
-                edge_manager = EdgeInferenceManager(separate_oodd_inference=False)
+                edge_manager = EdgeInferenceManager(db_manager=_fake_db(minimal_compatible=True))
                 edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
                 output = edge_manager.run_inference(detector_id, b"test_image", "image/jpeg", mode=ModeEnum.BINARY)
 
@@ -266,9 +289,77 @@ class TestEdgeInferenceManager:
             # No model_id.txt written; repository is empty.
             with mock.patch("app.core.edge_inference.submit_image_for_inference") as mock_submit:
                 mock_submit.return_value = mock_response
-                edge_manager = EdgeInferenceManager()
+                edge_manager = EdgeInferenceManager(db_manager=_fake_db())
                 edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
                 output = edge_manager.run_inference("test_detector", b"test_image", "image/jpeg", mode=ModeEnum.BINARY)
 
                 assert "mlb_key" not in output
                 assert "oodd_mlb_key" not in output
+
+    def test_uses_separate_oodd_caches_db_read(self):
+        """Second call for the same detector_id is served from cache; DB is read only once."""
+        with mock.patch("app.core.inference_image.INFERENCE_IMAGE_MODE", "minimal_if_compatible"):
+            db = _fake_db(minimal_compatible=False)  # not minimal → uses_separate_oodd=True
+            edge_manager = EdgeInferenceManager(db_manager=db)
+
+            result1 = edge_manager.uses_separate_oodd("cache_test_detector")
+            result2 = edge_manager.uses_separate_oodd("cache_test_detector")
+
+            assert result1 is True
+            assert result2 is True
+            assert db.get_inference_deployment_record.call_count == 1
+
+    def test_uses_separate_oodd_default_on_missing_row(self):
+        """No DB row → conservative default: run separate OODD (full image expected)."""
+        with mock.patch("app.core.inference_image.INFERENCE_IMAGE_MODE", "minimal_if_compatible"):
+            db = mock.Mock()
+            db.get_inference_deployment_record.return_value = None
+            edge_manager = EdgeInferenceManager(db_manager=db)
+
+            result = edge_manager.uses_separate_oodd("missing_row_detector")
+
+            assert result is True
+
+    def test_uses_separate_oodd_cache_is_keyed_by_detector_id(self):
+        """Two detectors with different minimal_compatible values must get independent cache entries."""
+        with mock.patch("app.core.inference_image.INFERENCE_IMAGE_MODE", "minimal_if_compatible"):
+            rec_a = mock.Mock()
+            rec_a.minimal_compatible = True  # detA is minimal → uses_separate_oodd=False
+
+            rec_b = mock.Mock()
+            rec_b.minimal_compatible = False  # detB is full → uses_separate_oodd=True
+
+            db = mock.Mock()
+            db.get_inference_deployment_record.side_effect = lambda detector_id, is_oodd=False: (
+                rec_a if detector_id == "detA" else rec_b
+            )
+
+            edge_manager = EdgeInferenceManager(db_manager=db)
+
+            assert edge_manager.uses_separate_oodd("detA") is False
+            assert edge_manager.uses_separate_oodd("detB") is True
+
+    def test_sync_models_skips_oodd_when_minimal_compatible(
+        self, edge_model_info_with_binary, oodd_model_info_with_binary
+    ):
+        """In minimal_if_compatible mode with minimal_compatible=True, OODD model dir is never written."""
+        edge_model_info_with_binary.minimal_compatible = True
+        with (
+            tempfile.TemporaryDirectory() as temp_dir,
+            mock.patch("app.core.edge_inference.fetch_model_info") as mock_fetch,
+            mock.patch("app.core.edge_inference.get_object_using_presigned_url") as mock_get_from_s3,
+            mock.patch("app.core.edge_inference.INFERENCE_IMAGE_MODE", "minimal_if_compatible"),
+        ):
+            mock_get_from_s3.return_value = b"test_model"
+            mock_fetch.return_value = (edge_model_info_with_binary, oodd_model_info_with_binary)
+            edge_manager = EdgeInferenceManager(db_manager=_fake_db(minimal_compatible=True))
+            edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
+            detector_id = "test_detector"
+
+            new_model, minimal_compatible = edge_manager.sync_models_from_cloud(detector_id)
+
+            assert new_model is True
+            assert minimal_compatible is True
+            validate_model_directory(temp_dir, detector_id, 1, edge_model_info_with_binary)
+            oodd_dir = os.path.join(temp_dir, detector_id, "oodd")
+            assert not os.path.exists(oodd_dir), "OODD dir must not be created when running in minimal mode"

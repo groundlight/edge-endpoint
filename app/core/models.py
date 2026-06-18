@@ -47,6 +47,15 @@ class InferenceDeployment(Base):
         nullable=False,
         comment="When True, the model-updater will delete this detector's K8s resources and then remove this row.",
     )
+    minimal_compatible = Column(
+        Boolean,
+        nullable=True,
+        comment=(
+            "Cloud's assertion (from fetch-model-urls) that this detector's primary pipeline "
+            "can run on the minimal inference image. Only meaningful on the primary row "
+            "(is_oodd=False); NULL until the model-updater first writes it."
+        ),
+    )
 
     created_at = Column(
         DateTime, nullable=True, default=datetime.datetime.utcnow, comment="Timestamp of record creation"

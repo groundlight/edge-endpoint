@@ -102,6 +102,25 @@ Never
 {{- end -}}
 {{- end -}}
 
+{{/*
+  Resolve the per-install inference image mode (standard / minimal_if_compatible / fully_minimal).
+*/}}
+{{- define "groundlight-edge-endpoint.inferenceImageMode" -}}
+{{- default "standard" .Values.inferenceImageMode -}}
+{{- end -}}
+
+{{/*
+  Compute the full ECR image URI (incl. tag) for the inference server, picking the
+  full vs minimal repository based on the boolean argument.
+*/}}
+{{- define "groundlight-edge-endpoint.inferenceImageFull" -}}
+{{- printf "%s/gl-edge-inference:%s" .Values.ecrRegistry (include "groundlight-edge-endpoint.inferenceTag" .) -}}
+{{- end -}}
+
+{{- define "groundlight-edge-endpoint.inferenceImageMinimal" -}}
+{{- printf "%s/gl-edge-inference-minimal:%s" .Values.ecrRegistry (include "groundlight-edge-endpoint.inferenceTag" .) -}}
+{{- end -}}
+
 {{- define "groundlight-edge-endpoint.inferencePullPolicy" -}}
 {{- $tag := include "groundlight-edge-endpoint.inferenceTag" . -}}
 {{- if eq $tag "dev" -}}

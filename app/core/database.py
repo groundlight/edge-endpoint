@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.file_paths import DATABASE_FILEPATH, DATABASE_ORM_LOG_FILE, DATABASE_ORM_LOG_FILE_SIZE
 from app.core.models import Base, InferenceDeployment
+from app.core.naming import get_edge_inference_model_name
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +102,13 @@ class DatabaseManager:
                 if hasattr(detector_record, field):
                     setattr(detector_record, field, value)
             session.commit()
+
+    def get_inference_deployment_record(self, detector_id: str, is_oodd: bool = False) -> InferenceDeployment | None:
+        """Return the primary or OODD record for a detector, or None if it doesn't exist."""
+        model_name = get_edge_inference_model_name(detector_id, is_oodd=is_oodd)
+        with self.session_maker() as session:
+            query = select(InferenceDeployment).filter_by(model_name=model_name)
+            return session.execute(query).scalar_one_or_none()
 
     def get_inference_deployment_records(self, **kwargs) -> Sequence[InferenceDeployment]:
         """

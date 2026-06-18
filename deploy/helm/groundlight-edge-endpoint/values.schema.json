@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "inferenceImageMode": {
+      "type": "string",
+      "enum": ["standard", "minimal_if_compatible", "fully_minimal"],
+      "description": "Per-detector inference image selection mode. See values.yaml for full descriptions."
+    }
+  }
+}

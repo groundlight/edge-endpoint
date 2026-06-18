@@ -15,8 +15,15 @@ from groundlight.edge import EdgeEndpointConfig, InferenceConfig
 from jinja2 import Template
 from model import ModeEnum
 
+from app.core.database import DatabaseManager
 from app.core.edge_config_manager import EdgeConfigManager
 from app.core.file_paths import MODEL_REPOSITORY_PATH
+from app.core.inference_image import (
+    INFERENCE_IMAGE_MODE,
+    MODE_FULLY_MINIMAL,
+    MODE_STANDARD,
+    detector_uses_minimal_image,
+)
 from app.core.naming import (
     get_detector_models_dir,
     get_edge_inference_service_name,
@@ -32,6 +39,16 @@ logger = logging.getLogger(__name__)
 # Simple TTL cache for is_edge_inference_ready checks to avoid having to re-check every time a request is processed.
 # This will be process-specific, so each edge-endpoint worker will have its own cache instance.
 ttl_cache = TTLCache(maxsize=128, ttl=5)
+
+# Per-worker TTL cache for the "run separate OODD?" decision. Keyed by detector_id only (db_manager dropped from key)
+# so repeated inference calls skip the DB read. TTL matches is_edge_inference_ready so staleness windows align;
+# a minimal_compatible flip triggers a pod redeployment that takes far longer than 5s to complete.
+_separate_oodd_cache: TTLCache = TTLCache(maxsize=128, ttl=5)
+
+
+@cached(_separate_oodd_cache, key=lambda detector_id, db_manager: detector_id)
+def _uses_separate_oodd_cached(detector_id: str, db_manager) -> bool:
+    return not detector_uses_minimal_image(detector_id, db_manager)
 
 
 @cached(ttl_cache)
@@ -258,27 +275,26 @@ class EdgeInferenceManager:
 
     def __init__(
         self,
+        db_manager: DatabaseManager,
         verbose: bool = False,
-        separate_oodd_inference: bool = True,
     ) -> None:
         self.verbose = verbose
+        self.db_manager = db_manager
         self.speedmon = SpeedMonitor()
-        self.separate_oodd_inference = separate_oodd_inference
         self.last_escalation_times: dict[str, float | None] = {}
+
+    def uses_separate_oodd(self, detector_id: str) -> bool:
+        """Whether this detector runs OODD as a separate pod (full image) vs folded into primary (minimal image)."""
+        return _uses_separate_oodd_cached(detector_id, self.db_manager)
 
     @trace_span
     def inference_is_available(self, detector_id: str) -> bool:
         """Check whether inference pods for this detector are ready to serve."""
+        separate_oodd = self.uses_separate_oodd(detector_id)
         primary_url = get_edge_inference_service_name(detector_id) + ":8000"
-        oodd_url = (
-            get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
-            if self.separate_oodd_inference
-            else None
-        )
+        oodd_url = get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000" if separate_oodd else None
 
-        ready = is_edge_inference_ready(primary_url) and (
-            not self.separate_oodd_inference or is_edge_inference_ready(oodd_url)
-        )
+        ready = is_edge_inference_ready(primary_url) and (not separate_oodd or is_edge_inference_ready(oodd_url))
         if not ready:
             logger.debug(
                 f"Edge inference server and/or OODD inference server is not ready. {primary_url=}, {oodd_url=}"
@@ -308,8 +324,9 @@ class EdgeInferenceManager:
         logger.info(f"Submitting image to edge inference service. {detector_id=}")
         start_time = time.perf_counter()
 
+        separate_oodd = self.uses_separate_oodd(detector_id)
         primary_url = get_edge_inference_service_name(detector_id) + ":8000"
-        if self.separate_oodd_inference:
+        if separate_oodd:
             oodd_url = get_edge_inference_service_name(detector_id, is_oodd=True) + ":8000"
             with ThreadPoolExecutor(max_workers=2) as executor:
                 if get_current_tracer() is not None:
@@ -340,7 +357,7 @@ class EdgeInferenceManager:
             primary_dir = get_primary_edge_model_dir(self.MODEL_REPOSITORY, detector_id)
             if mlb_key := get_current_model_ksuid(primary_dir, primary_version):
                 output_dict["mlb_key"] = mlb_key
-            if self.separate_oodd_inference and oodd_response is not None:
+            if separate_oodd and oodd_response is not None:
                 oodd_version = get_current_model_version(self.MODEL_REPOSITORY, detector_id, is_oodd=True)
                 oodd_dir = get_oodd_model_dir(self.MODEL_REPOSITORY, detector_id)
                 if oodd_mlb_key := get_current_model_ksuid(oodd_dir, oodd_version):
@@ -356,12 +373,13 @@ class EdgeInferenceManager:
         logger.info(f"Recent-average FPS for {detector_id=}: {fps:.2f}")
         return output_dict
 
-    def update_models_if_available(self, detector_id: str) -> bool:
+    def sync_models_from_cloud(self, detector_id: str) -> tuple[bool, bool]:
         """
-        Request a new model from Groundlight. If there is a new model available for primary or OODD
-        inference, download it and write it to the model repository as a new version.
+        Fetch model metadata from Groundlight and save new primary/OODD binaries when available.
 
-        Returns True if a new model was downloaded and saved, False otherwise.
+        Returns ``(models_saved, minimal_compatible)`` where ``models_saved`` is whether anything
+        was downloaded and written to the model repository this cycle and ``minimal_compatible``
+        is the cloud's latest assertion for the primary pipeline (always from this fetch).
         """
         logger.debug(f"Checking if there are new models available for {detector_id}")
 
@@ -373,11 +391,19 @@ class EdgeInferenceManager:
 
         edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
 
+        # Decide OODD update from the just-fetched flag rather than the (possibly stale) DB row.
+        if INFERENCE_IMAGE_MODE == MODE_FULLY_MINIMAL:
+            run_separate_oodd = False
+        elif INFERENCE_IMAGE_MODE == MODE_STANDARD:
+            run_separate_oodd = True
+        else:
+            run_separate_oodd = not edge_model_info.minimal_compatible
+
         primary_version = get_current_model_version(self.MODEL_REPOSITORY, detector_id)
         primary_edge_model_dir = get_primary_edge_model_dir(self.MODEL_REPOSITORY, detector_id)
         update_primary_model = should_update(edge_model_info, primary_edge_model_dir, primary_version)
 
-        if self.separate_oodd_inference:
+        if run_separate_oodd:
             oodd_version = get_current_model_version(self.MODEL_REPOSITORY, detector_id, is_oodd=True)
             oodd_model_dir = get_oodd_model_dir(self.MODEL_REPOSITORY, detector_id)
             update_oodd_model = should_update(oodd_model_info, oodd_model_dir, oodd_version)
@@ -386,7 +412,7 @@ class EdgeInferenceManager:
 
         if not update_primary_model and not update_oodd_model:
             logger.debug(f"No new models available for {detector_id}")
-            return False
+            return False, edge_model_info.minimal_compatible
 
         logger.info(f"At least one new model is available for {detector_id}, saving models to repository.")
         save_models_to_repository(
@@ -397,7 +423,7 @@ class EdgeInferenceManager:
             oodd_model_info=oodd_model_info if update_oodd_model else None,
             repository_root=self.MODEL_REPOSITORY,
         )
-        return True
+        return True, edge_model_info.minimal_compatible
 
     @trace_span
     def escalation_cooldown_complete(self, detector_id: str, edge_config: EdgeEndpointConfig) -> bool:

@@ -5,6 +5,12 @@ import time
 from app.core.database import DatabaseManager
 from app.core.edge_config_manager import EdgeConfigManager
 from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions
+from app.core.inference_image import (
+    INFERENCE_IMAGE_MODE,
+    MODE_MINIMAL_IF_COMPATIBLE,
+    detector_image,
+    detector_uses_minimal_image,
+)
 from app.core.kubernetes_management import InferenceDeploymentManager
 from app.core.naming import get_edge_inference_deployment_name, get_edge_inference_model_name
 
@@ -22,8 +28,6 @@ POD_DELETION_TIMEOUT_SECONDS = 60 * 3
 # second rollout on top of the still-loading first one (memory doubles → eviction cascade).
 ROLLOUT_READY_TIMEOUT_S = int(os.environ.get("ROLLOUT_READY_TIMEOUT_S", 60 * 30))
 
-USE_MINIMAL_IMAGE = os.environ.get("USE_MINIMAL_IMAGE", "false") == "true"
-
 
 def sleep_forever(message: str | None = None):
     while True:
@@ -31,12 +35,77 @@ def sleep_forever(message: str | None = None):
         time.sleep(TEN_MINUTES)
 
 
+def _persist_minimal_compatible(db_manager: DatabaseManager, detector_id: str, minimal_compatible: bool) -> bool:
+    """Write minimal_compatible onto the primary DB row when it has changed.
+
+    Returns True when the effective value changed (NULL is treated as False, matching
+    ``detector_uses_minimal_image``).
+    """
+    record = db_manager.get_inference_deployment_record(detector_id, is_oodd=False)
+    if record is None:
+        return False
+    previous_effective = bool(record.minimal_compatible)
+    if record.minimal_compatible == minimal_compatible:
+        return False
+    primary_model_name = get_edge_inference_model_name(detector_id, is_oodd=False)
+    db_manager.update_inference_deployment_record(
+        model_name=primary_model_name,
+        fields_to_update={"minimal_compatible": minimal_compatible},
+    )
+    return previous_effective != minimal_compatible
+
+
+def _redeploy_for_flavor_swap(
+    detector_id: str,
+    desired_image: str,
+    desired_separate_oodd: bool,
+    deployment_manager: InferenceDeploymentManager,
+) -> bool:
+    """
+    Tear down both primary and OODD deployments and recreate them in the desired flavor. There will
+    be downtime during the swap.
+
+    Deployment names are derived only from ``detector_id``, so primary-minimal and primary-full
+    collide on name — surge update is impossible. Always delete-then-create; if we crash between
+    the two, the next cycle re-deletes (404-tolerant) and recreates fresh, so there's no
+    partial-state recovery needed.
+
+    Returns True when delete and recreate both succeed. Otherwise, returns False.
+    """
+    logger.warning(
+        f"Flavor swap for {detector_id}: redeploying to {desired_image} "
+        f"(separate_oodd={desired_separate_oodd}). Tearing down primary+OODD pods."
+    )
+
+    deployment_manager.delete_inference_deployment(detector_id, is_oodd=False)
+    deployment_manager.delete_inference_deployment(detector_id, is_oodd=True)
+
+    poll_start = time.time()
+    while time.time() - poll_start < POD_DELETION_TIMEOUT_SECONDS:
+        primary_gone = deployment_manager.is_inference_deployment_fully_deleted(detector_id, is_oodd=False)
+        oodd_gone = deployment_manager.is_inference_deployment_fully_deleted(detector_id, is_oodd=True)
+        if primary_gone and oodd_gone:
+            break
+        time.sleep(2)
+    else:
+        logger.error(
+            f"Timed out waiting for {detector_id} pods to terminate during flavor swap. " "Next cycle will retry."
+        )
+        return False
+
+    logger.info(f"Flavor swap for {detector_id}: creating primary on {desired_image}")
+    deployment_manager.create_inference_deployment(detector_id=detector_id, is_oodd=False)
+    if desired_separate_oodd:
+        logger.info(f"Flavor swap for {detector_id}: creating OODD on {desired_image}")
+        deployment_manager.create_inference_deployment(detector_id=detector_id, is_oodd=True)
+    return True
+
+
 def _check_new_models_and_inference_deployments(
     detector_id: str,
     edge_inference_manager: EdgeInferenceManager,
     deployment_manager: InferenceDeploymentManager,
     db_manager: DatabaseManager,
-    separate_oodd_inference: bool,
 ) -> None:
     """
     Check if there are new models available for the detector_id. If so, update the inference deployment
@@ -44,29 +113,48 @@ def _check_new_models_and_inference_deployments(
     and updating the database record for the detector_id (i.e., setting deployment_created to True
     when we have successfully rolled out the inference deployment).
 
-    :param detector_id: the detector_id for which we are checking for new models and inference deployments.
-    :param edge_inference_manager: the edge inference manager object.
-    :param deployment_manager: the inference deployment manager object.
-    :param db_manager: the database manager object.
-    :param separate_oodd_inference: whether or not to run inference separately for an OODD model
+    The per-detector image flavor (full vs minimal) is read from app.core.inference_image so that
+    the deployment we create, the OODD-creation decision, and the request-path routing all derive
+    from the same source.
     """
     # Download and write new model to model repo on disk
-    new_model = edge_inference_manager.update_models_if_available(detector_id=detector_id)
+    new_model, minimal_compatible = edge_inference_manager.sync_models_from_cloud(detector_id=detector_id)
+
+    # Persist minimal_compatible before any read-back through inference_image so the per-detector
+    # flavor lookup sees the latest value within this same iteration.
+    minimal_compatible_flipped = _persist_minimal_compatible(db_manager, detector_id, minimal_compatible)
+
+    separate_oodd = not detector_uses_minimal_image(detector_id, db_manager)
+    desired_image = detector_image(detector_id, db_manager)
 
     edge_deployment_name = get_edge_inference_deployment_name(detector_id)
     oodd_deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd=True)
-    deployment_names = (
-        f"{edge_deployment_name} and {oodd_deployment_name}" if separate_oodd_inference else edge_deployment_name
-    )
+    deployment_names = f"{edge_deployment_name} and {oodd_deployment_name}" if separate_oodd else edge_deployment_name
+
+    # Reconcile running deployments with desired image and separate-OODD layout. A minimal_compatible
+    # flip triggers delete-and-recreate only in minimal_if_compatible mode (the only mode where the
+    # flag changes deployment behavior). We also redeploy on image mismatch or stale OODD presence.
+    primary_exists = deployment_manager.get_inference_deployment(edge_deployment_name) is not None
+    oodd_exists = deployment_manager.get_inference_deployment(oodd_deployment_name) is not None
+    observed_image = deployment_manager.get_deployment_image(edge_deployment_name)
+    image_mismatch = observed_image is not None and observed_image != desired_image
+    separate_oodd_mismatch = separate_oodd != oodd_exists
+    flip_affects_deployments = minimal_compatible_flipped and INFERENCE_IMAGE_MODE == MODE_MINIMAL_IF_COMPATIBLE
+    swap_happened = False
+
+    if flip_affects_deployments and (primary_exists or oodd_exists):
+        swap_happened = _redeploy_for_flavor_swap(detector_id, desired_image, separate_oodd, deployment_manager)
+    elif primary_exists and (image_mismatch or separate_oodd_mismatch):
+        swap_happened = _redeploy_for_flavor_swap(detector_id, desired_image, separate_oodd, deployment_manager)
 
     edge_deployment = deployment_manager.get_inference_deployment(deployment_name=edge_deployment_name)
-    deployment_created = False
+    deployment_created = swap_happened
     if edge_deployment is None:
         logger.info(f"Creating a new edge inference deployment for {detector_id}")
         deployment_manager.create_inference_deployment(detector_id=detector_id)
         deployment_created = True
 
-    if separate_oodd_inference:
+    if separate_oodd:
         oodd_deployment = deployment_manager.get_inference_deployment(deployment_name=oodd_deployment_name)
         if oodd_deployment is None:
             logger.info(f"Creating a new oodd inference deployment for {detector_id}")
@@ -81,7 +169,7 @@ def _check_new_models_and_inference_deployments(
         # Update inference deployment and rollout a new pod
         logger.info(f"Updating inference deployment for {detector_id}")
         deployment_manager.update_inference_deployment(detector_id=detector_id)
-        if separate_oodd_inference:
+        if separate_oodd:
             deployment_manager.update_inference_deployment(detector_id=detector_id, is_oodd=True)
 
         # Poll until the deployment rollout begins
@@ -90,7 +178,7 @@ def _check_new_models_and_inference_deployments(
         rollout_start_timeout = 10
         poll_start = time.time()
         while deployment_manager.is_inference_deployment_rollout_complete(deployment_name=edge_deployment_name) or (
-            separate_oodd_inference
+            separate_oodd
             and deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name)
         ):
             time.sleep(0.5)
@@ -101,7 +189,7 @@ def _check_new_models_and_inference_deployments(
         logger.info(f"Waiting for inference deployment(s) ({deployment_names}) to complete")
         poll_start = time.time()
         while not deployment_manager.is_inference_deployment_rollout_complete(deployment_name=edge_deployment_name) or (
-            separate_oodd_inference
+            separate_oodd
             and not deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name)
         ):
             time.sleep(5)
@@ -118,7 +206,7 @@ def _check_new_models_and_inference_deployments(
         delete_old_model_versions(detector_id, repository_root=edge_inference_manager.MODEL_REPOSITORY, num_to_keep=2)
 
     if deployment_manager.is_inference_deployment_rollout_complete(deployment_name=edge_deployment_name) and (
-        not separate_oodd_inference
+        not separate_oodd
         or deployment_manager.is_inference_deployment_rollout_complete(deployment_name=oodd_deployment_name)
     ):
         # Database transaction to update the deployment_created field for the detector_id
@@ -129,7 +217,7 @@ def _check_new_models_and_inference_deployments(
             model_name=primary_model_name,
             fields_to_update={"deployment_created": True, "deployment_name": edge_deployment_name},
         )
-        if separate_oodd_inference:
+        if separate_oodd:
             oodd_model_name = get_edge_inference_model_name(detector_id, is_oodd=True)
             db_manager.update_inference_deployment_record(
                 model_name=oodd_model_name,
@@ -141,7 +229,6 @@ def manage_update_models(
     edge_inference_manager: EdgeInferenceManager,
     deployment_manager: InferenceDeploymentManager,
     db_manager: DatabaseManager,
-    separate_oodd_inference: bool,
 ) -> None:
     """
     Periodically update inference models for detectors.
@@ -156,11 +243,6 @@ def manage_update_models(
 
     NOTE: The periodicity of this task is controlled by refresh_rate in the active edge config
     file. The value is re-read each cycle so it can be changed at runtime.
-
-    :param edge_inference_manager: the edge inference manager object.
-    :param deployment_manager: the inference deployment manager object.
-    :param db_manager: the database manager object.
-    :param separate_oodd_inference: whether to run inference separately for an OODD model.
     """
     deploy_detector_level_inference = bool(int(os.environ.get("DEPLOY_DETECTOR_LEVEL_INFERENCE", 0)))
     if not deploy_detector_level_inference:
@@ -173,9 +255,10 @@ def manage_update_models(
         if pending_deletions:
             logger.info(f"Processing deletion of {len(pending_deletions)} detector(s): {pending_deletions}")
             for detector_id in pending_deletions:
+                # Unconditionally delete both primary and OODD: delete_inference_deployment
+                # tolerates 404, so we don't need to remember the prior per-detector flavor.
                 deployment_manager.delete_inference_deployment(detector_id)
-                if separate_oodd_inference:
-                    deployment_manager.delete_inference_deployment(detector_id, is_oodd=True)
+                deployment_manager.delete_inference_deployment(detector_id, is_oodd=True)
 
             # Poll until all pods are fully terminated
             poll_start = time.time()
@@ -183,10 +266,7 @@ def manage_update_models(
             while time.time() - poll_start < POD_DELETION_TIMEOUT_SECONDS:
                 all_gone = all(
                     deployment_manager.is_inference_deployment_fully_deleted(did)
-                    and (
-                        not separate_oodd_inference
-                        or deployment_manager.is_inference_deployment_fully_deleted(did, is_oodd=True)
-                    )
+                    and deployment_manager.is_inference_deployment_fully_deleted(did, is_oodd=True)
                     for did in pending_deletions
                 )
                 if all_gone:
@@ -213,7 +293,6 @@ def manage_update_models(
                     edge_inference_manager=edge_inference_manager,
                     deployment_manager=deployment_manager,
                     db_manager=db_manager,
-                    separate_oodd_inference=separate_oodd_inference,
                 )
                 logger.debug(f"Successfully updated model for detector_id: {detector_id}")
             except Exception as e:
@@ -231,6 +310,7 @@ def manage_update_models(
         deployment_records = db_manager.get_inference_deployment_records()
         deployed_detector_ids = set(record.detector_id for record in deployment_records)
         for detector_id in deployed_detector_ids:
+            separate_oodd = not detector_uses_minimal_image(detector_id, db_manager)
             primary_deployment_name = get_edge_inference_deployment_name(detector_id)
             primary_deployment_created = (
                 deployment_manager.get_inference_deployment(primary_deployment_name) is not None
@@ -240,7 +320,7 @@ def manage_update_models(
                 fields_to_update={"deployment_created": primary_deployment_created},
             )
 
-            if separate_oodd_inference:
+            if separate_oodd:
                 oodd_deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd=True)
                 oodd_deployment_created = deployment_manager.get_inference_deployment(oodd_deployment_name) is not None
                 db_manager.update_inference_deployment_record(
@@ -253,16 +333,14 @@ if __name__ == "__main__":
     logger.info("Starting model updater.")
 
     logger.info("Creating edge inference manager, deployment manager, and database manager.")
-    edge_inference_manager = EdgeInferenceManager(verbose=True)
-    deployment_manager = InferenceDeploymentManager()
-
     # We will delegate creation of database tables to the edge-endpoint container.
     # So here we don't run a task to create the tables if they don't already exist.
     db_manager = DatabaseManager()
+    edge_inference_manager = EdgeInferenceManager(db_manager=db_manager, verbose=True)
+    deployment_manager = InferenceDeploymentManager(db_manager=db_manager)
 
     manage_update_models(
         edge_inference_manager=edge_inference_manager,
         deployment_manager=deployment_manager,
         db_manager=db_manager,
-        separate_oodd_inference=not USE_MINIMAL_IMAGE,
     )
