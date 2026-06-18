@@ -24,6 +24,10 @@ import { DARK_HEADER_STYLE } from "./sharedStyles";
 // Faster polling in dev is helpful when iterating, slow down polling in prod
 const REFRESH_MS = import.meta.env.DEV ? 1_000 : 10_000;
 
+// Fallback dashboard for detector links until /status/config.json resolves (or
+// if it fails). The backend derives the real value from the upstream endpoint.
+const DEFAULT_DASHBOARD_URL = "https://dashboard.groundlight.ai";
+
 const parseIfJson = (value) => {
   if (typeof value === "string") {
     try {
@@ -220,6 +224,7 @@ export default function App() {
   const [resources, setResources] = useState(null);
   const [edgeConfig, setEdgeConfig] = useState(null);
   const [edgeConfigError, setEdgeConfigError] = useState(false);
+  const [dashboardUrl, setDashboardUrl] = useState(DEFAULT_DASHBOARD_URL);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const intervalRef = useRef(null);
@@ -258,6 +263,25 @@ export default function App() {
     } catch {
       setEdgeConfigError(true);
     }
+  }, []);
+
+  // The dashboard URL is static for the lifetime of the page, so fetch it once
+  // rather than on every poll. Keep the default on any failure.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/status/config.json");
+        if (!res.ok) return;
+        const cfg = await res.json();
+        if (!cancelled && cfg?.dashboard_url) setDashboardUrl(cfg.dashboard_url);
+      } catch {
+        // Keep the default dashboard URL.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -322,7 +346,7 @@ export default function App() {
 
         <Stack gap="xl">
           <CollapsibleSection title="Detector Details">
-            <DetectorDetails details={detectorDetails} loading={loading} />
+            <DetectorDetails details={detectorDetails} loading={loading} dashboardUrl={dashboardUrl} />
           </CollapsibleSection>
 
           <CollapsibleSection title="Resource Usage by Detector">

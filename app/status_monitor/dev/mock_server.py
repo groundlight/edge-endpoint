@@ -361,6 +361,8 @@ class MockHandler(BaseHTTPRequestHandler):
                 data = build_metrics(state)
             elif self.path == "/edge-config":
                 data = build_edge_config(state)
+            elif self.path == "/status/config.json":
+                data = {"dashboard_url": "https://dashboard.groundlight.ai"}
             else:
                 self.send_error(404)
                 return
