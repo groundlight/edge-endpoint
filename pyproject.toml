@@ -39,7 +39,7 @@ dev = [
 # dashboard (app/profiling/dashboard.py). Kept out of the default install so
 # developers who don't use the dashboard don't pay the ~50MB cost.
 profiling = [
-    "marimo>=0.23.0,<0.24.0",
+    "marimo>=0.23.9,<0.24.0",
     "plotly>=6.0,<7.0",
 ]
 lint = [
