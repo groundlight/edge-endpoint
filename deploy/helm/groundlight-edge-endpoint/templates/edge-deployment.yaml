@@ -231,9 +231,6 @@ spec:
         env:
         - name: LOG_LEVEL
           value: {{ .Values.logLevel | quote }}
-        # Needed so the status page can derive the correct dashboard URL for
-        # detector links based on the upstream environment (prod, integ, dev, etc.)
-        # instead of always linking to prod.
         - name: GROUNDLIGHT_ENDPOINT
           value: "{{ .Values.upstreamEndpoint }}"
         - name: GROUNDLIGHT_API_TOKEN
