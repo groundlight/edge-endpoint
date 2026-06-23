@@ -359,7 +359,7 @@ class MockHandler(BaseHTTPRequestHandler):
                 data = build_resources(state)
             elif self.path == "/status/metrics.json":
                 data = build_metrics(state)
-            elif self.path == "/edge-config":
+            elif self.path == "/status/edge-config":
                 data = build_edge_config(state)
             else:
                 self.send_error(404)
