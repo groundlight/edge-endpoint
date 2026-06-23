@@ -80,13 +80,27 @@ s3Mount:
   mountPath: "/opt/groundlight/edge/pinamod-mount"
   cachePath: "/opt/groundlight/edge/pinamod-cache"
 
-# Registry host for the edge-endpoint and inference-server images and for the
-# registry-credentials pull secret. Single source of truth for all three.
-# Defaults to the legacy GL_Public account. Edge artifacts are migrating to
-# dedicated per-environment Axon accounts; once those exist this should be derived
-# from upstreamEndpoint instead of hardcoded.
-# TODO: derive per environment from upstreamEndpoint when the dev/prod edge ECRs are live (see edge artifacts migration plan).
-ecrRegistry: "767397850842.dkr.ecr.us-west-2.amazonaws.com"
+# Edge image registry resolution.
+#
+# Edge installs already pass upstreamEndpoint as the single "which environment"
+# signal, so the ECR image base is derived from it via ecrRegistryMap rather than a
+# separate install argument. The resolved value is the registry host plus an optional
+# repo prefix, and is the single source of truth for all three image layers: the
+# edge-endpoint image, the inference image, and the docker-server of the
+# registry-credentials pull secret (which uses just the host portion of the base).
+#
+# Every entry currently points at the legacy GL_Public account, so behavior is
+# unchanged. When the dedicated Axon edge ECR accounts exist (aws-global #371), add
+# their entries here (host plus the `edge/` repo prefix, and jetson repo naming) and
+# the switch becomes a data-only change. Upstreams not in the map fall back to the
+# prod (api.groundlight.ai) entry, so existing self-hosted installs keep pulling from
+# GL_Public.
+ecrRegistryMap:
+  "https://api.groundlight.ai": "767397850842.dkr.ecr.us-west-2.amazonaws.com"
+
+# Explicit override / escape hatch for self-hosted or unmapped upstreams. When set,
+# it wins over ecrRegistryMap. Leave empty to derive from upstreamEndpoint.
+ecrRegistry: ""
 
 # This sets the log level for all the containers, both edge endpoint and inference.
 logLevel: "INFO"
