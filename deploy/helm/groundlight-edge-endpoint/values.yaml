@@ -80,6 +80,12 @@ s3Mount:
   mountPath: "/opt/groundlight/edge/pinamod-mount"
   cachePath: "/opt/groundlight/edge/pinamod-cache"
 
+# Registry host for the edge-endpoint and inference-server images and for the
+# registry-credentials pull secret. Single source of truth for all three.
+# Defaults to the legacy GL_Public account. Edge artifacts are migrating to
+# dedicated per-environment Axon accounts; once those exist this should be derived
+# from upstreamEndpoint instead of hardcoded.
+# TODO: derive per environment from upstreamEndpoint when the dev/prod edge ECRs are live (see edge artifacts migration plan).
 ecrRegistry: "767397850842.dkr.ecr.us-west-2.amazonaws.com"
 
 # This sets the log level for all the containers, both edge endpoint and inference.
