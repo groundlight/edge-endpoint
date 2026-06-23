@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.core.edge_config_manager import EdgeConfigManager
 from app.metrics.iq_activity import clear_old_activity_files
 from app.metrics.metric_reporting import MetricsReporter
 from app.metrics.resource_metrics import ResourceMetricsCollector
@@ -50,6 +51,17 @@ async def get_metrics():
 def get_resources():
     """Return per-detector GPU and RAM usage as JSON."""
     return resource_collector.collect()
+
+
+@app.get("/status/edge-config")
+def get_edge_config():
+    """Return the active edge endpoint configuration as JSON.
+
+    Served here, under the /status prefix, so the status page can read it through the same
+    reverse proxy that fronts the rest of the status UI (e.g. the GEP hub). The main
+    edge-endpoint API also exposes /edge-config for SDK and tooling use.
+    """
+    return EdgeConfigManager.active().to_payload()
 
 
 @app.get("/status")
