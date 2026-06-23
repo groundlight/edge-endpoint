@@ -248,7 +248,7 @@ export default function App() {
     }
 
     try {
-      const res = await fetch("/edge-config");
+      const res = await fetch("/status/edge-config");
       if (res.ok) {
         setEdgeConfig(await res.json());
         setEdgeConfigError(false);
