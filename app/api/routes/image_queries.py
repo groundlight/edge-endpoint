@@ -112,6 +112,24 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     # request was sent directly and not through the SDK) we generate one in the same way that the SDK does.
     request_id = request.headers.get("x-request-id") or generate_request_id()
 
+    # Resolve the detector to its canonical identity before keying any activity, config, or inference on it.
+    # Detector IDs are case-sensitive KSUIDs, but the cloud resolves them case-insensitively. A mis-cased ID
+    # would therefore route to the correct model while being tracked as a separate detector by the edge's
+    # case-sensitive subsystems (hourly activity folders, edge-config lookup), yielding incoherent metrics and
+    # duplicate-key failures when the cloud ingests them. Reject the mismatch loudly so a single detector is
+    # only ever keyed under one canonical ID.
+    detector_metadata = get_detector_metadata(detector_id=detector_id, gl=gl)  # NOTE: API call (once, then cached)
+    if detector_id != detector_metadata.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"Unknown detector_id={detector_id!r}. Detector IDs are case-sensitive; "
+                f"did you mean {detector_metadata.id!r}?"
+            ),
+        )
+    # Schedule a background task to refresh the detector metadata if it's too old.
+    background_tasks.add_task(refresh_detector_metadata_if_needed, detector_id, gl)
+
     require_human_review = human_review == "ALWAYS"
     edge_config = EdgeConfigManager.active()
     detector_inference_config = EdgeConfigManager.detector_config(edge_config, detector_id)
@@ -154,11 +172,6 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             submit_iq_params=submit_iq_params,
             request_id=request_id,
         )
-
-    # Confirm the existence of the detector in GL, get relevant metadata
-    detector_metadata = get_detector_metadata(detector_id=detector_id, gl=gl)  # NOTE: API call (once, then cached)
-    # Schedule a background task to refresh the detector metadata if it's too old
-    background_tasks.add_task(refresh_detector_metadata_if_needed, detector_id, gl)
 
     confidence_threshold = (
         confidence_threshold if confidence_threshold is not None else detector_metadata.confidence_threshold

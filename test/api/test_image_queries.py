@@ -282,6 +282,28 @@ def test_post_image_query_with_invalid_detector_id(test_client: TestClient, dete
     assert response.json() == {"detail": "Detector with id 'invalid_id' not found"}
 
 
+def test_post_image_query_rejects_miscased_detector_id(test_client: TestClient, detector: Detector):
+    """A detector_id whose casing differs from the canonical ID is rejected with 404 and not escalated.
+
+    The cloud resolves detector IDs case-insensitively, so a mis-cased ID still resolves to the real
+    detector. The edge must reject it so a single detector is never tracked under two case variants.
+    """
+    image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
+    miscased_id = detector.id.upper()  # same KSUID, wrong casing
+    assert miscased_id != detector.id
+
+    with assert_not_escalated_to_gl(detector=detector):
+        response = test_client.post(
+            url,
+            headers={"Content-Type": "image/jpeg"},
+            content=image_bytes,
+            params={"detector_id": miscased_id, "confidence_threshold": 1.0},
+        )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND, response.json()["detail"]
+    assert miscased_id in response.json()["detail"]
+
+
 def test_post_image_query_with_invalid_field(test_client: TestClient, detector: Detector):
     """Test submitting an image query with an invalid detector ID."""
     image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
