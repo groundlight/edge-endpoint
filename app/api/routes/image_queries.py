@@ -115,9 +115,9 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     # Ensure that detector_id has correct casing by pulling the detector ID out of detector_metadata
     # get_detector_metadata returns the correctly-cased, canonical detector ID
     detector_metadata = get_detector_metadata(detector_id=detector_id, gl=gl)  # NOTE: API call (once, then cached)
-    detector_id = detector_metadata.id
-    # Schedule a background task to refresh the detector metadata if it's too old.
+    # Refresh against the caller-supplied key, since that is the key this cache entry is stored under.
     background_tasks.add_task(refresh_detector_metadata_if_needed, detector_id, gl)
+    detector_id = detector_metadata.id
 
     require_human_review = human_review == "ALWAYS"
     edge_config = EdgeConfigManager.active()

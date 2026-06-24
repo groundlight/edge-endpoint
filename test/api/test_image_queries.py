@@ -293,7 +293,9 @@ def test_post_image_query_canonicalizes_miscased_detector_id(test_client: TestCl
     miscased_id = detector.id.upper()  # same KSUID, wrong casing
     assert miscased_id != detector.id
 
-    with assert_escalated_to_gl(detector=detector, sdk_response=confident_cloud_iq):
+    with assert_escalated_to_gl(
+        detector=detector, sdk_response=confident_cloud_iq, submitted_with={"detector": detector.id}
+    ):
         with mock.patch("app.api.routes.image_queries.record_activity_for_metrics") as mock_record:
             response = test_client.post(
                 url,
