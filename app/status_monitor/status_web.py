@@ -32,9 +32,13 @@ async def startup_event():
     )
     logging.info("Starting status-monitor server...")
     logging.info("Will report metrics to the cloud every hour")
-    # Every hour, on the hour, collect metrics to send to the cloud.
-    scheduler.add_job(reporter.collect_metrics_for_cloud, "cron", hour="*", minute="0")
-    # Every hour, try to report collected metrics to the cloud. Run at 3 minutes past the hour, with a jitter of 120
+    # Reload any snapshots that were queued but not yet delivered before a restart, so we re-send the
+    # identical sealed payload rather than re-reading (and possibly changing) the hourly counts.
+    reporter.load_pending_reports()
+    # A minute past the hour, seal the previous hour's metrics. The small offset lets the last
+    # in-flight image queries of the hour finish being counted before we snapshot.
+    scheduler.add_job(reporter.collect_metrics_for_cloud, "cron", hour="*", minute="1")
+    # A few minutes later, try to deliver collected metrics. Run at 3 minutes past the hour, with a jitter of 120
     # seconds, to avoid every edge-endpoint report hitting the server at the exact same time.
     scheduler.add_job(reporter.report_metrics_to_cloud, "cron", hour="*", minute="3", jitter=120)
     scheduler.add_job(clear_old_activity_files, "interval", seconds=ONE_HOUR_IN_SECONDS)

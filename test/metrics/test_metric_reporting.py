@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 from app.metrics.metric_reporting import MetricsReporter, SafeMetricsDict
@@ -6,6 +7,23 @@ from app.metrics.metric_reporting import MetricsReporter, SafeMetricsDict
 
 def _deliberate_error():
     raise RuntimeError("Intentional test error")
+
+
+def _fake_payload(activity_hour: str, num_iqs: int = 100) -> dict:
+    """A minimal report payload with a controllable activity_hour and per-detector count."""
+    return {
+        "device_info": {"device_id": "device_test", "now": "2026-06-24T16:00:00"},
+        "activity_metrics": {
+            "activity_hour": activity_hour,
+            "detector_activity_previous_hour": json.dumps({"det_1": {"hourly_total_iqs": num_iqs}}),
+        },
+        "k3s_stats": {},
+    }
+
+
+def _reported_iqs(payload: dict) -> int:
+    """Pull det_1's hourly_total_iqs out of a (fake) payload."""
+    return json.loads(payload["activity_metrics"]["detector_activity_previous_hour"])["det_1"]["hourly_total_iqs"]
 
 
 class TestSafeMetricsDict:
@@ -109,18 +127,97 @@ class TestMetricsReporter:
         payload = reporter.metrics_payload()
         self._check_payload_structure(payload)
 
-    def test_collect_metrics_for_cloud(self):
-        """Test that metrics are collected correctly."""
-        reporter = MetricsReporter()
+    def test_collect_metrics_for_cloud(self, tmp_path):
+        """Metrics are collected and sealed once per hour (re-collecting the same hour is idempotent)."""
+        reporter = MetricsReporter(pending_reports_dir=tmp_path)
 
         reporter.collect_metrics_for_cloud()
         assert len(reporter.metrics_to_send) == 1
 
+        # Collecting again within the same hour is a no-op (first-writer-wins).
         reporter.collect_metrics_for_cloud()
-        assert len(reporter.metrics_to_send) == 2
+        assert len(reporter.metrics_to_send) == 1
 
-        _, payload = reporter.metrics_to_send.popitem()
+        _, payload = next(iter(reporter.metrics_to_send.items()))
         self._check_payload_structure(payload)
+
+    def test_collect_is_idempotent_per_hour(self, tmp_path):
+        """Two collections for the same hour keep the first sealed snapshot, even if the second read
+        would have produced different counts. This is the edge-side guard against the cloud's
+        "same key, different value" rejection."""
+        reporter = MetricsReporter(pending_reports_dir=tmp_path)
+
+        with patch.object(reporter, "metrics_payload", return_value=_fake_payload("2026-06-24_15", num_iqs=100)):
+            reporter.collect_metrics_for_cloud()
+        with patch.object(reporter, "metrics_payload", return_value=_fake_payload("2026-06-24_15", num_iqs=200)):
+            reporter.collect_metrics_for_cloud()
+
+        assert list(reporter.metrics_to_send) == ["2026-06-24_15"]
+        # The first snapshot is kept; the drifted re-read is ignored.
+        assert _reported_iqs(reporter.metrics_to_send["2026-06-24_15"]) == 100
+        assert (tmp_path / "2026-06-24_15.json").exists()
+
+    def test_pending_report_persisted_and_reloaded_after_restart(self, tmp_path):
+        """A queued snapshot survives a restart, and re-collecting that hour afterward stays deduped."""
+        reporter = MetricsReporter(pending_reports_dir=tmp_path)
+        with patch.object(reporter, "metrics_payload", return_value=_fake_payload("2026-06-24_15", num_iqs=100)):
+            reporter.collect_metrics_for_cloud()
+
+        # Simulate a restart: a brand-new reporter starts empty, then reloads from disk.
+        restarted = MetricsReporter(pending_reports_dir=tmp_path)
+        assert restarted.metrics_to_send == {}
+        restarted.load_pending_reports()
+        assert "2026-06-24_15" in restarted.metrics_to_send
+
+        # Re-collecting the same hour after a reload won't replace it with a freshly-read value.
+        with patch.object(restarted, "metrics_payload", return_value=_fake_payload("2026-06-24_15", num_iqs=999)):
+            restarted.collect_metrics_for_cloud()
+        assert len(restarted.metrics_to_send) == 1
+        assert _reported_iqs(restarted.metrics_to_send["2026-06-24_15"]) == 100
+
+    @patch("app.metrics.metric_reporting._groundlight_client")
+    def test_successful_send_removes_persisted_report(self, mock_gl_client, tmp_path):
+        """A 200 response clears the snapshot from memory and disk."""
+        mock_gl_client.return_value.api_client = self._get_mock_api_client(status_code=200)
+        reporter = MetricsReporter(pending_reports_dir=tmp_path)
+        with patch.object(reporter, "metrics_payload", return_value=_fake_payload("2026-06-24_15")):
+            reporter.collect_metrics_for_cloud()
+        assert (tmp_path / "2026-06-24_15.json").exists()
+
+        reporter.report_metrics_to_cloud()
+
+        assert reporter.metrics_to_send == {}
+        assert not (tmp_path / "2026-06-24_15.json").exists()
+
+    @patch("app.metrics.metric_reporting._groundlight_client")
+    def test_failed_send_keeps_persisted_report(self, mock_gl_client, tmp_path):
+        """A non-200 response keeps the snapshot queued (in memory and on disk) for a later retry."""
+        mock_gl_client.return_value.api_client = self._get_mock_api_client(status_code=400)
+        reporter = MetricsReporter(pending_reports_dir=tmp_path)
+        with patch.object(reporter, "metrics_payload", return_value=_fake_payload("2026-06-24_15")):
+            reporter.collect_metrics_for_cloud()
+
+        reporter.report_metrics_to_cloud()
+
+        assert "2026-06-24_15" in reporter.metrics_to_send
+        assert (tmp_path / "2026-06-24_15.json").exists()
+
+    def test_prune_drops_only_stale_reports(self, tmp_path):
+        """Reports older than the max age are dropped; fresh ones are retained."""
+        reporter = MetricsReporter(pending_reports_dir=tmp_path)
+        stale_hour = (datetime.now(timezone.utc) - timedelta(days=8)).strftime("%Y-%m-%d_%H")
+        fresh_hour = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%d_%H")
+        for hour in (stale_hour, fresh_hour):
+            payload = _fake_payload(hour)
+            reporter._persist_report(hour, payload)
+            reporter.metrics_to_send[hour] = payload
+
+        reporter._prune_stale_reports()
+
+        assert stale_hour not in reporter.metrics_to_send
+        assert not (tmp_path / f"{stale_hour}.json").exists()
+        assert fresh_hour in reporter.metrics_to_send
+        assert (tmp_path / f"{fresh_hour}.json").exists()
 
     @patch("app.metrics.metric_reporting._groundlight_client")
     def test_report_single_metric_payload_to_cloud(self, mock_gl_client):
