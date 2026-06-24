@@ -112,12 +112,8 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     # request was sent directly and not through the SDK) we generate one in the same way that the SDK does.
     request_id = request.headers.get("x-request-id") or generate_request_id()
 
-    # Resolve the detector to its canonical identity before keying any activity, config, or inference on it.
-    # Detector IDs are case-sensitive KSUIDs, but the cloud resolves them case-insensitively. A mis-cased ID
-    # would otherwise be tracked as a separate detector by the edge's case-sensitive subsystems (hourly activity
-    # folders, edge-config lookup), yielding incoherent metrics and duplicate-key failures when the cloud ingests
-    # them. Mirror the cloud's lenient resolution but canonicalize immediately, so a single detector is only ever
-    # keyed under one casing no matter how the caller spelled it.
+    # Canonicalize the (case-sensitive) detector ID up front so all downstream keying uses one casing,
+    # since the cloud resolves IDs case-insensitively and a mis-cased ID would otherwise be tracked separately.
     detector_metadata = get_detector_metadata(detector_id=detector_id, gl=gl)  # NOTE: API call (once, then cached)
     detector_id = detector_metadata.id
     # Schedule a background task to refresh the detector metadata if it's too old.
