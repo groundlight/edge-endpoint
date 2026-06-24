@@ -112,6 +112,13 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     # request was sent directly and not through the SDK) we generate one in the same way that the SDK does.
     request_id = request.headers.get("x-request-id") or generate_request_id()
 
+    # Ensure that detector_id has correct casing by pulling the detector ID out of detector_metadata
+    # get_detector_metadata returns the correctly-cased, canonical detector ID
+    detector_metadata = get_detector_metadata(detector_id=detector_id, gl=gl)  # NOTE: API call (once, then cached)
+    # Refresh against the caller-supplied key, since that is the key this cache entry is stored under.
+    background_tasks.add_task(refresh_detector_metadata_if_needed, detector_id, gl)
+    detector_id = detector_metadata.id
+
     require_human_review = human_review == "ALWAYS"
     edge_config = EdgeConfigManager.active()
     detector_inference_config = EdgeConfigManager.detector_config(edge_config, detector_id)
@@ -154,11 +161,6 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             submit_iq_params=submit_iq_params,
             request_id=request_id,
         )
-
-    # Confirm the existence of the detector in GL, get relevant metadata
-    detector_metadata = get_detector_metadata(detector_id=detector_id, gl=gl)  # NOTE: API call (once, then cached)
-    # Schedule a background task to refresh the detector metadata if it's too old
-    background_tasks.add_task(refresh_detector_metadata_if_needed, detector_id, gl)
 
     confidence_threshold = (
         confidence_threshold if confidence_threshold is not None else detector_metadata.confidence_threshold

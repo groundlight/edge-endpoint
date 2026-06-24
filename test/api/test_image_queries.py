@@ -282,6 +282,33 @@ def test_post_image_query_with_invalid_detector_id(test_client: TestClient, dete
     assert response.json() == {"detail": "Detector with id 'invalid_id' not found"}
 
 
+def test_post_image_query_canonicalizes_miscased_detector_id(test_client: TestClient, detector: Detector):
+    """A mis-cased detector_id is accepted but tracked under the canonical casing.
+
+    The cloud resolves detector IDs case-insensitively, so the edge mirrors that leniency. To avoid a single
+    detector being split across two case variants in edge metrics, the handler canonicalizes the ID up front
+    so every activity record is keyed on the canonical casing regardless of how the caller spelled it.
+    """
+    image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
+    miscased_id = detector.id.upper()  # same KSUID, wrong casing
+    assert miscased_id != detector.id
+
+    with assert_escalated_to_gl(
+        detector=detector, sdk_response=confident_cloud_iq, submitted_with={"detector": detector.id}
+    ):
+        with mock.patch("app.api.routes.image_queries.record_activity_for_metrics") as mock_record:
+            response = test_client.post(
+                url,
+                headers={"Content-Type": "image/jpeg"},
+                content=image_bytes,
+                params={"detector_id": miscased_id, "confidence_threshold": 1.0},
+            )
+
+    assert response.status_code == status.HTTP_200_OK, response.json()["detail"]
+    recorded_ids = {call.args[0] for call in mock_record.call_args_list}
+    assert recorded_ids == {detector.id}, f"metrics keyed on non-canonical IDs: {recorded_ids}"
+
+
 def test_post_image_query_with_invalid_field(test_client: TestClient, detector: Detector):
     """Test submitting an image query with an invalid detector ID."""
     image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
