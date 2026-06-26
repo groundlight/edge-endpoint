@@ -220,6 +220,7 @@ export default function App() {
   const [resources, setResources] = useState(null);
   const [edgeConfig, setEdgeConfig] = useState(null);
   const [edgeConfigError, setEdgeConfigError] = useState(false);
+  const [dashboardUrl, setDashboardUrl] = useState("https://dashboard.groundlight.ai");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const intervalRef = useRef(null);
@@ -258,6 +259,17 @@ export default function App() {
     } catch {
       setEdgeConfigError(true);
     }
+  }, []);
+
+  // The dashboard URL is static deployment config, so fetch it once on mount rather
+  // than on every poll. Falls back to the prod dashboard if the request fails.
+  useEffect(() => {
+    fetch("/status/cloud-config")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.dashboard_url) setDashboardUrl(data.dashboard_url);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -322,7 +334,7 @@ export default function App() {
 
         <Stack gap="xl">
           <CollapsibleSection title="Detector Details">
-            <DetectorDetails details={detectorDetails} loading={loading} />
+            <DetectorDetails details={detectorDetails} loading={loading} dashboardUrl={dashboardUrl} />
           </CollapsibleSection>
 
           <CollapsibleSection title="Resource Usage by Detector">
