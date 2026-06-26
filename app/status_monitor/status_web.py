@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.core.edge_config_manager import EdgeConfigManager
 from app.metrics.iq_activity import clear_old_activity_files
-from app.metrics.metric_reporting import MetricsReporter
+from app.metrics.metric_reporting import MetricsReporter, _groundlight_client
 from app.metrics.resource_metrics import ResourceMetricsCollector
 
 ONE_HOUR_IN_SECONDS = 3600
@@ -21,22 +21,20 @@ REACT_BUILD_DIR = Path(__file__).parent / "react-build"
 
 
 def cloud_dashboard_url() -> str:
-    """Derive the Cloud Dashboard base URL from the cloud API endpoint.
+    """Derive the Cloud Dashboard base URL from the SDK client's configured cloud endpoint.
 
-    Swaps a leading 'api.' host label for 'dashboard.' so e.g.
-    'https://api.groundlight.ai' becomes 'https://dashboard.groundlight.ai'. On the
-    edge endpoint GROUNDLIGHT_ENDPOINT already points at the real cloud, so detector
-    links resolve to the right dashboard for whichever cloud the device is registered
-    to (prod, integ, dev, us1, ...).
+    The Groundlight SDK already knows which cloud this device is registered to, so we read its
+    endpoint and swap the leading 'api.' host label for 'dashboard.' (e.g.
+    'https://api.integ.groundlight.ai' -> 'https://dashboard.integ.groundlight.ai'). Detector
+    links then resolve to the right dashboard across prod, integ, dev, us1, etc.
     """
-    endpoint = os.environ.get("GROUNDLIGHT_ENDPOINT", "https://api.groundlight.ai")
-    parsed = urlparse(endpoint)
+    parsed = urlparse(_groundlight_client().endpoint)
     host = parsed.hostname or ""
     if host.startswith("api."):
         dashboard_host = "dashboard." + host[len("api.") :]
     else:
         dashboard_host = "dashboard." + host
-    return urlunparse(parsed._replace(netloc=dashboard_host, path="", params="", query="", fragment=""))
+    return f"{parsed.scheme or 'https'}://{dashboard_host}"
 
 
 app = FastAPI(title="status-monitor")
