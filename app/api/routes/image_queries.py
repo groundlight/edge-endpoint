@@ -3,6 +3,7 @@ import random
 from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
+from starlette.concurrency import run_in_threadpool
 from groundlight import Groundlight
 from model import ImageQuery
 
@@ -114,7 +115,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
     # Ensure that detector_id has correct casing by pulling the detector ID out of detector_metadata
     # get_detector_metadata returns the correctly-cased, canonical detector ID
-    detector_metadata = get_detector_metadata(detector_id=detector_id, gl=gl)  # NOTE: API call (once, then cached)
+    detector_metadata = await run_in_threadpool(get_detector_metadata, detector_id=detector_id, gl=gl)  # NOTE: API call (once, then cached)
     # Refresh against the caller-supplied key, since that is the key this cache entry is stored under.
     background_tasks.add_task(refresh_detector_metadata_if_needed, detector_id, gl)
     detector_id = detector_metadata.id
@@ -173,10 +174,11 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         # If human review is required, we should skip edge inference completely
         logger.debug("Received human_review=ALWAYS. Skipping edge inference.")
         record_activity_for_metrics(detector_id, activity_type="escalations")
-    elif app_state.edge_inference_manager.inference_is_available(detector_id=detector_id):
+    elif await run_in_threadpool(app_state.edge_inference_manager.inference_is_available, detector_id=detector_id):
         # -- Edge-model Inference --
         logger.debug(f"Local inference is available for {detector_id=}. Running inference...")
-        results = app_state.edge_inference_manager.run_inference(
+        results = await run_in_threadpool(
+            app_state.edge_inference_manager.run_inference,
             detector_id=detector_id, image_bytes=image_bytes, content_type=content_type, mode=detector_metadata.mode
         )
         ml_confidence = results["confidence"]

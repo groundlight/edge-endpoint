@@ -75,6 +75,17 @@ spec:
           value: "1"
         - name: EDGE_COMPILE_ENABLED
           value: "{{ .Values.edgeCompileEnabled }}"
+        - name: OMP_NUM_THREADS
+          value: "4"
+        - name: MKL_NUM_THREADS
+          value: "4"
+        - name: OPENBLAS_NUM_THREADS
+          value: "4"
+        resources:
+          requests:
+            cpu: "4"
+          limits:
+            cpu: "8"
         volumeMounts:
         - name: edge-endpoint-persistent-volume
           mountPath: *modelRepository
