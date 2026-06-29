@@ -22,11 +22,6 @@ REACT_BUILD_DIR = Path(__file__).parent / "react-build"
 
 def cloud_dashboard_url() -> str:
     """Derive the Cloud Dashboard base URL from the SDK client's configured cloud endpoint.
-
-    The Groundlight SDK already knows which cloud this device is registered to, so we read its
-    endpoint and swap the leading 'api.' host label for 'dashboard.' (e.g.
-    'https://api.integ.groundlight.ai' -> 'https://dashboard.integ.groundlight.ai'). Detector
-    links then resolve to the right dashboard across prod, integ, dev, us1, etc.
     """
     parsed = urlparse(_groundlight_client().endpoint)
     host = parsed.hostname or ""
