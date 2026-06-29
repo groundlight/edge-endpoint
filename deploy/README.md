@@ -88,7 +88,7 @@ export GROUNDLIGHT_API_TOKEN="api_xxxxxx"
 
 > [!NOTE]
 > Your Groundlight account needs to be enabled to support the Edge Endpoint. If you don't have 
-> access to the Edge Endpoint, please contact Groundlight support (support@groundlight.ai).
+> access to the Edge Endpoint, please contact Groundlight support (axon-vision-support@axon.com).
 
 ### Setting up for Helm
 
@@ -293,7 +293,7 @@ DEPLOYMENT_NAMESPACE=<namespace-you-deployed-to> ./deploy/bin/delete-old-deploym
 
 ## Troubleshooting Deployments
 
-Here are some common issues you might encounter when deploying the edge endpoint and how to resolve them. If you have an issue that's not listed here, please contact Groundlight support at [support@groundlight.ai](mailto:support@groundlight.ai) for more assistence.
+Here are some common issues you might encounter when deploying the edge endpoint and how to resolve them. If you have an issue that's not listed here, please contact Groundlight support at [axon-vision-support@axon.com](mailto:axon-vision-support@axon.com) for more assistence.
 
 ### Helm deployment fails with `validate-api-token` error
 
@@ -306,7 +306,7 @@ it means that the API token you provided is not giving access.
 
 There are two possible reasons for this:
 1. The API token is invalid. Check the value you're providing and make sure it maps to a valid API token in the Groundlight web app.
-2. Your account does not have permission to use edge services. Not all plans enable edge inference. To find out more and get your account enabled, contact Groundlight support at [support@groundlight.ai](mailto:support@groundlight.ai).
+2. Your account does not have permission to use edge services. Not all plans enable edge inference. To find out more and get your account enabled, contact Groundlight support at [axon-vision-support@axon.com](mailto:axon-vision-support@axon.com).
 
 To diagnose which of these is the issue (or if it's something else entirely), you can check the logs of the `validate-api-token-edge` job:
 
