@@ -21,8 +21,7 @@ REACT_BUILD_DIR = Path(__file__).parent / "react-build"
 
 
 def cloud_dashboard_url() -> str:
-    """Derive the Cloud Dashboard base URL from the SDK client's configured cloud endpoint.
-    """
+    """Derive the Cloud Dashboard base URL from the SDK client's configured cloud endpoint."""
     parsed = urlparse(_groundlight_client().endpoint)
     host = parsed.hostname or ""
     if host.startswith("api."):
