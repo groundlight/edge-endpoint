@@ -7,23 +7,14 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
-from functools import lru_cache
 from typing import Any, Callable
 
-from groundlight import Groundlight
-
 from app.core import deviceid
+from app.core.groundlight_client import groundlight_client
 from app.escalation_queue import failed_escalations
 from app.metrics import iq_activity, system_metrics
 
 logger = logging.getLogger(__name__)
-
-
-@lru_cache(maxsize=1)
-def _groundlight_client() -> Groundlight:
-    """Returns a Groundlight client instance with EE-wide credentials for reporting metrics."""
-    # Don't specify an API token here - it will use the environment variable.
-    return Groundlight()
 
 
 class SafeMetricsDict:
@@ -101,7 +92,7 @@ class MetricsReporter:
 
     def report_metrics_to_cloud(self):
         """Reports metrics to the cloud API."""
-        sdk = _groundlight_client()
+        sdk = groundlight_client()
         # TODO: replace this with a proper SDK call when available.
         headers = sdk.api_client._headers()
 
