@@ -2,13 +2,13 @@ import json
 import logging
 import os
 import time
-from functools import lru_cache
 from pathlib import Path
 
 from fastapi import HTTPException, status
-from groundlight import Groundlight, GroundlightClientError, ImageQuery
+from groundlight import GroundlightClientError, ImageQuery
 from urllib3.exceptions import MaxRetryError, ReadTimeoutError
 
+from app.core.groundlight_client import groundlight_client
 from app.core.utils import safe_call_sdk
 from app.escalation_queue.failed_escalations import record_failed_escalation
 from app.escalation_queue.models import EscalationInfo
@@ -24,13 +24,6 @@ logger = logging.getLogger(__name__)
 # Increasing lengths of time to wait before retrying an escalation, to avoid hammering the cloud
 # service if it's down for some reason or if the user's throttling limit is reached.
 RETRY_WAIT_TIMES = [0, 1, 5, 10, 30]
-
-
-@lru_cache(maxsize=1)
-def _groundlight_client() -> Groundlight:
-    """Returns a Groundlight client instance with EE-wide credentials for escalating from the queue."""
-    # Don't specify an API token here - it will use the environment variable.
-    return Groundlight()  # NOTE this will wait the default 10 seconds when there's no connection.
 
 
 def _escalate_once(escalation_info: EscalationInfo, submit_iq_request_timeout_s: int | tuple[int, int]) -> ImageQuery:
@@ -51,7 +44,7 @@ def _escalate_once(escalation_info: EscalationInfo, submit_iq_request_timeout_s:
         f"Escalating queued escalation with ID {escalation_info.submit_iq_params.image_query_id} for detector "
         f"{escalation_info.detector_id} with timestamp {escalation_info.timestamp}."
     )
-    gl = _groundlight_client()
+    gl = groundlight_client()
     image_path = Path(escalation_info.image_path_str)
     image_bytes = image_path.read_bytes()
     submit_iq_params = escalation_info.submit_iq_params
