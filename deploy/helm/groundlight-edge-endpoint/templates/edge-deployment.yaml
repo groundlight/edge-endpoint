@@ -231,6 +231,8 @@ spec:
         env:
         - name: LOG_LEVEL
           value: {{ .Values.logLevel | quote }}
+        - name: GROUNDLIGHT_ENDPOINT
+          value: "{{ .Values.upstreamEndpoint }}"
         - name: GROUNDLIGHT_API_TOKEN
           valueFrom:
             secretKeyRef:
