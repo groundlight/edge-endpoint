@@ -20,6 +20,7 @@ export default defineConfig({
       "/status/static/icon_gold_dark.svg": EDGE_ENDPOINT,
       "/status/static/favicon.ico": EDGE_ENDPOINT,
       "/status/edge-config": EDGE_ENDPOINT,
+      "/status/cloud-config": EDGE_ENDPOINT,
     },
   },
 });

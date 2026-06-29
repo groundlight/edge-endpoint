@@ -122,7 +122,7 @@ class TestMetricsReporter:
         _, payload = reporter.metrics_to_send.popitem()
         self._check_payload_structure(payload)
 
-    @patch("app.metrics.metric_reporting._groundlight_client")
+    @patch("app.metrics.metric_reporting.groundlight_client")
     def test_report_single_metric_payload_to_cloud(self, mock_gl_client):
         """Test that a single metric payload is reported correctly."""
         mock_api_client = self._get_mock_api_client()
@@ -137,7 +137,7 @@ class TestMetricsReporter:
 
         assert len(reporter.metrics_to_send) == 0
 
-    @patch("app.metrics.metric_reporting._groundlight_client")
+    @patch("app.metrics.metric_reporting.groundlight_client")
     def test_report_multiple_metric_payloads_to_cloud(self, mock_gl_client):
         """Test that multiple metric payloads are reported correctly."""
         mock_api_client = self._get_mock_api_client()
@@ -155,7 +155,7 @@ class TestMetricsReporter:
         assert mock_api_client.call_api.call_count == 3
         assert len(reporter.metrics_to_send) == 0
 
-    @patch("app.metrics.metric_reporting._groundlight_client")
+    @patch("app.metrics.metric_reporting.groundlight_client")
     def test_report_metric_payload_to_cloud_failure(self, mock_gl_client):
         """Test that a metric payload is kept in metrics_to_send if the cloud API call fails."""
         mock_api_client = self._get_mock_api_client(status_code=400)
@@ -175,7 +175,7 @@ class TestMetricsReporter:
         assert len(reporter.metrics_to_send) == 3
         assert reporter.metrics_to_send == mock_metrics
 
-    @patch("app.metrics.metric_reporting._groundlight_client")
+    @patch("app.metrics.metric_reporting.groundlight_client")
     def test_report_metric_payload_empty_metrics_to_send(self, mock_gl_client):
         """Test that a metric payload is kept in metrics_to_send if the cloud API call fails."""
         mock_api_client = self._get_mock_api_client(status_code=400)

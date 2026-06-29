@@ -1,6 +1,7 @@
 import logging
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
@@ -8,6 +9,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.edge_config_manager import EdgeConfigManager
+from app.core.groundlight_client import groundlight_client
 from app.metrics.iq_activity import clear_old_activity_files
 from app.metrics.metric_reporting import MetricsReporter
 from app.metrics.resource_metrics import ResourceMetricsCollector
@@ -17,6 +19,22 @@ LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
 STATIC_DIR = Path(__file__).parent / "static"
 REACT_BUILD_DIR = Path(__file__).parent / "react-build"
+
+
+def cloud_dashboard_url() -> str:
+    """Derive the Cloud Dashboard base URL from the SDK client's configured cloud endpoint.
+
+    Always uses https, since every Groundlight cloud is served over https.
+    """
+    host = urlparse(groundlight_client().endpoint).hostname
+    if not host:
+        raise ValueError("Could not determine cloud host from the Groundlight client endpoint.")
+    if host.startswith("api."):
+        dashboard_host = "dashboard." + host[len("api.") :]
+    else:
+        dashboard_host = "dashboard." + host
+    return f"https://{dashboard_host}"
+
 
 app = FastAPI(title="status-monitor")
 scheduler = AsyncIOScheduler()
@@ -62,6 +80,13 @@ def get_edge_config():
     edge-endpoint API also exposes /edge-config for SDK and tooling use.
     """
     return EdgeConfigManager.active().to_payload()
+
+
+@app.get("/status/cloud-config")
+def get_cloud_config():
+    """Return cloud-derived config for the status UI, such as the Cloud Dashboard base
+    URL used to build detector links."""
+    return {"dashboard_url": cloud_dashboard_url()}
 
 
 @app.get("/status")

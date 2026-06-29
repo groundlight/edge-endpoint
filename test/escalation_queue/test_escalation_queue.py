@@ -362,7 +362,7 @@ class TestQueueReader:
 class TestEscalateOnce:
     @pytest.fixture
     def mock_gl(self):
-        with patch("app.escalation_queue.manage_reader._groundlight_client") as mock_gl:
+        with patch("app.escalation_queue.manage_reader.groundlight_client") as mock_gl:
             mock_gl.return_value = Mock()
             yield mock_gl.return_value
 
@@ -415,7 +415,7 @@ class TestEscalateOnce:
 
     def test_gl_client_creation_failure(self, test_escalation_info: EscalationInfo):
         """If the Groundlight client cannot be created, _escalate_once should raise."""
-        with patch("app.escalation_queue.manage_reader._groundlight_client") as mock_gl:
+        with patch("app.escalation_queue.manage_reader.groundlight_client") as mock_gl:
             mock_gl.side_effect = GroundlightClientError()
             with pytest.raises(GroundlightClientError):
                 _escalate_once(test_escalation_info, submit_iq_request_timeout_s=5)
