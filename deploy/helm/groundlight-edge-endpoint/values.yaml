@@ -104,12 +104,15 @@ inferenceDeployment:
   # past ~3 detectors). Total compute threads ~= cpuThreads x (2 x num_detectors); keep
   # small (2-4) on dense multi-detector edges. Tune empirically per device.
   cpuThreads: 4
-  # CPU request per inference pod (scheduling reservation). This governs pod DENSITY:
-  # max inference pods ~= node_cores / cpuRequest. No CPU limit is set, so pods burst
-  # freely (bounded by cpuThreads) with no CFS throttling. Each detector = 2 pods
-  # (primary + OODD), so e.g. cpuRequest=4 caps a 112-core node at ~13 detectors --
-  # lower it (1) to pack more detectors per device.
-  cpuRequest: 1
+  # Optional CPU request per inference pod. EMPTY (default) => no request => BestEffort:
+  # the scheduler launches ALL detectors regardless of core count. This matches real edge
+  # usage where most detectors are idle at any instant -- active pods are bounded by
+  # cpuThreads and the OS time-slices the occasional simultaneous burst. No CPU limit is
+  # ever set, so there is no CFS throttling either. Set a value (e.g. "1") only if you want
+  # a hard scheduling reservation that caps density (max pods ~= node_cores / cpuRequest);
+  # note that reserving N cores per pod is what previously capped a 112-core node at
+  # ~112/N detectors and caused set_config readiness timeouts past that.
+  cpuRequest: ""
   startupProbe:
     # Consecutive 10-second startup-probe failures before kubelet kills the container.
     # Ceiling = failureThreshold × 10s. Default 540 = 90 min.
