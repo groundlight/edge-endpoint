@@ -1,0 +1,26 @@
+# Snyk (https://snyk.io) policy file.
+# Ignores reviewed and risk-accepted findings. See docs:
+# https://docs.snyk.io/snyk-cli/commands/ignore
+
+version: v1.5.0
+ignore:
+  # CVE-2023-45853 — integer overflow in MiniZip.
+  # MiniZip is a contrib component in the zlib source tree that Debian does NOT
+  # compile into the shipped zlib1g package, so the vulnerable code is absent
+  # from our images. Debian tracker status is <ignored>: "contrib/minizip not
+  # built ... src:zlib only starts building minizip starting in 1:1.2.13.dfsg-2".
+  # https://security-tracker.debian.org/tracker/CVE-2023-45853
+  #
+  # Verified 2026-06-30 against the bookworm image (zlib1g 1:1.2.13.dfsg-1):
+  # libz.so ships no minizip files and no zipOpenNewFileInZip* symbols.
+  # TRIP-WIRE: if zlib1g ever updates to 1:1.2.13.dfsg-2 or later, Debian begins
+  # building minizip — re-verify before renewing this ignore.
+  #
+  # Single Debian 12 ID covers both the main and bastion images (both bookworm).
+  SNYK-DEBIAN12-ZLIB-6008963:
+    - '*':
+        reason: >-
+          MiniZip not compiled into Debian zlib1g; vulnerable code absent from
+          image. Debian: not-affected, no fix will be issued.
+        expires: 2027-06-30T00:00:00.000Z
+patch: {}
