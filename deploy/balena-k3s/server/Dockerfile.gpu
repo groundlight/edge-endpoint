@@ -111,7 +111,7 @@ ENV K3S_TAG=${K3S_TAG}
 ENV NVIDIA_DRIVER_VERSION=${NVIDIA_DRIVER_VERSION}
 ENV NVIDIA_DRIVER=NVIDIA-Linux-x86_64-${NVIDIA_DRIVER_VERSION}
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     curl runc systemd ca-certificates kmod procps gnupg2 iptables && \
     rm -rf /var/lib/apt/lists/*
 

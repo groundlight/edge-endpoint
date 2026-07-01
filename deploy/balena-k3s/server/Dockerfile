@@ -52,7 +52,7 @@ ARG K3S_TAG="v1.28.8+k3s1"
 ENV DEBIAN_FRONTEND=noninteractive
 ENV K3S_TAG=${K3S_TAG}
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     curl runc systemd ca-certificates kmod procps gnupg iptables && \
     rm -rf /var/lib/apt/lists/*
 
