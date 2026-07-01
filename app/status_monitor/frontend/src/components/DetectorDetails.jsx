@@ -197,7 +197,7 @@ function getTimestamp(info) {
   return Number.isNaN(t) ? Date.now() : t;
 }
 
-export default function DetectorDetails({ details, loading }) {
+export default function DetectorDetails({ details, loading, dashboardUrl = "https://dashboard.groundlight.ai" }) {
   // null = default sort by deployment creation time (oldest first)
   const [sortDir, setSortDir] = useState(null);
 
@@ -283,8 +283,9 @@ export default function DetectorDetails({ details, loading }) {
                 <Table.Td style={{ verticalAlign: "top", overflow: "hidden" }}>
                   <Stack gap={4}>
                     <Anchor
-                      href={`https://dashboard.groundlight.ai/reef/detectors/${id}`}
+                      href={`${dashboardUrl}/reef/detectors/${id}`}
                       target="_blank"
+                      rel="noopener noreferrer"
                       size="sm"
                       underline="always"
                       style={{ whiteSpace: "nowrap" }}
