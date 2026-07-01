@@ -4,23 +4,38 @@
 # by nginx to enable HTTPS.
 #
 # The certificate is "pinned" to the device: it lives on persistent storage and
-# is only (re)generated when it is missing or within 30 days of expiry. Keeping
-# it stable across pod restarts gives the Lens<->edge link a consistent endpoint
-# identity instead of a brand-new cert on every boot.
+# is only (re)generated when the existing cert/key pair is missing, mismatched,
+# or within 30 days of expiry. Keeping it stable across pod restarts gives the
+# Lens<->edge link a consistent endpoint identity instead of a brand-new cert on
+# every boot. Regeneration is self-healing: a broken pair is replaced rather than
+# left in place for nginx to choke on later.
 
 set -ex
 
-CERT_DIR=/etc/nginx/certs
+# CERT_DIR is overridable so the generator can be exercised in tests; production
+# deployments mount nginx's cert directory here.
+CERT_DIR="${CERT_DIR:-/etc/nginx/certs}"
 CERT_FILE="$CERT_DIR/certificate.crt"
 KEY_FILE="$CERT_DIR/private.key"
 
-# Reuse the existing cert if it is present and valid for at least 30 more days.
-if [ -f "$CERT_FILE" ] && [ -f "$KEY_FILE" ] && openssl x509 -checkend 2592000 -noout -in "$CERT_FILE"; then
-    echo "Existing TLS certificate is still valid; keeping the pinned cert."
+# Reusable means: both files exist, the cert is valid for at least 30 more days,
+# and the private key actually matches the certificate.
+cert_is_reusable() {
+    [ -f "$CERT_FILE" ] || return 1
+    [ -f "$KEY_FILE" ] || return 1
+    openssl x509 -checkend 2592000 -noout -in "$CERT_FILE" >/dev/null 2>&1 || return 1
+    local cert_pubkey key_pubkey
+    cert_pubkey=$(openssl x509 -in "$CERT_FILE" -noout -pubkey 2>/dev/null) || return 1
+    key_pubkey=$(openssl pkey -in "$KEY_FILE" -pubout 2>/dev/null) || return 1
+    [ "$cert_pubkey" = "$key_pubkey" ]
+}
+
+if cert_is_reusable; then
+    echo "Existing TLS certificate is still valid and matches its key; keeping the pinned cert."
     exit 0
 fi
 
-echo "Generating a new self-signed TLS certificate..."
+echo "Generating a new self-signed TLS certificate (cert/key missing, mismatched, or near expiry)..."
 
 # create a temporary directory to work in
 TMPDIR=$(mktemp -d -t tls-cert-XXXXXX)
