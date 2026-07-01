@@ -136,7 +136,7 @@ helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint
   --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}"
 ```
 
-This will install the Edge Endpoint doing GPU-based inference in the `edge` namespace in your k3s cluster and expose it on port 30101 on your local node. Helm will keep a history of the installation in the `default` namespace (signified by the `-n default` flag).
+This will install the Edge Endpoint doing GPU-based inference in the `edge` namespace in your k3s cluster and expose it via HTTPS on port 30143 on your local node. Helm will keep a history of the installation in the `default` namespace (signified by the `-n default` flag).
 
 To change values that you've customized after you've installed the Edge Endpoint or to install an updated chart, use the `helm upgrade` command. For example, to change the `groundlightApiToken` value, you can run:
 
@@ -165,6 +165,16 @@ If the system you're running on doesn't have a GPU, you can run the Edge Endpoin
 helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint \
   --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}" \
   --set inferenceFlavor=cpu
+```
+
+#### Variation: Enable HTTP
+
+By default, the Edge Endpoint only serves HTTPS (with a self-signed certificate) on port 30143. Unencrypted HTTP on port 30101 is disabled by default. If you need HTTP access (for example, for local development or clients that can't handle the self-signed certificate), set `httpEnabled=true`:
+
+```shell
+helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint \
+  --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}" \
+  --set httpEnabled=true
 ```
 
 #### Variation: Disable the network healer
@@ -204,7 +214,7 @@ NAME                             READY   STATUS    RESTARTS   AGE
 edge-endpoint-6d7b9c4b59-wdp8f   2/2     Running   0          2m
 ```
 
-Now you can access the Edge Endpoint at `http://localhost:30101`. For use with the Groundlight SDK, you can set the `GROUNDLIGHT_ENDPOINT` environment variable to `http://localhost:30101`.
+Now you can access the Edge Endpoint at `https://localhost:30143` (it uses a self-signed TLS certificate, so set `DISABLE_TLS_VERIFY=1` or pass `disable_tls_verification=True` to the `Groundlight()` constructor). For use with the Groundlight SDK, you can set the `GROUNDLIGHT_ENDPOINT` environment variable to `https://localhost:30143`.
 
 ### Uninstalling Edge Endpoint
 

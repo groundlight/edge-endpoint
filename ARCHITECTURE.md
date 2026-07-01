@@ -26,7 +26,7 @@ The edge endpoint pod divides its work between five containers:
 
 ## Network flow
 
-By default, the edge endpoint exposes the Groundlight API on port 30101 on the local machine.
+By default, the edge endpoint exposes the Groundlight API over HTTPS on port 30143 on the local machine. Unencrypted HTTP on port 30101 is disabled by default but can be enabled via the `httpEnabled` Helm value.
 
 The following diagram shows how HTTP requests are handled by the edge endpoint when not running in minimal mode.
 

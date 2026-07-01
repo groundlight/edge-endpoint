@@ -29,6 +29,8 @@ echo "created detector with id: $DETECTOR_ID"
 export EDGE_ENDPOINT_PORT="30108"
 export DEPLOYMENT_NAMESPACE="test-with-k3s-helm"
 export INFERENCE_FLAVOR="CPU"
+# These tests hit the edge endpoint over plain HTTP, so the helm install below passes
+# --set httpEnabled=true to opt back into the HTTP port (disabled by default).
 export LIVE_TEST_ENDPOINT="http://localhost:$EDGE_ENDPOINT_PORT"
 export REFRESH_RATE=60 # not actually different than the default, but we may want to tweak this
 
@@ -73,6 +75,7 @@ helm install -n default ${HELM_RELEASE_NAME} deploy/helm/groundlight-edge-endpoi
     --set namespace=$DEPLOYMENT_NAMESPACE \
     --set edgeEndpointTag=$IMAGE_TAG \
     --set inferenceTag=$INFERENCE_IMAGE_TAG \
+    --set httpEnabled=true \
     --set-file configFile=$EDGE_CONFIG_FILE
 
 echo "Waiting for edge-endpoint pods to rollout..."
