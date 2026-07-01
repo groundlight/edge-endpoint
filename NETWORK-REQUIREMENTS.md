@@ -29,11 +29,11 @@ There may be additional network requirements based on the deployment methods, pl
 
 <img src="images/network-requirement-self-managed-separate-machine.excalidraw.png" alt="Self-Managed edge endpoint with separate client" width="800"/>
 
-For self managed edge servers where the client is not in the same machine as the edge endpoint, inbound port `30101` (HTTP) and `30143` (HTTPS) to the server are the default ports for our SDK to communicate with the edge server.
+For self managed edge servers where the client is not in the same machine as the edge endpoint, inbound port `30143` (HTTPS) to the server is the default port for our SDK to communicate with the edge server. Unencrypted HTTP on port `30101` is disabled by default and only needs to be allowlisted if you've explicitly enabled it via the `httpEnabled` Helm value.
 
 <img src="images/network-requirement-self-managed-all-in-one.excalidraw.png" alt="Self-Managed edge endpoint with client in the same machine" width="800"/>
 
-For client application running on the same machine, no outbound port access is needed as the client can access the edge endpoint through `ENDPOINT=http://localhost:30101` or its internal IP address.
+For client application running on the same machine, no outbound port access is needed as the client can access the edge endpoint through `ENDPOINT=https://localhost:30143` (with `DISABLE_TLS_VERIFY=1` set, since the endpoint uses a self-signed certificate) or its internal IP address.
 
 ### Balena-Managed Devices
 
@@ -45,14 +45,14 @@ For more information, please refer to balena's networking documentation [here](h
 
 <img src="images/network-requirement-balena-managed-separate-machine.excalidraw.png" alt="Balena-managed edge endpoint with separate client" width="800"/>
 
-For balena-managed edge servers where the client is not in the same machine as the edge endpoint, inbound port `30101` to the server is the default port for our SDK to communicate with the edge server.
+For balena-managed edge servers where the client is not in the same machine as the edge endpoint, inbound port `30143` (HTTPS) to the server is the default port for our SDK to communicate with the edge server.
 
 <img src="images/network-requirement-balena-managed-all-in-one.excalidraw.png" alt="Balena-managed edge endpoint with client in the same machine" width="800"/>
 
-For client application running on the same machine, no outbound port access is needed as the client can access the edge endpoint through `ENDPOINT=http://localhost:30101` or its internal IP address.
+For client application running on the same machine, no outbound port access is needed as the client can access the edge endpoint through `ENDPOINT=https://localhost:30143` (with `DISABLE_TLS_VERIFY=1` set, since the endpoint uses a self-signed certificate) or its internal IP address.
 
 ### Edge on the Cloud
 
 <img src="images/network-requirement-on-the-cloud.excalidraw.png" alt="Edge on the cloud" width="800"/>
 
-For our edge-on-the-cloud services, an outbound allowlist to port `30101` and the IP address of the edge server is required on the client side. On the server side please refer to the [Basic Requirements](#basic-requirements).
+For our edge-on-the-cloud services, an outbound allowlist to port `30143` and the IP address of the edge server is required on the client side. On the server side please refer to the [Basic Requirements](#basic-requirements).
