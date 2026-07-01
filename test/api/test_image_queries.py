@@ -114,33 +114,29 @@ def assert_not_escalated_to_gl(detector: Detector | None = None):
 def enable_edge_inference(
     *, edge_response: dict | None = None, assert_ran: bool = False, assert_didnt_run: bool = False
 ):
-    """
-    Context manager to mock everything for supporting edge inference. Returns that edge_inference
-    is available (as if the inference deployment is ready), and enables/requires the user to specify
-    the exact contents of the edge_response.
-    # TODO: better mocking support for edge_response
+    """Context manager that mocks edge inference for tests.
+
+    By default (no edge_response), run_inference raises RuntimeError to simulate no pod available.
+    When edge_response is provided, run_inference returns that response to simulate successful inference.
     """
     if assert_ran and assert_didnt_run:
         raise ValueError("Conflicting assertions configured.")
-    edge_response = edge_response or {}
 
     mock_edge_inference_manager = mock.Mock()
-    mock_edge_inference_manager.inference_is_available.return_value = True
-    mock_edge_inference_manager.run_inference.return_value = edge_response
+    if edge_response is not None:
+        mock_edge_inference_manager.run_inference.return_value = edge_response
+    else:
+        mock_edge_inference_manager.run_inference.side_effect = RuntimeError("Edge inference not available")
 
-    # We need to inject the edge_inference_manager mock via `get_app_state`, so
-    # we need to mock AppState as well. It would be nicer if we had more loosely
-    # coupled dependency injection here.
-    mock_app_state = mock.Mock()
-    mock_app_state.edge_inference_manager = mock_edge_inference_manager
-
-    with mock.patch("app.api.routes.image_queries.get_app_state") as mock_app_state:
+    # Patch get_app_state and wire in our mock EdgeInferenceManager.
+    with mock.patch("app.api.routes.image_queries.get_app_state") as mock_get_app_state:
+        mock_get_app_state.return_value.edge_inference_manager = mock_edge_inference_manager
         yield mock_edge_inference_manager
 
-        if assert_ran:  # assert that a request was sent to the inference server
-            mock_edge_inference_manager.inference_is_available.assert_called_once()
+        if assert_ran:
+            mock_edge_inference_manager.run_inference.assert_called_once()
         if assert_didnt_run:
-            mock_edge_inference_manager.inference_is_available.assert_not_called()
+            mock_edge_inference_manager.run_inference.assert_not_called()
 
 
 #
@@ -156,7 +152,7 @@ def test_post_image_query(test_client: TestClient, detector: Detector):
     with assert_escalated_to_gl(
         submitted_with={"confidence_threshold": threshold}, detector=detector, sdk_response=confident_cloud_iq
     ):
-        with enable_edge_inference(assert_didnt_run=True):  # No inference deployments configured yet
+        with enable_edge_inference():  # No deployment: run_inference raises RuntimeError, falls back to cloud
             response = test_client.post(
                 url,
                 headers={"Content-Type": "image/jpeg"},

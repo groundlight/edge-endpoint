@@ -173,141 +173,147 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         # If human review is required, we should skip edge inference completely
         logger.debug("Received human_review=ALWAYS. Skipping edge inference.")
         record_activity_for_metrics(detector_id, activity_type="escalations")
-    elif app_state.edge_inference_manager.inference_is_available(detector_id=detector_id):
-        # -- Edge-model Inference --
-        logger.debug(f"Local inference is available for {detector_id=}. Running inference...")
-        results = app_state.edge_inference_manager.run_inference(
-            detector_id=detector_id, image_bytes=image_bytes, content_type=content_type, mode=detector_metadata.mode
-        )
-        ml_confidence = results["confidence"]
-        class_index = results["label"]
-        record_confidence_for_metrics(detector_id, ml_confidence, class_index=class_index)
-
-        is_confident_enough = ml_confidence >= confidence_threshold
-        if not is_confident_enough:
-            record_activity_for_metrics(detector_id, activity_type="below_threshold_iqs", class_index=class_index)
-
-        if return_edge_prediction or is_confident_enough:  # Return the edge prediction
-            if return_edge_prediction:
-                logger.debug(f"Returning edge prediction without cloud escalation. {detector_id=}")
-            else:
-                logger.debug(f"Edge detector confidence sufficient. {detector_id=}")
-
-            image_query = create_iq(
-                detector_id=detector_id,
-                mode=detector_metadata.mode,
-                mode_configuration=detector_metadata.mode_configuration,
-                result_value=results["label"],
-                confidence=ml_confidence,
-                confidence_threshold=confidence_threshold,
-                is_done_processing=True,
-                query=detector_metadata.query,
-                patience_time=patience_time,
-                rois=results["rois"],
-                text=results["text"],
-                mlb_key=results.get("mlb_key"),
-                oodd_mlb_key=results.get("oodd_mlb_key"),
+    else:
+        try:
+            results = app_state.edge_inference_manager.run_inference(
+                detector_id=detector_id, image_bytes=image_bytes, content_type=content_type, mode=detector_metadata.mode
             )
+        except RuntimeError:
+            logger.debug(f"Edge inference failed for {detector_id=}, treating as unavailable.")
+            results = None
 
-            # Skip cloud operations if escalation is disabled
-            if disable_cloud_escalation:
-                return image_query
+        if results is not None:
+            # -- Edge-model Inference --
+            logger.debug(f"Local inference succeeded for {detector_id=}.")
+            ml_confidence = results["confidence"]
+            class_index = results["label"]
+            record_confidence_for_metrics(detector_id, ml_confidence, class_index=class_index)
 
-            if is_confident_enough:  # Audit confident edge predictions at the specified rate
-                if random.random() < edge_config.global_config.confident_audit_rate:
-                    logger.debug(
-                        f"Auditing confident edge prediction with confidence {ml_confidence} for detector {detector_id=}."
-                    )
-                    record_activity_for_metrics(detector_id, activity_type="audits")
-                    submit_iq_params = SubmitImageQueryParams(
-                        patience_time=patience_time,
-                        confidence_threshold=confidence_threshold,
-                        human_review=human_review,
-                        metadata=generate_metadata_dict(results=results, is_edge_audit=True),
-                        image_query_id=image_query.id,  # We give the cloud IQ the same ID as the returned edge IQ
-                    )
-                    # We write to the queue synchronously because it should be fast. But this could be done as a
-                    # background task if it becomes slow.
-                    write_escalation_to_queue(
-                        writer=app_state.queue_writer,
-                        detector_id=detector_id,
-                        image_bytes=image_bytes,
-                        submit_iq_params=submit_iq_params,
-                        request_id=request_id,
-                    )
+            is_confident_enough = ml_confidence >= confidence_threshold
+            if not is_confident_enough:
+                record_activity_for_metrics(detector_id, activity_type="below_threshold_iqs", class_index=class_index)
 
-                    # We keep done_processing=True here for `image_query` because although we escalated the query for
-                    # an audit, this is invisible to the user. From their perspective, this is the final answer.
+            if return_edge_prediction or is_confident_enough:  # Return the edge prediction
+                if return_edge_prediction:
+                    logger.debug(f"Returning edge prediction without cloud escalation. {detector_id=}")
+                else:
+                    logger.debug(f"Edge detector confidence sufficient. {detector_id=}")
 
-                    # Don't want to escalate to cloud again if we're already auditing the query
+                image_query = create_iq(
+                    detector_id=detector_id,
+                    mode=detector_metadata.mode,
+                    mode_configuration=detector_metadata.mode_configuration,
+                    result_value=results["label"],
+                    confidence=ml_confidence,
+                    confidence_threshold=confidence_threshold,
+                    is_done_processing=True,
+                    query=detector_metadata.query,
+                    patience_time=patience_time,
+                    rois=results["rois"],
+                    text=results["text"],
+                    mlb_key=results.get("mlb_key"),
+                    oodd_mlb_key=results.get("oodd_mlb_key"),
+                )
+
+                # Skip cloud operations if escalation is disabled
+                if disable_cloud_escalation:
                     return image_query
 
-            # Escalate after returning edge prediction if escalation is enabled and we have low confidence.
-            if not is_confident_enough:
-                # Only escalate if we haven't escalated on this detector too recently.
-                if app_state.edge_inference_manager.escalation_cooldown_complete(detector_id, edge_config):
-                    logger.debug(
-                        f"Escalating to cloud due to low confidence: {ml_confidence} < thresh={confidence_threshold}"
-                    )
-                    record_activity_for_metrics(detector_id, activity_type="escalations", class_index=class_index)
-                    submit_iq_params = SubmitImageQueryParams(
-                        patience_time=patience_time,
-                        confidence_threshold=confidence_threshold,
-                        human_review=human_review,
-                        metadata=generate_metadata_dict(results=results, is_edge_audit=False),
-                        image_query_id=image_query.id,  # We give the cloud IQ the same ID as the returned edge IQ
-                    )
-                    # We write to the queue synchronously because it should be fast. But this could be done as a
-                    # background task if it becomes slow.
-                    write_escalation_to_queue(
-                        writer=app_state.queue_writer,
-                        detector_id=detector_id,
-                        image_bytes=image_bytes,
-                        submit_iq_params=submit_iq_params,
-                        request_id=request_id,
-                    )
-                    # Not done processing because the IQ in the cloud could get a better answer once escalated
-                    image_query.done_processing = False
-                else:
-                    logger.debug(
-                        f"Not escalating to cloud due to rate limit on background cloud escalations: {detector_id=}"
-                    )
+                if is_confident_enough:  # Audit confident edge predictions at the specified rate
+                    if random.random() < edge_config.global_config.confident_audit_rate:
+                        logger.debug(
+                            f"Auditing confident edge prediction with confidence {ml_confidence} for detector {detector_id=}."
+                        )
+                        record_activity_for_metrics(detector_id, activity_type="audits")
+                        submit_iq_params = SubmitImageQueryParams(
+                            patience_time=patience_time,
+                            confidence_threshold=confidence_threshold,
+                            human_review=human_review,
+                            metadata=generate_metadata_dict(results=results, is_edge_audit=True),
+                            image_query_id=image_query.id,  # We give the cloud IQ the same ID as the returned edge IQ
+                        )
+                        # We write to the queue synchronously because it should be fast. But this could be done as a
+                        # background task if it becomes slow.
+                        write_escalation_to_queue(
+                            writer=app_state.queue_writer,
+                            detector_id=detector_id,
+                            image_bytes=image_bytes,
+                            submit_iq_params=submit_iq_params,
+                            request_id=request_id,
+                        )
 
-            return image_query
-    else:
-        # -- Edge-inference is not available --
-        # Create an edge-inference deployment record, which may be used to spin up an edge-inference server.
-        logger.debug(f"Local inference not available for {detector_id=}. Creating inference deployment record.")
-        api_token = gl.api_client.configuration.api_key["ApiToken"]
+                        # We keep done_processing=True here for `image_query` because although we escalated the query for
+                        # an audit, this is invisible to the user. From their perspective, this is the final answer.
 
-        primary_model_name = get_edge_inference_model_name(detector_id=detector_id, is_oodd=False)
-        app_state.db_manager.create_or_update_inference_deployment_record(
-            deployment={
-                "model_name": primary_model_name,
-                "detector_id": detector_id,
-                "api_token": api_token,
-                "deployment_created": False,
-            }
-        )
+                        # Don't want to escalate to cloud again if we're already auditing the query
+                        return image_query
 
-        if app_state.separate_oodd_inference:
-            oodd_model_name = get_edge_inference_model_name(detector_id=detector_id, is_oodd=True)
+                # Escalate after returning edge prediction if escalation is enabled and we have low confidence.
+                if not is_confident_enough:
+                    # Only escalate if we haven't escalated on this detector too recently.
+                    if app_state.edge_inference_manager.escalation_cooldown_complete(detector_id, edge_config):
+                        logger.debug(
+                            f"Escalating to cloud due to low confidence: {ml_confidence} < thresh={confidence_threshold}"
+                        )
+                        record_activity_for_metrics(detector_id, activity_type="escalations", class_index=class_index)
+                        submit_iq_params = SubmitImageQueryParams(
+                            patience_time=patience_time,
+                            confidence_threshold=confidence_threshold,
+                            human_review=human_review,
+                            metadata=generate_metadata_dict(results=results, is_edge_audit=False),
+                            image_query_id=image_query.id,  # We give the cloud IQ the same ID as the returned edge IQ
+                        )
+                        # We write to the queue synchronously because it should be fast. But this could be done as a
+                        # background task if it becomes slow.
+                        write_escalation_to_queue(
+                            writer=app_state.queue_writer,
+                            detector_id=detector_id,
+                            image_bytes=image_bytes,
+                            submit_iq_params=submit_iq_params,
+                            request_id=request_id,
+                        )
+                        # Not done processing because the IQ in the cloud could get a better answer once escalated
+                        image_query.done_processing = False
+                    else:
+                        logger.debug(
+                            f"Not escalating to cloud due to rate limit on background cloud escalations: {detector_id=}"
+                        )
+
+                return image_query
+        else:
+            # -- Edge-inference is not available --
+            # Create an edge-inference deployment record, which may be used to spin up an edge-inference server.
+            logger.debug(f"Local inference not available for {detector_id=}. Creating inference deployment record.")
+            api_token = gl.api_client.configuration.api_key["ApiToken"]
+
+            primary_model_name = get_edge_inference_model_name(detector_id=detector_id, is_oodd=False)
             app_state.db_manager.create_or_update_inference_deployment_record(
                 deployment={
-                    "model_name": oodd_model_name,
+                    "model_name": primary_model_name,
                     "detector_id": detector_id,
                     "api_token": api_token,
                     "deployment_created": False,
                 }
             )
 
-        if return_edge_prediction:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=(
-                    f"Edge predictions are required, but an edge-inference server is not available for {detector_id=}."
-                ),
-            )
+            if app_state.separate_oodd_inference:
+                oodd_model_name = get_edge_inference_model_name(detector_id=detector_id, is_oodd=True)
+                app_state.db_manager.create_or_update_inference_deployment_record(
+                    deployment={
+                        "model_name": oodd_model_name,
+                        "detector_id": detector_id,
+                        "api_token": api_token,
+                        "deployment_created": False,
+                    }
+                )
+
+            if return_edge_prediction:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=(
+                        f"Edge predictions are required, but an edge-inference server is not available for {detector_id=}."
+                    ),
+                )
 
     # Fall back to submitting the image to the cloud
     if disable_cloud_escalation:

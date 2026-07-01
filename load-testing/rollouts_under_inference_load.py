@@ -1,7 +1,6 @@
 from groundlight import Groundlight, ExperimentalApi, Detector
 import subprocess
 import threading
-import types
 import time
 
 import groundlight_helpers as glh
@@ -12,19 +11,6 @@ LABELS_PER_BATCH = 3
 CONFIDENCE_THRESHOLD = 0.0
 VICTORY_DURATION_SEC = 4 * 60
 MIN_ROLLOUTS = 2
-
-
-def disable_transport_retries(gl: ExperimentalApi) -> None:
-    """Disable urllib3 transport-level retries."""
-    gl.configuration.retries = 0
-
-
-def disable_sdk_retries(gl: ExperimentalApi) -> None:
-    """Monkeypatch the SDK's internal API client to remove the RequestsRetryDecorator
-    from call_api, so that 5xx errors propagate immediately without retries.
-    NOTE: This reaches into SDK internals and may break if the retry decorator changes."""
-    api = gl.api_client
-    api.call_api = types.MethodType(api.call_api.__wrapped__, api)
 
 
 def get_max_inference_revision() -> int:
@@ -61,8 +47,7 @@ def main():
     gl_cloud = Groundlight(endpoint=glh.CLOUD_ENDPOINT_PROD)
 
     # Disable internal retries in the python-sdk so that this test surfaces all errors, even if transient
-    disable_transport_retries(gl)
-    disable_sdk_retries(gl)
+    glh.disable_all_retries(gl)
 
     detector = glh.provision_detector(
         gl_cloud, "BINARY", "Rollout Under Load Test",

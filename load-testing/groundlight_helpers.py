@@ -8,6 +8,7 @@ import os
 import requests
 import json
 import time
+import types
 import yaml
 from tqdm import trange
 
@@ -28,6 +29,18 @@ PRIMING_MAX_BATCH_SIZE = 10
 # class to actually train.
 MIN_PRIMING_LABELS = 30
 PRIMING_LABELS_PER_CLASS = 5
+
+
+def disable_all_retries(gl: ExperimentalApi) -> None:
+    """Disable all SDK and transport-level retries so 5xx errors surface immediately.
+
+    This reaches into SDK internals: it strips the RequestsRetryDecorator from
+    call_api via __wrapped__ and sets urllib3 retries to 0. May break if the
+    SDK's internal retry machinery changes.
+    """
+    gl.configuration.retries = 0
+    api = gl.api_client
+    api.call_api = types.MethodType(api.call_api.__wrapped__, api)
 
 
 def hash_pipeline_config(pipeline_config: str) -> str:
