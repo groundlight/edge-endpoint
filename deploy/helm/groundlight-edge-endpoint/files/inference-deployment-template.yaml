@@ -83,16 +83,9 @@ spec:
           value: "{{ .Values.inferenceDeployment.cpuThreads }}"
         - name: OPENBLAS_NUM_THREADS
           value: "{{ .Values.inferenceDeployment.cpuThreads }}"
-        {{- if .Values.inferenceDeployment.cpuRequest }}
-        # Optional CPU request, omitted by default (BestEffort). Threads are bounded by
-        # cpuThreads and most detectors are idle at any instant, so by default we let the
-        # scheduler launch every detector and let the OS time-slice when many fire at once.
-        # Set a value (e.g. "1") to reserve CPU and cap pod density on contended nodes.
-        # No CPU limit is ever set => no CFS throttling.
-        resources:
-          requests:
-            cpu: "{{ .Values.inferenceDeployment.cpuRequest }}"
-        {{- end }}
+        # No CPU requests or limits: inference pods run BestEffort. Threads are bounded by
+        # cpuThreads and most detectors are idle at any instant, so the scheduler launches
+        # every detector and the OS time-slices the occasional simultaneous burst.
         volumeMounts:
         - name: edge-endpoint-persistent-volume
           mountPath: *modelRepository
