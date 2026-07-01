@@ -1,9 +1,9 @@
 import time
 
 import requests
-from integration import ENDPOINT_PORT
+from integration import LIVE_TEST_ENDPOINT
 
-TEST_ENDPOINT = f"http://localhost:{ENDPOINT_PORT}"
+TEST_ENDPOINT = LIVE_TEST_ENDPOINT
 MAX_WAIT_TIME_S = 60
 
 
@@ -13,7 +13,9 @@ def check_status_page():
     final_exception = None
     while time.time() - start_time < MAX_WAIT_TIME_S:
         try:
-            status_response = requests.get(TEST_ENDPOINT + "/status")
+            # verify=False is a no-op for http:// endpoints; needed for https:// endpoints
+            # using the edge endpoint's self-signed certificate.
+            status_response = requests.get(TEST_ENDPOINT + "/status", verify=False)
             status_response.raise_for_status()
             if status_response.status_code == 200:
                 return

@@ -24,12 +24,15 @@ logger = logging.getLogger(__name__)
 
 EDGE_SETUP = os.getenv("EDGE_SETUP", "0") == "1"
 ENDPOINT_PORT = os.getenv("EDGE_ENDPOINT_PORT", "30107")
+# LIVE_TEST_ENDPOINT lets callers pick the scheme (e.g. https:// when testing the edge
+# endpoint's default HTTPS-only configuration); falls back to plain http on ENDPOINT_PORT.
+LIVE_TEST_ENDPOINT = os.getenv("LIVE_TEST_ENDPOINT", f"http://localhost:{ENDPOINT_PORT}")
 
 NUM_IQS_PER_CLASS_TO_IMPROVE_MODEL = 10
 # ACCEPTABLE_TRAINED_CONFIDENCE = 0.75 NOTE: temporarily commented out, see Note below.
 
 if EDGE_SETUP:  # This flag exists so that we can create the detector before the edge is deployed
-    gl = Groundlight(endpoint=f"http://localhost:{ENDPOINT_PORT}")
+    gl = Groundlight(endpoint=LIVE_TEST_ENDPOINT)
 else:
     gl = Groundlight()
 
