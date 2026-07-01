@@ -60,7 +60,8 @@ def call_api(url: str, params: dict, timeout: float | None = None) -> dict:
         "X-API-Token": os.environ.get('GROUNDLIGHT_API_TOKEN')
     }
 
-    response = requests.get(url, params=params, headers=headers, timeout=timeout)
+    disable_tls = os.environ.get('DISABLE_TLS_VERIFY', '0') == '1'
+    response = requests.get(url, params=params, headers=headers, timeout=timeout, verify=not disable_tls)
     if response.status_code == 200:
         response_content = response.content.decode('utf-8')
         return json.loads(response_content)
