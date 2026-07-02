@@ -112,7 +112,7 @@ class AppState:
 
 
 @trace_span
-def get_app_state(request: Request) -> AppState:
+async def get_app_state(request: Request) -> AppState:
     """FastAPI dependency that returns the singleton AppState attached to the running app."""
     if not hasattr(request.app.state, "app_state"):
         raise RuntimeError("App state is not initialized.")
