@@ -193,23 +193,21 @@ def check_k8_deployments(c):
         conn.run("kubectl logs deployment/edge-endpoint")
         raise RuntimeError("Failed to see edge-endpoint deployment ready.")
 
-@task 
+@task
 def check_server_port(c):
-    """Checks that the server is listening on the service ports."""
+    """Checks that the server is listening on the HTTPS service port.
+    HTTP (30101) is disabled by default, so we only check HTTPS (30143).
+    """
     # First check that it's visible from the EEUT's localhost
     conn = connect_server()
-    for port in [30101, 30143]:
-        print(f"Checking that the server is listening on port {port} from the EEUT's localhost...")
-        conn.run(f"nc -zv localhost {port}")
+    print("Checking that the server is listening on port 30143 from the EEUT's localhost...")
+    conn.run("nc -zv localhost 30143")
 
-    print(f"Checking that HTTP (30101) is reachable from here...")
+    print("Checking that HTTPS (30143) is reachable from here...")
     eeut_ip = get_eeut_ip()
-    local(f"nc -zv {eeut_ip} 30101")
+    local(f"nc -zv {eeut_ip} 30143")
 
-    # We don't check 30143 from outside because the CICD runner might not have
-    # permissions to open that port in the AWS security group.
-    # Instead, we verify HTTPS internally on the host.
-    print(f"Verifying HTTPS endpoint internally...")
+    print("Verifying HTTPS endpoint internally...")
     conn.run("curl -vk https://localhost:30143/health/live")
 
     print("Server port check complete.")
