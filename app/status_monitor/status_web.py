@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.core.edge_config_manager import EdgeConfigManager
 from app.core.groundlight_client import groundlight_client
+from app.escalation_queue.failed_escalations import prune_failed_escalations
 from app.metrics.iq_activity import clear_old_activity_files
 from app.metrics.metric_reporting import MetricsReporter
 from app.metrics.resource_metrics import ResourceMetricsCollector
@@ -56,6 +57,7 @@ async def startup_event():
     # seconds, to avoid every edge-endpoint report hitting the server at the exact same time.
     scheduler.add_job(reporter.report_metrics_to_cloud, "cron", hour="*", minute="3", jitter=120)
     scheduler.add_job(clear_old_activity_files, "interval", seconds=ONE_HOUR_IN_SECONDS)
+    scheduler.add_job(prune_failed_escalations, "interval", hours=24)
     scheduler.start()
 
 
