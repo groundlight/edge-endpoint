@@ -5,14 +5,13 @@ from pathlib import Path
 from app.escalation_queue.constants import (
     DEFAULT_QUEUE_BASE_DIR,
     IMAGE_DIR_SUFFIX,
+    QUEUE_RETENTION_DAYS,
     READING_DIR_SUFFIX,
     WRITING_DIR_SUFFIX,
 )
 from app.escalation_queue.failed_escalations import FAILED_ESCALATIONS_DIR
 
 logger = logging.getLogger(__name__)
-
-QUEUE_RETENTION_DAYS = 7
 
 # Every directory the escalation queue writes to disk. Anything older than the retention window is
 # deleted regardless of escalation status: stale pending escalations, their images, and failed-

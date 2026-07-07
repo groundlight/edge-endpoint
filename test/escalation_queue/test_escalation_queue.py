@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 import tempfile
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Generator, Iterator
 from unittest.mock import Mock, patch
@@ -587,6 +588,43 @@ class TestReadFromEscalationQueue:
             # Should have called _escalate_once twice (for the two valid lines)
             # The corrupted line should be skipped without calling _escalate_once
             assert mock_escalate.call_count == 2
+
+    def _run_reader_with_failure(self, test_reader: QueueReader, timestamp_str: str) -> Mock:
+        """Feed a single escalation (with the given queued timestamp) whose escalation attempt fails, and
+        return the mocked record_failed_escalation so callers can assert whether it was invoked.
+        """
+        mock_request_cache = Mock()
+        mock_request_cache.contains.return_value = False
+        with tempfile.TemporaryDirectory() as temp_dir:
+            escalation_str = convert_escalation_info_to_str(
+                generate_test_escalation_info(
+                    timestamp_str=timestamp_str,
+                    image_path=str(Path(temp_dir) / "image.jpeg"),
+                    request_id=generate_request_id(),
+                )
+            )
+            with (
+                patch.object(QueueReader, "__iter__", return_value=iter([escalation_str])),
+                patch(
+                    "app.escalation_queue.manage_reader.consume_queued_escalation",
+                    side_effect=FileNotFoundError("image gone"),
+                ),
+                patch("app.escalation_queue.manage_reader.record_failed_escalation") as mock_record,
+            ):
+                read_from_escalation_queue(test_reader, mock_request_cache)
+        return mock_record
+
+    def test_expired_escalation_failure_is_not_recorded(self, test_reader: QueueReader):
+        """A failure of an escalation past the retention window should be dropped without recording."""
+        old_timestamp = (datetime.now() - timedelta(days=8)).strftime("%Y%m%d_%H%M%S_%f")
+        mock_record = self._run_reader_with_failure(test_reader, old_timestamp)
+        mock_record.assert_not_called()
+
+    def test_recent_escalation_failure_is_recorded(self, test_reader: QueueReader):
+        """A failure of an escalation within the retention window should still be recorded."""
+        recent_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        mock_record = self._run_reader_with_failure(test_reader, recent_timestamp)
+        mock_record.assert_called_once()
 
 
 class TestQueueUtils:
