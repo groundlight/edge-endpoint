@@ -36,6 +36,10 @@ def _escalation_is_expired(escalation_info: EscalationInfo) -> bool:
 
     Age is derived from the escalation's own timestamp. On any parse failure we return False so that
     the failure is still recorded (fail toward keeping the signal).
+
+    Note: this only governs *permanent* failures. Retryable failures loop indefinitely inside
+    consume_queued_escalation and never surface to the caller, so an expired escalation that keeps
+    hitting a retryable error is neither dropped nor recorded until it fails permanently.
     """
     try:
         queued_at = datetime.strptime(escalation_info.timestamp, _ESCALATION_TIMESTAMP_FORMAT)

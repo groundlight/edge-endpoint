@@ -346,6 +346,33 @@ class TestQueueReader:
         second_reader = generate_queue_reader(test_base_dir)
         assert_expected_reader_output(second_reader, [test_escalation_info_1] * 2 + [test_escalation_info_2])
 
+    def test_reader_skips_orphaned_tracking_file(self, test_base_dir: str):
+        """A tracking file whose data file was deleted (e.g. by the retention sweep) is discarded
+        without crashing, and the reader proceeds to the next available file."""
+        # Partially read a 2-line file so a data + tracking pair is left in the reading dir.
+        info_1 = generate_test_escalation_info(detector_id="test_id_1")
+        writer = generate_queue_writer(test_base_dir)
+        for _ in range(2):
+            assert writer.write_escalation(info_1)
+        first_reader = generate_queue_reader(test_base_dir)
+        assert_expected_reader_output(first_reader, [info_1])
+
+        reading_dir = first_reader.base_reading_dir
+        data_files = [p for p in reading_dir.iterdir() if not p.name.startswith("tracking-")]
+        tracking_files = [p for p in reading_dir.iterdir() if p.name.startswith("tracking-")]
+        assert len(data_files) == 1 and len(tracking_files) == 1
+
+        # Simulate the retention sweep deleting the (old) data file but not its (newer) tracking file.
+        data_files[0].unlink()
+
+        # A fresh escalation that should still be read once the orphaned tracker is skipped.
+        info_2 = generate_test_escalation_info(detector_id="test_id_2")
+        assert generate_queue_writer(test_base_dir).write_escalation(info_2)
+
+        second_reader = generate_queue_reader(test_base_dir)
+        assert_expected_reader_output(second_reader, [info_2])
+        assert not tracking_files[0].exists()
+
     def test_reader_selects_empty_tracking_file(self, test_base_dir: str, test_writer: QueueWriter):
         """Verify that the reader will select a tracking file even if it contains no tracked escalations."""
         test_escalation_info_1 = generate_test_escalation_info(detector_id="test_id_1")

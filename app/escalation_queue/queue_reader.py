@@ -41,6 +41,13 @@ class QueueReader:
         reboot.
         """
         for data_path, tracker_path in self._get_files():
+            if not data_path.exists():
+                # The data file is gone while its tracking file remains. Discard the orphaned tracker and move on;
+                # otherwise _choose_new_file would keep selecting the missing data file, and opening it below would
+                # raise FileNotFoundError out of this generator, crashing the reader loop on every restart.
+                logger.warning("Queue data file %s is missing; discarding orphaned tracking file.", data_path)
+                tracker_path.unlink(missing_ok=True)
+                continue
             with data_path.open(mode="r") as escalations, tracker_path.open(mode="a") as tracker:
                 lines_to_skip = len(tracker_path.read_text()) if tracker_path.exists() else 0
                 for line in islice(escalations, lines_to_skip, None):

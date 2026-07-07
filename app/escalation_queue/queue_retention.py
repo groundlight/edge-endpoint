@@ -36,7 +36,13 @@ def prune_expired_queue_data() -> None:
     for base in RETENTION_DIRS:
         if not base.exists():
             continue
-        for path in base.iterdir():
+        try:
+            entries = list(base.iterdir())
+        except OSError:
+            # The dir vanished between the existence check and listing, or is otherwise unreadable.
+            logger.debug(f"Could not list retention dir {base}", exc_info=True)
+            continue
+        for path in entries:
             try:
                 if not path.is_file():
                     continue
