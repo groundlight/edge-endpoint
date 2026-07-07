@@ -22,13 +22,7 @@ QUEUE_ENTRY_DIRS = (
 
 
 def _collect_referenced_image_paths() -> set[str]:
-    """Return the set of resolved image paths still referenced by queued (unconsumed) escalations.
-
-    A single unreadable queue file is skipped rather than aborting the whole sweep: the sweep and the
-    queue reader share a filesystem, so a file this process cannot open the reader cannot open either,
-    meaning its escalations will never fire and its images are already dead. Aborting instead would let
-    one bad file silently disable image retention indefinitely.
-    """
+    """Return the set of resolved image paths still referenced by queued (unconsumed) escalations."""
     referenced: set[str] = set()
     for base in QUEUE_ENTRY_DIRS:
         if not base.exists():
@@ -60,16 +54,7 @@ def _collect_referenced_image_paths() -> set[str]:
 
 
 def prune_orphaned_images() -> None:
-    """Delete escalation images that are no longer referenced by any queued escalation and are older
-    than the retention window.
-
-    Images are written to disk before their queue entry and deleted once the escalation is consumed
-    (see `read_from_escalation_queue`). They can be orphaned when a queue line is malformed, when the
-    queue write fails after the image is written, or when the process crashes mid-consume. This sweep
-    bounds the on-disk lifetime of those orphans without ever removing an image that a still-pending
-    escalation needs — which matters because retryable escalations can stay queued for a long time
-    during a cloud outage.
-    """
+    """Delete unreferenced escalation images older than the retention window."""
     if not IMAGE_DIR.exists():
         return
 
