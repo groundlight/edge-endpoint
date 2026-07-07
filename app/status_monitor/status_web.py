@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from app.core.edge_config_manager import EdgeConfigManager
 from app.core.groundlight_client import groundlight_client
 from app.escalation_queue.failed_escalations import prune_failed_escalations
+from app.escalation_queue.image_retention import prune_orphaned_images
 from app.metrics.iq_activity import clear_old_activity_files
 from app.metrics.metric_reporting import MetricsReporter
 from app.metrics.resource_metrics import ResourceMetricsCollector
@@ -60,6 +61,8 @@ async def startup_event():
     # cron (not interval) so restarts don't reset the timer and starve the job; twice daily
     # ensures records are deleted within ~30.5 days even in quiet periods with no write-triggered prunes.
     scheduler.add_job(prune_failed_escalations, "cron", hour="4,16")
+    # Delete orphaned escalation images (unreferenced by any queued escalation) past the retention window.
+    scheduler.add_job(prune_orphaned_images, "cron", hour="4,16")
     scheduler.start()
 
 
