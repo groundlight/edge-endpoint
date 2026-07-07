@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 FAILED_ESCALATIONS_DIR = Path(DEFAULT_QUEUE_BASE_DIR) / "failed"
 MAX_RECORDS = 200
-FAILED_ESCALATION_RETENTION_DAYS = 30
 MAX_EXCEPTION_MESSAGE_CHARS = 1000
 MAX_TRACEBACK_CHARS = 4000  # Caps exception tracebacks in failure records
 MAX_ESCALATION_CHARS = 4000  # Caps raw (malformed) escalation payloads in failure records
@@ -102,15 +101,6 @@ def prune_failed_escalations() -> None:
             path.unlink(missing_ok=True)
         except Exception:
             logger.debug(f"Failed to remove temp file {path}", exc_info=True)
-
-    cutoff = datetime.now(timezone.utc) - timedelta(days=FAILED_ESCALATION_RETENTION_DAYS)
-    for path in FAILED_ESCALATIONS_DIR.glob("*.json"):
-        try:
-            mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
-            if mtime < cutoff:
-                path.unlink(missing_ok=True)
-        except Exception:
-            logger.debug(f"Failed to prune old record {path}", exc_info=True)
 
     files = sorted(FAILED_ESCALATIONS_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime_ns)
     while len(files) > MAX_RECORDS:

@@ -1,5 +1,4 @@
 import json
-import os
 import shutil
 import tempfile
 import time
@@ -114,35 +113,6 @@ class TestPruneFailedEscalations:
         (d / "leftover.json.tmp").write_text("{}")
         prune_failed_escalations()
         assert len(list(d.glob("*.json.tmp"))) == 0
-
-    def test_deletes_files_older_than_retention_window(self):
-        """Files older than FAILED_ESCALATION_RETENTION_DAYS should be deleted during pruning."""
-        d = failed_escalations.FAILED_ESCALATIONS_DIR
-        old_file = d / "old_record.json"
-        old_file.write_text("{}")
-        old_mtime = (datetime.now(timezone.utc) - timedelta(days=31)).timestamp()
-        os.utime(old_file, (old_mtime, old_mtime))
-        prune_failed_escalations()
-        assert not old_file.exists()
-
-    def test_keeps_files_within_retention_window(self):
-        """Files newer than FAILED_ESCALATION_RETENTION_DAYS should not be deleted during pruning."""
-        d = failed_escalations.FAILED_ESCALATIONS_DIR
-        recent_file = d / "recent_record.json"
-        recent_file.write_text("{}")
-        prune_failed_escalations()
-        assert recent_file.exists()
-
-    def test_retention_days_constant_controls_cutoff(self):
-        """Patching FAILED_ESCALATION_RETENTION_DAYS should change which files are pruned."""
-        d = failed_escalations.FAILED_ESCALATIONS_DIR
-        f = d / "borderline.json"
-        f.write_text("{}")
-        two_days_ago = (datetime.now(timezone.utc) - timedelta(days=2)).timestamp()
-        os.utime(f, (two_days_ago, two_days_ago))
-        with patch.object(failed_escalations, "FAILED_ESCALATION_RETENTION_DAYS", 1):
-            prune_failed_escalations()
-        assert not f.exists()
 
 
 class TestMetricsSummary:
