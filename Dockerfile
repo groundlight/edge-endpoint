@@ -22,7 +22,7 @@ RUN npm run build
 #############
 # Build Stage
 #############
-FROM python:3.11-slim-bullseye AS production-dependencies-build-stage
+FROM python:3.11-slim-bookworm AS production-dependencies-build-stage
 
 # docker buildx will override this for the target platform
 ARG TARGETARCH

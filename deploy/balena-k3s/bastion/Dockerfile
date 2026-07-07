@@ -12,7 +12,7 @@ ADD https://github.com/alexellis/arkade/archive/refs/tags/${ARKADE_VERSION}.tar.
 RUN tar xvf ${ARKADE_VERSION}.tar.gz --strip-components=1 && make build
 
 # ------- Runtime Stage -------
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 
 WORKDIR /app
 
