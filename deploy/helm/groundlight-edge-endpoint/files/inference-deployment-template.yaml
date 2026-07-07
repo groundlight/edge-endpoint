@@ -75,6 +75,17 @@ spec:
           value: "1"
         - name: EDGE_COMPILE_ENABLED
           value: "{{ .Values.edgeCompileEnabled }}"
+        # Cap PyTorch/OpenMP/MKL/OpenBLAS intra-op threads so that many inference pods
+        # don't oversubscribe the node's cores. See values.yaml inferenceDeployment.cpuThreads.
+        - name: OMP_NUM_THREADS
+          value: "{{ .Values.inferenceDeployment.cpuThreads }}"
+        - name: MKL_NUM_THREADS
+          value: "{{ .Values.inferenceDeployment.cpuThreads }}"
+        - name: OPENBLAS_NUM_THREADS
+          value: "{{ .Values.inferenceDeployment.cpuThreads }}"
+        # No CPU requests or limits: inference pods run BestEffort. Threads are bounded by
+        # cpuThreads and most detectors are idle at any instant, so the scheduler launches
+        # every detector and the OS time-slices the occasional simultaneous burst.
         volumeMounts:
         - name: edge-endpoint-persistent-volume
           mountPath: *modelRepository

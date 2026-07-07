@@ -98,6 +98,15 @@ modelUpdater:
 
 # inference pod (inferencemodel-*) behavior
 inferenceDeployment:
+  # CPU thread cap per inference pod for PyTorch/OpenMP/MKL/OpenBLAS intra-op parallelism.
+  # Without this each pod defaults to ALL node cores, so N pods spawn N x cores threads
+  # that thrash under load (observed: per-request CPU cost grew 5x and throughput collapsed
+  # past ~3 detectors). Total compute threads ~= cpuThreads x (2 x num_detectors); keep
+  # small (2-4) on dense multi-detector edges. Tune empirically per device.
+  cpuThreads: 4
+  # Note: inference pods set no CPU requests or limits (BestEffort). Threads are bounded by
+  # cpuThreads above, and most detectors are idle at any instant, so the scheduler launches
+  # every detector regardless of core count and the OS time-slices simultaneous bursts.
   startupProbe:
     # Consecutive 10-second startup-probe failures before kubelet kills the container.
     # Ceiling = failureThreshold × 10s. Default 540 = 90 min.

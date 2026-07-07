@@ -48,6 +48,27 @@ if iptables -t nat -L CNI-HOSTPORT-DNAT -n >/dev/null 2>&1; then
     echo "CNI portmap cleanup complete"
 fi
 
+# balena-engine uses iptables-legacy with a FORWARD DROP policy and only adds
+# ACCEPT rules for its own bridges (balena0, supervisor0).  K3s uses
+# iptables-nft (ubuntu:22.04 default), so its flannel/kube-proxy rules never
+# appear in the legacy tables.  Without explicit legacy ACCEPT rules, all pod
+# egress traffic (including DNS from CoreDNS) is silently dropped.
+#
+# We own the EDGE-FORWARD chain entirely -- flush and rebuild on every startup
+# for a guaranteed clean state.  The jump from DOCKER-USER survives
+# balena-engine iptables rebuilds because balena-engine never touches
+# DOCKER-USER contents.
+echo "Setting up iptables-legacy FORWARD rules for k3s networks..."
+iptables-legacy -N EDGE-FORWARD 2>/dev/null || true
+iptables-legacy -F EDGE-FORWARD
+iptables-legacy -A EDGE-FORWARD -s 10.42.0.0/16 -j ACCEPT
+iptables-legacy -A EDGE-FORWARD -d 10.42.0.0/16 -j ACCEPT
+iptables-legacy -A EDGE-FORWARD -s 10.43.0.0/16 -j ACCEPT
+iptables-legacy -A EDGE-FORWARD -d 10.43.0.0/16 -j ACCEPT
+iptables-legacy -C DOCKER-USER -j EDGE-FORWARD 2>/dev/null || \
+    iptables-legacy -I DOCKER-USER -j EDGE-FORWARD
+echo "iptables-legacy rules ready"
+
 # Ensure the root filesystem has shared mount propagation so that k3s pods can use
 # mountPropagation: Bidirectional (needed by the mount-s3 FUSE sidecar).
 # In Balena, the server container's root is private by default.
