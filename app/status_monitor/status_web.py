@@ -57,7 +57,9 @@ async def startup_event():
     # seconds, to avoid every edge-endpoint report hitting the server at the exact same time.
     scheduler.add_job(reporter.report_metrics_to_cloud, "cron", hour="*", minute="3", jitter=120)
     scheduler.add_job(clear_old_activity_files, "interval", seconds=ONE_HOUR_IN_SECONDS)
-    scheduler.add_job(prune_failed_escalations, "interval", hours=24)
+    # cron (not interval) so restarts don't reset the timer and starve the job; twice daily
+    # ensures records are deleted within ~30.5 days even in quiet periods with no write-triggered prunes.
+    scheduler.add_job(prune_failed_escalations, "cron", hour="4,16")
     scheduler.start()
 
 
