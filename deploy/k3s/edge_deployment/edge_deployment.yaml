@@ -199,8 +199,12 @@ spec:
         - name: registry-credentials
 
       volumes:
+        # Pinned to the device so the self-signed TLS cert stays stable across pod
+        # restarts, rather than being regenerated on every boot.
         - name: nginx-certs
-          emptyDir: {}
+          hostPath:
+            path: /opt/groundlight/device/certs
+            type: DirectoryOrCreate
         - name: edge-config-volume
           configMap:
             name: edge-config
