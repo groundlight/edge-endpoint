@@ -25,20 +25,28 @@ while true; do
     fi
 
     nginx_master_pid=""
-    # procps is not installed in the production image, so find the nginx master
-    # by scanning /proc directly rather than using pgrep.
-    for pid_dir in /proc/[0-9]*; do
-        pid="${pid_dir##*/}"
-        cmdline_file="$pid_dir/cmdline"
-        [ -r "$cmdline_file" ] || continue
-        cmdline=$(tr '\0' ' ' < "$cmdline_file" 2>/dev/null) || continue
-        case "$cmdline" in
-            *"nginx: master"*"daemon off"*)
-                nginx_master_pid="$pid"
-                break
-                ;;
-        esac
-    done
+    nginx_pid_file="$CERT_DIR/nginx.pid"
+    if [ -f "$nginx_pid_file" ]; then
+        # Helm deployment: the real nginx writes its PID into the shared certs
+        # volume, so we can reload it unambiguously without scanning /proc.
+        nginx_master_pid=$(cat "$nginx_pid_file" 2>/dev/null) || true
+    else
+        # k3s deployment: no separate nginx container, so there is only one
+        # nginx master in the pod. Scan /proc to find it.
+        # procps is not installed in the production image, so we avoid pgrep.
+        for pid_dir in /proc/[0-9]*; do
+            pid="${pid_dir##*/}"
+            cmdline_file="$pid_dir/cmdline"
+            [ -r "$cmdline_file" ] || continue
+            cmdline=$(tr '\0' ' ' < "$cmdline_file" 2>/dev/null) || continue
+            case "$cmdline" in
+                *"nginx: master"*)
+                    nginx_master_pid="$pid"
+                    break
+                    ;;
+            esac
+        done
+    fi
     if [ -n "$nginx_master_pid" ]; then
         kill -HUP "$nginx_master_pid"
         echo "nginx reloaded (HUP sent to PID $nginx_master_pid)."
