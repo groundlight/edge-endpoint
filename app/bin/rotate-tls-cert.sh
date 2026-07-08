@@ -33,7 +33,7 @@ while true; do
         [ -r "$cmdline_file" ] || continue
         cmdline=$(tr '\0' ' ' < "$cmdline_file" 2>/dev/null) || continue
         case "$cmdline" in
-            *"nginx: master"*)
+            *"nginx: master"*"daemon off"*)
                 nginx_master_pid="$pid"
                 break
                 ;;
