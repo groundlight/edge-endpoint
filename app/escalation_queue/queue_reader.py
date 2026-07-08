@@ -41,6 +41,13 @@ class QueueReader:
         reboot.
         """
         for data_path, tracker_path in self._get_files():
+            if not data_path.exists():
+                # The data file is gone while its tracking file remains. Discard the orphaned tracker and move on;
+                # otherwise _choose_new_file would keep selecting the missing data file, and opening it below would
+                # raise FileNotFoundError out of this generator, crashing the reader loop on every restart.
+                logger.warning("Queue data file %s is missing; discarding orphaned tracking file.", data_path)
+                tracker_path.unlink(missing_ok=True)
+                continue
             with data_path.open(mode="r") as escalations, tracker_path.open(mode="a") as tracker:
                 lines_to_skip = len(tracker_path.read_text()) if tracker_path.exists() else 0
                 for line in islice(escalations, lines_to_skip, None):
@@ -111,8 +118,13 @@ class QueueReader:
         oldest_writing_path = sorted(queue_files)[0]
         new_reading_path = self.base_reading_dir / oldest_writing_path.name
 
-        # Move the file from writing directory to reading directory
-        oldest_writing_path.rename(new_reading_path)
+        # Move the file from writing directory to reading directory. Retention may delete a stale file before rename;
+        # treat FileNotFoundError as unavailable.
+        try:
+            oldest_writing_path.rename(new_reading_path)
+        except FileNotFoundError:
+            logger.warning("Queue file %s vanished before it could be selected; skipping.", oldest_writing_path)
+            return None
 
         return new_reading_path
 

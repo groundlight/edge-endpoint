@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from fastapi import HTTPException, status
@@ -10,6 +11,7 @@ from urllib3.exceptions import MaxRetryError, ReadTimeoutError
 
 from app.core.groundlight_client import groundlight_client
 from app.core.utils import safe_call_sdk
+from app.escalation_queue.constants import QUEUE_RETENTION_DAYS
 from app.escalation_queue.failed_escalations import record_failed_escalation
 from app.escalation_queue.models import EscalationInfo
 from app.escalation_queue.queue_reader import QueueReader
@@ -24,6 +26,26 @@ logger = logging.getLogger(__name__)
 # Increasing lengths of time to wait before retrying an escalation, to avoid hammering the cloud
 # service if it's down for some reason or if the user's throttling limit is reached.
 RETRY_WAIT_TIMES = [0, 1, 5, 10, 30]
+
+# Matches the naive local-time format written by get_formatted_timestamp_str().
+_ESCALATION_TIMESTAMP_FORMAT = "%Y%m%d_%H%M%S_%f"
+
+
+def _escalation_is_expired(escalation_info: EscalationInfo) -> bool:
+    """Return True if the escalation was queued longer ago than the retention window.
+
+    Age is derived from the escalation's own timestamp. On any parse failure we return False so that
+    the failure is still recorded (fail toward keeping the signal).
+
+    Note: this only governs *permanent* failures. Retryable failures loop indefinitely inside
+    consume_queued_escalation and never surface to the caller, so an expired escalation that keeps
+    hitting a retryable error is neither dropped nor recorded until it fails permanently.
+    """
+    try:
+        queued_at = datetime.strptime(escalation_info.timestamp, _ESCALATION_TIMESTAMP_FORMAT)
+    except (ValueError, TypeError):
+        return False
+    return datetime.now() - queued_at >= timedelta(days=QUEUE_RETENTION_DAYS)
 
 
 def _escalate_once(escalation_info: EscalationInfo, submit_iq_request_timeout_s: int | tuple[int, int]) -> ImageQuery:
@@ -120,11 +142,17 @@ def read_from_escalation_queue(reader: QueueReader, request_cache: RequestCache)
             else:
                 logger.debug("Duplicate request ID received: %s. Skipping", escalation_info.request_id)
         except Exception as e:
-            logger.error("Escalation failed, moving on.", exc_info=True)
+            if escalation_info is not None and _escalation_is_expired(escalation_info):
+                # The escalation is already past the retention window, so its data is being purged
+                # regardless. Don't record the failure: the record isn't actionable (the escalation
+                # can't be retried) and would just re-add expired data with a fresh retention clock.
+                logger.warning("Escalation failed but is past the retention window; dropping without recording.")
+            else:
+                logger.error("Escalation failed, moving on.", exc_info=True)
 
-            # Save the failed escalation details to disk. Once we integrate with Splunk, we could consider
-            # removing this and just relying on the error log instead.
-            record_failed_escalation(escalation, e)
+                # Save the failed escalation details to disk. Once we integrate with Splunk, we could consider
+                # removing this and just relying on the error log instead.
+                record_failed_escalation(escalation, e)
         finally:
             if escalation_info is not None:
                 # Cache the request ID so that we don't repeat duplicate requests

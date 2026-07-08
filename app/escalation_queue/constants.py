@@ -6,3 +6,4 @@ WRITING_DIR_SUFFIX = "writing"
 IMAGE_DIR_SUFFIX = "images"
 TRACKING_FILE_NAME_PREFIX = "tracking-"  # Prefix for naming tracking files
 MAX_QUEUE_FILE_LINES = 200  # Maximum number of lines written to each escalation queue file.
+QUEUE_RETENTION_DAYS = 7  # Escalation queue data (images, escalation records, failed records) is deleted after this.

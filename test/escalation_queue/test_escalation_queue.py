@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 import tempfile
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Generator, Iterator
 from unittest.mock import Mock, patch
@@ -243,6 +244,22 @@ class TestQueueReader:
         assert_expected_reader_output(test_reader, [test_escalation_info])
         assert not written_to_path.exists()
 
+    def test_choose_new_file_handles_rename_race(
+        self, test_reader: QueueReader, test_writer: QueueWriter, test_escalation_info: EscalationInfo, monkeypatch
+    ):
+        """The retention sweep (separate process) can delete a writing/ file between listing and rename.
+
+        _choose_new_file must treat the resulting FileNotFoundError as "no file available" (return None)
+        rather than letting it crash the reader loop.
+        """
+        assert test_writer.write_escalation(test_escalation_info)
+
+        def _raise_not_found(*args, **kwargs):
+            raise FileNotFoundError
+
+        monkeypatch.setattr(Path, "rename", _raise_not_found)
+        assert test_reader._choose_new_file() is None
+
     def test_reader_reads_multiple_lines_from_same_file(self, test_reader: QueueReader, test_writer: QueueWriter):
         """
         Verify that the reader can read multiple lines from the same file in the correct order.
@@ -344,6 +361,33 @@ class TestQueueReader:
         # Ensure a new reader will read from the in progress file before the newly written file
         second_reader = generate_queue_reader(test_base_dir)
         assert_expected_reader_output(second_reader, [test_escalation_info_1] * 2 + [test_escalation_info_2])
+
+    def test_reader_skips_orphaned_tracking_file(self, test_base_dir: str):
+        """A tracking file whose data file was deleted (e.g. by the retention sweep) is discarded
+        without crashing, and the reader proceeds to the next available file."""
+        # Partially read a 2-line file so a data + tracking pair is left in the reading dir.
+        info_1 = generate_test_escalation_info(detector_id="test_id_1")
+        writer = generate_queue_writer(test_base_dir)
+        for _ in range(2):
+            assert writer.write_escalation(info_1)
+        first_reader = generate_queue_reader(test_base_dir)
+        assert_expected_reader_output(first_reader, [info_1])
+
+        reading_dir = first_reader.base_reading_dir
+        data_files = [p for p in reading_dir.iterdir() if not p.name.startswith("tracking-")]
+        tracking_files = [p for p in reading_dir.iterdir() if p.name.startswith("tracking-")]
+        assert len(data_files) == 1 and len(tracking_files) == 1
+
+        # Simulate the retention sweep deleting the (old) data file but not its (newer) tracking file.
+        data_files[0].unlink()
+
+        # A fresh escalation that should still be read once the orphaned tracker is skipped.
+        info_2 = generate_test_escalation_info(detector_id="test_id_2")
+        assert generate_queue_writer(test_base_dir).write_escalation(info_2)
+
+        second_reader = generate_queue_reader(test_base_dir)
+        assert_expected_reader_output(second_reader, [info_2])
+        assert not tracking_files[0].exists()
 
     def test_reader_selects_empty_tracking_file(self, test_base_dir: str, test_writer: QueueWriter):
         """Verify that the reader will select a tracking file even if it contains no tracked escalations."""
@@ -587,6 +631,43 @@ class TestReadFromEscalationQueue:
             # Should have called _escalate_once twice (for the two valid lines)
             # The corrupted line should be skipped without calling _escalate_once
             assert mock_escalate.call_count == 2
+
+    def _run_reader_with_failure(self, test_reader: QueueReader, timestamp_str: str) -> Mock:
+        """Feed a single escalation (with the given queued timestamp) whose escalation attempt fails, and
+        return the mocked record_failed_escalation so callers can assert whether it was invoked.
+        """
+        mock_request_cache = Mock()
+        mock_request_cache.contains.return_value = False
+        with tempfile.TemporaryDirectory() as temp_dir:
+            escalation_str = convert_escalation_info_to_str(
+                generate_test_escalation_info(
+                    timestamp_str=timestamp_str,
+                    image_path=str(Path(temp_dir) / "image.jpeg"),
+                    request_id=generate_request_id(),
+                )
+            )
+            with (
+                patch.object(QueueReader, "__iter__", return_value=iter([escalation_str])),
+                patch(
+                    "app.escalation_queue.manage_reader.consume_queued_escalation",
+                    side_effect=FileNotFoundError("image gone"),
+                ),
+                patch("app.escalation_queue.manage_reader.record_failed_escalation") as mock_record,
+            ):
+                read_from_escalation_queue(test_reader, mock_request_cache)
+        return mock_record
+
+    def test_expired_escalation_failure_is_not_recorded(self, test_reader: QueueReader):
+        """A failure of an escalation past the retention window should be dropped without recording."""
+        old_timestamp = (datetime.now() - timedelta(days=8)).strftime("%Y%m%d_%H%M%S_%f")
+        mock_record = self._run_reader_with_failure(test_reader, old_timestamp)
+        mock_record.assert_not_called()
+
+    def test_recent_escalation_failure_is_recorded(self, test_reader: QueueReader):
+        """A failure of an escalation within the retention window should still be recorded."""
+        recent_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        mock_record = self._run_reader_with_failure(test_reader, recent_timestamp)
+        mock_record.assert_called_once()
 
 
 class TestQueueUtils:
