@@ -10,7 +10,7 @@
 # every boot. Regeneration is self-healing: a broken pair is replaced rather than
 # left in place for nginx to choke on later.
 
-set -e
+set -ex
 
 # CERT_DIR is overridable so the generator can be exercised in tests; production
 # deployments mount nginx's cert directory here.
