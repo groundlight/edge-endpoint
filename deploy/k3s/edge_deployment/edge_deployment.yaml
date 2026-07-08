@@ -45,6 +45,9 @@ spec:
       # This service account is used by the edge logic to access the Kubernetes API
       # from within the pod. See deploy/k3s/service_account.yaml for more details
       serviceAccountName: edge-endpoint-service-account
+      # Required so the cert-rotation sidecar can send SIGHUP to the nginx master
+      # process to reload the certificate without restarting the pod.
+      shareProcessNamespace: true
       initContainers:
         - name: generate-tls-cert
           image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${IMAGE_TAG}
@@ -113,6 +116,17 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 10
             failureThreshold: 4 # after 40 seconds of failure, restart the pod
+
+        - name: cert-rotation
+          image: *edgeEndpointImage
+          imagePullPolicy: Always
+          resources:
+            requests:
+              memory: "20Mi"
+          command: ["/bin/bash", "/groundlight-edge/app/bin/rotate-tls-cert.sh"]
+          volumeMounts:
+            - name: nginx-certs
+              mountPath: /etc/nginx/certs
 
         - name: status-monitor
           image: *edgeEndpointImage
