@@ -24,7 +24,21 @@ while true; do
         continue
     fi
 
-    nginx_master_pid=$(pgrep -o -f "nginx: master") || true
+    nginx_master_pid=""
+    # procps is not installed in the production image, so find the nginx master
+    # by scanning /proc directly rather than using pgrep.
+    for pid_dir in /proc/[0-9]*; do
+        pid="${pid_dir##*/}"
+        cmdline_file="$pid_dir/cmdline"
+        [ -r "$cmdline_file" ] || continue
+        cmdline=$(tr '\0' ' ' < "$cmdline_file" 2>/dev/null) || continue
+        case "$cmdline" in
+            *"nginx: master"*)
+                nginx_master_pid="$pid"
+                break
+                ;;
+        esac
+    done
     if [ -n "$nginx_master_pid" ]; then
         kill -HUP "$nginx_master_pid"
         echo "nginx reloaded (HUP sent to PID $nginx_master_pid)."
