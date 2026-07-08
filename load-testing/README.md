@@ -132,3 +132,27 @@ A timestamped run directory under `load-testing/benchmark_results/` with `result
 
 #### Resuming
 Pass `--resume <run-dir>` to skip measurements already recorded in that run's CSV.
+
+### Lens Benchmark
+
+#### Purpose
+Tests throughput and system utilization across **three lens shapes** (`single_binary`, `single_bbox`, `bbox_to_binary`) while sweeping independent dimensions — objects per frame, cameras (parallel workers) per lens, and detector copies — in a single run. Provisioning is one-shot (all detectors created and trained upfront); the edge config is ramped per-run so VRAM/compute footprint tracks the active set. See [`app_benchmark/README.md`](app_benchmark/README.md) for full details on config format, output schema, and detector lifecycle.
+
+#### Usage
+```
+cd load-testing
+GROUNDLIGHT_API_TOKEN=... uv run app_benchmark app_benchmark/configs/example.yaml \
+    --device-name g4dn-xlarge-t4
+```
+
+`--device-name` is required — it identifies the host in all output artifacts. Pass `--notes` for free-form annotations (driver version, power mode, etc.). Run `uv run app_benchmark --help` for all flags.
+
+#### Outputs
+A timestamped directory under `load-testing/benchmark_results/` containing:
+* `summary.md`: primary view — environment block, lens config table, per-run overview, cross-run plots, and per-worker stats
+* `summary.json`: machine-readable cross-run summary
+* `plots/`: cross-run system utilization (2×2 grid) and per-lens FPS overlays
+* `run_NN/`: per-run logs (`system.log`, per-camera `.log` files) and drill-down plots
+
+#### Evaluate
+Open `summary.md` in the timestamped results directory. The overview table shows per-lens mean FPS and whether each lens hit its target FPS (≥95% of frames). Cross-run plots show how utilization and throughput evolve as the sweep progresses.
