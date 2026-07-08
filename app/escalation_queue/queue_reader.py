@@ -118,8 +118,13 @@ class QueueReader:
         oldest_writing_path = sorted(queue_files)[0]
         new_reading_path = self.base_reading_dir / oldest_writing_path.name
 
-        # Move the file from writing directory to reading directory
-        oldest_writing_path.rename(new_reading_path)
+        # Move the file from writing directory to reading directory. Retention may delete a stale file before rename;
+        # treat FileNotFoundError as unavailable.
+        try:
+            oldest_writing_path.rename(new_reading_path)
+        except FileNotFoundError:
+            logger.warning("Queue file %s vanished before it could be selected; skipping.", oldest_writing_path)
+            return None
 
         return new_reading_path
 

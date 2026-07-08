@@ -11,9 +11,12 @@ from app.escalation_queue.queue_retention import QUEUE_RETENTION_DAYS, prune_exp
 _OLDER_THAN_WINDOW = QUEUE_RETENTION_DAYS + 1
 _WITHIN_WINDOW = max(QUEUE_RETENTION_DAYS - 1, 0)
 
+# The (images, writing, reading, failed) directories yielded by the `dirs` fixture.
+RetentionDirs = tuple[Path, Path, Path, Path]
+
 
 @pytest.fixture
-def dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> RetentionDirs:
     """Redirect every retention directory to temp subdirectories."""
     images = tmp_path / "images"
     writing = tmp_path / "writing"
@@ -33,7 +36,7 @@ def _write(path: Path, age_days: float) -> Path:
     return path
 
 
-def test_deletes_data_older_than_window_in_every_dir(dirs):
+def test_deletes_data_older_than_window_in_every_dir(dirs: RetentionDirs):
     """Files past the retention window are deleted across images, writing, reading, and failed dirs."""
     images, writing, reading, failed = dirs
     old = [
@@ -47,7 +50,7 @@ def test_deletes_data_older_than_window_in_every_dir(dirs):
         assert not p.exists()
 
 
-def test_keeps_data_within_window(dirs):
+def test_keeps_data_within_window(dirs: RetentionDirs):
     """Files newer than the retention window are kept, regardless of directory."""
     images, writing, reading, failed = dirs
     recent = [
@@ -61,7 +64,7 @@ def test_keeps_data_within_window(dirs):
         assert p.exists()
 
 
-def test_deletes_pending_escalation_regardless_of_status(dirs):
+def test_deletes_pending_escalation_regardless_of_status(dirs: RetentionDirs):
     """Old pending escalation data + its image are removed even though they were never escalated."""
     images, writing, _, _ = dirs
     img = _write(images / "det-x-999", age_days=_OLDER_THAN_WINDOW)
@@ -71,7 +74,7 @@ def test_deletes_pending_escalation_regardless_of_status(dirs):
     assert not queue_line.exists()
 
 
-def test_ignores_subdirectories(dirs):
+def test_ignores_subdirectories(dirs: RetentionDirs):
     """Non-file entries are skipped without error."""
     images, *_ = dirs
     (images / "nested").mkdir()
@@ -80,7 +83,7 @@ def test_ignores_subdirectories(dirs):
     assert (images / "nested").exists()
 
 
-def test_missing_dir_is_skipped(dirs, monkeypatch):
+def test_missing_dir_is_skipped(dirs: RetentionDirs, monkeypatch: pytest.MonkeyPatch):
     """A retention dir that does not exist is skipped rather than raising."""
     images, writing, reading, failed = dirs
     monkeypatch.setattr(queue_retention, "RETENTION_DIRS", (Path("/nonexistent/queue/images"), images))

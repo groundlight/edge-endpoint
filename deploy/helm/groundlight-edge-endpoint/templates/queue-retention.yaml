@@ -1,0 +1,47 @@
+# Cron job to enforce the escalation-queue data-retention window. Prunes everything the queue writes
+# to disk (images, pending escalation data, and failed-escalation records) older than
+# QUEUE_RETENTION_DAYS, deleted purely by age regardless of escalation status.
+#
+# A CronJob (not an in-process scheduler) so the schedule is wall-clock owned: a restart or crash-loop
+# of the edge-endpoint pod can't reset a timer and silently starve the retention guarantee.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: queue-retention
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+spec:
+  schedule: "0 4,16 * * *"  # Twice daily; keeps worst-case on-disk age within ~half a day of the window.
+  concurrencyPolicy: Forbid  # Never overlap sweeps; skip a run rather than stack them.
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 3600
+      backoffLimit: 3
+      template:
+        metadata:
+          labels:
+            app: queue-retention
+        spec:
+          restartPolicy: Never
+          imagePullSecrets:
+          - name: registry-credentials
+          containers:
+          - name: queue-retention
+            image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
+            imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
+            resources:
+              requests:
+                memory: "100Mi"
+            command: ["./app/bin/launch-queue-retention.sh"]
+            env:
+            - name: LOG_LEVEL
+              value: {{ .Values.logLevel | quote }}
+            volumeMounts:
+              - name: escalation-queue-volume
+                mountPath: /opt/groundlight/queue
+          volumes:
+          - name: escalation-queue-volume
+            hostPath:
+              path: /opt/groundlight/queue/{{ .Values.namespace }}
+              type: DirectoryOrCreate

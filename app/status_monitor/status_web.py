@@ -10,7 +10,6 @@ from fastapi.staticfiles import StaticFiles
 
 from app.core.edge_config_manager import EdgeConfigManager
 from app.core.groundlight_client import groundlight_client
-from app.escalation_queue.queue_retention import prune_expired_queue_data
 from app.metrics.iq_activity import clear_old_activity_files
 from app.metrics.metric_reporting import MetricsReporter
 from app.metrics.resource_metrics import ResourceMetricsCollector
@@ -57,10 +56,6 @@ async def startup_event():
     # seconds, to avoid every edge-endpoint report hitting the server at the exact same time.
     scheduler.add_job(reporter.report_metrics_to_cloud, "cron", hour="*", minute="3", jitter=120)
     scheduler.add_job(clear_old_activity_files, "interval", seconds=ONE_HOUR_IN_SECONDS)
-    # Enforce the queue data-retention window (images + escalation data + failed records). cron (not
-    # interval) so restarts don't reset the timer and starve the job; twice daily keeps the worst-case
-    # on-disk age within ~half a day of the window.
-    scheduler.add_job(prune_expired_queue_data, "cron", hour="4,16")
     scheduler.start()
 
 

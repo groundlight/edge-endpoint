@@ -51,3 +51,15 @@ def prune_expired_queue_data() -> None:
                     path.unlink(missing_ok=True)
             except Exception:
                 logger.debug(f"Failed to prune expired queue file {path}", exc_info=True)
+
+
+if __name__ == "__main__":
+    # Entrypoint for the retention Kubernetes CronJob: `python -m app.escalation_queue.queue_retention`.
+    # Runs a single sweep and exits so the CronJob's wall-clock schedule owns the cadence (a restart or
+    # crash-loop can't reset a timer and starve the retention guarantee).
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s.%(msecs)03d %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+    )
+    logger.info(f"Pruning escalation-queue data older than {QUEUE_RETENTION_DAYS} days.")
+    prune_expired_queue_data()
+    logger.info("Escalation-queue retention sweep complete.")

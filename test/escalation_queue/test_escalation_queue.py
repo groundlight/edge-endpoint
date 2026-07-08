@@ -244,6 +244,22 @@ class TestQueueReader:
         assert_expected_reader_output(test_reader, [test_escalation_info])
         assert not written_to_path.exists()
 
+    def test_choose_new_file_handles_rename_race(
+        self, test_reader: QueueReader, test_writer: QueueWriter, test_escalation_info: EscalationInfo, monkeypatch
+    ):
+        """The retention sweep (separate process) can delete a writing/ file between listing and rename.
+
+        _choose_new_file must treat the resulting FileNotFoundError as "no file available" (return None)
+        rather than letting it crash the reader loop.
+        """
+        assert test_writer.write_escalation(test_escalation_info)
+
+        def _raise_not_found(*args, **kwargs):
+            raise FileNotFoundError
+
+        monkeypatch.setattr(Path, "rename", _raise_not_found)
+        assert test_reader._choose_new_file() is None
+
     def test_reader_reads_multiple_lines_from_same_file(self, test_reader: QueueReader, test_writer: QueueWriter):
         """
         Verify that the reader can read multiple lines from the same file in the correct order.
