@@ -5,6 +5,22 @@ set -e
 
 K="k3s kubectl"
 
+# retry MAX BASE -- cmd... : run cmd up to MAX times with linear backoff
+# (BASE, 2*BASE, ... seconds). Returns cmd's exit code from the final attempt.
+retry() {
+    local max=$1 base=$2 attempt=1 rc=0; shift 2; [ "${1:-}" = "--" ] && shift
+    while :; do
+        if "$@"; then return 0; else rc=$?; fi   # capture rc in else, not after the if
+        [ "$attempt" -ge "$max" ] && { echo "retry: '$*' failed after $max attempts (exit $rc)" >&2; return "$rc"; }
+        echo "retry: attempt $attempt/$max failed (exit $rc); retrying in $((base * attempt))s" >&2
+        sleep "$((base * attempt))"
+        attempt=$((attempt + 1))
+    done
+}
+
+# Sourced by the retry unit test (INSTALL_K3S_LIB_ONLY=1) to load helpers only.
+[ "${INSTALL_K3S_LIB_ONLY:-}" = "1" ] && return 0 2>/dev/null
+
 #!/bin/bash
 
 # Validate number of arguments
@@ -206,7 +222,18 @@ if command -v k3s &> /dev/null; then
     fi
 else
     echo "k3s is not installed. Installing..."
-    curl -sfL https://get.k3s.io |  K3S_KUBECONFIG_MODE="644" sh -s - --disable=traefik
+
+    # The upstream installer downloads the k3s binary + checksum from GitHub's
+    # CDN, which can fail transiently. Retry up to 3x (10s, 20s backoff), tearing
+    # down any partial install first so a retry doesn't see k3s as "installed".
+    run_k3s_installer() {
+        /usr/local/bin/k3s-uninstall.sh >/dev/null 2>&1 || true
+        curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" sh -s - --disable=traefik
+    }
+    if ! retry 3 10 -- run_k3s_installer; then
+        echo "ERROR: k3s installer failed after 3 attempts (transient CDN download failure?)." >&2
+        exit 1
+    fi
 
     if check_k3s_is_running; then
         echo "k3s has installed and initialized successfully."
