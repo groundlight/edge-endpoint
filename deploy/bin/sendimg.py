@@ -27,7 +27,7 @@ Example Usage:
 
 Note:
 -----
-Ensure that the Groundlight edge-endpoint is running locally on http://localhost:30101.
+Ensure that the Groundlight edge-endpoint is running locally on https://localhost:30143.
 """
 
 
@@ -42,7 +42,7 @@ def submit_image_to_local_edge_endpoint(image, detector_id):
     image.save(buffered, format="JPEG")
     image_bytes = buffered.getvalue()
 
-    client = Groundlight(endpoint="http://localhost:30101")
+    client = Groundlight(endpoint="https://localhost:30143", disable_tls_verification=True)
 
     detector = client.get_detector(detector_id)
     response = client.ask_ml(detector=detector, image=image_bytes)

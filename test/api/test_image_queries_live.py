@@ -32,9 +32,11 @@ def ensure_edge_endpoint_is_live_and_ready():
     final_exception = None
     while time.time() - start_time < MAX_WAIT_TIME_S:
         try:
-            live_response = requests.get(TEST_ENDPOINT + "/health/live")
+            # verify=False is a no-op for http:// endpoints; needed for https:// endpoints
+            # using the edge endpoint's self-signed certificate.
+            live_response = requests.get(TEST_ENDPOINT + "/health/live", verify=False)
             live_response.raise_for_status()
-            ready_response = requests.get(TEST_ENDPOINT + "/health/ready")
+            ready_response = requests.get(TEST_ENDPOINT + "/health/ready", verify=False)
             ready_response.raise_for_status()
             if live_response.json().get("status") == "alive" and ready_response.json().get("status") == "ready":
                 return

@@ -21,6 +21,11 @@ jobs:
     # This used to run on a larger runner, but to use it as a reusable workflow outside of this
     # organization we need it to run on a default github runner.
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Test both the opt-in HTTP configuration and the default HTTPS-only configuration.
+        protocol: [http, https]
     env:
       # associated with roxanne+test_edge account since for some reason it was failing with
       # prod biggies
@@ -29,6 +34,7 @@ jobs:
       INFERENCE_IMAGE_TAG: ${{ inputs.inference_image_tag }}
       PYTHON_VERSION: "3.11"
       UV_VERSION: "0.8.4"
+      TEST_PROTOCOL: ${{ matrix.protocol }}
     steps:
       - name: Report disk space before cleanup
         run: |
@@ -81,4 +87,4 @@ jobs:
       - name: Diagnose failure
         if: failure()
         run: |
-          NAMESPACE=test-with-k3s-helm ./deploy/bin/diagnose-k8-failure.sh
+          NAMESPACE=test-with-k3s-helm-${{ matrix.protocol }} ./deploy/bin/diagnose-k8-failure.sh

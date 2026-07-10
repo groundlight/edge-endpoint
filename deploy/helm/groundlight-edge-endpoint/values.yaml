@@ -37,7 +37,7 @@ imagePullPolicy: "Always"
 # Whether to enable the HTTP (non-TLS) port on the edge endpoint.
 # When set to false, only HTTPS access is available, and the HTTP port is fully disabled
 # (removed from the Kubernetes Service, NGINX listener, and container port).
-httpEnabled: true
+httpEnabled: false
 
 # The HTTP port that the Edge Endpoint will listen on on the host (only used when httpEnabled is true).
 # Within the cluster, edge-endpoint listens on port 30101 and can be addressed by

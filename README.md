@@ -5,7 +5,8 @@
 Run your Groundlight models on-prem by hosting an Edge Endpoint on your own hardware.  The Edge Endpoint exposes the exact same API as the Groundlight cloud service, so any Groundlight application can point to the Edge Endpoint simply by configuring the `GROUNDLIGHT_ENDPOINT` environment variable as follows:
 
 ```bash
-export GROUNDLIGHT_ENDPOINT=http://localhost:30101
+export GROUNDLIGHT_ENDPOINT=https://localhost:30143
+export DISABLE_TLS_VERIFY=1  # The edge endpoint uses a self-signed TLS certificate
 # This assumes your Groundlight SDK application is running on the same host as the Edge Endpoint.
 ```
 
@@ -23,15 +24,15 @@ While not required, configuring detectors provides fine-grained control over the
 
 Any application written with the [Groundlight SDK](https://pypi.org/project/groundlight/) can work with an Edge Endpoint without any code changes. Simply set the `GROUNDLIGHT_ENDPOINT` environment variable.
 
-The Edge Endpoint supports both unencrypted HTTP and encrypted HTTPS:
+The Edge Endpoint supports encrypted HTTPS out of the box, with unencrypted HTTP available as an opt-in for development:
 
-*   **HTTP (Recommended for dev)**: `http://localhost:30101`
-*   **HTTPS (Self-signed)**: `https://localhost:30143` (Requires `export DISABLE_TLS_VERIFY=1`)
+*   **HTTPS (Self-signed, default)**: `https://localhost:30143` (Requires `export DISABLE_TLS_VERIFY=1`)
+*   **HTTP (Opt-in for dev)**: `http://localhost:30101` — set the Helm value `httpEnabled=true` to enable it.
 
 To find the correct port, run `kubectl get services`:
 ```
-NAME                      TYPE       CLUSTER-IP   EXTERNAL-IP   PORT(S)                        AGE
-edge-endpoint-service     NodePort   10.43.0.10   <none>        30101:30101/TCP,443:30143/TCP  23m
+NAME                      TYPE       CLUSTER-IP   EXTERNAL-IP   PORT(S)          AGE
+edge-endpoint-service     NodePort   10.43.0.10   <none>        443:30143/TCP    23m
 ```
 
 We recommend configuring the endpoint using an environment variable, but you can also pass it directly to the `Groundlight` SDK object:
@@ -39,8 +40,8 @@ We recommend configuring the endpoint using an environment variable, but you can
 ```python
 from groundlight import Groundlight
 
-# Use HTTP (defaults to 30101) or HTTPS (defaults to 30143)
-gl = Groundlight(endpoint="http://localhost:30101")
+# Use HTTPS (defaults to 30143) or HTTP (defaults to 30101, if enabled)
+gl = Groundlight(endpoint="https://localhost:30143", disable_tls_verification=True)
 
 det = gl.get_or_create_detector(name="doorway", query="Is the doorway open?")
 img = "./docs/static/img/doorway.jpg"
@@ -74,7 +75,7 @@ Each `inferencemodel` pod contains one container.
 
 * `Cloud API:` This is the upstream API that we use as a fallback in case the edge logic server encounters problems. It is set to `https://api.groundlight.ai`.
 
-* `Endpoint url:` This is the URL where the endpoint's functionality is exposed to the SDK or applications. (i.e., the upstream you can set for the Groundlight application). The default ports are `30101` (HTTP) and `30143` (HTTPS).
+* `Endpoint url:` This is the URL where the endpoint's functionality is exposed to the SDK or applications. (i.e., the upstream you can set for the Groundlight application). The default port is `30143` (HTTPS); HTTP on port `30101` is available if `httpEnabled=true` is set.
 
 ## Logging and Observability
 

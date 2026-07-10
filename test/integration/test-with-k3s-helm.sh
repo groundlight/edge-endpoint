@@ -4,6 +4,10 @@
 # live tests, which will hit the API service that got setup
 # Altogether, you can run everything with:
 # > make test-with-k3s-helm
+#
+# Set TEST_PROTOCOL=https to exercise the edge endpoint's default HTTPS-only configuration
+# instead of the opt-in HTTP configuration. Defaults to "http" to match this script's
+# historical behavior.
 set -e
 set -x
 
@@ -19,17 +23,40 @@ then
 
 fi
 
+export TEST_PROTOCOL="${TEST_PROTOCOL:-http}"
+case "$TEST_PROTOCOL" in
+    http)
+        # HTTP is disabled by default, so opt back into it.
+        export HTTP_ENABLED="true"
+        ;;
+    https)
+        export HTTP_ENABLED="false"
+        # The edge endpoint uses a self-signed TLS certificate.
+        export DISABLE_TLS_VERIFY=1
+        ;;
+    *)
+        echo "Error: TEST_PROTOCOL must be 'http' or 'https' (got '$TEST_PROTOCOL')."
+        exit 1
+        ;;
+esac
+
 # First create a detector to use for testing:
 export DETECTOR_ID=$(uv run python test/integration/integration.py --mode create_detector)
 echo "created detector with id: $DETECTOR_ID"
 
 # set some other environment variables
-# We put the tests on port 30108 and in a different namespace so that it doesn't require any
-# extra configuration to run them alongside a "default" deployment while you're developing.
+# We put the tests on non-default ports and in a protocol-specific namespace so that it
+# doesn't require any extra configuration to run them alongside a "default" deployment (or
+# the other protocol's test run) while you're developing.
 export EDGE_ENDPOINT_PORT="30108"
-export DEPLOYMENT_NAMESPACE="test-with-k3s-helm"
+export EDGE_ENDPOINT_HTTPS_PORT="30109"
+export DEPLOYMENT_NAMESPACE="test-with-k3s-helm-$TEST_PROTOCOL"
 export INFERENCE_FLAVOR="CPU"
-export LIVE_TEST_ENDPOINT="http://localhost:$EDGE_ENDPOINT_PORT"
+if [ "$TEST_PROTOCOL" = "http" ]; then
+    export LIVE_TEST_ENDPOINT="http://localhost:$EDGE_ENDPOINT_PORT"
+else
+    export LIVE_TEST_ENDPOINT="https://localhost:$EDGE_ENDPOINT_HTTPS_PORT"
+fi
 export REFRESH_RATE=60 # not actually different than the default, but we may want to tweak this
 
 # update the config for this detector, such that we always take edge answers
@@ -70,9 +97,11 @@ helm install -n default ${HELM_RELEASE_NAME} deploy/helm/groundlight-edge-endpoi
     --set groundlightApiToken=$GROUNDLIGHT_API_TOKEN \
     --set inferenceFlavor=$INFERENCE_FLAVOR \
     --set edgeEndpointPort=$EDGE_ENDPOINT_PORT \
+    --set edgeEndpointHttpsPort=$EDGE_ENDPOINT_HTTPS_PORT \
     --set namespace=$DEPLOYMENT_NAMESPACE \
     --set edgeEndpointTag=$IMAGE_TAG \
     --set inferenceTag=$INFERENCE_IMAGE_TAG \
+    --set httpEnabled=$HTTP_ENABLED \
     --set-file configFile=$EDGE_CONFIG_FILE
 
 echo "Waiting for edge-endpoint pods to rollout..."
