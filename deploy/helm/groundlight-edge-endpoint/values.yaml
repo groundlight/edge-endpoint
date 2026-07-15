@@ -24,6 +24,12 @@ inferenceTag: ""
 # an object detection or counting model. 
 useMinimalImage: false
 
+# When true (default) each detector runs a separate OODD inference pod whose
+# prediction adjusts the primary model's confidence. Set false to disable OODD
+# entirely (no OODD pods launch and no OODD confidence adjustment is applied).
+# Has no effect when useMinimalImage is true, since that image runs OODD in-pipeline.
+runOodd: true
+
 # Enable request-level tracing profiling for the edge endpoint.
 # When enabled, per-request trace data (span timings, annotations) is written to
 # /opt/groundlight/device/edge-profiling/ as JSONL files. Disabled by default.

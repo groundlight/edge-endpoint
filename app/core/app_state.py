@@ -23,6 +23,7 @@ MAX_DETECTOR_IDS_CACHE_SIZE = 1000
 STALE_METADATA_THRESHOLD_SEC = 60  # 60 seconds
 
 USE_MINIMAL_IMAGE = os.environ.get("USE_MINIMAL_IMAGE", "false") == "true"
+RUN_OODD = os.environ.get("RUN_OODD", "true") == "true"
 
 
 @lru_cache(maxsize=MAX_SDK_INSTANCES_CACHE_SIZE)
@@ -103,8 +104,9 @@ class AppState:
     def __init__(self):
         # We only launch a separate OODD inference pod if we are not using the minimal image.
         # Pipelines used in the minimal image include OODD inference and confidence adjustment,
-        # so they do not need to be adjusted separately.
-        self.separate_oodd_inference = not USE_MINIMAL_IMAGE
+        # so they do not need to be adjusted separately. OODD can also be disabled entirely
+        # (regardless of the image) via the RUN_OODD flag.
+        self.separate_oodd_inference = (not USE_MINIMAL_IMAGE) and RUN_OODD
         self.edge_inference_manager = EdgeInferenceManager(separate_oodd_inference=self.separate_oodd_inference)
         self.db_manager = DatabaseManager()
         self.is_ready = False

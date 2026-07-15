@@ -24,6 +24,7 @@ ROLLOUT_READY_TIMEOUT_S = int(os.environ.get("ROLLOUT_READY_TIMEOUT_S", 60 * 30)
 DETECTOR_CONFIG_CHANGE_POLL_INTERVAL_S = 2.0
 
 USE_MINIMAL_IMAGE = os.environ.get("USE_MINIMAL_IMAGE", "false") == "true"
+RUN_OODD = os.environ.get("RUN_OODD", "true") == "true"
 
 
 def sleep_forever(message: str | None = None):
@@ -295,5 +296,5 @@ if __name__ == "__main__":
         edge_inference_manager=edge_inference_manager,
         deployment_manager=deployment_manager,
         db_manager=db_manager,
-        separate_oodd_inference=not USE_MINIMAL_IMAGE,
+        separate_oodd_inference=(not USE_MINIMAL_IMAGE) and RUN_OODD,
     )
