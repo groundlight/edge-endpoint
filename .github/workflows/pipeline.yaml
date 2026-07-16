@@ -494,8 +494,8 @@ jobs:
             --repository-name edge-endpoint \
             --image-ids imageTag=release \
             --query 'imageDetails[0].imageTags' \
-            --output text)
-          last_release_sha=$(echo "$tags" | tr '\t' '\n' | grep -E '^[0-9a-f]{9}-main$' | head -1 | cut -d- -f1)
+            --output text 2>/dev/null || true)
+          last_release_sha=$(echo "$tags" | tr '\t' '\n' | grep -E '^[0-9a-f]{9}-main$' | head -1 | cut -d- -f1 || true)
           if [[ -z "$last_release_sha" ]]; then
             echo "Could not find a <sha>-main tag on the current 'release' image."
             echo "Tags found: $tags"
