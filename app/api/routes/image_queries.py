@@ -125,6 +125,18 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     require_human_review = human_review == "ALWAYS"
     edge_config = EdgeConfigManager.active()
     detector_inference_config = EdgeConfigManager.detector_config(edge_config, detector_id)
+    # GL-352: optionally reject detectors that aren't configured on this edge endpoint, instead of
+    # escalating them to the cloud. Prevents accidental use of the wrong detector and avoids spinning
+    # up inference pods for unconfigured detectors. Off by default (backward-compatible).
+    if edge_config.global_config.reject_unconfigured_detectors and detector_inference_config is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Detector {detector_id} is not configured on this edge endpoint, and this endpoint is "
+                "configured to reject image queries for unconfigured detectors "
+                "(global_config.reject_unconfigured_detectors=true)."
+            ),
+        )
     return_edge_prediction = (
         detector_inference_config.always_return_edge_prediction if detector_inference_config is not None else False
     )

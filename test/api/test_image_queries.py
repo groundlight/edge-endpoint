@@ -327,3 +327,40 @@ def test_post_image_query_with_invalid_field(test_client: TestClient, detector: 
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST, response.json()["detail"]
         assert "inspection_id" in response.json()["detail"]
+
+
+def test_post_image_query_rejects_unconfigured_detector_when_enabled(test_client: TestClient, detector: Detector):
+    """GL-352: with global_config.reject_unconfigured_detectors on, an unconfigured detector 400s and is not escalated."""
+    from groundlight.edge import EdgeEndpointConfig, GlobalConfig
+
+    image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
+    # A config with the flag enabled and no detectors configured -> this detector is "unconfigured".
+    strict_config = EdgeEndpointConfig(global_config=GlobalConfig(reject_unconfigured_detectors=True))
+
+    with assert_not_escalated_to_gl(detector=detector):
+        with mock.patch("app.api.routes.image_queries.EdgeConfigManager.active", return_value=strict_config):
+            response = test_client.post(
+                url,
+                headers={"Content-Type": "image/jpeg"},
+                content=image_bytes,
+                params={"detector_id": detector.id, "confidence_threshold": 1.0},
+            )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST, response.json()["detail"]
+    assert "not configured" in response.json()["detail"]
+
+
+def test_post_image_query_allows_unconfigured_detector_by_default(test_client: TestClient, detector: Detector):
+    """GL-352: default (flag off) is unchanged — an unconfigured detector still escalates rather than 400ing."""
+    image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
+
+    with assert_escalated_to_gl(detector=detector, sdk_response=confident_cloud_iq):
+        with enable_edge_inference(assert_didnt_run=True):
+            response = test_client.post(
+                url,
+                headers={"Content-Type": "image/jpeg"},
+                content=image_bytes,
+                params={"detector_id": detector.id, "confidence_threshold": 1.0},
+            )
+
+    assert response.status_code == status.HTTP_200_OK, response.json()["detail"]
