@@ -48,7 +48,7 @@ openssl genpkey -algorithm RSA -out private.key -pkeyopt rsa_keygen_bits:2048
 openssl req -new -key private.key -out csr.pem -subj "/C=US/ST=Washington/L=Seattle/O=Groundlight/OU=Engineering/CN=localhost"
 
 # Generate a self-signed certificate
-openssl x509 -req -days 365 -in csr.pem -signkey private.key -out certificate.crt
+openssl x509 -req -days 3650 -in csr.pem -signkey private.key -out certificate.crt
 
 echo "TLS certificate and key generated successfully."
 
