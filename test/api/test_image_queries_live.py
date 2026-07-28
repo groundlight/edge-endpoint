@@ -24,7 +24,6 @@ MAX_WAIT_TIME_S = 60
 DETECTOR_ID = os.getenv("DETECTOR_ID", "det_2SagpFUrs83cbMZsap5hZzRjZw4")
 
 
-@pytest.mark.live
 @pytest.fixture(scope="module", autouse=True)
 def ensure_edge_endpoint_is_live_and_ready():
     """Ensure that the edge-endpoint server is live and ready before running tests."""
