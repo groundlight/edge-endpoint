@@ -1,7 +1,10 @@
 self-hosted-runner:
   # Labels of self-hosted runner in array of strings.
   # this isn't a self hosted runner but it's a special enterprise big runner
-  labels: ["ubuntu-22.04-8core"]
+  labels:
+    - "ubuntu-22.04-8core"
+    # GL Public VPC runners for G4 EEUT / sweeper (registered to axon-groundlight)
+    - "groundlight-eeut"
 
 # Configuration variables in array of strings defined in your repository or
 # organization. `null` means disabling configuration variables check.

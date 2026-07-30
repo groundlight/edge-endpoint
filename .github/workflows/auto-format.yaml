@@ -19,10 +19,12 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
         
+      # Official curl installer instead of astral-sh/setup-uv — infosec disallows third-party Actions.
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          version: ${{ env.UV_VERSION }}
+        run: |
+          set -euo pipefail
+          curl -LsSf "https://astral.sh/uv/${{ env.UV_VERSION }}/install.sh" | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Install Linting Dependencies
         run: |
           make install-lint

@@ -41,10 +41,13 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      # Install uv via the official curl installer instead of astral-sh/setup-uv,
+      # since infosec policy disallows third-party GitHub Actions.
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          version: ${{ env.UV_VERSION }}
+        run: |
+          set -euo pipefail
+          curl -LsSf "https://astral.sh/uv/${{ env.UV_VERSION }}/install.sh" | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Install edge-endpoint's python dependencies
         run: |
@@ -83,10 +86,13 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      # Install uv via the official curl installer instead of astral-sh/setup-uv,
+      # since infosec policy disallows third-party GitHub Actions.
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          version: ${{ env.UV_VERSION }}
+        run: |
+          set -euo pipefail
+          curl -LsSf "https://astral.sh/uv/${{ env.UV_VERSION }}/install.sh" | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Install edge-endpoint's python dependencies
         run: |
@@ -202,13 +208,16 @@ jobs:
           sleep 5
           curl -vk https://localhost:30143/health/live
 
+      # Install poetry via the official installer instead of snok/install-poetry,
+      # since infosec policy disallows third-party GitHub Actions.
       - name: Install Poetry for SDK tests
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.SDK_POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          installer-parallel: true
+        run: |
+          set -euo pipefail
+          curl -sSLf https://install.python-poetry.org | python - --version "${SDK_POETRY_VERSION}"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          poetry config virtualenvs.create true
+          poetry config virtualenvs.in-project true
 
       # Note that we're pulling the latest main from the SDK repo
       # This might be ahead of what's published to pypi, but it's useful to test things before they're released.
@@ -317,13 +326,21 @@ jobs:
   G4-end-to-end:
     # Note this job can run multiple times in parallel because the stack name is unique
     # for the run.  How much we want to do this is TBD.
-    runs-on: self-hosted
+    # groundlight-eeut = GL Public VPC runners registered to axon-groundlight (not Axon's
+    # shared self-hosted pool). See positronix-ai/ci-infra glpublic-cicd.
+    runs-on: [self-hosted, groundlight-eeut]
     needs:
       - call-build-push-ee-image
+
+    permissions:
+      contents: read
 
     env:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
       PYTHONUNBUFFERED: 1
+      # GITHUB_TOKEN is not an ambient env var, so surface it explicitly. The EEUT
+      # uses it to clone the private GHEC repo; it expires when this job ends.
+      EEUT_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     defaults:
       run:
         working-directory: cicd/pulumi
@@ -353,14 +370,21 @@ jobs:
 
       - name: Install Pulumi
         run: |
-          curl -fsSL https://get.pulumi.com | sh
+          # HOME is not set on the self-hosted runners, so resolve it before running
+          # the installer: otherwise it lands in /.pulumi and the PATH entry misses it.
           export HOME=$(eval echo ~$(whoami))
+          curl -fsSL https://get.pulumi.com | sh
           echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
 
+      # Install uv via the official curl installer instead of astral-sh/setup-uv,
+      # since infosec policy disallows third-party GitHub Actions.
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          version: ${{ env.UV_VERSION }}
+        run: |
+          set -euo pipefail
+          export HOME=$(eval echo ~$(whoami))
+          export UV_INSTALL_DIR="$HOME/.local/bin"
+          curl -LsSf "https://astral.sh/uv/${{ env.UV_VERSION }}/install.sh" | sh
+          echo "$UV_INSTALL_DIR" >> "$GITHUB_PATH"
 
       - name: Make sure uv is working
         run: |
@@ -396,6 +420,14 @@ jobs:
 
           # Inject the API token into the pulumi stack
           uv run pulumi config set ee-cicd:groundlightApiToken ${GROUNDLIGHT_API_TOKEN} --secret
+
+          # Short-lived workflow token so the EEUT can clone the private GHEC repo
+          # and fetch this run's merge commit (not present on the public mirror).
+          if [ -z "${EEUT_GITHUB_TOKEN}" ]; then
+            echo "EEUT_GITHUB_TOKEN is empty; the EEUT could not clone the repo."
+            exit 1
+          fi
+          uv run pulumi config set ee-cicd:githubRepoToken "${EEUT_GITHUB_TOKEN}" --secret
 
       - name: Create the EEUT instance
         run: |
@@ -448,7 +480,8 @@ jobs:
       - name: Instructions for connecting to a failed worker to debug
         if: always()
         run: |
-          EEUT_IP=$(uv run pulumi stack output eeut_private_ip)
+          # Purely informational, so never let it fail the job and bury the real error.
+          EEUT_IP=$(uv run pulumi stack output eeut_private_ip 2>/dev/null || echo "unknown")
           echo "If the tests failed, the EEUT (edge endpoint under test) is still running."
           echo "To connect to it, see the Debugging EEUT runbook.  You'll want to know:"
           echo "export EEUT_IP=${EEUT_IP}"

@@ -19,7 +19,9 @@ jobs:
   destroy-expired-eeut-stacks:
     #runs-on: ubuntu-22.04  # preferably
     # Currently running on self-hosted because something is wrong with the AWS perms on the GH runners.
-    runs-on: self-hosted
+    # groundlight-eeut = GL Public VPC runners registered to axon-groundlight (not Axon's
+    # shared self-hosted pool). See positronix-ai/ci-infra glpublic-cicd.
+    runs-on: [self-hosted, groundlight-eeut]
     env:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_CICD_PAT }}
     defaults:
@@ -46,8 +48,10 @@ jobs:
 
       - name: Install Pulumi
         run: |
-          curl -fsSL https://get.pulumi.com | sh
+          # HOME is not set on the self-hosted runners, so resolve it before running
+          # the installer: otherwise it lands in /.pulumi and the PATH entry misses it.
           export HOME=$(eval echo ~$(whoami))
+          curl -fsSL https://get.pulumi.com | sh
           echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
 
       - name: Check that pulumi is installed and authenticated

@@ -15,6 +15,10 @@ mkdir -p /opt/groundlight/ee-install-status
 touch /opt/groundlight/ee-install-status/installing
 SETUP_COMPLETE=0
 record_result() {
+    # Remove temporary git credentials on both success and failure.
+    if [ -n "${GIT_CREDENTIAL_FILE:-}" ]; then
+        rm -f "${GIT_CREDENTIAL_FILE}"
+    fi
     if [ "$SETUP_COMPLETE" -eq 0 ]; then
         echo "Setup failed at $(date)"
         touch /opt/groundlight/ee-install-status/failed
@@ -56,11 +60,33 @@ sudo apt install -y \
     bash-completion \
     ffmpeg
 
-# Download the edge-endpoint code
+# Download the edge-endpoint code from the private GHEC source of truth.
+# Token is the short-lived workflow GITHUB_TOKEN, injected by Pulumi into user-data
+# (same pattern as GROUNDLIGHT_API_TOKEN). Needed because PR merge commits only
+# exist in axon-groundlight/edge-endpoint, not the public mirror.
 CODE_BASE=/opt/groundlight/src/
 mkdir -p ${CODE_BASE}
 cd ${CODE_BASE}
-git clone https://github.com/groundlight/edge-endpoint
+GITHUB_REPO_TOKEN="__GITHUBREPOTOKEN__"
+if [ "${GITHUB_REPO_TOKEN:0:14}" = "__GITHUBREPOTO" ]; then
+    echo "ERROR: GITHUBREPOTOKEN placeholder was not substituted by the launching script."
+    exit 1
+fi
+if [ -z "${GITHUB_REPO_TOKEN}" ]; then
+    echo "ERROR: GITHUBREPOTOKEN was substituted with an empty value."
+    exit 1
+fi
+
+# Keep the token out of process arguments and .git/config. The temporary
+# credential file is mode 0600 and is removed after checkout or on script exit.
+GIT_CREDENTIAL_FILE=$(mktemp)
+chmod 600 "${GIT_CREDENTIAL_FILE}"
+printf 'https://x-access-token:%s@github.com\n' "${GITHUB_REPO_TOKEN}" > "${GIT_CREDENTIAL_FILE}"
+unset GITHUB_REPO_TOKEN
+GIT_CREDENTIAL_HELPER="store --file=${GIT_CREDENTIAL_FILE}"
+
+git -c credential.helper="${GIT_CREDENTIAL_HELPER}" \
+    clone https://github.com/axon-groundlight/edge-endpoint.git
 cd edge-endpoint/
 # The launching script should update this to a specific commit.
 SPECIFIC_COMMIT="__EE_COMMIT_HASH__"
@@ -70,8 +96,10 @@ if [ -n "$SPECIFIC_COMMIT" ]; then
     if [ "${SPECIFIC_COMMIT:0:11}" != "__EE_COMMIT" ]; then
         echo "Checking out commit ${SPECIFIC_COMMIT}"
         # This is probably a merge commit, so we need to fetch it deliberately.
-        git fetch origin $SPECIFIC_COMMIT
-        git checkout $SPECIFIC_COMMIT
+        git -c credential.helper="${GIT_CREDENTIAL_HELPER}" fetch origin "${SPECIFIC_COMMIT}"
+        git checkout "${SPECIFIC_COMMIT}"
+        rm -f "${GIT_CREDENTIAL_FILE}"
+        GIT_CREDENTIAL_FILE=""
         EE_IMAGE_TAG="__EEIMAGETAG__"
         if [ "${EE_IMAGE_TAG:0:12}" != "__EEIMAGETAG" ]; then
             echo "Using image tag ${EE_IMAGE_TAG}"

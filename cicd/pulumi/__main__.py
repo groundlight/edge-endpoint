@@ -59,10 +59,15 @@ def load_user_data_script() -> str:
     image_tag = config.get("eeImageTag") or "release"
     user_data_script2 = user_data_script1.replace("__EEIMAGETAG__", image_tag)
     
-    # Apply API token replacement as the final async transformation
+    # Apply secret substitutions last (Pulumi Outputs).
     api_token = config.require_secret("groundlightApiToken")
-    final_script = api_token.apply(
-        lambda token: user_data_script2.replace("__GROUNDLIGHTAPITOKEN__", token)
+    repo_token = config.require_secret("githubRepoToken")
+    final_script = pulumi.Output.all(api_token, repo_token).apply(
+        lambda args: (
+            user_data_script2
+            .replace("__GROUNDLIGHTAPITOKEN__", args[0])
+            .replace("__GITHUBREPOTOKEN__", args[1])
+        )
     )
     
     return final_script
