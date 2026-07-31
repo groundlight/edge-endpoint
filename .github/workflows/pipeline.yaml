@@ -593,6 +593,9 @@ jobs:
           ./deploy/bin/tag-edge-endpoint-image.sh latest
           ./deploy/bin/tag-edge-endpoint-image.sh release
 
+  # Customer-facing Helm charts live on public groundlight/edge-endpoint gh-pages
+  # (https://code.groundlight.ai/edge-endpoint/). Publish there with the Mirror
+  # App — same auth pattern as mirror-to-public — instead of GHEC origin.
   publish-chart:
     if: github.ref == 'refs/heads/main'
     needs:
@@ -600,8 +603,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.MIRROR_APP_ID }}
+          private-key: ${{ secrets.MIRROR_APP_PRIVATE_KEY }}
+          owner: groundlight
+          repositories: edge-endpoint
+
       - name: Checkout source code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          # checkout otherwise leaves an http.https://github.com/.extraheader
+          # credential for GITHUB_TOKEN, which wins over the App token when
+          # pushing to the public repo.
+          persist-credentials: false
 
       - name: Set up Helm
         uses: azure/setup-helm@v3
@@ -611,10 +628,20 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Create deploy worktree
+      - name: Create deploy worktree from public gh-pages
+        env:
+          MIRROR_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          git fetch origin gh-pages
-          git worktree add .deploy gh-pages
+          set -euo pipefail
+          echo "::add-mask::${MIRROR_TOKEN}"
+
+          git remote add public \
+            "https://github.com/groundlight/edge-endpoint.git"
+          git config --local credential.helper \
+            "!f() { echo username=x-access-token; echo password=\${MIRROR_TOKEN}; }; f"
+
+          git fetch public gh-pages
+          git worktree add .deploy public/gh-pages
 
       - name: Package chart into .deploy
         run: |
@@ -626,9 +653,13 @@ jobs:
             --url https://code.groundlight.ai/edge-endpoint/ \
             --merge .deploy/index.yaml
 
-      - name: Commit and push to gh-pages
+      - name: Commit and push to public gh-pages
+        env:
+          MIRROR_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
+          set -euo pipefail
+          echo "::add-mask::${MIRROR_TOKEN}"
           cd .deploy
           git add .
           git commit -m "Publish Helm chart $(date -u +'%Y-%m-%d %H:%M:%S UTC')" || echo "Nothing to commit"
-          git push origin gh-pages
+          git push public HEAD:refs/heads/gh-pages
