@@ -618,6 +618,7 @@ jobs:
   # Customer-facing Helm charts live on public groundlight/edge-endpoint gh-pages
   # (https://code.groundlight.ai/edge-endpoint/). Publish there with the Mirror
   # App — same auth pattern as mirror-to-public — instead of GHEC origin.
+  # Axon private OCI dual-publish is publish-chart-edge-artifacts (sibling job).
   publish-chart:
     if: github.ref == 'refs/heads/main'
     needs:
@@ -685,3 +686,30 @@ jobs:
           git add .
           git commit -m "Publish Helm chart $(date -u +'%Y-%m-%d %H:%M:%S UTC')" || echo "Nothing to commit"
           git push public HEAD:refs/heads/gh-pages
+
+  # Dual-publish Helm chart to Axon edge-artifacts ECR as OCI (main only).
+  # Keeps public gh-pages publish above. Requires groundlight-edge-artifact CDK
+  # deploy so oidc-ghec-edge-push trusts this repo (aws-global#478).
+  # Replication edge/* master→dev already covers charts ([GL-1797]).
+  publish-chart-edge-artifacts:
+    if: github.ref == 'refs/heads/main'
+    needs:
+      - tag-release
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      EDGE_ECR_URL: 794562053834.dkr.ecr.us-west-2.amazonaws.com
+    steps:
+      - name: Configure AWS credentials for edge master ECR (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::794562053834:role/oidc-ghec-edge-push
+          aws-region: us-west-2
+      - name: Check out code
+        uses: actions/checkout@v4
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+      - name: Package and push chart to edge-artifacts OCI
+        run: ./deploy/bin/publish-edge-artifacts-helm-chart.sh
