@@ -1,0 +1,51 @@
+name: edge-artifacts-tag-latest
+on:
+  # Called by pipeline after build-push on main. Waits for master→dev ECR
+  # replication of this commit's *-main tag, then moves mutable `latest` in
+  # the **dev** edge-artifacts account (not in master). Master stays
+  # build-only; environment pointers live in deployment registries.
+  workflow_call:
+
+env:
+  # dev-groundlight-edge-artifacts (deployment pull registry), not master.
+  EDGE_ARTIFACTS_ACCOUNT: "216731772508"
+  EDGE_ARTIFACTS_REGION: "us-west-2"
+  EDGE_ARTIFACTS_TAG_ROLE: "oidc-ghec-edge-tag"
+
+jobs:
+  tag-edge-artifacts-latest:
+    runs-on: ubuntu-latest
+    # Caps hangs outside the replication poll (AWS CLI / docker / buildx).
+    # The wait step uses a ~10 minute budget for the edge-endpoint image.
+    timeout-minutes: 20
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Configure AWS credentials for dev edge-artifacts ECR (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.EDGE_ARTIFACTS_ACCOUNT }}:role/${{ env.EDGE_ARTIFACTS_TAG_ROLE }}
+          aws-region: ${{ env.EDGE_ARTIFACTS_REGION }}
+      - name: Login to dev edge-artifacts ECR
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registries: ${{ env.EDGE_ARTIFACTS_ACCOUNT }}
+          mask-password: "true"
+      - name: Check out code
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Wait for replicated *-main tag in dev ECR
+        env:
+          ECR_ACCOUNT: ${{ env.EDGE_ARTIFACTS_ACCOUNT }}
+          ECR_REGION: ${{ env.EDGE_ARTIFACTS_REGION }}
+          ECR_REPOSITORY: edge/edge-endpoint
+          WAIT_TIMEOUT_SECONDS: "600"
+        run: ./deploy/bin/wait-for-ecr-image.sh
+      - name: Tag latest in the dev edge-artifacts account
+        env:
+          ECR_ACCOUNT: ${{ env.EDGE_ARTIFACTS_ACCOUNT }}
+          ECR_REGION: ${{ env.EDGE_ARTIFACTS_REGION }}
+          ECR_REPOSITORY_PREFIX: "edge/"
+        run: ./deploy/bin/tag-edge-endpoint-image.sh latest

@@ -1,15 +1,23 @@
 #!/bin/bash
 
-# Put a specific tag on an existing image in ECR
+# Put a specific tag on an existing image in ECR.
 # Assumptions:
 # - The image is already built and pushed to ECR
 # - The image is tagged with the git commit hash
+#
+# Environment variables:
+#   ECR_ACCOUNT: AWS account ID of the registry (default: legacy GL_Public 767397850842)
+#   ECR_REGION: Region of the registry (default: us-west-2)
+#   ECR_REPOSITORY_PREFIX: Optional repository path prefix. Use "edge/" for
+#     Axon edge-artifacts registries (master or deployment accounts).
+#   EDGE_ENDPOINT_IMAGE: Image/repository basename (default: edge-endpoint)
 
 set -e  # Exit immediately on error
 set -o pipefail
 
 ECR_ACCOUNT=${ECR_ACCOUNT:-767397850842}
 ECR_REGION=${ECR_REGION:-us-west-2}
+ECR_REPOSITORY_PREFIX=${ECR_REPOSITORY_PREFIX:-}
 
 # Ensure that you're in the same directory as this script before running it
 cd "$(dirname "$0")"
@@ -33,7 +41,7 @@ fi
 GIT_TAG=$(./git-tag-name.sh)
 EDGE_ENDPOINT_IMAGE=${EDGE_ENDPOINT_IMAGE:-edge-endpoint}  # v0.2.0 (fastapi inference server) compatible images
 ECR_URL="${ECR_ACCOUNT}.dkr.ecr.${ECR_REGION}.amazonaws.com"
-ECR_REPO="${ECR_URL}/${EDGE_ENDPOINT_IMAGE}"
+ECR_REPO="${ECR_URL}/${ECR_REPOSITORY_PREFIX}${EDGE_ENDPOINT_IMAGE}"
 
 # Authenticate docker to ECR
 aws ecr get-login-password --region ${ECR_REGION} | docker login \
