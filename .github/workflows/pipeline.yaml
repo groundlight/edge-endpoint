@@ -687,14 +687,16 @@ jobs:
           git commit -m "Publish Helm chart $(date -u +'%Y-%m-%d %H:%M:%S UTC')" || echo "Nothing to commit"
           git push public HEAD:refs/heads/gh-pages
 
-  # Dual-publish Helm chart to Axon edge-artifacts ECR as OCI (main only).
-  # Keeps public gh-pages publish above. Requires groundlight-edge-artifact CDK
-  # deploy so oidc-ghec-edge-push trusts this repo (aws-global#478).
-  # Replication edge/* master→dev already covers charts ([GL-1797]).
+  # Dual-publish Helm chart to Axon edge-artifacts ECR as OCI on merge to
+  # main (same gate model as image dual-publish / zuuul gl-edge-inference:
+  # not gated on legacy GL_Public tag-release). Public gh-pages publish above
+  # remains on the tag-release path. Requires oidc-ghec-edge-push trust
+  # (aws-global#478/#494). Replication edge/* master→dev covers charts
+  # ([GL-1797]); mutable `latest` is applied in **dev only** by the job below.
   publish-chart-edge-artifacts:
     if: github.ref == 'refs/heads/main'
     needs:
-      - tag-release
+      - main-tests-pass
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -713,3 +715,45 @@ jobs:
         uses: azure/setup-helm@v3
       - name: Package and push chart to edge-artifacts OCI
         run: ./deploy/bin/publish-edge-artifacts-helm-chart.sh
+
+  # After the chart is pushed to master, wait for master→dev ECR replication
+  # of Chart.yaml version, then point `latest` at it in the **dev**
+  # edge-artifacts account (Axon-dev environment pointer; master stays
+  # version-only). Mirrors edge-artifacts-tag-latest for the container image.
+  edge-artifacts-tag-chart-latest:
+    if: github.ref == 'refs/heads/main'
+    needs:
+      - publish-chart-edge-artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      EDGE_ARTIFACTS_ACCOUNT: "216731772508"
+      EDGE_ARTIFACTS_REGION: "us-west-2"
+      EDGE_ARTIFACTS_TAG_ROLE: "oidc-ghec-edge-tag"
+    steps:
+      - name: Configure AWS credentials for dev edge-artifacts ECR (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.EDGE_ARTIFACTS_ACCOUNT }}:role/${{ env.EDGE_ARTIFACTS_TAG_ROLE }}
+          aws-region: ${{ env.EDGE_ARTIFACTS_REGION }}
+      - name: Check out code
+        uses: actions/checkout@v4
+      - name: Wait for replicated chart version in dev ECR
+        env:
+          ECR_ACCOUNT: ${{ env.EDGE_ARTIFACTS_ACCOUNT }}
+          ECR_REGION: ${{ env.EDGE_ARTIFACTS_REGION }}
+          WAIT_TIMEOUT_SECONDS: "600"
+        run: |
+          set -euo pipefail
+          CHART_NAME=$(awk '/^name:/ { print $2; exit }' deploy/helm/groundlight-edge-endpoint/Chart.yaml)
+          CHART_VERSION=$(awk '/^version:/ { print $2; exit }' deploy/helm/groundlight-edge-endpoint/Chart.yaml)
+          export ECR_REPOSITORY="edge/${CHART_NAME}"
+          export ECR_IMAGE_TAG="${CHART_VERSION}"
+          ./deploy/bin/wait-for-ecr-image.sh
+      - name: Tag latest in the dev edge-artifacts account
+        env:
+          ECR_ACCOUNT: ${{ env.EDGE_ARTIFACTS_ACCOUNT }}
+          ECR_REGION: ${{ env.EDGE_ARTIFACTS_REGION }}
+        run: ./deploy/bin/tag-edge-artifacts-helm-chart.sh latest
