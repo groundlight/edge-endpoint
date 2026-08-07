@@ -48,8 +48,6 @@ spec:
         imagePullPolicy: IfNotPresent
         command: ["/bin/bash", "/groundlight-edge/deploy/bin/wait-for-warmup.sh"]
 
-      # NOTE: the sync-pinamod container is duplicated in the warmup_inference_model.yaml Job
-      # TODO: refactor to share code between the Job and the initContainer in the Deployment
       - name: sync-pinamod
         image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:${IMAGE_TAG}
         imagePullPolicy: IfNotPresent

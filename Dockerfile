@@ -104,7 +104,7 @@ RUN mkdir -p /opt/groundlight/edge/sqlite
 # Copy configs
 COPY configs ${APP_ROOT}/configs
 
-COPY deploy/k3s/inference_deployment/inference_deployment_template.yaml \
+COPY app/templates/inference_deployment_template.yaml \
     /etc/groundlight/inference-deployment/
 
 

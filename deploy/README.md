@@ -224,83 +224,6 @@ To remove the Edge Endpoint deployed with Helm:
 helm uninstall -n default edge-endpoint
 ```
 
-## Legacy Instructions
-
-> [!NOTE]
-> The older setup mechanism with `setup-ee.sh` is still available, but we recommend using Helm for
-> new installations and converting existing installations to Helm when possible. See the section
-> [Converting from setup-ee.sh to Helm](#converting-from-setup-eesh-to-helm) for instructions on
-> how to do this.
-
-If you haven't yet installed the k3s Kubernetes distribution, follow the steps in the [Setting up Single-Node Kubernetes with k3s](#setting-up-single-node-kubernetes-with-k3s) section.
-
-You might want to customize the [edge config file](../configs/edge-config.yaml) to include the detector ID's you want to run. See [the guide to configuring detectors](/CONFIGURING-DETECTORS.md) for more information. Adding detector ID's to the config file will cause inference pods to be initialized automatically for each detector and provides you finer-grained control over each detector's behavior. Even if detectors aren't configured in the config file, edge inference will be set up for each detector ID for which the Groundlight service receives requests (note that it takes some time for each inference pod to become available for the first time).
-
-Before installing the edge-endpoint, you need to create/specify the namespace for the deployment. If you're creating a new one, run:
-
-```bash
-kubectl create namespace "your-namespace-name"
-```
-
-Whether you created a new namespace or are using an existing one, set the DEPLOYMENT_NAMESPACE environment variable:
-```bash
-export DEPLOYMENT_NAMESPACE="your-namespace-name"
-```
-
-Some other environment variables should also be set. You'll need to have created
-a Groundlight API token in the [Groundlight web app](https://app.groundlight.ai/reef/my-account/api-tokens).
-```bash
-# Set your API token
-export GROUNDLIGHT_API_TOKEN="api_xxxxxx"
-
-# Choose an inference flavor, either CPU or (default) GPU.
-# Note that appropriate setup for GPU will need to be done separately.
-export INFERENCE_FLAVOR="CPU"
-# OR
-export INFERENCE_FLAVOR="GPU"
-```
-
-You'll also need to configure your AWS credentials using `aws configure` to include credentials that have permissions to pull from the appropriate ECR location (if you don't already have the AWS CLI installed, refer to the instructions [here](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)).
-
-To install the edge-endpoint, run:
-```shell
-./deploy/bin/setup-ee.sh
-```
-
-This will create the edge-endpoint deployment, which is both the SDK proxy and coordination service. After a short while, you should be able to see something like this if you run `kubectl get pods -n "your-namespace-name"`:
-
-```
-NAME                                    READY   STATUS    RESTARTS   AGE
-edge-endpoint-594d645588-5mf28          2/2     Running   0          4s
-```
-
-If you configured detectors in the [edge config file](/configs/edge-config.yaml), you should also see `inferencemodel` pod(s) for each detector.
-By default, there will be two `inferencemodel` pods per detector (one for primary inference and one for out of domain detection), e.g.:
-
-```
-NAME                                                                        READY   STATUS    RESTARTS   AGE
-edge-endpoint-594d645588-5mf28                                              2/2     Running   0          4s
-inferencemodel-primary-det-3jemxiunjuekdjzbuxavuevw15k-5d8b454bcb-xqf8m     1/1     Running   0          2s
-inferencemodel-oodd-det-3jemxiunjuekdjzbuxavuevw15k-5d8b454bcb-xqf8m        1/1     Running   0          2s
-```
-
-In minimal mode, there should only be one `inferencemodel` pod per detector (only primary inference, no separate OODD pod). 
-
-We currently have a hard-coded docker image from ECR in the [edge-endpoint](/edge-endpoint/deploy/k3s/edge_deployment.yaml)
-deployment. If you want to make modifications to the edge endpoint code and push a different
-image to ECR see [Pushing/Pulling Images from ECR](#pushingpulling-images-from-elastic-container-registry-ecr).
-
-### Converting from `setup-ee.sh` to Helm
-
-If you have an existing edge-endpoint deployment set up with `setup-ee.sh` and want to convert it to Helm, you can follow these steps:
-
-1. Uninstall the existing edge-endpoint deployment:
-```shell
-DEPLOYMENT_NAMESPACE=<namespace-you-deployed-to> ./deploy/bin/delete-old-deployment.sh
-```
-2. Follow the instructions in the [Setting up for Helm](#setting-up-for-helm) section to set up Helm.
-3. That's it
-
 ## Troubleshooting Deployments
 
 Here are some common issues you might encounter when deploying the edge endpoint and how to resolve them. If you have an issue that's not listed here, please contact Groundlight support at [axon-vision-support@axon.com](mailto:axon-vision-support@axon.com) for more assistence.
@@ -350,30 +273,24 @@ Then, re-run the Helm install command.
 
 ### Pods with `ImagePullBackOff` Status
 
-Check the `refresh_creds` cron job to see if it's running. If it's not, you may need to re-run [refresh-ecr-login.sh](/deploy/bin/refresh-ecr-login.sh) to update the credentials used by docker/k3s to pull images from ECR.  If the script is running but failing, this indicates that the stored AWS credentials (in secret `aws-credentials`) are invalid or not authorized to pull algorithm images from ECR.
+Image pulls use short-lived ECR credentials refreshed by the `refresh-ecr-creds`
+CronJob (created by the Helm chart). Check recent runs:
 
+```shell
+kubectl get cronjob -n edge refresh-ecr-creds
+kubectl logs -n edge -l app=refresh-ecr-creds --tail=100
 ```
-kubectl logs -n <YOUR-NAMESPACE> -l app=refresh_creds
-```
+
+If the job is failing, the Groundlight API token is often invalid or not authorized
+to fetch reader credentials, or the upstream endpoint is unreachable. Confirm the
+`groundlight-api-token` secret and that pods can reach `upstreamEndpoint`.
 
 ### Changing IP Address Causes DNS Failures and Other Problems
-When the IP address of the machine you're using to run edge-endpoint changes, it creates an inconsistent environment for the
-k3s system (which doesn't automatically update itself to reflect the change). The most obvious symptom of this is that DNS
-address resolution stops working.
 
-If this happens, there's a script to reset the address in k3s and restart the components that need restarting.
-
-From the edge-endpoint directory, you can run:
-```
-deploy/bin/ip-changed.sh
-```
-If you're in another directory, adjust the path appropriately.
-
-When the script is complete (it should take roughly 15 seconds), address resolution and other Kubernetes features should
-be back online.
-
-If you're running edge-endpoint on a transportable device, such as a laptop, you should run `ip-changed.sh` every time you switch
-access points.
+When the host IP changes, k3s DNS (CoreDNS) can break until the cluster is restarted.
+The Helm chart enables a network healer by default that detects this and restarts k3s;
+see [Disable the network healer](#variation-disable-the-network-healer) if you need to
+turn that off. On a laptop or other device that moves between networks, leave it enabled.
 
 ### EC2 Networking Setup Creates a Rule That Causes DNS Failures and Other Problems
 
@@ -389,16 +306,43 @@ to resolve this, simply run the script `deploy/bin/fix-g4-routing.sh`.
 
 The issue should be permanently resolved at this point. You shouldn't need to run the script again on that node, 
 even after rebooting.
-## Pushing/Pulling Images from Elastic Container Registry (ECR)
+## Building custom images
 
-We currently have a hard-coded docker image in our k3s deployment, which is not ideal.
-If you're testing things locally and want to use a different docker image, you can do so
-by first creating a docker image locally, pushing it to ECR, retrieving the image ID and
-then using that ID in the [edge_deployment](k3s/edge_deployment/edge_deployment.yaml) file.
+### Local development (edge-endpoint)
 
-Follow the following steps:
+Build into the local k3s cluster with the fixed `dev` tag (no ECR push):
 
 ```shell
-# Build and push image to ECR
-> ./deploy/bin/build-push-edge-endpoint-image.sh
+./deploy/bin/build-local-edge-endpoint-image.sh
 ```
+
+```shell
+helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint \
+  --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}" \
+  --set edgeEndpointTag=dev
+```
+
+Helm sets `imagePullPolicy=Never` for the `dev` tag so Kubernetes uses the local image.
+
+### Push to ECR (edge-endpoint)
+
+```shell
+# Tag is based on the current git commit; the script prints it
+./deploy/bin/build-push-edge-endpoint-image.sh
+```
+
+```shell
+helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint \
+  --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}" \
+  --set edgeEndpointTag="<your-image-tag>"
+```
+
+### Inference image
+
+Built from zuuul (`predictors/serving/`). See that repo's serving README, then pass
+`--set inferenceTag=<your-image-tag>` (or `inferenceTag=dev` for a local build).
+
+### Image tag knobs
+
+`imageTag` is the shared default for both images.
+`edgeEndpointTag` and `inferenceTag` override that default for one image only.
