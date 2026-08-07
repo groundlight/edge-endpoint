@@ -89,6 +89,35 @@ Create the name of the service account to use
 {{- end }}
 
 {{/*
+  Resolve the edge image base (ECR registry host plus optional repo prefix) for the
+  configured upstreamEndpoint. Edge installs pass upstreamEndpoint as the single
+  "which environment" signal, so the registry is derived from it via
+  .Values.ecrRegistryMap rather than a separate argument. An explicit
+  .Values.ecrRegistry overrides the map; upstreams absent from the map fall back to
+  the prod (api.groundlight.ai) entry so existing self-hosted installs keep pulling
+  from GL_Public. The result is prepended to each image repo name, so it never ends
+  with a slash.
+*/}}
+{{- define "groundlight-edge-endpoint.ecrRegistry" -}}
+{{- if .Values.ecrRegistry -}}
+{{- .Values.ecrRegistry -}}
+{{- else -}}
+{{- $map := .Values.ecrRegistryMap -}}
+{{- $default := index $map "https://api.groundlight.ai" -}}
+{{- index $map .Values.upstreamEndpoint | default $default -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+  The registry host portion of the resolved image base (everything before the first
+  "/"). Image pull secrets key on the registry host, so the registry-credentials
+  docker-server must use this rather than the full image base.
+*/}}
+{{- define "groundlight-edge-endpoint.ecrRegistryHost" -}}
+{{- include "groundlight-edge-endpoint.ecrRegistry" . | splitList "/" | first -}}
+{{- end -}}
+
+{{/*
   Determine the correct pull policy to use for each container type. If it is 
   a dev tag, we use "Never" to avoid pulling from the registry. Otherwise,
   we use the global pull policy.
