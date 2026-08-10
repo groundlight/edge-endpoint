@@ -1,4 +1,4 @@
-.PHONY: install install-lint install-pre-commit test test-with-docker test-all lint format
+.PHONY: install install-lint install-pre-commit test test-with-docker test-all lint format test-helm-template
 SHELL := /bin/bash
 
 install:
@@ -24,6 +24,9 @@ test-with-k3s-helm:
 
 validate-setup-helm:
 	test/validate_setup_helm.sh
+
+test-helm-template:  ## Render-time assertions for edgeArtifactsMap (no cluster)
+	test/helm/test_edge_artifacts_map.sh
 
 # Adjust which paths we lint
 LINT_PATHS="app test"

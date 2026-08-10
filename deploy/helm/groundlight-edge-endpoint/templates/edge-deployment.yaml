@@ -61,7 +61,7 @@ spec:
       serviceAccountName: edge-endpoint-service-account
       initContainers:
       - name: generate-tls-cert
-        image: &edgeEndpointImage 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
+        image: &edgeEndpointImage {{ include "groundlight-edge-endpoint.ecrRegistry" . }}/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
         volumeMounts:
         - name: nginx-certs
@@ -104,9 +104,9 @@ spec:
           failureThreshold: 3
         env:
         - name: S3_BUCKET
-          value: "{{ .Values.s3Mount.bucket }}"
+          value: "{{ include "groundlight-edge-endpoint.s3Bucket" . }}"
         - name: S3_REGION
-          value: "{{ .Values.s3Mount.region }}"
+          value: "{{ include "groundlight-edge-endpoint.s3Region" . }}"
         - name: MOUNT_PATH
           value: "{{ .Values.s3Mount.mountPath }}"
         - name: CACHE_PATH

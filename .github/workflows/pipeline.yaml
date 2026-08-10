@@ -67,6 +67,20 @@ jobs:
           uv sync --group dev
           uv run pytest --rootdir=. tests/ -v
 
+  test-helm-template:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          token: ${{ github.token }}
+
+      - name: Run edgeArtifactsMap helm template matrix
+        run: make test-helm-template
+
   test-integration-edge-endpoint:
     # Live tests that need a running edge-endpoint Docker container.
     # Pulls the image already built+pushed by call-build-push-ee-image instead of
@@ -514,6 +528,7 @@ jobs:
     # This is a dummy step to avoid repeating the list of tests
     needs:
       - test-unit-edge-endpoint
+      - test-helm-template
       - test-integration-edge-endpoint
       - test-sdk
       - call-test-with-k3s-helm

@@ -37,7 +37,7 @@ kubectl create secret generic aws-credentials-file --from-file /shared/credentia
     --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl create secret docker-registry registry-credentials \
-    --docker-server={{ .Values.ecrRegistry }} \
+    --docker-server={{ include "groundlight-edge-endpoint.ecrRegistryHost" . }} \
     --docker-username=AWS \
     --docker-password="$(cat /shared/token.txt)" \
     --dry-run=client -o yaml | kubectl apply -f -

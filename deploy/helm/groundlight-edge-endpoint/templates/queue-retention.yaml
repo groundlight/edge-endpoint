@@ -28,7 +28,7 @@ spec:
           - name: registry-credentials
           containers:
           - name: queue-retention
-            image: 767397850842.dkr.ecr.us-west-2.amazonaws.com/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
+            image: {{ include "groundlight-edge-endpoint.ecrRegistry" . }}/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
             imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
             resources:
               requests:

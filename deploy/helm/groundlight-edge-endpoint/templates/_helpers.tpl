@@ -77,16 +77,110 @@ Create the name of the service account to use
 {{- end }}
 
 {{/*
-  Determine the correct image tag to use for each container type. If the specific override
-  is set for that image, use it. Otherwise, use the global image tag.
+  Canonical origin (scheme://host) of upstreamEndpoint for edgeArtifactsMap lookup.
+  Drops path, query, and trailing slash. Requires an absolute HTTPS URL.
+*/}}
+{{- define "groundlight-edge-endpoint.upstreamOrigin" -}}
+{{- $parsed := urlParse .Values.upstreamEndpoint -}}
+{{- $scheme := index $parsed "scheme" -}}
+{{- $host := index $parsed "host" -}}
+{{- if or (ne $scheme "https") (not $host) -}}
+{{- fail (printf "upstreamEndpoint %q must be an absolute HTTPS URL" .Values.upstreamEndpoint) -}}
+{{- end -}}
+{{- printf "%s://%s" $scheme $host -}}
+{{- end -}}
+
+{{/*
+  edgeArtifactsMap entry for the canonical upstream origin, as JSON. Fails closed
+  when the origin is absent from the map.
+*/}}
+{{- define "groundlight-edge-endpoint.edgeArtifacts" -}}
+{{- $origin := include "groundlight-edge-endpoint.upstreamOrigin" . -}}
+{{- if not (hasKey .Values.edgeArtifactsMap $origin) -}}
+{{- fail (printf "The provided upstreamEndpoint %q is not a recognized Groundlight API URL. Verify the value and try again." .Values.upstreamEndpoint) -}}
+{{- end -}}
+{{- index .Values.edgeArtifactsMap $origin | toJson -}}
+{{- end -}}
+
+{{/*
+  Default image tag: values.imageTag if set, otherwise edgeArtifactsMap for the
+  upstream. edgeEndpointTag / inferenceTag override this per image.
+*/}}
+{{- define "groundlight-edge-endpoint.imageTag" -}}
+{{- if .Values.imageTag -}}
+{{- .Values.imageTag -}}
+{{- else -}}
+{{- (include "groundlight-edge-endpoint.edgeArtifacts" . | fromJson).imageTag -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+  Determine the correct image tag to use for each container type. If the specific
+  override is set for that image, use it. Otherwise, use the resolved imageTag.
 */}}
 {{- define "groundlight-edge-endpoint.edgeEndpointTag" -}}
-{{- .Values.edgeEndpointTag | default .Values.imageTag }}
+{{- .Values.edgeEndpointTag | default (include "groundlight-edge-endpoint.imageTag" .) }}
 {{- end }}
 
 {{- define "groundlight-edge-endpoint.inferenceTag" -}}
-{{- .Values.inferenceTag | default .Values.imageTag }}
+{{- .Values.inferenceTag | default (include "groundlight-edge-endpoint.imageTag" .) }}
 {{- end }}
+
+{{/*
+  Resolve the edge image base (ECR registry host plus optional repo prefix) for the
+  configured upstreamEndpoint via edgeArtifactsMap. An explicit .Values.ecrRegistry
+  overrides the map. Unknown upstreams fail at render time (see edgeArtifacts).
+  The result is prepended to each image repo name, so it never ends with a slash.
+*/}}
+{{- define "groundlight-edge-endpoint.ecrRegistry" -}}
+{{- if .Values.ecrRegistry -}}
+{{- .Values.ecrRegistry -}}
+{{- else -}}
+{{- (include "groundlight-edge-endpoint.edgeArtifacts" . | fromJson).ecrRegistry -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+  The registry host portion of the resolved image base (everything before the first
+  "/"). Image pull secrets key on the registry host, so the registry-credentials
+  docker-server must use this rather than the full image base.
+*/}}
+{{- define "groundlight-edge-endpoint.ecrRegistryHost" -}}
+{{- include "groundlight-edge-endpoint.ecrRegistry" . | splitList "/" | first -}}
+{{- end -}}
+
+{{/*
+  Resolve the S3 bucket for model-weight mounts from edgeArtifactsMap, unless
+  s3Mount.bucket is set as an explicit override.
+*/}}
+{{- define "groundlight-edge-endpoint.s3Bucket" -}}
+{{- if .Values.s3Mount.bucket -}}
+{{- .Values.s3Mount.bucket -}}
+{{- else -}}
+{{- (include "groundlight-edge-endpoint.edgeArtifacts" . | fromJson).s3Bucket -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+  Resolve the S3 region for model-weight mounts from edgeArtifactsMap, unless
+  s3Mount.region is set as an explicit override.
+*/}}
+{{- define "groundlight-edge-endpoint.s3Region" -}}
+{{- if .Values.s3Mount.region -}}
+{{- .Values.s3Mount.region -}}
+{{- else -}}
+{{- (include "groundlight-edge-endpoint.edgeArtifacts" . | fromJson).s3Region -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+  Cron schedule for the refresh-ecr-creds job, derived from edgeArtifactsMap so
+  environments with shorter credential TTLs (edge-artifacts AssumeRole, 1h) can
+  refresh more often without changing the cadence for legacy GL_Public installs.
+*/}}
+{{- define "groundlight-edge-endpoint.credentialRefreshSchedule" -}}
+{{- (include "groundlight-edge-endpoint.edgeArtifacts" . | fromJson).credentialRefreshSchedule -}}
+{{- end -}}
 
 {{/*
   Determine the correct pull policy to use for each container type. If it is 

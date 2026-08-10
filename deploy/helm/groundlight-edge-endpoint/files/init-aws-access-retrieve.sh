@@ -89,7 +89,7 @@ CURL_EXIT_CODE=0
 for attempt in 1 2 3 4 5; do
   rm -f "$CREDENTIALS_FILE" "$CURL_ERROR_FILE"
   HTTP_STATUS=$(curl -sS -L -o "$CREDENTIALS_FILE" -w "%{http_code}" --fail-with-body \
-    --header "x-api-token: ${GROUNDLIGHT_API_TOKEN}" "${sanitized_url}/reader-credentials" \
+    --header "x-api-token: ${GROUNDLIGHT_API_TOKEN}" "${sanitized_url}/reader-credentials/v2" \
     2>"$CURL_ERROR_FILE")
   CURL_EXIT_CODE=$?
 

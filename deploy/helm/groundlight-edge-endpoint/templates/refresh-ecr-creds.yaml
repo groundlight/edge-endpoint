@@ -7,7 +7,9 @@ metadata:
   labels:
     {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
 spec:
-  schedule: "0 * * * *"  # Every 2 hours
+  # Per-environment cadence from edgeArtifactsMap (hourly for GL_Public's 3h TTL;
+  # every 15m for edge-artifacts AssumeRole's 1h TTL).
+  schedule: {{ include "groundlight-edge-endpoint.credentialRefreshSchedule" . | quote }}
   jobTemplate:
     spec:
       ttlSecondsAfterFinished: 3600

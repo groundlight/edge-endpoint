@@ -13,9 +13,10 @@ global:
 # like running more that one instance of the Edge Endpoint in the same cluster
 namespace: "edge"
 
-# The tag to use for the images. The value of `imageTag` is used for both the edge-endpoint and
-# inference images, unless you add a specific tag for one or the other image
-imageTag: "release"
+# Image tag resolution. Leave imageTag empty to derive from edgeArtifactsMap via
+# upstreamEndpoint (prod → "release", AG1/dev → "latest"). Explicit imageTag,
+# edgeEndpointTag, or inferenceTag scalars still win when set.
+imageTag: ""
 edgeEndpointTag: ""
 inferenceTag: ""
 
@@ -72,15 +73,48 @@ upstreamEndpoint: "https://api.groundlight.ai"
 # Currently, all Groundlight services are deployed in the us-west-2 region
 awsRegion: "us-west-2"
 
-# S3 FUSE mount configuration for model weights (pinamod + pretrained weights)
-# mount-s3 mounts the S3 bucket as a local filesystem with local disk caching
+# S3 FUSE mount configuration for model weights (pinamod + pretrained weights).
+# mount-s3 mounts the S3 bucket as a local filesystem with local disk caching.
+# bucket/region default from edgeArtifactsMap via upstreamEndpoint; set explicitly
+# to override. mountPath/cachePath are host paths and are not environment-specific.
 s3Mount:
-  bucket: "pinamod-artifacts-public"
-  region: "us-west-2"
+  bucket: ""
+  region: ""
   mountPath: "/opt/groundlight/edge/pinamod-mount"
   cachePath: "/opt/groundlight/edge/pinamod-cache"
 
-ecrRegistry: "767397850842.dkr.ecr.us-west-2.amazonaws.com"
+# Per-upstream artifact defaults (ECR, S3, image tag, cred refresh), keyed by
+# canonical upstreamEndpoint origin.
+edgeArtifactsMap:
+  "https://api.groundlight.ai":
+    ecrRegistry: "767397850842.dkr.ecr.us-west-2.amazonaws.com"
+    s3Bucket: "pinamod-artifacts-public"
+    s3Region: "us-west-2"
+    imageTag: "release"
+    credentialRefreshSchedule: "0 * * * *"
+  "https://api.integ.groundlight.ai":
+    ecrRegistry: "767397850842.dkr.ecr.us-west-2.amazonaws.com"
+    s3Bucket: "pinamod-artifacts-public"
+    s3Region: "us-west-2"
+    imageTag: "release"
+    credentialRefreshSchedule: "0 * * * *"
+  "https://api.dev.groundlight.ai":
+    ecrRegistry: "767397850842.dkr.ecr.us-west-2.amazonaws.com"
+    s3Bucket: "pinamod-artifacts-public"
+    s3Region: "us-west-2"
+    imageTag: "release"
+    credentialRefreshSchedule: "0 * * * *"
+  "https://api.groundlight.dev.axon.com":
+    ecrRegistry: "216731772508.dkr.ecr.us-west-2.amazonaws.com/edge"
+    s3Bucket: "edge-model-artifacts-edgemodelartifactsdevreplicabucket131ac6fa"
+    s3Region: "us-west-2"
+    imageTag: "latest"
+    credentialRefreshSchedule: "*/15 * * * *"
+
+# Explicit override / escape hatch for the ECR image base (registry host plus
+# optional repo prefix). When set, wins over edgeArtifactsMap. Leave empty to
+# derive from upstreamEndpoint.
+ecrRegistry: ""
 
 # This sets the log level for all the containers, both edge endpoint and inference.
 logLevel: "INFO"
