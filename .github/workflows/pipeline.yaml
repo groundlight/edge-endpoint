@@ -732,9 +732,9 @@ jobs:
         run: ./deploy/bin/publish-edge-artifacts-helm-chart.sh
 
   # After the chart is pushed to master, wait for master→dev ECR replication
-  # of Chart.yaml version, then point `latest` at it in the **dev**
+  # of the git-tag OCI tag, then point `latest` at it in the **dev**
   # edge-artifacts account (Axon-dev environment pointer; master stays
-  # version-only). Mirrors edge-artifacts-tag-latest for the container image.
+  # git-tag only). Mirrors edge-artifacts-tag-latest for the container image.
   edge-artifacts-tag-chart-latest:
     if: github.ref == 'refs/heads/main'
     needs:
@@ -755,7 +755,7 @@ jobs:
           aws-region: ${{ env.EDGE_ARTIFACTS_REGION }}
       - name: Check out code
         uses: actions/checkout@v4
-      - name: Wait for replicated chart version in dev ECR
+      - name: Wait for replicated chart git-tag in dev ECR
         env:
           ECR_ACCOUNT: ${{ env.EDGE_ARTIFACTS_ACCOUNT }}
           ECR_REGION: ${{ env.EDGE_ARTIFACTS_REGION }}
@@ -763,9 +763,8 @@ jobs:
         run: |
           set -euo pipefail
           CHART_NAME=$(awk '/^name:/ { print $2; exit }' deploy/helm/groundlight-edge-endpoint/Chart.yaml)
-          CHART_VERSION=$(awk '/^version:/ { print $2; exit }' deploy/helm/groundlight-edge-endpoint/Chart.yaml)
           export ECR_REPOSITORY="edge/${CHART_NAME}"
-          export ECR_IMAGE_TAG="${CHART_VERSION}"
+          # Default ECR_IMAGE_TAG is ./git-tag-name.sh (same as image dual-publish).
           ./deploy/bin/wait-for-ecr-image.sh
       - name: Tag latest in the dev edge-artifacts account
         env:

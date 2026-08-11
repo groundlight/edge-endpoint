@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Point a mutable tag (e.g. latest) at an existing OCI Helm chart tag in ECR.
-# Used in the **dev** edge-artifacts account after master→dev replication.
-# Master stays version-tagged only; environment pointers live in deployment
-# registries (same model as edge-endpoint image `latest` tagging).
+# Point a new ECR tag at an existing OCI Helm chart tag (same digest).
+# Used to alias the SemVer package tag to the git tag after helm push, and to
+# move mutable pointers like `latest` in the **dev** edge-artifacts account.
 #
 # Usage:
+#   ECR_ACCOUNT=794562053834 SOURCE_TAG=0.0.0-<git-tag> ./tag-edge-artifacts-helm-chart.sh <git-tag>
 #   ECR_ACCOUNT=216731772508 ./tag-edge-artifacts-helm-chart.sh latest
 #
 # Environment variables:
@@ -13,7 +13,7 @@
 #   ECR_REGION: Region of the registry (default us-west-2)
 #   CHART_PATH: Chart directory relative to this script
 #     (default ../helm/groundlight-edge-endpoint)
-#   SOURCE_TAG: Tag to retarget from (default: Chart.yaml version)
+#   SOURCE_TAG: Tag to retarget from (default: ./git-tag-name.sh)
 
 set -euo pipefail
 
@@ -38,12 +38,15 @@ if [[ "${NEW_TAG}" == "latest" ]]; then
 fi
 
 CHART_NAME=$(awk '/^name:/ { print $2; exit }' "${CHART_PATH}/Chart.yaml")
-CHART_VERSION=$(awk '/^version:/ { print $2; exit }' "${CHART_PATH}/Chart.yaml")
-SOURCE_TAG="${SOURCE_TAG:-${CHART_VERSION}}"
+SOURCE_TAG="${SOURCE_TAG:-$(./git-tag-name.sh)}"
 REPO_NAME="edge/${CHART_NAME}"
 
-if [ -z "${CHART_NAME}" ] || [ -z "${SOURCE_TAG}" ]; then
-  echo "Failed to read chart name/version from ${CHART_PATH}/Chart.yaml" >&2
+if [ -z "${CHART_NAME}" ]; then
+  echo "Failed to read chart name from ${CHART_PATH}/Chart.yaml" >&2
+  exit 1
+fi
+if [ -z "${SOURCE_TAG}" ]; then
+  echo "Failed to resolve SOURCE_TAG (git-tag-name.sh)" >&2
   exit 1
 fi
 
