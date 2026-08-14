@@ -7,7 +7,7 @@ containers:
     image: amazon/aws-cli:latest
     imagePullPolicy: IfNotPresent
     command:
-      - /bin/sh
+      - /bin/bash
       - /app/init-aws-access-retrieve.sh
     env:
       - name: GROUNDLIGHT_ENDPOINT
@@ -17,6 +17,8 @@ containers:
           secretKeyRef:
             name: groundlight-api-token
             key: GROUNDLIGHT_API_TOKEN
+      - name: GROUNDLIGHT_TOKEN_DIR
+        value: "/opt/groundlight/device/tokens"
 
     volumeMounts:
       - name: shared-volume
@@ -24,6 +26,8 @@ containers:
       - name: init-aws-access
         mountPath: /app/init-aws-access-retrieve.sh
         subPath: init-aws-access-retrieve.sh
+      - name: device-info-volume
+        mountPath: /opt/groundlight/device
 
   - name: kubectl
     image: bitnami/kubectl:latest
@@ -43,4 +47,8 @@ volumes:
       name: init-aws-access
   - name: shared-volume
     emptyDir: {}
+  - name: device-info-volume
+    hostPath:
+      path: /opt/groundlight/device
+      type: DirectoryOrCreate
 {{- end }}

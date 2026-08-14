@@ -29,7 +29,6 @@ class InferenceDeployment(Base):
     )
     detector_id = Column(String(44), primary_key=False, nullable=False, comment="Detector ID")
 
-    api_token = Column(String(66), nullable=False, comment="API token")
     deployment_created = Column(
         Boolean,
         default=False,

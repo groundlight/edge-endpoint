@@ -1,6 +1,9 @@
 import json
 from unittest.mock import MagicMock, patch
 
+from groundlight.internalapi import GroundlightApiClient
+from groundlight_openapi_client.configuration import Configuration
+
 from app.metrics.metric_reporting import MetricsReporter, SafeMetricsDict
 
 
@@ -101,6 +104,7 @@ class TestMetricsReporter:
         mock_response.status_code = status_code
         mock_response.headers = {"Authorization": "Bearer fake-token"}
         mock_api_client = MagicMock()
+        mock_api_client._headers.return_value = {"Content-Type": "application/json", "x-api-token": "api_test"}
         mock_api_client.call_api.return_value = (None, mock_response.status_code, mock_response.headers)
         return mock_api_client
 
@@ -186,4 +190,27 @@ class TestMetricsReporter:
         reporter.report_metrics_to_cloud()
 
         assert mock_api_client.call_api.call_count == 0
+        assert len(reporter.metrics_to_send) == 0
+
+    @patch("groundlight_openapi_client.api_client.ApiClient.call_api", return_value=(None, 200, {}))
+    @patch("app.metrics.metric_reporting.groundlight_client")
+    def test_report_metrics_with_real_groundlight_api_client(self, mock_gl_client, mock_parent_call_api):
+        """Use a real GroundlightApiClient so keyword headers/body would IndexError on args[4]."""
+        configuration = Configuration(host="https://example.test")
+        configuration.api_key["ApiToken"] = "api_test"
+        real_client = GroundlightApiClient(configuration)
+        mock_gl_client.return_value.api_client = real_client
+
+        reporter = MetricsReporter()
+        reporter.metrics_to_send = {"timestamp": {"payload": "payload"}}
+        reporter.report_metrics_to_cloud()
+
+        mock_parent_call_api.assert_called_once()
+        args = mock_parent_call_api.call_args.args
+        assert len(args) >= 6
+        assert args[0] == "/v1/edge/report-metrics"
+        assert args[1] == "POST"
+        # GroundlightApiClient mutates args[4] to inject X-Request-Id before calling super.
+        assert "X-Request-Id" in args[4]
+        assert args[5] == {"payload": "payload"}
         assert len(reporter.metrics_to_send) == 0

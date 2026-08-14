@@ -193,6 +193,14 @@ spec:
           value: "1"
         - name: GROUNDLIGHT_ENDPOINT
           value: "{{ .Values.upstreamEndpoint }}"
+        - name: GROUNDLIGHT_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: groundlight-api-token
+              key: GROUNDLIGHT_API_TOKEN
+              optional: true
+        - name: GROUNDLIGHT_TOKEN_DIR
+          value: "/opt/groundlight/device/tokens"
         - name: USE_MINIMAL_IMAGE
           value: "{{ .Values.useMinimalImage }}"
         - name: ENABLE_PROFILING
@@ -239,6 +247,8 @@ spec:
               name: groundlight-api-token
               key: GROUNDLIGHT_API_TOKEN
               optional: true
+        - name: GROUNDLIGHT_TOKEN_DIR
+          value: "/opt/groundlight/device/tokens"
         - name: NAMESPACE
           value: "{{ .Values.namespace }}"
         - name: INFERENCE_FLAVOR
@@ -282,9 +292,13 @@ spec:
               name: groundlight-api-token
               key: GROUNDLIGHT_API_TOKEN
               optional: true
+        - name: GROUNDLIGHT_TOKEN_DIR
+          value: "/opt/groundlight/device/tokens"
         volumeMounts:
           - name: escalation-queue-volume
             mountPath: /opt/groundlight/queue
+          - name: device-info-volume
+            mountPath: /opt/groundlight/device
 
       - name: inference-model-updater
         image: *edgeEndpointImage
@@ -308,6 +322,8 @@ spec:
             secretKeyRef:
               name: groundlight-api-token
               key: GROUNDLIGHT_API_TOKEN
+        - name: GROUNDLIGHT_TOKEN_DIR
+          value: "/opt/groundlight/device/tokens"
         - name: USE_MINIMAL_IMAGE
           value: "{{ .Values.useMinimalImage }}"
         - name: ROLLOUT_READY_TIMEOUT_S

@@ -12,8 +12,6 @@ from .naming import get_edge_inference_model_name
 
 logger = logging.getLogger(__name__)
 
-GROUNDLIGHT_API_TOKEN = os.environ.get("GROUNDLIGHT_API_TOKEN", "")
-
 
 class EdgeConfigManager:
     """Manages the lifecycle of the edge endpoint configuration: saving and
@@ -86,7 +84,6 @@ def apply_detector_changes(removed: set[str], added: set[str], db_manager: Datab
                 deployment={
                     "model_name": model_name,
                     "detector_id": detector_id,
-                    "api_token": GROUNDLIGHT_API_TOKEN,
                     "deployment_created": False,
                     "pending_deletion": False,
                 }

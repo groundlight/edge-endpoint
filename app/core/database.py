@@ -57,10 +57,7 @@ class DatabaseManager:
         sqlalchemy_logger.propagate = False
 
     def create_or_update_inference_deployment_record(self, deployment: Dict[str, str]) -> None:
-        """
-        Creates a new record in the `inference_deployments` table. If the record exists, but the API token has
-        changed, we will update the record with the new API token.
-        :param deployment: A dictionary containing the deployment details.
+        """Create or update a row in the `inference_deployments` work-queue table.
 
         TODO: Use a pydantic model for the record - see sqlmodels library
         """

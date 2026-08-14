@@ -29,6 +29,47 @@ if [ "$1" == "validate" ]; then
   validate="yes"
 fi
 
+# Prefer a working token from the SDK device cache when present. The Python
+# containers (edge-endpoint, status-monitor, escalation-queue-reader,
+# inference-model-updater) own rotation and write
+# $GROUNDLIGHT_TOKEN_DIR/<seed-snippet>.json; this job only reads it.
+# Snippet length matches python-sdk TokenManager.TOKEN_SNIPPET_LENGTH (20).
+resolve_groundlight_api_token() {
+  local seed="$GROUNDLIGHT_API_TOKEN"
+  if [ -z "$seed" ]; then
+    echo "GROUNDLIGHT_API_TOKEN is not set. Exiting." >&2
+    exit 1
+  fi
+
+  if [ -z "${GROUNDLIGHT_TOKEN_DIR:-}" ]; then
+    echo "GROUNDLIGHT_TOKEN_DIR unset; using seed GROUNDLIGHT_API_TOKEN" >&2
+    echo "$seed"
+    return
+  fi
+
+  local snippet="${seed:0:20}"
+  local cache_file="${GROUNDLIGHT_TOKEN_DIR}/${snippet}.json"
+  if [ ! -f "$cache_file" ]; then
+    echo "No device token cache at ${cache_file}; using seed GROUNDLIGHT_API_TOKEN" >&2
+    echo "$seed"
+    return
+  fi
+
+  local cached
+  cached=$(jq -r '.current.raw_key // empty' "$cache_file" 2>/dev/null || true)
+  if [ -n "$cached" ]; then
+    echo "Using rotated device API token from cache: ${cache_file}" >&2
+    echo "$cached"
+    return
+  fi
+
+  echo "Token cache present but missing current.raw_key; falling back to seed: ${cache_file}" >&2
+  echo "$seed"
+}
+
+GROUNDLIGHT_API_TOKEN="$(resolve_groundlight_api_token)"
+export GROUNDLIGHT_API_TOKEN
+
 # This function replicates the Groundlight SDK's logic to clean up user-supplied endpoint URLs 
 sanitize_endpoint_url() {
     local endpoint="${1:-$GROUNDLIGHT_ENDPOINT}"

@@ -70,44 +70,52 @@ confident_cloud_iq = ImageQuery(
 
 
 @contextmanager
+def _patch_device_groundlight_client(mock_gl: mock.MagicMock):
+    """Patch the device Groundlight client used by image_queries and detector metadata."""
+    with (
+        mock.patch("app.api.routes.image_queries.groundlight_client", return_value=mock_gl),
+        mock.patch("app.core.app_state.groundlight_client", return_value=mock_gl),
+    ):
+        yield mock_gl
+
+
+@contextmanager
 def assert_escalated_to_gl(*, sdk_response: ImageQuery, detector: Detector, submitted_with: dict | None = None):
     """
     Context manager to assert that an image query is escalated to the Groundlight SDK.
 
-    This function patches the `submit_image_query` method of the Groundlight SDK to return
-    a predefined response (`sdk_response`). It yields the mocked method to allow further
-    assertions on how it was called. Use `submitted_with` to assert that a subset of the
-    arguments used to escalate to the cloud are as expected.
+    This function patches the device client's `submit_image_query` to return a predefined
+    response (`sdk_response`). It yields the mocked method to allow further assertions on
+    how it was called. Use `submitted_with` to assert that a subset of the arguments used
+    to escalate to the cloud are as expected.
     """
-    with mock.patch("app.api.routes.image_queries.Groundlight.get_detector") as mock_get_detector:
-        mock_get_detector.return_value = detector
+    mock_gl = mock.MagicMock()
+    mock_gl.get_detector.return_value = detector
+    mock_gl.submit_image_query.return_value = sdk_response
+    with _patch_device_groundlight_client(mock_gl):
+        yield mock_gl.submit_image_query
 
-        with mock.patch("app.api.routes.image_queries.Groundlight.submit_image_query") as mock_submit:
-            mock_submit.return_value = sdk_response
-            yield mock_submit
-
-            if submitted_with:
-                mock_submit.assert_called_once_with(
-                    *[mock.ANY for v in mock_submit.call_args.args],
-                    **{k: v if k in submitted_with else mock.ANY for k, v in mock_submit.call_args.kwargs.items()},
-                )
-            else:
-                mock_submit.assert_called_once()
+        if submitted_with:
+            mock_gl.submit_image_query.assert_called_once_with(
+                *[mock.ANY for v in mock_gl.submit_image_query.call_args.args],
+                **{
+                    k: v if k in submitted_with else mock.ANY
+                    for k, v in mock_gl.submit_image_query.call_args.kwargs.items()
+                },
+            )
+        else:
+            mock_gl.submit_image_query.assert_called_once()
 
 
 @contextmanager
 def assert_not_escalated_to_gl(detector: Detector | None = None):
     """Context manager to assert that an image query is NOT escalated to the Groundlight SDK."""
-    if detector is None:  # no detector provided, for invalid detector_id test
-        with mock.patch("app.api.routes.image_queries.Groundlight.submit_image_query") as mock_submit:
-            yield mock_submit
-            mock_submit.assert_not_called()
-    else:
-        with mock.patch("app.api.routes.image_queries.Groundlight.get_detector") as mock_get_detector:
-            mock_get_detector.return_value = detector
-            with mock.patch("app.api.routes.image_queries.Groundlight.submit_image_query") as mock_submit:
-                yield mock_submit
-                mock_submit.assert_not_called()
+    mock_gl = mock.MagicMock()
+    if detector is not None:
+        mock_gl.get_detector.return_value = detector
+    with _patch_device_groundlight_client(mock_gl):
+        yield mock_gl.submit_image_query
+        mock_gl.submit_image_query.assert_not_called()
 
 
 @contextmanager

@@ -170,43 +170,43 @@ def test_timestamped_cache_error_cases():
 
 def test_refresh_detector_metadata_if_needed_basic():
     """Test that refresh_detector_metadata_if_needed correctly refreshes the cache if the metadata is stale."""
-    mock_gl = MagicMock()
     mock_timer = MockTimer()
 
     with (
         patch("app.core.utils.time.monotonic", new=mock_timer),  # Enable control over the cache's timer
+        patch("app.core.app_state.groundlight_client", return_value=MagicMock()),
         patch("app.core.app_state.safe_call_sdk", return_value=MagicMock()) as mock_sdk_call,
     ):
         # First call to populate cache
         detector_id = "test-detector"
-        get_detector_metadata(detector_id=detector_id, gl=mock_gl)
+        get_detector_metadata(detector_id=detector_id)
         assert mock_sdk_call.call_count == 1
 
         # Verify no refresh needed when cache is fresh
-        refresh_detector_metadata_if_needed(detector_id, mock_gl)
+        refresh_detector_metadata_if_needed(detector_id)
         assert mock_sdk_call.call_count == 1  # Should not have called again
 
         # Move time forward past the stale threshold
         mock_timer.advance(STALE_METADATA_THRESHOLD_SEC + 1)
 
         # Now refresh should trigger a new API call
-        refresh_detector_metadata_if_needed(detector_id, mock_gl)
+        refresh_detector_metadata_if_needed(detector_id)
         assert mock_sdk_call.call_count == 2  # Should have called again
 
 
 def test_refresh_detector_metadata_if_needed_error():
     """Test that refresh_detector_metadata_if_needed correctly restores the cache if the refresh fails."""
-    mock_gl = MagicMock()
     mock_timer = MockTimer()
     mock_metadata = MagicMock()
 
     with (
         patch("app.core.utils.time.monotonic", new=mock_timer),  # Enable control over the cache's timer
+        patch("app.core.app_state.groundlight_client", return_value=MagicMock()),
         patch("app.core.app_state.safe_call_sdk", return_value=mock_metadata) as mock_sdk_call,
     ):
         detector_id = "test-detector-2"  # NOTE: the get_detector_metadata cache persists between tests
         # Populate cache
-        get_detector_metadata(detector_id=detector_id, gl=mock_gl)
+        get_detector_metadata(detector_id=detector_id)
         metadata_cache: TimestampedCache = get_detector_metadata.cache
         assert mock_sdk_call.call_count == 1
         assert "test-detector-2" in metadata_cache
@@ -220,7 +220,7 @@ def test_refresh_detector_metadata_if_needed_error():
         with patch.object(
             metadata_cache, "restore_suspended_value", wraps=metadata_cache.restore_suspended_value
         ) as restore_suspended_value_spy:
-            refresh_detector_metadata_if_needed(detector_id, mock_gl)
+            refresh_detector_metadata_if_needed(detector_id)
             assert mock_sdk_call.call_count == 2  # Verify that it tried to refresh the metadata
             # Verify the cache was restored
             assert "test-detector-2" in metadata_cache

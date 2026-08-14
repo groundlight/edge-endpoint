@@ -16,6 +16,7 @@ from app.api.api import api_router, edge_config_router, edge_detector_readiness_
 from app.api.naming import API_BASE_PATH
 from app.core.app_state import AppState
 from app.core.edge_config_manager import EdgeConfigManager, reconcile_config
+from app.core.edge_endpoint_auth import edge_endpoint_auth_manager
 from app.core.file_paths import ACTIVE_EDGE_CONFIG_PATH, HELM_CONFIGMAP_PATH
 from app.profiling import PROFILING_ENABLED
 from app.profiling.instrumentation import install_threadpool_tracing
@@ -47,6 +48,9 @@ app.include_router(router=edge_detector_readiness_router)
 async def startup_event():
     """Lifecycle event that is triggered when the application starts."""
     logging.info("Starting edge-endpoint application...")
+    # Build the auth singleton at boot so an unreachable cloud fails in the logs
+    # instead of as a confusing first-request 401.
+    edge_endpoint_auth_manager()
     app.state.app_state = AppState()
     app.state.app_state.db_manager.reset_database()
 

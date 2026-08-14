@@ -3,7 +3,6 @@ import random
 from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
-from groundlight import Groundlight
 from model import ImageQuery
 from starlette.concurrency import run_in_threadpool
 
@@ -11,10 +10,10 @@ from app.core.app_state import (
     AppState,
     get_app_state,
     get_detector_metadata,
-    get_groundlight_sdk_instance,
     refresh_detector_metadata_if_needed,
 )
 from app.core.edge_config_manager import EdgeConfigManager
+from app.core.groundlight_client import groundlight_client
 from app.core.naming import get_edge_inference_model_name
 from app.core.utils import create_iq, generate_iq_id, generate_metadata_dict, generate_request_id
 from app.escalation_queue.models import SubmitImageQueryParams
@@ -70,7 +69,6 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     confidence_threshold: Optional[float] = Query(None, ge=0, le=1),
     human_review: Optional[Literal["DEFAULT", "ALWAYS", "NEVER"]] = Query(None),
     want_async: bool = Query(False),
-    gl: Groundlight = Depends(get_groundlight_sdk_instance),
     app_state: AppState = Depends(get_app_state),
 ):
     """
@@ -97,7 +95,6 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             The returned ImageQuery will have a 'result' of None. Requires 'wait' to be set to 0.
 
     Dependencies:
-        gl (Groundlight): Application's Groundlight SDK instance.
         app_state (AppState): Application's state manager.
         background_tasks (BackgroundTasks): FastAPI background tasks manager for asynchronous operations.
 
@@ -113,13 +110,14 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     # request was sent directly and not through the SDK) we generate one in the same way that the SDK does.
     request_id = request.headers.get("x-request-id") or generate_request_id()
 
+    gl = groundlight_client()
+
     # Ensure that detector_id has correct casing by pulling the detector ID out of detector_metadata
     # get_detector_metadata returns the correctly-cased, canonical detector ID
     detector_metadata = await run_in_threadpool(
-        get_detector_metadata, detector_id=detector_id, gl=gl
+        get_detector_metadata, detector_id=detector_id
     )  # NOTE: API call (once, then cached)
-    # Refresh against the caller-supplied key, since that is the key this cache entry is stored under.
-    background_tasks.add_task(refresh_detector_metadata_if_needed, detector_id, gl)
+    background_tasks.add_task(refresh_detector_metadata_if_needed, detector_id)
     detector_id = detector_metadata.id
 
     require_human_review = human_review == "ALWAYS"
@@ -285,14 +283,12 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         # -- Edge-inference is not available --
         # Create an edge-inference deployment record, which may be used to spin up an edge-inference server.
         logger.debug(f"Local inference not available for {detector_id=}. Creating inference deployment record.")
-        api_token = gl.api_client.configuration.api_key["ApiToken"]
 
         primary_model_name = get_edge_inference_model_name(detector_id=detector_id, is_oodd=False)
         app_state.db_manager.create_or_update_inference_deployment_record(
             deployment={
                 "model_name": primary_model_name,
                 "detector_id": detector_id,
-                "api_token": api_token,
                 "deployment_created": False,
             }
         )
@@ -303,7 +299,6 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 deployment={
                     "model_name": oodd_model_name,
                     "detector_id": detector_id,
-                    "api_token": api_token,
                     "deployment_created": False,
                 }
             )

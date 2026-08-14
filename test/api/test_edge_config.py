@@ -1,5 +1,7 @@
 from fastapi.testclient import TestClient
-from groundlight.edge import EdgeEndpointConfig
+from groundlight.edge import DEFAULT, EdgeEndpointConfig
+
+DET_A = "det_AAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
 
 def test_get_edge_config(test_client: TestClient):
@@ -20,3 +22,11 @@ def test_set_edge_config_valid_body(test_client: TestClient):
     """PUT /edge-config with a valid body should return 200."""
     response = test_client.put("/edge-config", json={})
     assert response.status_code == 200
+
+
+def test_set_edge_config_accepts_sdk_to_payload(test_client: TestClient):
+    """Normal gl.edge.set_config payloads (including api_token: null) must succeed."""
+    config = EdgeEndpointConfig()
+    config.add_detector(DET_A, DEFAULT)
+    response = test_client.put("/edge-config", json=config.to_payload())
+    assert response.status_code == 200, response.text

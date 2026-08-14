@@ -28,6 +28,8 @@ spec:
                 secretKeyRef:
                   name: groundlight-api-token-validate-{{ .Values.namespace }}
                   key: GROUNDLIGHT_API_TOKEN
+            - name: GROUNDLIGHT_TOKEN_DIR
+              value: "/opt/groundlight/device/tokens"
           command:
             - /bin/bash
             - /app/init-aws-access-retrieve.sh
@@ -36,10 +38,16 @@ spec:
             - name: validate-api-token-script
               mountPath: /app/init-aws-access-retrieve.sh
               subPath: init-aws-access-retrieve.sh
+            - name: device-info-volume
+              mountPath: /opt/groundlight/device
       volumes:
         - name: validate-api-token-script
           configMap:
             name: validate-api-token-script-{{ .Values.namespace }}
+        - name: device-info-volume
+          hostPath:
+            path: /opt/groundlight/device
+            type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: ConfigMap

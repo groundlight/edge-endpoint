@@ -12,11 +12,14 @@ import yaml
 from cachetools import TTLCache, cached
 from fastapi import HTTPException, status
 from groundlight.edge import EdgeEndpointConfig, InferenceConfig
+from groundlight_openapi_client.api.edge_api import EdgeApi
+from groundlight_openapi_client.exceptions import ApiException
 from jinja2 import Template
 from model import ModeEnum
 
 from app.core.edge_config_manager import EdgeConfigManager
 from app.core.file_paths import MODEL_REPOSITORY_PATH
+from app.core.groundlight_client import groundlight_client
 from app.core.naming import (
     get_detector_models_dir,
     get_edge_inference_service_name,
@@ -365,13 +368,7 @@ class EdgeInferenceManager:
         """
         logger.debug(f"Checking if there are new models available for {detector_id}")
 
-        det_config = EdgeConfigManager.detector_config(EdgeConfigManager.active(), detector_id)
-        api_token = det_config.api_token if det_config and det_config.enabled else None
-
-        # fallback to env var if we don't have a token in the config
-        api_token = api_token or os.environ.get("GROUNDLIGHT_API_TOKEN", None)
-
-        edge_model_info, oodd_model_info = fetch_model_info(detector_id, api_token=api_token)
+        edge_model_info, oodd_model_info = fetch_model_info(detector_id)
 
         primary_version = get_current_model_version(self.MODEL_REPOSITORY, detector_id)
         primary_edge_model_dir = get_primary_edge_model_dir(self.MODEL_REPOSITORY, detector_id)
@@ -426,35 +423,28 @@ class EdgeInferenceManager:
         return False
 
 
-def fetch_model_info(detector_id: str, api_token: Optional[str] = None) -> tuple[ModelInfoBase, ModelInfoBase]:
-    """Fetch model info for primary and OODD models from the Groundlight API."""
-    if not api_token:
-        raise ValueError(f"No API token provided for {detector_id=}")
-
+def fetch_model_info(detector_id: str) -> tuple[ModelInfoBase, ModelInfoBase]:
+    """Fetch model info for primary and OODD models via the device client's EdgeApi."""
     logger.debug(f"Fetching model info for {detector_id}")
 
-    # Get endpoint from env var
-    groundlight_endpoint = os.environ.get("GROUNDLIGHT_ENDPOINT", "https://api.groundlight.ai/")
-    if not groundlight_endpoint.endswith("/"):
-        groundlight_endpoint += "/"
-    url = f"{groundlight_endpoint}edge-api/v1/fetch-model-urls/{detector_id}/"
-
-    headers = {"x-api-token": api_token}
-    response = requests.get(url, headers=headers, timeout=10)
-    logger.debug(f'fetch-model-urls response.text = "{response.text}", response.status_code = {response.status_code}')
-
-    if response.status_code == status.HTTP_200_OK:
-        return parse_model_info(response.json())
-
-    exception_string = f"Failed to fetch model info for detector '{detector_id}'."
     try:
-        response_json = response.json()
-        if "detail" in response_json:  # Include additional detail on the error if available
-            exception_string = f"{exception_string} Received error: {response_json['detail']}"
-    except requests.exceptions.JSONDecodeError:
-        exception_string = f"{exception_string} Received error: {response.text}"
-
-    raise HTTPException(status_code=response.status_code, detail=exception_string)
+        edge_api = EdgeApi(groundlight_client().api_client)
+        # Generated EdgeModelInfo requires model_binary_id: str, but cloud returns null for
+        # no-binary detectors. Skip return-type checks; parse_model_info handles that case.
+        obj = edge_api.get_model_urls(
+            detector_id,
+            _request_timeout=10,
+            _check_return_type=False,
+        )
+        return parse_model_info(obj.to_dict())
+    except ApiException as e:
+        exception_string = f"Failed to fetch model info for detector '{detector_id}'."
+        body = e.body
+        if isinstance(body, (bytes, bytearray)):
+            body = body.decode("utf-8", errors="replace")
+        if body:
+            exception_string = f"{exception_string} Received error: {body}"
+        raise HTTPException(status_code=e.status or status.HTTP_502_BAD_GATEWAY, detail=exception_string) from e
 
 
 def get_model_buffer(model_info: ModelInfoBase) -> bytes | None:

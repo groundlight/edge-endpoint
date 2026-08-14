@@ -103,8 +103,9 @@ Edge inference configs can be applied to as many detectors as you'd like, so if 
 ### `enabled` - default `true`
 Whether the edge endpoint should accept image queries for the associated detector. Generally you'll want this to be `true` for detectors that you're configuring.
 
-### `api_token` - default `null`
-The API token to use for fetching the inference model for the associated detector. Most of the time this should be left blank, which will default to using the Groundlight API token set as an environment variable. If you are configuring detectors owned by multiple accounts, you could specify different API tokens to be used for each detector.  
+### `api_token` - ignored
+This field is accepted for SDK compatibility but ignored. The Edge Endpoint always uses its device API token (including any rotated token from the shared device token cache) for cloud calls.
+
 
 ### `always_return_edge_prediction` - default `false`
 Whether the edge model's answer should always be returned, regardless of the answer's confidence. When this is `false` (the default behavior), the edge model's answer will only be returned if it is above the confidence threshold. If the confidence is not sufficiently high, the query will be escalated to the cloud, which may result in a longer wait for the answer. If you always want to receive fast answers from a detector and don't want to enforce that answers will be above the confidence threshold, you should set this to `true`. 

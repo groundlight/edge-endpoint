@@ -1,4 +1,6 @@
-# Test to see if edge-endpoint can proxy to the cloud
+# Test to see if edge-endpoint can proxy to the cloud.
+# Resolves the working device token from the SDK cache when present so the test
+# still passes after the seed token has been revoked by rotation.
 apiVersion: v1
 kind: Pod
 metadata:
@@ -10,19 +12,38 @@ metadata:
     "helm.sh/hook": test
 spec:
   containers:
-    - name: wget
-      image: busybox
-      command: ['sh']
+    - name: curl
+      image: amazon/aws-cli:latest
+      imagePullPolicy: IfNotPresent
+      command: ["bash", "-c"]
       # We use the internal service port here (30101 for HTTP, 443 for HTTPS), not the
-      # NodePort exposed to the host. When httpEnabled is false, we use --no-check-certificate
+      # NodePort exposed to the host. When httpEnabled is false, we use -k
       # since the edge endpoint uses a self-signed certificate.
       args:
-      - '-c'
-      {{- if .Values.httpEnabled }}
-      - 'wget -O - --header "x-api-token: ${GROUNDLIGHT_API_TOKEN}" {{ include "groundlight-edge-endpoint.fullname" . }}-service:30101/device-api/v1/me'
-      {{- else }}
-      - 'wget --no-check-certificate -O - --header "x-api-token: ${GROUNDLIGHT_API_TOKEN}" https://{{ include "groundlight-edge-endpoint.fullname" . }}-service:443/device-api/v1/me'
-      {{- end }}
+        - |
+          set -euo pipefail
+          seed="${GROUNDLIGHT_API_TOKEN:-}"
+          if [ -z "$seed" ]; then
+            echo "GROUNDLIGHT_API_TOKEN is not set. Exiting." >&2
+            exit 1
+          fi
+          token="$seed"
+          if [ -n "${GROUNDLIGHT_TOKEN_DIR:-}" ]; then
+            snippet="${seed:0:20}"
+            cache_file="${GROUNDLIGHT_TOKEN_DIR}/${snippet}.json"
+            if [ -f "$cache_file" ]; then
+              cached=$(jq -r '.current.raw_key // empty' "$cache_file" 2>/dev/null || true)
+              if [ -n "$cached" ]; then
+                echo "Using rotated device API token from cache: ${cache_file}" >&2
+                token="$cached"
+              fi
+            fi
+          fi
+          {{- if .Values.httpEnabled }}
+          curl -fsS -H "x-api-token: ${token}" "http://{{ include "groundlight-edge-endpoint.fullname" . }}-service:30101/device-api/v1/me"
+          {{- else }}
+          curl -fsSk -H "x-api-token: ${token}" "https://{{ include "groundlight-edge-endpoint.fullname" . }}-service:443/device-api/v1/me"
+          {{- end }}
       env:
       - name: GROUNDLIGHT_API_TOKEN
         valueFrom:
@@ -30,4 +51,14 @@ spec:
             name: groundlight-api-token
             key: GROUNDLIGHT_API_TOKEN
             optional: true
+      - name: GROUNDLIGHT_TOKEN_DIR
+        value: "/opt/groundlight/device/tokens"
+      volumeMounts:
+      - name: device-info-volume
+        mountPath: /opt/groundlight/device
+  volumes:
+  - name: device-info-volume
+    hostPath:
+      path: /opt/groundlight/device
+      type: DirectoryOrCreate
   restartPolicy: Never
