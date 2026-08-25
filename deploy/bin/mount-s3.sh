@@ -48,6 +48,41 @@ mount-s3 "$S3_BUCKET" "$MOUNT_POINT" \
     --foreground &
 MOUNT_PID=$!
 
+# Release the mount on shutdown. Without a trap this never happens: bash is PID 1
+# in the container's PID namespace, and PID 1 ignores signals that only have a
+# default handler, so SIGTERM is discarded, Kubernetes waits out the full grace
+# period, and mount-s3 is SIGKILLed without ever unmounting. That leaves a zombie
+# behind on the host -- still listed in the mount table, but returning ENOTCONN to
+# every reader -- for the next pod's drain loop above to clean up. Installing a
+# handler gives SIGTERM something to run, so the mount goes away with the pod.
+cleanup() {
+    echo "Shutting down, unmounting $MOUNT_POINT"
+    # Bound the clean-unmount attempts. Against a wedged (alive but unresponsive)
+    # FUSE daemon a non-lazy umount can block, and we would never reach the
+    # watchdog below -- burning the grace period and getting SIGKILLed without
+    # unmounting, which is the outcome this trap exists to prevent. The liveness
+    # probe now restarts the container on exactly that wedged case, so this path
+    # is reachable. A busy-but-healthy mount returns EBUSY immediately, so the
+    # common path is unaffected, and `umount -l` only detaches the name and
+    # always returns promptly.
+    timeout 5 umount "$MOUNT_POINT" 2>/dev/null \
+        || timeout 5 fusermount -u "$MOUNT_POINT" 2>/dev/null \
+        || umount -l "$MOUNT_POINT" 2>/dev/null \
+        || echo "WARNING: every unmount attempt failed for $MOUNT_POINT; it will be left stale for the next pod to drain" >&2
+    kill -TERM "$MOUNT_PID" 2>/dev/null || true
+    # bash has no timeout on `wait`, so arm a watchdog: if mount-s3 is wedged and
+    # doesn't exit, SIGKILL it rather than block until the termination grace
+    # period expires (at which point we'd be SIGKILLed anyway, just 20s later).
+    # `wait` still returns the instant mount-s3 exits, so the normal path is
+    # unaffected.
+    { sleep 10; kill -KILL "$MOUNT_PID" 2>/dev/null; } &
+    watchdog=$!
+    wait "$MOUNT_PID" 2>/dev/null || true
+    kill "$watchdog" 2>/dev/null || true
+    exit 0
+}
+trap cleanup TERM INT
+
 # Verify the mount comes up healthy within 30s. Catches subtle failures like
 # mount-s3 starting against the wrong bucket (empty listing) or a FUSE mount
 # that established but isn't actually serving content. mount-s3 normally

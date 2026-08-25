@@ -98,9 +98,19 @@ spec:
         command: ["/bin/bash", "/groundlight-edge/deploy/bin/mount-s3.sh"]
         livenessProbe:
           exec:
-            command: ["mountpoint", "-q", "/host-root{{ .Values.s3Mount.mountPath }}"]
+            # `ls` forces an opendir/readdir through /dev/fuse, so a dead FUSE
+            # session fails the probe and the container restarts (remounting via
+            # the drain logic in mount-s3.sh).
+            command:
+            - /bin/bash
+            - -c
+            - '[ -n "$(ls -A /host-root{{ .Values.s3Mount.mountPath }} 2>/dev/null)" ]'
           initialDelaySeconds: 30
           periodSeconds: 30
+          # A FUSE roundtrip can exceed the 1s default. This also catches a mount
+          # that is wedged rather than dead: `ls` blocks and the probe times out,
+          # which kubelet counts as a failure.
+          timeoutSeconds: 10
           failureThreshold: 3
         env:
         - name: S3_BUCKET
