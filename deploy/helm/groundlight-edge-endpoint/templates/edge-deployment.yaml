@@ -60,20 +60,28 @@ spec:
       # from within the pod. See templates/service_account.yaml for more details
       serviceAccountName: edge-endpoint-service-account
       initContainers:
+      {{- $s3Exclude := printf "%s %s" (base .Values.s3Mount.mountPath) (base .Values.s3Mount.cachePath) }}
+      {{- $chownMounts := list
+        (dict "name" "nginx-certs" "mountPath" "/etc/nginx/certs")
+        (dict "name" "device-info-volume" "mountPath" "/opt/groundlight/device")
+        (dict "name" "escalation-queue-volume" "mountPath" "/opt/groundlight/queue")
+        (dict "name" "edge-endpoint-persistent-volume" "mountPath" "/opt/groundlight/edge" "exclude" $s3Exclude)
+      }}
+      {{- include "groundlight-edge-endpoint.chownHostPaths.initContainer" $chownMounts | nindent 6 }}
       - name: generate-tls-cert
         image: &edgeEndpointImage {{ include "groundlight-edge-endpoint.ecrRegistry" . }}/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
         volumeMounts:
         - name: nginx-certs
           mountPath: /etc/nginx/certs
-        command: ["/bin/bash", "/groundlight-edge/app/bin/generate-tls-cert.sh"]
+        command: ["python", "-m", "app.runtime.generate_tls_cert"]
       - name: database-prep
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
         volumeMounts:
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/sqlite
-        command: ["/bin/bash", "/groundlight-edge/deploy/bin/setup_db.sh"]
+        command: ["python", "-m", "app.runtime.setup_db"]
       - name: apply-edge-config
         image: busybox:1.36
         env:
@@ -95,21 +103,15 @@ spec:
             memory: "50Mi"
         securityContext:
           privileged: true  # Required for FUSE mount
-        command: ["/bin/bash", "/groundlight-edge/deploy/bin/mount-s3.sh"]
+          runAsUser: 0
+        command: ["python", "-m", "app.runtime.mount_s3"]
         livenessProbe:
           exec:
-            # `ls` forces an opendir/readdir through /dev/fuse, so a dead FUSE
-            # session fails the probe and the container restarts (remounting via
-            # the drain logic in mount-s3.sh).
-            command:
-            - /bin/bash
-            - -c
-            - '[ -n "$(ls -A /host-root{{ .Values.s3Mount.mountPath }} 2>/dev/null)" ]'
+            command: ["python", "-m", "app.runtime.check_s3_mount", "/host-root{{ .Values.s3Mount.mountPath }}"]
           initialDelaySeconds: 30
           periodSeconds: 30
-          # A FUSE roundtrip can exceed the 1s default. This also catches a mount
-          # that is wedged rather than dead: `ls` blocks and the probe times out,
-          # which kubelet counts as a failure.
+          # Distroless has no /bin/bash; this probe reads /proc/mounts via python.
+          # timeoutSeconds is above the 1s default in case the proc read stalls.
           timeoutSeconds: 10
           failureThreshold: 3
         env:
@@ -136,7 +138,11 @@ spec:
         resources:
           requests:
             memory: "50Mi"
-        command: ["/bin/bash", "-c", "./app/bin/launch-nginx.sh"]
+        securityContext:
+          capabilities:
+            add:
+              - NET_BIND_SERVICE
+        command: ["python", "-m", "app.runtime.launch_nginx"]
         ports:
         {{- if .Values.httpEnabled }}
         - containerPort: 30101
@@ -189,6 +195,7 @@ spec:
         resources:
           requests:
             memory: "700Mi"
+        command: ["python", "-m", "uvicorn", "--workers", "8", "--host", "0.0.0.0", "--port", "6718", "--proxy-headers", "app.main:app"]
         env:
         - name: LOG_LEVEL
           value: {{ .Values.logLevel | quote }}
@@ -218,10 +225,6 @@ spec:
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
-        # TODO: Remove this once we have have removed nginx from the container
-        - name: nginx-config-volume
-          mountPath: /etc/nginx/nginx.conf
-          subPath: dummy-nginx.conf
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/sqlite
         - name: edge-endpoint-persistent-volume
@@ -245,7 +248,7 @@ spec:
             memory: "150Mi"
         ports:
         - containerPort: 8123
-        command: ["./app/bin/launch-status-monitor.sh"]
+        command: ["python", "-m", "uvicorn", "--workers", "1", "--host", "0.0.0.0", "--port", "8123", "app.status_monitor.status_web:app"]
         env:
         - name: LOG_LEVEL
           value: {{ .Values.logLevel | quote }}
@@ -290,7 +293,7 @@ spec:
         resources:
           requests:
             memory: "100Mi"
-        command: ["./app/bin/launch-escalation-queue-reader.sh"]
+        command: ["python", "-m", "app.escalation_queue.manage_reader"]
         env:
         - name: LOG_LEVEL
           value: {{ .Values.logLevel | quote }}
@@ -318,8 +321,7 @@ spec:
         resources:
           requests:
             memory: "200Mi"
-        command: ["/bin/bash", "-c"]
-        args: ["run_model_updater"]
+        command: ["python", "-m", "app.model_updater.update_models"]
         env:
         - name: LOG_LEVEL
           value: {{ .Values.logLevel | quote }}

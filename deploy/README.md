@@ -316,8 +316,24 @@ Build into the local k3s cluster with the fixed `dev` tag (no ECR push):
 ./deploy/bin/build-local-edge-endpoint-image.sh
 ```
 
+FIPS (`Dockerfile.fips`, linux/amd64). Same `dev` tag and Helm values. Docker must be able to pull `cgr.dev/axon.com` first (`deploy/bin/ensure-chainguard-auth.sh`):
+
+- Laptop: `chainctl auth login --org-name axon.com` then `chainctl auth configure-docker`.
+- Headless: on a machine with a browser, `chainctl auth pull-token create --parent 644ce05dcfa4a1ac9e410de97e5b0d7f3194c656 --ttl=2h -o json`. On the build host, remove any `credHelpers["cgr.dev"]` from `~/.docker/config.json`, then `docker login cgr.dev` with that `identity_id` / `token`. Do not set `CI=true` to skip auth.
+
 ```shell
-helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint \
+./deploy/bin/build-local-edge-endpoint-image-fips.sh
+```
+
+That defaults to the Axon-dev image name (`216731772508.../edge/edge-endpoint:dev`). For GL_Public naming:
+
+```shell
+ECR_ACCOUNT=767397850842 EDGE_ENDPOINT_IMAGE=edge-endpoint \
+  ./deploy/bin/build-local-edge-endpoint-image-fips.sh
+```
+
+```shell
+helm upgrade -i -n default edge-endpoint ./deploy/helm/groundlight-edge-endpoint \
   --set groundlightApiToken="${GROUNDLIGHT_API_TOKEN}" \
   --set edgeEndpointTag=dev
 ```

@@ -166,3 +166,6 @@ __marimo__/
 # Claude Code: per-user local settings and transient worktrees
 .claude/settings.local.json
 .claude/worktrees/
+
+# FIPS buildx cache (local)
+.buildx-cache-fips/

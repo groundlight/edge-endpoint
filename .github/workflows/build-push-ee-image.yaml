@@ -1,6 +1,6 @@
 name: build-push-ee-image
 # This workflow is split into a separate file and called via workflow_call to enable triggering it
-# from other repositories, to test new inference images. 
+# from other repositories, to test new inference images.
 on:
   workflow_call:
     inputs:
@@ -17,43 +17,20 @@ on:
         required: true
 jobs:
   build-push-edge-endpoint-multiplatform:
-    # This used to run on a larger runner, but to use it as a reusable workflow outside of this
-    # orgnaization we need it to run on a default github runner. 
-    # If we start seeing issues with the default runner again, there are some hacks to delete
-    # unwanted software that's installed by default on the github runners to free up space. This is
-    # already done in the test-k3s-helm workflow.
+    # Non-FIPS GL_Public publish. No id-token: this job authenticates to GL_Public
+    # with static keys. It used to assume the edge master ECR role via OIDC, but
+    # non-FIPS builds no longer publish there (only the FIPS job does), so that
+    # login was both unused and a way for an OIDC/edge-registry failure to break
+    # the GL_Public publish path.
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
       contents: read
-    env:
-      # On main, also publish to the Axon-managed edge master ECR (ai-groundlight-edge-artifacts)
-      EDGE_ECR_URL: ${{ github.ref == 'refs/heads/main' && '794562053834.dkr.ecr.us-west-2.amazonaws.com' || '' }}
     steps:
       - name: Check out code
         uses: actions/checkout@v4
         with:
           repository: ${{ inputs.repo }}
           ref: ${{ inputs.ref }}
-      # Edge artifacts master ECR login (OIDC) must run before the GL_Public credential step
-      # so that the final active AWS credentials are GL_Public's (used by the build
-      # script's own ECR login) while docker stays authenticated to both registries.
-      - name: Configure AWS credentials for edge master ECR (OIDC)
-        if: github.ref == 'refs/heads/main'
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::794562053834:role/oidc-ghec-edge-push
-          aws-region: us-west-2
-      - name: Login to edge master ECR
-        if: github.ref == 'refs/heads/main'
-        uses: aws-actions/amazon-ecr-login@v2
-        with:
-          registries: "794562053834"
-          mask-password: "true"
-      # Resolve the immutable edge tag while OIDC edge credentials are still active.
-      - name: Look up existing edge image digest
-        if: github.ref == 'refs/heads/main'
-        run: ./deploy/bin/lookup-edge-existing-digest.sh
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -65,7 +42,103 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v1
         with:
           mask-password: "true"
-      - name: Build and Push Multiplatform edge-endpoint Image to ECR
-        # This is actually only taking about 4 minutes right now.
+      - name: Build and Push Multiplatform edge-endpoint Image to GL_Public ECR
         timeout-minutes: 45
         run: ./deploy/bin/build-push-edge-endpoint-image.sh
+
+  build-push-edge-endpoint-image-fips:
+    # FIPS images publish only to the Axon-managed edge master ECR
+    # (ai-groundlight-edge-artifacts), and only on main. On PRs this job builds,
+    # verifies, and smokes locally when CHAINGUARD_IDENTITY is set; otherwise it
+    # skips so the rest of cicd is not blocked.
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.repo }}
+          ref: ${{ inputs.ref }}
+      - name: Check FIPS build prerequisites
+        id: prereq
+        run: |
+          if [ -z "${{ vars.CHAINGUARD_IDENTITY }}" ]; then
+            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              echo "::error title=edge-endpoint FIPS build cannot run::The CHAINGUARD_IDENTITY repo variable is not set, so this job cannot authenticate to cgr.dev. Set it to the org-wide Chainguard identity (the same value gep and zuuul use)."
+              exit 1
+            fi
+            echo "::warning::CHAINGUARD_IDENTITY is unset; skipping the FIPS build on this PR so the rest of cicd can proceed. Set the repo variable (same value as gep/zuuul) to run verify+smoke here."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "push=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          push=false
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            push=true
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "push=${push}" >> "$GITHUB_OUTPUT"
+      - name: Set up QEMU
+        if: steps.prereq.outputs.skip != 'true'
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        if: steps.prereq.outputs.skip != 'true'
+        uses: docker/setup-buildx-action@v3
+      - name: Authenticate to Chainguard (OIDC)
+        if: steps.prereq.outputs.skip != 'true'
+        uses: chainguard-dev/setup-chainctl@v0.5.1
+        with:
+          identity: ${{ vars.CHAINGUARD_IDENTITY }}
+      - name: Mint an ephemeral cgr.dev pull token
+        if: steps.prereq.outputs.skip != 'true'
+        id: cgr-token
+        run: |
+          # Parent is the axon.com Chainguard org (same ID gep and zuuul use).
+          OUT=$(chainctl auth pull-token create \
+                  --parent 644ce05dcfa4a1ac9e410de97e5b0d7f3194c656 \
+                  --name "edge-endpoint-fips-${GITHUB_RUN_ID}" \
+                  --ttl=1h -o json)
+          TOKEN=$(echo "$OUT" | jq -r '.token')
+          IDENTITY_ID=$(echo "$OUT" | jq -r '.identity_id')
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+          echo "identity_id=$IDENTITY_ID" >> "$GITHUB_OUTPUT"
+      - name: Log in to cgr.dev
+        if: steps.prereq.outputs.skip != 'true'
+        env:
+          CGR_TOKEN: ${{ steps.cgr-token.outputs.token }}
+          CGR_IDENTITY: ${{ steps.cgr-token.outputs.identity_id }}
+        run: |
+          if [ -f "$HOME/.docker/config.json" ]; then
+            python3 - <<'PY'
+          import json, os
+          path = os.path.expanduser("~/.docker/config.json")
+          with open(path) as f:
+              config = json.load(f)
+          if config.get("credHelpers", {}).pop("cgr.dev", None):
+              with open(path, "w") as f:
+                  json.dump(config, f)
+              print("Removed the cgr.dev credHelper so the pull-token login takes effect.")
+          PY
+          fi
+          echo "$CGR_TOKEN" | docker login cgr.dev --username "$CGR_IDENTITY" --password-stdin
+      - name: Configure AWS credentials for Axon edge master ECR (OIDC)
+        if: steps.prereq.outputs.push == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::794562053834:role/oidc-ghec-edge-push
+          aws-region: us-west-2
+      - name: Log in to Axon edge master ECR
+        if: steps.prereq.outputs.push == 'true'
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registries: "794562053834"
+          mask-password: "true"
+      - name: Build, verify and push the FIPS image
+        if: steps.prereq.outputs.skip != 'true'
+        timeout-minutes: 60
+        env:
+          FIPS_PUSH: ${{ steps.prereq.outputs.push }}
+        run: ./deploy/bin/build-push-edge-endpoint-image-fips.sh

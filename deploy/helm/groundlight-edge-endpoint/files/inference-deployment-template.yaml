@@ -127,7 +127,7 @@ spec:
             exec:
               # Delay SIGTERM so kube-proxy can remove this pod from iptables
               # before uvicorn stops accepting connections.
-              command: ["sh", "-c", "sleep 10"]
+              command: ["python", "-c", "import time; time.sleep(10)"]
 
       volumes:
       - name: edge-endpoint-persistent-volume

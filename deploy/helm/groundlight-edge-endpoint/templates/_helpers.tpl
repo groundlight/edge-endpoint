@@ -235,7 +235,7 @@ Never
   Validate that the model-updater's rollout-ready timeout stays strictly under the
   inference pod's startupProbe ceiling (failureThreshold * 10s). If it doesn't,
   kubelet can kill the inference pod for a failed startup probe while the
-  model-updater is still polling for it to become Ready — pods can effectively
+  model-updater is still polling for it to become Ready  -  pods can effectively
   never start up. Catch the misconfiguration at `helm install/upgrade` rather
   than 45 min later when pods start crash-looping.
 */}}
@@ -245,5 +245,48 @@ Never
 {{- if ge $rollout $ceiling -}}
   {{- fail (printf "modelUpdater.rolloutReadyTimeoutSeconds (%ds) must be less than inferenceDeployment.startupProbe.failureThreshold × 10s (%ds). Raise inferenceDeployment.startupProbe.failureThreshold proportionally when increasing modelUpdater.rolloutReadyTimeoutSeconds." $rollout $ceiling) -}}
 {{- end -}}
+{{- end -}}
+
+{{/*
+  Same busybox as apply-edge-config. FIPS app images are distroless and have
+  no chown; do not pull a second image (aws-cli) just for this init.
+*/}}
+{{- define "groundlight-edge-endpoint.hostPathChown.image" -}}
+busybox:1.36
+{{- end -}}
+
+{{/*
+  Root init container that chowns Edge-owned writable mounts to uid 65532.
+
+  FIPS images run as USER 65532. kubelet creates hostPath DirectoryOrCreate as
+  root, and fsGroup does not chown hostPath. The PVC (edge-endpoint-pvc) is
+  included too so a local-path volume that happened to be root-owned still
+  works; fsGroup would usually cover that case. The chart does not set a
+  global runAsUser: FIPS-ness is the image USER plus which registry the
+  device pulls.
+
+  Caller passes a list of dicts with name, mountPath, and optional chownPath
+  (defaults to mountPath). Optional exclude is a space-separated list of
+  immediate child names to leave alone (pinamod FUSE dirs on the shared PVC).
+  Chown the whole device hostPath: tokens, edge-metrics, and edge-profiling
+  are all written by USER 65532. certs are also a separate nginx-certs volume.
+  When exclude is set, also chown the mount root itself (not recursive) so
+  USER 65532 can create siblings of the excluded dirs.
+*/}}
+{{- define "groundlight-edge-endpoint.chownHostPaths.initContainer" -}}
+- name: chown-hostpaths
+  image: {{ include "groundlight-edge-endpoint.hostPathChown.image" . }}
+  imagePullPolicy: IfNotPresent
+  securityContext:
+    runAsUser: 0
+  command:
+    - /bin/sh
+    - -ec
+    - mkdir -p{{ range . }} {{ .chownPath | default .mountPath }}{{ end }}; {{ range . }}{{ if .exclude }}chown 65532:65532 {{ .mountPath }}; find {{ .mountPath }} -mindepth 1 -maxdepth 1{{ range (splitList " " .exclude) }} ! -name {{ . | quote }}{{ end }} -exec chown -R 65532:65532 {} +; {{ else }}chown -R 65532:65532 {{ .chownPath | default .mountPath }}; {{ end }}{{ end }}
+  volumeMounts:
+  {{- range . }}
+    - name: {{ .name }}
+      mountPath: {{ .mountPath }}
+  {{- end }}
 {{- end -}}
 

@@ -9,6 +9,10 @@
 # following Helm value:
 # `--set edgeEndpointTag=dev (or add it to your values.yaml file)
 
+# Dockerfile defaults to the non-FIPS image. FIPS:
+#   DOCKERFILE=Dockerfile.fips ./deploy/bin/build-local-edge-endpoint-image.sh
+# or ./deploy/bin/build-local-edge-endpoint-image-fips.sh (Axon-dev image name).
+#
 # This works by:
 # 1. Building the image with the local Docker daemon
 # 2. Checking the image SHA in the local Docker daemon and in k3s
@@ -24,6 +28,11 @@
 set -e
 
 cd "$(dirname "$0")"
+
+DOCKERFILE=${DOCKERFILE:-Dockerfile}
+if [ "$(basename "${DOCKERFILE}")" = "Dockerfile.fips" ]; then
+    ./ensure-chainguard-auth.sh
+fi
 
 ECR_ACCOUNT=${ECR_ACCOUNT:-767397850842}
 ECR_REGION=${ECR_REGION:-us-west-2}
@@ -42,7 +51,7 @@ build_and_upload() {
     echo "Building and uploading ${name}..."
     cd "${project_root}/${path}"
     local full_name=${ECR_URL}/${name}:${TAG}
-    docker build -t ${full_name} .
+    docker build -f "${DOCKERFILE}" -t ${full_name} .
     local id=$(docker image inspect ${full_name} | jq -r '.[0].Id')
     local on_server=$(sudo crictl images -q | grep $id)
     if [ -z "$on_server" ]; then

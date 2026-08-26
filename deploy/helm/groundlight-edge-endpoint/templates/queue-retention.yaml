@@ -33,7 +33,7 @@ spec:
             resources:
               requests:
                 memory: "100Mi"
-            command: ["./app/bin/launch-queue-retention.sh"]
+            command: ["python", "-m", "app.escalation_queue.queue_retention"]
             env:
             - name: LOG_LEVEL
               value: {{ .Values.logLevel | quote }}

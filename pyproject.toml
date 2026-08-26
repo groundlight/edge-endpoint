@@ -11,6 +11,7 @@ dependencies = [
     "APScheduler==3.10.4",
     "SQLAlchemy==2.0.35",
     "cachetools>=5.3.1,<6.0.0",
+    "cryptography>=44.0.0,<49.0.0",
     "fastapi>=0.115.0,<0.116.0",
     "groundlight>=0.32.0,<0.33.0",
     "httpx>=0.27.2,<0.28.0",

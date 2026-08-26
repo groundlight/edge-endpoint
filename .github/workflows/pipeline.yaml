@@ -270,9 +270,10 @@ jobs:
     # (helm tests, G4, test-sdk, test-integration) consume this image from ECR.
     needs:
       - test-unit-edge-endpoint
-    # id-token: write is required for the reusable workflow's OIDC assume of
+    # id-token: write is required for the FIPS job's OIDC assume of
     # oidc-ghec-edge-push in the master edge-artifacts account on main
-    # (reusable workflows can only narrow permissions).
+    # (reusable workflows can only narrow permissions). The non-FIPS job
+    # does not use it.
     permissions:
       id-token: write
       contents: read
