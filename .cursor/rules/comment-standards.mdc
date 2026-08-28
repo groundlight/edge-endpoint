@@ -1,9 +1,9 @@
 ---
-description: Production server code, not demo code.  Code like there are conseqeuences.
+description: Production server code, not demo code. Code like there are consequences.
 alwaysApply: true
 priority: 10
 ---
 
 Comments should be concise and only used to convey non-obvious information.
-Docstrings should give a brief summary of the function, class, or module that could allow someone to use the basic functionality without having to read all the source. Safely assume anyone who will do anything more advanced can and will read the source
-Future users don't need to know about what we tried or the particular Jira ticket that we're responding to. That just becomes additional mental burden for them. Mistakes can be logged in an agent knowledge store if available, but should not be checked into code
+Docstrings should give a brief summary of the function, class, or module that could allow someone to use the basic functionality without having to read all the source. Safely assume anyone who will do anything more advanced can and will read the source.
+Future users don't need to know about what we tried or the particular Jira ticket that we're responding to. That just becomes additional mental burden for them. Mistakes can be logged in an agent knowledge store if available, but should not be checked into code.
