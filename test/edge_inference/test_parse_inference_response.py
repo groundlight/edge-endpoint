@@ -1,7 +1,7 @@
 import pytest
 from model import ModeEnum
 
-from app.core.edge_inference import parse_inference_response
+from app.core.edge_inference import calculate_confidence_for_bounding_box_mode, parse_inference_response
 
 
 # Fixtures for mock responses
@@ -278,3 +278,27 @@ class TestParseInferenceResponse:
     def test_parse_invalid_response_invalid_text(self, mock_invalid_predictions_invalid_text):
         with pytest.raises(ValueError, match="Got more than one text prediction. This should not happen"):
             parse_inference_response(mock_invalid_predictions_invalid_text, ModeEnum.BINARY)
+
+
+class TestCalculateConfidenceForBoundingBoxMode:
+    def test_with_predicted_rois(self):
+        multi_predictions = {"rois": [[{"score": 0.8}]], "max_dropped_roi_scores": [0.15]}
+        assert calculate_confidence_for_bounding_box_mode(multi_predictions) == pytest.approx(0.68)
+
+    def test_no_objects_found_with_near_miss(self):
+        # No accepted ROIs, but a rejected candidate came close to the threshold: confidence in "no objects"
+        # should scale with how close that near-miss was, not collapse to 0.
+        multi_predictions = {"rois": [[]], "max_dropped_roi_scores": [0.15]}
+        assert calculate_confidence_for_bounding_box_mode(multi_predictions) == pytest.approx(0.85)
+
+    def test_no_objects_found_with_no_signal_at_all(self):
+        multi_predictions = {"rois": [[]], "max_dropped_roi_scores": None}
+        assert calculate_confidence_for_bounding_box_mode(multi_predictions) == 0.0
+
+    def test_no_objects_found_with_zero_dropped_score(self):
+        multi_predictions = {"rois": None, "max_dropped_roi_scores": [0.0]}
+        assert calculate_confidence_for_bounding_box_mode(multi_predictions) == 0.0
+
+    def test_empty_outer_rois_list_does_not_raise(self):
+        multi_predictions = {"rois": [], "max_dropped_roi_scores": [0.2]}
+        assert calculate_confidence_for_bounding_box_mode(multi_predictions) == pytest.approx(0.8)
