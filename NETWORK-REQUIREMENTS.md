@@ -17,7 +17,9 @@ Depending on the deployment methods, there may be additional networking requirem
 Groundlight edge endpoint requires the following outbound access:
 
 - `*.groundlight.ai`: Groundlight endpoint for receiving detector metadata and temporary AWS credentials
-- `*.us-west-2.amazonaws.com`: AWS access for inference image download (ECR), model weights (S3), and credential refresh (STS)
+- `*.groundlight.*.axon.com`: for Axon-hosted deployments (`upstreamEndpoint` set to an `axon.com` origin, e.g. `api.groundlight.dev.axon.com`), this is used instead of `*.groundlight.ai` for receiving detector metadata and temporary AWS credentials
+- `*.us-west-2.amazonaws.com`: AWS access for inference image download (ECR), Helm chart distribution (ECR OCI), model weights (S3), and credential refresh (STS). Several AWS accounts under this domain host these artifacts depending on your deployment's `upstreamEndpoint` (Groundlight-managed vs. Axon-managed), so allowlist by domain rather than by a specific account ID
+- `*.us-east-1.amazonaws.com`: same as above, for deployments whose edge-artifact repos live in `us-east-1` instead of `us-west-2` (e.g. `usslg`)
 - `*.s3.amazonaws.com`: AWS S3 access for model weights via FUSE mount
 - `*.sts.amazonaws.com`: AWS STS for credential refresh
 
