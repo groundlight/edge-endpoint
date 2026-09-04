@@ -10,8 +10,10 @@ TOKEN="dummy-token"
 
 GL_PUBLIC_REG="767397850842.dkr.ecr.us-west-2.amazonaws.com"
 AXON_DEV_REG="216731772508.dkr.ecr.us-west-2.amazonaws.com/edge"
+AXON_USA_REG="686194638722.dkr.ecr.us-east-1.amazonaws.com/edge"
 GL_PUBLIC_BUCKET="pinamod-artifacts-public"
 AXON_DEV_BUCKET="edge-model-artifacts-edgemodelartifactsdevreplicabucket131ac6fa"
+AXON_USA_BUCKET="edge-model-artifac-edgemodelartifactsusslgreplicabucket0f431ed4"
 
 fail=0
 pass=0
@@ -82,6 +84,24 @@ assert_axon_dev() {
   assert_contains "$label v2" "$out" "reader-credentials/v2"
 }
 
+assert_axon_usa() {
+  local label="$1" out="$2"
+  assert_contains "$label registry" "$out" "${AXON_USA_REG}/edge-endpoint:latest"
+  assert_contains "$label inference" "$out" "${AXON_USA_REG}/gl-edge-inference:latest"
+  assert_contains "$label docker-server host" "$out" "docker-server=686194638722.dkr.ecr.us-east-1.amazonaws.com"
+  if grep -qF 'docker-server=686194638722.dkr.ecr.us-east-1.amazonaws.com/edge' <<<"$out"; then
+    echo "FAIL $label: docker-server unexpectedly includes /edge prefix"
+    fail=$((fail + 1))
+  else
+    echo "OK  $label docker-server has no /edge prefix"
+    pass=$((pass + 1))
+  fi
+  assert_contains "$label bucket" "$out" "value: \"${AXON_USA_BUCKET}\""
+  assert_contains "$label s3 region" "$out" 'value: "us-east-1"'
+  assert_contains "$label schedule" "$out" 'schedule: "*/15 * * * *"'
+  assert_contains "$label v2" "$out" "reader-credentials/v2"
+}
+
 echo "=== edgeArtifactsMap helm template matrix ==="
 
 out="$(render)"
@@ -111,6 +131,15 @@ assert_axon_dev "AG1 trailing slash" "$out"
 out="$(render --set upstreamEndpoint=https://api.groundlight.dev.axon.com/device-api/)"
 assert_axon_dev "AG1 /device-api path" "$out"
 
+out="$(render --set upstreamEndpoint=https://api.groundlight.usa.axon.com)"
+assert_axon_usa "usa canonical" "$out"
+
+out="$(render --set upstreamEndpoint=https://api.groundlight.usa.axon.com/)"
+assert_axon_usa "usa trailing slash" "$out"
+
+out="$(render --set upstreamEndpoint=https://api.groundlight.usa.axon.com/device-api/)"
+assert_axon_usa "usa /device-api path" "$out"
+
 out="$(render \
   --set upstreamEndpoint=https://api.groundlight.dev.axon.com \
   --set ecrRegistry=999999999999.dkr.ecr.us-west-2.amazonaws.com/custom \
@@ -126,6 +155,7 @@ assert_contains "scalar override keeps AG1 schedule" "$out" 'schedule: "*/15 * *
 assert_render_fails "unknown host" --set upstreamEndpoint=https://api.example.invalid
 assert_render_fails "lookalike host" --set upstreamEndpoint=https://api.groundlight.dev.axon.com.evil.example
 assert_render_fails "typo host" --set upstreamEndpoint=https://apii.groundlight.dev.axon.com
+assert_render_fails "usa lookalike host" --set upstreamEndpoint=https://api.groundlight.usa.axon.com.evil.example
 assert_render_fails "malformed URL" --set upstreamEndpoint=not-a-url
 
 echo

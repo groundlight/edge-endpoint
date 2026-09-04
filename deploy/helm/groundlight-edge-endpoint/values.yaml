@@ -110,6 +110,12 @@ edgeArtifactsMap:
     s3Region: "us-west-2"
     imageTag: "latest"
     credentialRefreshSchedule: "*/15 * * * *"
+  "https://api.groundlight.usa.axon.com":
+    ecrRegistry: "686194638722.dkr.ecr.us-east-1.amazonaws.com/edge"
+    s3Bucket: "edge-model-artifac-edgemodelartifactsusslgreplicabucket0f431ed4"
+    s3Region: "us-east-1"
+    imageTag: "latest"
+    credentialRefreshSchedule: "*/15 * * * *"
 
 # Explicit override / escape hatch for the ECR image base (registry host plus
 # optional repo prefix). When set, wins over edgeArtifactsMap. Leave empty to

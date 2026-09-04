@@ -15,7 +15,7 @@ with patch("fastapi.staticfiles.StaticFiles"):
         ("https://api.integ.groundlight.ai/device-api", "https://dashboard.integ.groundlight.ai"),
         ("https://api.dev.groundlight.ai/device-api", "https://dashboard.dev.groundlight.ai"),
         ("https://api.groundlight.dev.axon.com/device-api", "https://dashboard.groundlight.dev.axon.com"),
-        ("https://api.groundlight.us1.axon.com/device-api", "https://dashboard.groundlight.us1.axon.com"),
+        ("https://api.groundlight.usa.axon.com/device-api", "https://dashboard.groundlight.usa.axon.com"),
     ],
 )
 def test_cloud_dashboard_url_swaps_api_for_dashboard(cloud_endpoint, expected_dashboard_url):
