@@ -3,14 +3,14 @@ entries:
   groundlight-edge-endpoint:
   - apiVersion: v2
     appVersion: 0.7.1
-    created: "2026-08-27T15:09:52.994022447Z"
+    created: "2026-09-09T16:51:05.71228427Z"
     dependencies:
     - condition: global.otelEnabled
       name: opentelemetry-collector
       repository: https://open-telemetry.github.io/opentelemetry-helm-charts
       version: 0.105.0
     description: A full stack for deploying the Groundlight Edge Endpoint
-    digest: 02c8dadacaa1c9e11d3100681eefafad8f6e2e6c6b6522cab151c9d072a9079a
+    digest: 7be949cb6ff2549e456b107bec4add90dc15497b2a732a2a44186b2e9545f027
     name: groundlight-edge-endpoint
     type: application
     urls:
@@ -18,7 +18,7 @@ entries:
     version: 0.7.1
   - apiVersion: v2
     appVersion: 0.7.0
-    created: "2026-08-27T15:09:52.98756881Z"
+    created: "2026-09-09T16:51:05.701138916Z"
     description: A full stack for deploying the Groundlight Edge Endpoint
     digest: 28e171e970db9f594730ec55eae35306e3dc440fb9213e4cacf294266a107aaa
     name: groundlight-edge-endpoint
@@ -26,4 +26,4 @@ entries:
     urls:
     - https://code.groundlight.ai/edge-endpoint/groundlight-edge-endpoint-0.7.0.tgz
     version: 0.7.0
-generated: "2026-08-27T15:09:52.986698161Z"
+generated: "2026-09-09T16:51:05.699953048Z"
