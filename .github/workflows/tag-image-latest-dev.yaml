@@ -1,9 +1,10 @@
-name: edge-artifacts-tag-latest
+name: tag-image-latest-dev
 on:
-  # Called by pipeline after build-push on main. Waits for master→dev ECR
-  # replication of this commit's *-main tag, then moves mutable `latest` in
-  # the **dev** edge-artifacts account (not in master). Master stays
-  # build-only; environment pointers live in deployment registries.
+  # Called by pipeline after build-push and main-tests-pass on main.
+  # Waits for master→dev ECR replication of this commit's *-main tag, then
+  # moves mutable `latest` in the **dev** edge-artifacts account (not in
+  # master). Master stays build-only; environment pointers live in
+  # deployment registries.
   workflow_call:
 
 env:
@@ -13,7 +14,7 @@ env:
   EDGE_ARTIFACTS_TAG_ROLE: "oidc-ghec-edge-tag"
 
 jobs:
-  tag-edge-artifacts-latest:
+  tag-image-latest-dev:
     runs-on: ubuntu-latest
     # Caps hangs outside the replication poll (AWS CLI / docker / buildx).
     # The wait step uses a ~10 minute budget for the edge-endpoint image.

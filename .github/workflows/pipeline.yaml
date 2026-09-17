@@ -285,21 +285,23 @@ jobs:
       AWS_GL_PUBLIC_ACCESS_KEY_ID: ${{ secrets.AWS_GL_PUBLIC_ACCESS_KEY_ID }}
       AWS_GL_PUBLIC_SECRET_ACCESS_KEY: ${{ secrets.AWS_GL_PUBLIC_SECRET_ACCESS_KEY }}
 
-  # After the image is built on main, wait for master→dev ECR replication of
-  # this commit's *-main tag, then point `latest` at it in the **dev**
-  # edge-artifacts account (Axon-dev environment pointer; master stays
-  # build-only). Additive / non-blocking for the GL_Public release chain.
-  edge-artifacts-tag-latest:
+  # After the image is built and the main test suite passes, wait for
+  # master→dev ECR replication of this commit's *-main tag, then point
+  # `latest` at it in the **dev** edge-artifacts account (Axon-dev
+  # environment pointer; master stays build-only). Additive / non-blocking
+  # for the GL_Public release chain.
+  tag-image-latest-dev:
     if: github.ref == 'refs/heads/main'
     needs:
       - call-build-push-ee-image
+      - main-tests-pass
     # id-token: write is required for the reusable workflow's OIDC assume of
     # oidc-ghec-edge-tag in the dev account (reusable workflows can only
     # narrow permissions).
     permissions:
       id-token: write
       contents: read
-    uses: ./.github/workflows/edge-artifacts-tag-latest.yaml
+    uses: ./.github/workflows/tag-image-latest-dev.yaml
 
   validate-setup-helm:
     runs-on: ubuntu-latest-4-cores
@@ -543,7 +545,7 @@ jobs:
   
   preview-release-notes:
     # Cheap and informational: shows commits on main since the image currently
-    # tagged `release` in ECR was built (i.e. since the last tag-release run).
+    # tagged `release` in ECR was built (i.e. since the last tag-image-release-legacy run).
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
@@ -580,7 +582,7 @@ jobs:
           release_notes=$(git log --pretty=format:'- %s (%h)' "$last_release_sha"..HEAD)
           echo -e "If released now, the release notes would be:\n$release_notes"
 
-  tag-pre-release:
+  tag-image-pre-release-legacy:
     if: github.ref == 'refs/heads/main'
     needs:
       - main-tests-pass
@@ -603,7 +605,7 @@ jobs:
       - name: Tag main images with the "pre-release" tag after all the tests pass
         run: ./deploy/bin/tag-edge-endpoint-image.sh pre-release
 
-  tag-release:
+  tag-image-release-legacy:
     # The environment rules are not defined in code -- instead, they are defined in the Github UI:
     #   https://github.com/groundlight/edge-endpoint/settings/environments/5838966020/edit
     # As of this time of writing, the environment rules require manual approval for tagging a release.
@@ -612,7 +614,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     needs:
       - main-tests-pass
-      - tag-pre-release
+      - tag-image-pre-release-legacy
     runs-on: ubuntu-22.04
     steps:
       - name: Configure AWS credentials
@@ -636,11 +638,11 @@ jobs:
   # Customer-facing Helm charts live on public groundlight/edge-endpoint gh-pages
   # (https://code.groundlight.ai/edge-endpoint/). Publish there with the Mirror
   # App — same auth pattern as mirror-to-public — instead of GHEC origin.
-  # Axon private OCI dual-publish is publish-chart-edge-artifacts (sibling job).
-  publish-chart:
+  # Axon private OCI dual-publish is push-chart-to-master-ecr (sibling job).
+  publish-chart-legacy:
     if: github.ref == 'refs/heads/main'
     needs:
-      - tag-release
+      - tag-image-release-legacy
     runs-on: ubuntu-latest
 
     steps:
@@ -707,11 +709,11 @@ jobs:
 
   # Dual-publish Helm chart to Axon edge-artifacts ECR as OCI on merge to
   # main (same gate model as image dual-publish / zuuul gl-edge-inference:
-  # not gated on legacy GL_Public tag-release). Public gh-pages publish above
-  # remains on the tag-release path. Requires oidc-ghec-edge-push trust
-  # (aws-global#478/#494). Replication edge/* master→dev covers charts
-  # ([GL-1797]); mutable `latest` is applied in **dev only** by the job below.
-  publish-chart-edge-artifacts:
+  # not gated on legacy GL_Public tag-image-release-legacy). Public gh-pages publish above
+  # remains on the tag-image-release-legacy path. Requires oidc-ghec-edge-push trust
+  # (aws-global#478/#494). Replication edge/* master→dev covers charts.
+  # Mutable `latest` is applied in dest-dev by tag-chart-latest-dev.
+  push-chart-to-master-ecr:
     if: github.ref == 'refs/heads/main'
     needs:
       - main-tests-pass
@@ -737,11 +739,11 @@ jobs:
   # After the chart is pushed to master, wait for master→dev ECR replication
   # of the git-tag OCI tag, then point `latest` at it in the **dev**
   # edge-artifacts account (Axon-dev environment pointer; master stays
-  # git-tag only). Mirrors edge-artifacts-tag-latest for the container image.
-  edge-artifacts-tag-chart-latest:
+  # git-tag only). Mirrors tag-image-latest-dev for the container image.
+  tag-chart-latest-dev:
     if: github.ref == 'refs/heads/main'
     needs:
-      - publish-chart-edge-artifacts
+      - push-chart-to-master-ecr
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -774,3 +776,16 @@ jobs:
           ECR_ACCOUNT: ${{ env.EDGE_ARTIFACTS_ACCOUNT }}
           ECR_REGION: ${{ env.EDGE_ARTIFACTS_REGION }}
         run: ./deploy/bin/tag-edge-artifacts-helm-chart.sh latest
+
+  # Usslg dest `latest` for the image and Helm chart. One Environment
+  # UsslgEdge job so there is a single usslg release approval. Does not
+  # wait on GL_Public tag-image-release-legacy and does not block it.
+  tag-latest-usslg:
+    if: github.ref == 'refs/heads/main'
+    needs:
+      - call-build-push-ee-image
+      - push-chart-to-master-ecr
+    permissions:
+      id-token: write
+      contents: read
+    uses: ./.github/workflows/tag-latest-usslg.yaml

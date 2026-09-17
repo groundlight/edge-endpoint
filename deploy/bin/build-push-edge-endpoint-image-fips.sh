@@ -15,8 +15,8 @@
 #
 # Set FIPS_PUSH=true to push the immutable git-sha tag (CI on main). Without it
 # the script builds linux/amd64, runs verify + smoke, and never touches ECR.
-# Mutable `latest` is not written here: edge-artifacts-tag-latest.yaml moves
-# `latest` in the *dev* account after master-to-dev replication.
+# Mutable `latest` is not written here: tag-image-latest-dev.yaml moves
+# `latest` in the dest-dev account after master-to-dev replication.
 #
 # Requires: docker buildx, a cgr.dev login (deploy/bin/ensure-chainguard-auth.sh
 # locally; CI uses an OIDC-minted pull token), and when pushing, AWS credentials

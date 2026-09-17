@@ -1,0 +1,65 @@
+name: tag-latest-usslg
+on:
+  # Called by pipeline on main after the FIPS image is in master, tests
+  # pass, and the chart is in master. Wait for both git-tags to replicate
+  # into usslg ECR, then PutImage dest `latest` on the image and the chart.
+  # Environment UsslgEdge is the one usslg release gate and the OIDC trust
+  # for oidc-ghec-edge-tag in 686194638722.
+  workflow_call:
+
+env:
+  EDGE_ARTIFACTS_ACCOUNT: "686194638722"
+  EDGE_ARTIFACTS_REGION: "us-east-1"
+  EDGE_ARTIFACTS_TAG_ROLE: "oidc-ghec-edge-tag"
+
+jobs:
+  tag-latest-usslg:
+    runs-on: ubuntu-latest
+    environment: UsslgEdge
+    timeout-minutes: 30
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Configure AWS credentials for usslg edge-artifacts ECR (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.EDGE_ARTIFACTS_ACCOUNT }}:role/${{ env.EDGE_ARTIFACTS_TAG_ROLE }}
+          aws-region: ${{ env.EDGE_ARTIFACTS_REGION }}
+      - name: Login to usslg edge-artifacts ECR
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registries: ${{ env.EDGE_ARTIFACTS_ACCOUNT }}
+          mask-password: "true"
+      - name: Check out code
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Wait for replicated git-tag on the usslg edge-endpoint image
+        env:
+          ECR_ACCOUNT: ${{ env.EDGE_ARTIFACTS_ACCOUNT }}
+          ECR_REGION: ${{ env.EDGE_ARTIFACTS_REGION }}
+          ECR_REPOSITORY: edge/edge-endpoint
+          WAIT_TIMEOUT_SECONDS: "600"
+        run: ./deploy/bin/wait-for-ecr-image.sh
+      - name: Tag latest on the usslg edge-endpoint image
+        env:
+          ECR_ACCOUNT: ${{ env.EDGE_ARTIFACTS_ACCOUNT }}
+          ECR_REGION: ${{ env.EDGE_ARTIFACTS_REGION }}
+          ECR_REPOSITORY_PREFIX: "edge/"
+        run: ./deploy/bin/tag-edge-endpoint-image.sh latest
+      - name: Wait for replicated chart git-tag in usslg ECR
+        env:
+          ECR_ACCOUNT: ${{ env.EDGE_ARTIFACTS_ACCOUNT }}
+          ECR_REGION: ${{ env.EDGE_ARTIFACTS_REGION }}
+          WAIT_TIMEOUT_SECONDS: "600"
+        run: |
+          set -euo pipefail
+          CHART_NAME=$(awk '/^name:/ { print $2; exit }' deploy/helm/groundlight-edge-endpoint/Chart.yaml)
+          export ECR_REPOSITORY="edge/${CHART_NAME}"
+          ./deploy/bin/wait-for-ecr-image.sh
+      - name: Tag latest on the usslg Helm chart
+        env:
+          ECR_ACCOUNT: ${{ env.EDGE_ARTIFACTS_ACCOUNT }}
+          ECR_REGION: ${{ env.EDGE_ARTIFACTS_REGION }}
+        run: ./deploy/bin/tag-edge-artifacts-helm-chart.sh latest
