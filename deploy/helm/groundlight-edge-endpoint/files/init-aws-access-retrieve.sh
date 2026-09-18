@@ -190,8 +190,15 @@ echo "Credentials fetched and saved to /shared/credentials"
 cat /shared/credentials; echo
 
 echo "Fetching AWS ECR login token..."
-TOKEN=$(aws ecr get-login-password --region {{ .Values.awsRegion }})
-echo $TOKEN > /shared/token.txt
+if ! TOKEN=$(aws ecr get-login-password --region {{ include "groundlight-edge-endpoint.ecrRegion" . }}); then
+  echo "Failed to get an ECR login token for region {{ include "groundlight-edge-endpoint.ecrRegion" . }}" >&2
+  exit 1
+fi
+if [ -z "$TOKEN" ]; then
+  echo "ECR login token was empty" >&2
+  exit 1
+fi
+printf '%s' "$TOKEN" > /shared/token.txt
 
 echo "Token fetched and saved to /shared/token.txt"
 

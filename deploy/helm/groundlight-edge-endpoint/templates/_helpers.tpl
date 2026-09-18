@@ -150,6 +150,24 @@ Create the name of the service account to use
 {{- end -}}
 
 {{/*
+  AWS region for the ECR login, derived from the resolved registry host
+  (<acct>.dkr.ecr[-fips].<region>.amazonaws.com). An ECR authorization token is
+  region-scoped: a token minted in one region is rejected with 400 Bad Request by a
+  registry in another, so this must track ecrRegistry rather than the chart-wide
+  awsRegion. Falls back to .Values.awsRegion when ecrRegistry has been overridden to
+  something that is not an ECR host, so that escape hatch keeps working.
+*/}}
+{{- define "groundlight-edge-endpoint.ecrRegion" -}}
+{{- $host := include "groundlight-edge-endpoint.ecrRegistryHost" . -}}
+{{- $p := splitList "." $host -}}
+{{- if and (eq (len $p) 6) (eq (index $p 1) "dkr") (hasPrefix "ecr" (index $p 2)) (eq (index $p 4) "amazonaws") (eq (index $p 5) "com") -}}
+{{- index $p 3 -}}
+{{- else -}}
+{{- .Values.awsRegion -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
   Resolve the S3 bucket for model-weight mounts from edgeArtifactsMap, unless
   s3Mount.bucket is set as an explicit override.
 */}}

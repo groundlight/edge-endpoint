@@ -65,6 +65,7 @@ assert_gl_public() {
   assert_contains "$label bucket" "$out" "value: \"${GL_PUBLIC_BUCKET}\""
   assert_contains "$label schedule" "$out" 'schedule: "0 * * * *"'
   assert_contains "$label v2" "$out" "reader-credentials/v2"
+  assert_contains "$label ecr login region" "$out" "get-login-password --region us-west-2"
 }
 
 assert_axon_dev() {
@@ -82,6 +83,7 @@ assert_axon_dev() {
   assert_contains "$label bucket" "$out" "value: \"${AXON_DEV_BUCKET}\""
   assert_contains "$label schedule" "$out" 'schedule: "*/15 * * * *"'
   assert_contains "$label v2" "$out" "reader-credentials/v2"
+  assert_contains "$label ecr login region" "$out" "get-login-password --region us-west-2"
 }
 
 assert_axon_usa() {
@@ -100,6 +102,7 @@ assert_axon_usa() {
   assert_contains "$label s3 region" "$out" 'value: "us-east-1"'
   assert_contains "$label schedule" "$out" 'schedule: "*/15 * * * *"'
   assert_contains "$label v2" "$out" "reader-credentials/v2"
+  assert_contains "$label ecr login region" "$out" "get-login-password --region us-east-1"
 }
 
 echo "=== edgeArtifactsMap helm template matrix ==="
@@ -151,6 +154,22 @@ assert_contains "scalar override bucket" "$out" 'value: "my-bucket"'
 assert_contains "scalar override region" "$out" 'value: "us-east-1"'
 # Schedule still comes from the AG1 map entry
 assert_contains "scalar override keeps AG1 schedule" "$out" 'schedule: "*/15 * * * *"'
+
+out="$(render \
+  --set upstreamEndpoint=https://api.groundlight.dev.axon.com \
+  --set ecrRegistry=999999999999.dkr.ecr-fips.us-east-1.amazonaws.com/custom)"
+assert_contains "ecr-fips override region" "$out" "get-login-password --region us-east-1"
+
+out="$(render \
+  --set upstreamEndpoint=https://api.groundlight.dev.axon.com \
+  --set ecrRegistry=ghcr.io/custom)"
+assert_contains "non-ECR override falls back to awsRegion default" "$out" "get-login-password --region us-west-2"
+
+out="$(render \
+  --set upstreamEndpoint=https://api.groundlight.dev.axon.com \
+  --set ecrRegistry=ghcr.io/custom \
+  --set awsRegion=eu-west-1)"
+assert_contains "non-ECR override falls back to explicit awsRegion" "$out" "get-login-password --region eu-west-1"
 
 assert_render_fails "unknown host" --set upstreamEndpoint=https://api.example.invalid
 assert_render_fails "lookalike host" --set upstreamEndpoint=https://api.groundlight.dev.axon.com.evil.example

@@ -70,7 +70,9 @@ groundlightApiToken: ""
 # you can override this value.
 upstreamEndpoint: "https://api.groundlight.ai"
 
-# Currently, all Groundlight services are deployed in the us-west-2 region
+# Fallback AWS region for the ECR login, used only when the resolved ecrRegistry is not an
+# ECR host (see groundlight-edge-endpoint.ecrRegion). usslg ECR is us-east-1 and GL_Public
+# is us-west-2; both are derived from the registry host, so this normally goes unused.
 awsRegion: "us-west-2"
 
 # S3 FUSE mount configuration for model weights (pinamod + pretrained weights).
