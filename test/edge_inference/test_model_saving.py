@@ -37,6 +37,9 @@ def test_save_model_with_binary_to_repository():
         # Validate directory structure and contents
         validate_model_directory(temp_dir, detector_id, 1, edge_model_info)
         validate_model_directory(temp_dir, detector_id, 1, oodd_model_info, is_oodd=True)
+        primary_dir = os.path.join(temp_dir, detector_id, "primary")
+        leftover = [name for name in os.listdir(primary_dir) if name.startswith(".tmp-")]
+        assert leftover == []
 
         model_info = {
             "pipeline_config": "test_pipeline_config_2",

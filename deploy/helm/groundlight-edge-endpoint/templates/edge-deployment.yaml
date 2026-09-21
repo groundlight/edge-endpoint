@@ -46,6 +46,8 @@ metadata:
     {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: edge-logic-server

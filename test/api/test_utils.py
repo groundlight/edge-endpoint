@@ -13,6 +13,7 @@ from model import (
     ResultTypeEnum,
     Source,
 )
+from pydantic import ValidationError
 
 from app.core.utils import (
     METADATA_SIZE_LIMIT_BYTES,
@@ -431,6 +432,43 @@ class TestParseModelInfo:
         assert isinstance(primary_edge_model_info, ModelInfoWithBinary)
         assert isinstance(oodd_model_info, ModelInfoBase)
         assert isinstance(oodd_model_info, ModelInfoWithBinary)
+
+    def test_parse_keeps_payload_hash_fields(self):
+        model_info = {
+            "pipeline_config": "test_pipeline_config",
+            "predictor_metadata": "test_metadata",
+            "model_binary_id": "test_binary_id",
+            "model_binary_url": "test_binary_url",
+            "payload_sha384": "a" * 96,
+            "payload_length": 11,
+            "oodd_pipeline_config": "test_oodd_pipeline_config",
+            "oodd_model_binary_id": "test_oodd_binary_id",
+            "oodd_model_binary_url": "test_oodd_binary_url",
+            "oodd_payload_sha384": "b" * 96,
+            "oodd_payload_length": 22,
+        }
+        primary_edge_model_info, oodd_model_info = parse_model_info(model_info)
+
+        assert isinstance(primary_edge_model_info, ModelInfoWithBinary)
+        assert primary_edge_model_info.payload_sha384 == model_info["payload_sha384"]
+        assert primary_edge_model_info.payload_length == model_info["payload_length"]
+        assert isinstance(oodd_model_info, ModelInfoWithBinary)
+        assert oodd_model_info.payload_sha384 == model_info["oodd_payload_sha384"]
+        assert oodd_model_info.payload_length == model_info["oodd_payload_length"]
+
+    def test_parse_raises_when_binary_present_and_payload_length_is_invalid(self):
+        model_info = {
+            "pipeline_config": "test_pipeline_config",
+            "predictor_metadata": "test_metadata",
+            "model_binary_id": "test_binary_id",
+            "model_binary_url": "test_binary_url",
+            "payload_length": "not-a-length",
+            "oodd_pipeline_config": "test_oodd_pipeline_config",
+            "oodd_model_binary_id": "test_oodd_binary_id",
+            "oodd_model_binary_url": "test_oodd_binary_url",
+        }
+        with pytest.raises(ValidationError):
+            parse_model_info(model_info)
 
     def test_parse_no_binary(self):
         model_info = {

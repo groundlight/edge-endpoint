@@ -1,9 +1,12 @@
 import contextvars
+import hashlib
+import hmac
 import json
 import logging
 import os
 import shutil
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
@@ -35,6 +38,27 @@ logger = logging.getLogger(__name__)
 # Simple TTL cache for is_edge_inference_ready checks to avoid having to re-check every time a request is processed.
 # This will be process-specific, so each edge-endpoint worker will have its own cache instance.
 ttl_cache = TTLCache(maxsize=128, ttl=5)
+
+MODEL_INTEGRITY_FILENAME = "model.integrity.json"
+
+
+def verify_downloaded_buffer(model_info: ModelInfoBase, buffer: bytes | None) -> None:
+    """Raise if cloud hash fields are missing or do not match the downloaded bytes."""
+    if buffer is None or not isinstance(model_info, ModelInfoWithBinary):
+        return
+    expected_digest = model_info.payload_sha384
+    expected_length = model_info.payload_length
+    if expected_digest is None and expected_length is None:
+        raise RuntimeError("Cloud omitted payload integrity fields from fetch-model-urls")
+    if not expected_digest or expected_length is None:
+        raise RuntimeError("Incomplete payload integrity fields from fetch-model-urls")
+    if expected_length != len(buffer):
+        raise RuntimeError(
+            f"Downloaded model payload length mismatch: expected {expected_length} bytes, got {len(buffer)}"
+        )
+    actual = hashlib.sha384(buffer).hexdigest()
+    if not hmac.compare_digest(actual, expected_digest):
+        raise RuntimeError("Downloaded model payload hash mismatch")
 
 
 @cached(ttl_cache)
@@ -447,9 +471,11 @@ def fetch_model_info(detector_id: str) -> tuple[ModelInfoBase, ModelInfoBase]:
 
 
 def get_model_buffer(model_info: ModelInfoBase) -> bytes | None:
+    """Download the model binary if present and reject it when the cloud digest does not match."""
     if isinstance(model_info, ModelInfoWithBinary):
         logger.info(f"New model binary available ({model_info.model_binary_id}), attempting to update model.")
         model_buffer = get_object_using_presigned_url(model_info.model_binary_url)
+        verify_downloaded_buffer(model_info, model_buffer)
     else:
         logger.info("Got a pipeline config but no model binary, attempting to update model.")
         model_buffer = None
@@ -513,25 +539,45 @@ def save_models_to_repository(
 def save_model_to_repository(
     model_buffer: bytes, model_info: ModelInfoBase, model_dir: str, model_version: int
 ) -> None:
-    model_version_dir = os.path.join(model_dir, str(model_version))
-    os.makedirs(model_version_dir, exist_ok=True)
+    """Write a model version directory atomically, including the integrity sidecar."""
+    dest_dir = os.path.join(model_dir, str(model_version))
+    if os.path.exists(dest_dir):
+        raise RuntimeError(f"Model version directory already exists: {dest_dir}")
+    staging_dir = os.path.join(model_dir, f".tmp-{model_version}-{os.getpid()}-{uuid.uuid4().hex[:8]}")
+    os.makedirs(staging_dir)
 
-    if model_buffer:
-        with open(os.path.join(model_version_dir, "model.buf"), "wb") as f:
-            f.write(model_buffer)
+    try:
+        if model_buffer:
+            with open(os.path.join(staging_dir, "model.buf"), "wb") as f:
+                f.write(model_buffer)
 
-    safe_loaded = yaml.safe_load(model_info.pipeline_config)
-    with open(os.path.join(model_version_dir, "pipeline_config.yaml"), "w") as f:
-        if isinstance(safe_loaded, (dict, list)):
-            yaml.safe_dump(safe_loaded, f, sort_keys=False, allow_unicode=True)
-        else:
-            f.write(model_info.pipeline_config)  # avoids the YAML document end marker for strings (...)
-    with open(os.path.join(model_version_dir, "predictor_metadata.json"), "w") as f:
-        f.write(model_info.predictor_metadata)
+        safe_loaded = yaml.safe_load(model_info.pipeline_config)
+        with open(os.path.join(staging_dir, "pipeline_config.yaml"), "w") as f:
+            if isinstance(safe_loaded, (dict, list)):
+                yaml.safe_dump(safe_loaded, f, sort_keys=False, allow_unicode=True)
+            else:
+                f.write(model_info.pipeline_config)  # avoids the YAML document end marker for strings (...)
+        with open(os.path.join(staging_dir, "predictor_metadata.json"), "w") as f:
+            f.write(model_info.predictor_metadata)
 
-    if isinstance(model_info, ModelInfoWithBinary):
-        with open(os.path.join(model_version_dir, "model_id.txt"), "w") as f:
-            f.write(model_info.model_binary_id)
+        if isinstance(model_info, ModelInfoWithBinary):
+            with open(os.path.join(staging_dir, "model_id.txt"), "w") as f:
+                f.write(model_info.model_binary_id)
+            if model_info.payload_sha384 and model_info.payload_length is not None:
+                with open(os.path.join(staging_dir, MODEL_INTEGRITY_FILENAME), "w") as f:
+                    json.dump(
+                        {
+                            "payload_sha384": model_info.payload_sha384,
+                            "payload_length": model_info.payload_length,
+                        },
+                        f,
+                    )
+
+        os.rename(staging_dir, dest_dir)
+    except Exception:
+        if os.path.exists(staging_dir):
+            shutil.rmtree(staging_dir)
+        raise
 
     logger.info(
         f"Wrote new model version {model_version} to {model_dir}"
@@ -597,9 +643,7 @@ def get_all_model_versions(model_dir: str) -> list:
     # explicitly exclude primary and oodd directories so we can search for the latest version in the old or new model
     # repository format
     model_versions = [
-        int(d)
-        for d in os.listdir(model_dir)
-        if os.path.isdir(os.path.join(model_dir, d)) and not d.startswith("primary") and not d.startswith("oodd")
+        int(d) for d in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, d)) and d.isdigit()
     ]
     return model_versions
 

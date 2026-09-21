@@ -109,6 +109,7 @@ echo "=== edgeArtifactsMap helm template matrix ==="
 
 out="$(render)"
 assert_gl_public "default" "$out"
+assert_contains "edge deployment Recreate" "$out" $'strategy:\n    type: Recreate'
 
 out="$(render --set upstreamEndpoint=https://api.groundlight.ai)"
 assert_gl_public "prod canonical" "$out"

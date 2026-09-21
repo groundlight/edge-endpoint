@@ -85,8 +85,8 @@ s3Mount:
   mountPath: "/opt/groundlight/edge/pinamod-mount"
   cachePath: "/opt/groundlight/edge/pinamod-cache"
 
-# Per-upstream artifact defaults (ECR, S3, image tag, cred refresh), keyed by
-# canonical upstreamEndpoint origin.
+# Per-upstream artifact defaults (ECR, S3, image tag, cred refresh),
+# keyed by canonical upstreamEndpoint origin.
 edgeArtifactsMap:
   "https://api.groundlight.ai":
     ecrRegistry: "767397850842.dkr.ecr.us-west-2.amazonaws.com"

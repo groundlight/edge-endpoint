@@ -26,7 +26,7 @@ from model import (
     Source,
 )
 from PIL import Image
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 from app.core import constants
 from app.profiling.context import trace_span
@@ -394,34 +394,36 @@ class ModelInfoWithBinary(ModelInfoBase):
 
     model_binary_id: str
     model_binary_url: str
+    payload_sha384: str | None = None
+    payload_length: int | None = None
 
     class Config:
         protected_namespaces = ()  # Disables protection for all namespaces, since model_ is protected by default
 
 
 def parse_model_info(
-    fetch_model_response: dict[str, str],
+    fetch_model_response: dict[str, Any],
 ) -> tuple[ModelInfoBase, ModelInfoBase]:
+    """Parse fetch-model-urls into edge and OODD ModelInfo.
+
+    Binary vs no-binary is decided by model_binary_id / model_binary_url (and the oodd_* pair).
+    If those are present, invalid hash fields raise instead of falling back to no-binary.
     """
-    Parse the response from the fetch model urls endpoint. Attempt to parse both the edge and oodd models
-    with their ML binaries, and fall back to no binary cases if that fails.
-    """
-    # The ModelInfo field names correspond to the response keys for the edge model, so we can use
-    # the pydantic model to validate and parse the response. The OODD specific keys will be ignored,
-    # since they aren't in the model fields.
-    try:
+    if fetch_model_response.get("model_binary_id") and fetch_model_response.get("model_binary_url"):
         edge_model_info = ModelInfoWithBinary(**fetch_model_response)
-    except ValidationError:
+    else:
         edge_model_info = ModelInfoNoBinary(**fetch_model_response)
 
-    try:
+    if fetch_model_response.get("oodd_model_binary_id") and fetch_model_response.get("oodd_model_binary_url"):
         oodd_model_info = ModelInfoWithBinary(
             model_binary_id=fetch_model_response["oodd_model_binary_id"],
             model_binary_url=fetch_model_response["oodd_model_binary_url"],
             pipeline_config=fetch_model_response["oodd_pipeline_config"],
             predictor_metadata=fetch_model_response["predictor_metadata"],
+            payload_sha384=fetch_model_response.get("oodd_payload_sha384"),
+            payload_length=fetch_model_response.get("oodd_payload_length"),
         )
-    except (ValidationError, KeyError):
+    else:
         oodd_model_info = ModelInfoNoBinary(
             pipeline_config=fetch_model_response["oodd_pipeline_config"],
             predictor_metadata=fetch_model_response["predictor_metadata"],

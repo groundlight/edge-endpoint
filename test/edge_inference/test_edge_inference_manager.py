@@ -1,3 +1,4 @@
+import hashlib
 import os
 import tempfile
 from unittest import mock
@@ -40,6 +41,10 @@ def validate_model_directory(
             assert model_info.model_binary_id == f.read()
 
 
+_BINARY_PAYLOAD = b"test_model"
+_BINARY_PAYLOAD_2 = b"test_model_2"
+
+
 @pytest.fixture
 def edge_model_info_with_binary() -> ModelInfoWithBinary:
     test_predictor_metadata = """{"text_query":"there is a dog","mode":"BINARY"}"""
@@ -48,6 +53,8 @@ def edge_model_info_with_binary() -> ModelInfoWithBinary:
         "predictor_metadata": test_predictor_metadata,
         "model_binary_id": "test_binary_id",
         "model_binary_url": "test_model_binary_url",
+        "payload_sha384": hashlib.sha384(_BINARY_PAYLOAD).hexdigest(),
+        "payload_length": len(_BINARY_PAYLOAD),
         "oodd_pipeline_config": "test_oodd_pipeline_config",
         "oodd_model_binary_id": "test_oodd_binary_id",
         "oodd_model_binary_url": "test_oodd_model_binary_url",
@@ -69,6 +76,8 @@ def oodd_model_info_with_binary() -> ModelInfoWithBinary:
         predictor_metadata=model_info["predictor_metadata"],
         model_binary_id=model_info["oodd_model_binary_id"],
         model_binary_url=model_info["oodd_model_binary_url"],
+        payload_sha384=hashlib.sha384(_BINARY_PAYLOAD).hexdigest(),
+        payload_length=len(_BINARY_PAYLOAD),
     )
 
 
@@ -103,7 +112,7 @@ class TestEdgeInferenceManager:
         with tempfile.TemporaryDirectory() as temp_dir:
             with mock.patch("app.core.edge_inference.fetch_model_info") as mock_fetch:
                 with mock.patch("app.core.edge_inference.get_object_using_presigned_url") as mock_get_from_s3:
-                    mock_get_from_s3.return_value = b"test_model"
+                    mock_get_from_s3.return_value = _BINARY_PAYLOAD
                     mock_fetch.return_value = (edge_model_info_with_binary, oodd_model_info_with_binary)
                     edge_manager = EdgeInferenceManager()
                     edge_manager.MODEL_REPOSITORY = temp_dir  # type: ignore
@@ -114,13 +123,17 @@ class TestEdgeInferenceManager:
                     validate_model_directory(temp_dir, detector_id, 1, oodd_model_info_with_binary, is_oodd=True)
 
                     # Should create a new version for new model info
-                    mock_get_from_s3.return_value = b"test_model_2"
+                    mock_get_from_s3.return_value = _BINARY_PAYLOAD_2
                     edge_model_info_with_binary_2 = edge_model_info_with_binary
                     edge_model_info_with_binary_2.model_binary_id = "test_binary_id_2"
                     edge_model_info_with_binary_2.model_binary_url = "test_model_binary_url_2"
+                    edge_model_info_with_binary_2.payload_sha384 = hashlib.sha384(_BINARY_PAYLOAD_2).hexdigest()
+                    edge_model_info_with_binary_2.payload_length = len(_BINARY_PAYLOAD_2)
                     oodd_model_info_with_binary_2 = oodd_model_info_with_binary
                     oodd_model_info_with_binary_2.model_binary_id = "test_oodd_binary_id_2"
                     oodd_model_info_with_binary_2.model_binary_url = "test_oodd_model_binary_url_2"
+                    oodd_model_info_with_binary_2.payload_sha384 = hashlib.sha384(_BINARY_PAYLOAD_2).hexdigest()
+                    oodd_model_info_with_binary_2.payload_length = len(_BINARY_PAYLOAD_2)
                     mock_fetch.return_value = (edge_model_info_with_binary_2, oodd_model_info_with_binary_2)
                     edge_manager.update_models_if_available(detector_id)
 
