@@ -5,6 +5,10 @@ on:
   pull_request_target:
     types: [opened, ready_for_review, reopened]
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   assign-pr-reviewer:
     # Only run this on Dependabot PRs
@@ -13,7 +17,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         name: checkout code
-      - uses: uesteibar/reviewer-lottery@v3
-        name: randomly assign reviewer
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: randomly assign reviewer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REVIEWERS=$(yq '.groups[0].usernames[]' .github/reviewer-lottery.yml)
+          REVIEWER=$(echo "$REVIEWERS" | shuf -n 1)
+          gh pr edit "${{ github.event.pull_request.number }}" --add-reviewer "$REVIEWER"
