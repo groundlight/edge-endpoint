@@ -5,6 +5,7 @@ from unittest import mock
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
+from groundlight.encodings import url_encode_dict
 from model import (
     BinaryClassificationResult,
     Detector,
@@ -218,6 +219,50 @@ def test_post_image_query_with_confident_audit(test_client: TestClient, detector
             assert response.status_code == status.HTTP_200_OK, response.json()["detail"]
 
 
+def test_post_image_query_forwards_user_metadata_to_cloud(test_client: TestClient, detector: Detector):
+    image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
+
+    with assert_escalated_to_gl(
+        submitted_with={"metadata": {"camera": "cam1", "edge_result": None}},
+        detector=detector,
+        sdk_response=confident_cloud_iq,
+    ):
+        with enable_edge_inference(assert_didnt_run=True):
+            response = test_client.post(
+                url,
+                headers={"Content-Type": "image/jpeg"},
+                content=image_bytes,
+                params={
+                    "detector_id": detector.id,
+                    "metadata": url_encode_dict({"camera": "cam1"}, name="metadata"),
+                },
+            )
+
+    assert response.status_code == status.HTTP_200_OK, response.json()["detail"]
+
+
+def test_post_image_query_async_forwards_user_metadata(test_client: TestClient, detector: Detector):
+    image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
+
+    with assert_escalated_to_gl(
+        submitted_with={"want_async": True, "metadata": {"camera": "cam1"}},
+        detector=detector,
+        sdk_response=confident_cloud_iq,
+    ):
+        response = test_client.post(
+            url,
+            headers={"Content-Type": "image/jpeg"},
+            content=image_bytes,
+            params={
+                "detector_id": detector.id,
+                "want_async": True,
+                "metadata": url_encode_dict({"camera": "cam1"}, name="metadata"),
+            },
+        )
+
+    assert response.status_code == status.HTTP_200_OK, response.json()["detail"]
+
+
 # TODO: This test doesn't seem to actually test this behavior, since it was passing when it should have failed.
 # It should get removed once this behavior is tested in the live environment.
 def test_post_image_query_with_human_review(test_client: TestClient, detector: Detector):
@@ -335,3 +380,27 @@ def test_post_image_query_with_invalid_field(test_client: TestClient, detector: 
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST, response.json()["detail"]
         assert "inspection_id" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    "metadata, expected_detail",
+    [
+        ("not base64!!", "base64-encoded JSON"),
+        (url_encode_dict({"is_edge_audit": True}, name="metadata"), "reserved keys"),
+    ],
+)
+def test_post_image_query_with_invalid_metadata(
+    test_client: TestClient, detector: Detector, metadata: str, expected_detail: str
+):
+    image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
+
+    with assert_not_escalated_to_gl(detector=detector):
+        response = test_client.post(
+            url,
+            headers={"Content-Type": "image/jpeg"},
+            content=image_bytes,
+            params={"detector_id": detector.id, "metadata": metadata},
+        )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST, response.json()["detail"]
+    assert expected_detail in response.json()["detail"]

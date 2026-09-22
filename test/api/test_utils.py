@@ -1,6 +1,8 @@
+import base64
 from typing import Any
 
 import pytest
+from groundlight.encodings import url_encode_dict
 from model import (
     ROI,
     BBoxGeometry,
@@ -22,6 +24,7 @@ from app.core.utils import (
     ModelInfoWithBinary,
     _size_of_dict_in_bytes,
     create_iq,
+    decode_user_metadata,
     generate_metadata_dict,
     parse_model_info,
     prefixed_ksuid,
@@ -177,6 +180,56 @@ class TestGenerateMetadataDict:
 
         assert metadata == expected_metadata
         self._assert_metadata_within_size_limit(metadata)
+
+    def test_user_metadata_merged_with_edge_keys(self, basic_binary_result: dict[str, Any]):
+        user_metadata = {"camera": "cam1"}
+        metadata = generate_metadata_dict(results=basic_binary_result, is_edge_audit=True, user_metadata=user_metadata)
+
+        assert metadata == {"camera": "cam1", "edge_result": basic_binary_result, "is_edge_audit": True}
+        assert user_metadata == {"camera": "cam1"}, "Caller's dict should not be mutated"
+
+    def test_user_metadata_takes_priority_over_edge_result(self, basic_binary_result: dict[str, Any]):
+        """Edge results are dropped rather than the caller's metadata when both don't fit."""
+        user_metadata = {"notes": "a" * (METADATA_SIZE_LIMIT_BYTES - 100)}
+        metadata = generate_metadata_dict(results=basic_binary_result, is_edge_audit=True, user_metadata=user_metadata)
+
+        assert metadata == {**user_metadata, "is_edge_audit": True}
+        assert _size_of_dict_in_bytes(metadata) <= METADATA_SIZE_LIMIT_BYTES
+
+    def test_large_user_metadata_with_no_results(self):
+        user_metadata = {"notes": "a" * (METADATA_SIZE_LIMIT_BYTES - 20)}
+        metadata = generate_metadata_dict(results=None, user_metadata=user_metadata)
+
+        assert metadata == user_metadata
+
+
+class TestDecodeUserMetadata:
+    def test_decodes_sdk_encoding(self):
+        assert decode_user_metadata(url_encode_dict({"foo": "bar", "n": 1}, name="metadata")) == {"foo": "bar", "n": 1}
+
+    @pytest.mark.parametrize(
+        "encoded",
+        ["not base64!!", base64.urlsafe_b64encode(b"{not json").decode(), base64.urlsafe_b64encode(b"\xff").decode()],
+    )
+    def test_rejects_malformed(self, encoded: str):
+        with pytest.raises(ValueError, match="base64-encoded JSON"):
+            decode_user_metadata(encoded)
+
+    def test_rejects_non_object(self):
+        with pytest.raises(ValueError, match="JSON object"):
+            decode_user_metadata(base64.urlsafe_b64encode(b"[1, 2]").decode())
+
+    @pytest.mark.parametrize("key", ["is_edge_audit", "edge_result", "is_from_edge"])
+    def test_rejects_reserved_keys(self, key: str):
+        with pytest.raises(ValueError, match="reserved keys"):
+            decode_user_metadata(url_encode_dict({key: True}, name="metadata"))
+
+    def test_rejects_metadata_without_room_for_audit_flag(self):
+        # Fits the SDK's 1KB limit on its own, but not once the edge adds `is_edge_audit`.
+        user_metadata = {"notes": "a" * (METADATA_SIZE_LIMIT_BYTES - 15)}
+        assert _size_of_dict_in_bytes(user_metadata) <= METADATA_SIZE_LIMIT_BYTES
+        with pytest.raises(ValueError, match="too large"):
+            decode_user_metadata(url_encode_dict(user_metadata, name="metadata"))
 
 
 class TestCreateIQ:
@@ -413,6 +466,21 @@ class TestCreateIQ:
         )
         assert iq.metadata["edge_result"]["mlb_key"] == "mlb_primary_only"
         assert "oodd_mlb_key" not in iq.metadata["edge_result"]
+
+    def test_create_iq_with_user_metadata(self):
+        iq = create_iq(
+            detector_id=prefixed_ksuid("det_"),
+            mode=ModeEnum.BINARY,
+            mode_configuration=None,
+            result_value=0,
+            confidence=0.8,
+            confidence_threshold=self.confidence_threshold,
+            is_done_processing=True,
+            mlb_key="mlb_abc",
+            user_metadata={"camera": "cam1"},
+        )
+
+        assert iq.metadata == {"camera": "cam1", "is_from_edge": True, "edge_result": {"mlb_key": "mlb_abc"}}
 
 
 class TestParseModelInfo:
