@@ -60,6 +60,8 @@ def verify_downloaded_buffer(model_info: ModelInfoBase, buffer: bytes | None) ->
     if not hmac.compare_digest(actual, expected_digest):
         raise RuntimeError("Downloaded model payload hash mismatch")
 
+CONFIDENCE_SIGNIFICANT_DIGITS = 4
+
 
 @cached(ttl_cache)
 def is_edge_inference_ready(inference_client_url: str) -> bool:
@@ -271,7 +273,12 @@ def parse_inference_response(response: dict, mode: ModeEnum) -> dict:
                 raise ValueError("Got more than one text prediction. This should not happen.")
             text = text_predictions[0]
 
-    output_dict = {"confidence": confidence, "label": label, "text": text, "rois": rois}
+    output_dict = {
+        "confidence": round(confidence, CONFIDENCE_SIGNIFICANT_DIGITS),
+        "label": label,
+        "text": text,
+        "rois": rois,
+    }
 
     return output_dict
 
