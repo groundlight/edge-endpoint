@@ -3,8 +3,7 @@ import time
 
 import pytest
 import requests
-from fastapi import status
-from groundlight import ApiException, Groundlight
+from groundlight import Groundlight
 from model import Detector
 from PIL import Image
 
@@ -76,9 +75,8 @@ def test_post_image_query_via_sdk_want_async(gl: Groundlight, detector: Detector
 
 
 @pytest.mark.live
-def test_post_image_query_via_sdk_with_metadata_throws_400(gl: Groundlight, detector: Detector):
-    """Test that submitting an image query with metadata raises a 400 error."""
+def test_post_image_query_via_sdk_with_metadata(gl: Groundlight, detector: Detector):
+    """Test that caller metadata is returned on the image query."""
     image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
-    with pytest.raises(ApiException) as exc_info:
-        gl.submit_image_query(detector=detector.id, image=image_bytes, wait=10.0, metadata={"foo": "bar"})
-    assert exc_info.value.status == status.HTTP_400_BAD_REQUEST
+    iq = gl.submit_image_query(detector=detector.id, image=image_bytes, wait=10.0, metadata={"foo": "bar"})
+    assert iq.metadata["foo"] == "bar"

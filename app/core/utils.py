@@ -1,3 +1,5 @@
+import base64
+import binascii
 import json
 import logging
 import time
@@ -37,6 +39,41 @@ METADATA_SIZE_LIMIT_BYTES = (
     1024  # This is defined in the SDK and will need to be manually updated here if it gets modified
 )
 
+# Keys the edge endpoint writes into IQ metadata; callers may not set them.
+EDGE_RESERVED_METADATA_KEYS = frozenset({"is_edge_audit", "edge_result", "is_from_edge"})
+
+
+def decode_user_metadata(encoded: str) -> dict[str, Any]:
+    """
+    Decodes caller-supplied IQ metadata, which the SDK sends as URL-safe base64-encoded JSON.
+
+    Raises ValueError if the metadata is malformed, uses a reserved key, or leaves no room for the edge's own
+    metadata within METADATA_SIZE_LIMIT_BYTES.
+    """
+    try:
+        decoded = json.loads(base64.urlsafe_b64decode(encoded.encode("utf-8")))
+    except (binascii.Error, UnicodeDecodeError, json.JSONDecodeError) as e:
+        raise ValueError("`metadata` must be URL-safe base64-encoded JSON.") from e
+
+    if not isinstance(decoded, dict):
+        raise ValueError("`metadata` must be a JSON object.")
+
+    reserved_keys_used = EDGE_RESERVED_METADATA_KEYS.intersection(decoded)
+    if reserved_keys_used:
+        raise ValueError(f"`metadata` may not contain reserved keys: {sorted(reserved_keys_used)}")
+
+    # Droppable edge fields (e.g. edge_result) are shed to fit; this checks what remains after they are.
+    combined_size = _size_of_dict_in_bytes(
+        generate_metadata_dict(results=None, is_edge_audit=True, user_metadata=decoded)
+    )
+    if combined_size > METADATA_SIZE_LIMIT_BYTES:
+        raise ValueError(
+            f"`metadata` is too large: {combined_size} bytes including the edge endpoint's own metadata > "
+            f"{METADATA_SIZE_LIMIT_BYTES} bytes limit."
+        )
+
+    return decoded
+
 
 @trace_span
 def create_iq(  # noqa: PLR0913
@@ -53,6 +90,7 @@ def create_iq(  # noqa: PLR0913
     text: str | None = None,
     mlb_key: str | None = None,
     oodd_mlb_key: str | None = None,
+    user_metadata: dict[str, Any] | None = None,
 ) -> ImageQuery:
     """
     Creates an ImageQuery object for the appropriate detector with the given result.
@@ -73,6 +111,7 @@ def create_iq(  # noqa: PLR0913
         cloud-side shape (see `generate_metadata_dict`), so consumers use the same
         `metadata.edge_result.mlb_key` lookup regardless of whether the IQ escalated.
     :param oodd_mlb_key: KSUID of the OODD MLB, same purpose as `mlb_key`.
+    :param user_metadata: Caller-supplied metadata to include alongside the edge's own metadata keys.
 
     :return: The created ImageQuery.
     """
@@ -80,7 +119,7 @@ def create_iq(  # noqa: PLR0913
         patience_time = constants.DEFAULT_PATIENCE_TIME
     result_type, result = _mode_to_result_and_type(mode, mode_configuration, confidence, result_value)
 
-    metadata: dict[str, Any] = {"is_from_edge": True}
+    metadata: dict[str, Any] = {**(user_metadata or {}), "is_from_edge": True}
     edge_result: dict[str, Any] = {}
     if mlb_key is not None:
         edge_result["mlb_key"] = mlb_key
@@ -210,9 +249,14 @@ def _size_of_dict_with_field_in_bytes(initial_dict: dict[str, Any], new_data_key
     return _size_of_dict_in_bytes(combined_dict)
 
 
-def generate_metadata_dict(results: dict[str, Any] | None, is_edge_audit: bool = False) -> dict[str, Any]:
+def generate_metadata_dict(
+    results: dict[str, Any] | None,
+    is_edge_audit: bool = False,
+    user_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Generates the metadata for an IQ being escalated to the cloud.
+    Starts from `user_metadata` (caller-supplied, assumed already validated by `decode_user_metadata`).
     Includes `"is_edge_audit": True` if it is an edge audit.
     Includes `"edge_result": results` if including the results would not push the metadata over the size limit. If they
         would, includes the results without the ROIs if the resulting metadata does not exceed the limit.
@@ -220,7 +264,7 @@ def generate_metadata_dict(results: dict[str, Any] | None, is_edge_audit: bool =
         used for inference; those are passed through as part of `edge_result` with no special handling,
         so the cloud sees them at `metadata["edge_result"]["mlb_key"]` / `["oodd_mlb_key"]`.
     """
-    metadata_dict = {}
+    metadata_dict = dict(user_metadata or {})
 
     if is_edge_audit:
         metadata_dict["is_edge_audit"] = True  # This metadata will trigger an audit in the cloud
@@ -231,8 +275,8 @@ def generate_metadata_dict(results: dict[str, Any] | None, is_edge_audit: bool =
             f"Inference results were {metadata_with_results_size} bytes, which made the metadata larger than the max "
             f"allowed size of {METADATA_SIZE_LIMIT_BYTES} bytes. Attempting to remove the ROIs from the results."
         )
-        results_without_rois = results.copy()
-        if "rois" in results_without_rois:
+        if results is not None and results.get("rois") is not None:
+            results_without_rois = results.copy()
             results_without_rois["rois"] = f"{len(results['rois'])} ROIs were detected."
             metadata_with_results_size = _size_of_dict_with_field_in_bytes(
                 metadata_dict, "edge_result", results_without_rois

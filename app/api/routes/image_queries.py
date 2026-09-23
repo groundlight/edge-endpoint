@@ -15,7 +15,13 @@ from app.core.app_state import (
 from app.core.edge_config_manager import EdgeConfigManager
 from app.core.groundlight_client import groundlight_client
 from app.core.naming import get_edge_inference_model_name
-from app.core.utils import create_iq, generate_iq_id, generate_metadata_dict, generate_request_id
+from app.core.utils import (
+    create_iq,
+    decode_user_metadata,
+    generate_iq_id,
+    generate_metadata_dict,
+    generate_request_id,
+)
 from app.escalation_queue.models import SubmitImageQueryParams
 from app.escalation_queue.queue_utils import safe_escalate_with_queue_write, write_escalation_to_queue
 from app.metrics.iq_activity import record_activity_for_metrics, record_confidence_for_metrics
@@ -46,7 +52,6 @@ async def validate_image_bytes(request: Request, content_type: str = Depends(val
 async def validate_query_params_for_edge(request: Request):
     invalid_edge_params = {
         "inspection_id",  # inspection_id will not be supported on the edge
-        "metadata",  # metadata is not supported on the edge currently, we need to set up persistent storage first
         "image_query_id",  # specifying an image query ID will not be supported on the edge
     }
     query_params = set(request.query_params.keys())
@@ -69,6 +74,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     confidence_threshold: Optional[float] = Query(None, ge=0, le=1),
     human_review: Optional[Literal["DEFAULT", "ALWAYS", "NEVER"]] = Query(None),
     want_async: bool = Query(False),
+    metadata: Optional[str] = Query(None),
     app_state: AppState = Depends(get_app_state),
 ):
     """
@@ -93,6 +99,8 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             - "NEVER": Never send for human review.
         want_async (bool): If True, returns immediately after query submission without waiting for a prediction.
             The returned ImageQuery will have a 'result' of None. Requires 'wait' to be set to 0.
+        metadata (Optional[str]): Caller metadata as URL-safe base64-encoded JSON (the SDK's encoding). It is
+            returned on the ImageQuery and forwarded to the cloud on escalation.
 
     Dependencies:
         app_state (AppState): Application's state manager.
@@ -105,6 +113,11 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         HTTPException: If there are issues with the request parameters or processing.
     """
     await validate_query_params_for_edge(request)
+
+    try:
+        user_metadata = decode_user_metadata(metadata) if metadata is not None else None
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
     # The request ID is automatically set on requests from the Groundlight SDK. If it doesn't exist (e.g., if this
     # request was sent directly and not through the SDK) we generate one in the same way that the SDK does.
@@ -150,7 +163,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             patience_time=patience_time,
             confidence_threshold=confidence_threshold,
             human_review=human_review,
-            metadata=None,
+            metadata=user_metadata,
             image_query_id=generate_iq_id(),
         )
         return safe_escalate_with_queue_write(
@@ -212,6 +225,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                 text=results["text"],
                 mlb_key=results.get("mlb_key"),
                 oodd_mlb_key=results.get("oodd_mlb_key"),
+                user_metadata=user_metadata,
             )
 
             # Skip cloud operations if escalation is disabled
@@ -228,7 +242,9 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         patience_time=patience_time,
                         confidence_threshold=confidence_threshold,
                         human_review=human_review,
-                        metadata=generate_metadata_dict(results=results, is_edge_audit=True),
+                        metadata=generate_metadata_dict(
+                            results=results, is_edge_audit=True, user_metadata=user_metadata
+                        ),
                         image_query_id=image_query.id,  # We give the cloud IQ the same ID as the returned edge IQ
                     )
                     # We write to the queue synchronously because it should be fast. But this could be done as a
@@ -259,7 +275,9 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
                         patience_time=patience_time,
                         confidence_threshold=confidence_threshold,
                         human_review=human_review,
-                        metadata=generate_metadata_dict(results=results, is_edge_audit=False),
+                        metadata=generate_metadata_dict(
+                            results=results, is_edge_audit=False, user_metadata=user_metadata
+                        ),
                         image_query_id=image_query.id,  # We give the cloud IQ the same ID as the returned edge IQ
                     )
                     # We write to the queue synchronously because it should be fast. But this could be done as a
@@ -321,7 +339,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
         patience_time=patience_time,
         confidence_threshold=confidence_threshold,
         human_review=human_review,
-        metadata=generate_metadata_dict(results=results, is_edge_audit=False),
+        metadata=generate_metadata_dict(results=results, is_edge_audit=False, user_metadata=user_metadata),
         image_query_id=generate_iq_id(),
     )
     return safe_escalate_with_queue_write(
