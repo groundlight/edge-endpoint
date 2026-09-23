@@ -222,6 +222,8 @@ spec:
           value: "/opt/groundlight/device/tokens"
         - name: USE_MINIMAL_IMAGE
           value: "{{ .Values.useMinimalImage }}"
+        - name: RUN_OODD
+          value: "{{ .Values.runOodd }}"
         - name: ENABLE_PROFILING
           value: "{{ .Values.enableProfiling }}"
         volumeMounts:
@@ -340,6 +342,8 @@ spec:
           value: "/opt/groundlight/device/tokens"
         - name: USE_MINIMAL_IMAGE
           value: "{{ .Values.useMinimalImage }}"
+        - name: RUN_OODD
+          value: "{{ .Values.runOodd }}"
         - name: ROLLOUT_READY_TIMEOUT_S
           value: "{{ .Values.modelUpdater.rolloutReadyTimeoutSeconds }}"
         volumeMounts:
