@@ -266,7 +266,7 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
             # Escalate after returning edge prediction if escalation is enabled and we have low confidence.
             if not is_confident_enough:
                 # Only escalate if we haven't escalated on this detector too recently.
-                if app_state.edge_inference_manager.escalation_cooldown_complete(detector_id, edge_config):
+                if app_state.edge_inference_manager.try_reserve_escalation(detector_id, edge_config):
                     logger.debug(
                         f"Escalating to cloud due to low confidence: {ml_confidence} < thresh={confidence_threshold}"
                     )

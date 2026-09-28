@@ -83,7 +83,7 @@ def _():
         "create_iq": "#FECB52",
         "record_activity_for_metrics": "#9467BD",
         "record_confidence_for_metrics": "#8C564B",
-        "escalation_cooldown_complete": "#C49C94",
+        "try_reserve_escalation": "#C49C94",
         "safe_escalate_with_queue_write": "#FF6692",
         "write_escalation_to_queue": "#B6E880",
     }

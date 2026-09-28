@@ -21,6 +21,7 @@ from jinja2 import Template
 from model import ModeEnum
 
 from app.core.edge_config_manager import EdgeConfigManager
+from app.core.escalation_cooldown import reserve_escalation_if_cooldown_elapsed
 from app.core.file_paths import MODEL_REPOSITORY_PATH
 from app.core.groundlight_client import groundlight_client
 from app.core.naming import (
@@ -287,10 +288,10 @@ class EdgeInferenceManager:
         verbose: bool = False,
         separate_oodd_inference: bool = True,
     ) -> None:
+        """Create the inference helper for this worker process."""
         self.verbose = verbose
         self.speedmon = SpeedMonitor()
         self.separate_oodd_inference = separate_oodd_inference
-        self.last_escalation_times: dict[str, float | None] = {}
 
     @trace_span
     def inference_is_available(self, detector_id: str) -> bool:
@@ -420,30 +421,24 @@ class EdgeInferenceManager:
         return True
 
     @trace_span
-    def escalation_cooldown_complete(self, detector_id: str, edge_config: EdgeEndpointConfig) -> bool:
-        """
-        Check if the time since the last escalation is long enough ago that we should escalate again.
-        The minimum time between escalations for a detector is set by the `min_time_between_escalations` field in the
-        detector's config. If the field is not set, we use the default defined in EdgeEndpointConfig.
+    def try_reserve_escalation(self, detector_id: str, edge_config: EdgeEndpointConfig) -> bool:
+        """Reserve the next cloud escalation when this detector's cooldown has elapsed.
+
+        The interval comes from the detector's config, or the EdgeEndpointConfig default when the
+        detector has none. Every worker shares the timestamp.
 
         Args:
             detector_id: ID of the detector to check
             edge_config: The active edge endpoint configuration.
         Returns:
-            True if there hasn't been an escalation on this detector in the last `min_time_between_escalations` seconds,
-              False otherwise.
+            True if the shared escalation timestamp was written and the caller may escalate,
+              False when the last reservation is still inside `min_time_between_escalations`.
         """
         det_config = EdgeConfigManager.detector_config(edge_config, detector_id)
         min_time_between_escalations = (
             det_config.min_time_between_escalations if det_config else InferenceConfig().min_time_between_escalations
         )
-        last_escalation_time = self.last_escalation_times.get(detector_id)
-
-        if last_escalation_time is None or (time.time() - last_escalation_time) > min_time_between_escalations:
-            self.last_escalation_times[detector_id] = time.time()
-            return True
-
-        return False
+        return reserve_escalation_if_cooldown_elapsed(detector_id, min_time_between_escalations)
 
 
 def fetch_model_info(detector_id: str) -> tuple[ModelInfoBase, ModelInfoBase]:

@@ -1,4 +1,7 @@
 ACTIVE_EDGE_CONFIG_PATH = "/opt/groundlight/edge/config/active-edge-config.yaml"
+# One file per detector, on the hostPath mounted into every edge-endpoint worker.
+# The PVC root is also the inference model repository, so this clock does not live there.
+ESCALATION_COOLDOWN_DIR = "/opt/groundlight/device/escalation-cooldowns"
 HELM_CONFIGMAP_PATH = "/etc/groundlight/edge-config/edge-config.yaml"
 INFERENCE_DEPLOYMENT_TEMPLATE_PATH = "/etc/groundlight/inference-deployment/inference_deployment_template.yaml"
 
