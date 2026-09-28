@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.edge_config_manager import EdgeConfigManager
-from app.core.groundlight_client import groundlight_client
+from app.core.groundlight_client import upstream_endpoint
 from app.metrics.iq_activity import clear_old_activity_files
 from app.metrics.metric_reporting import MetricsReporter
 from app.metrics.resource_metrics import ResourceMetricsCollector
@@ -22,13 +22,13 @@ REACT_BUILD_DIR = Path(__file__).parent / "react-build"
 
 
 def cloud_dashboard_url() -> str:
-    """Derive the Cloud Dashboard base URL from the SDK client's configured cloud endpoint.
+    """Derive the Cloud Dashboard base URL from the upstream cloud endpoint.
 
     Always uses https, since every Groundlight cloud is served over https.
     """
-    host = urlparse(groundlight_client().endpoint).hostname
+    host = urlparse(upstream_endpoint()).hostname
     if not host:
-        raise ValueError("Could not determine cloud host from the Groundlight client endpoint.")
+        raise ValueError("Could not determine cloud host from the upstream endpoint.")
     if host.startswith("api."):
         dashboard_host = "dashboard." + host[len("api.") :]
     else:
@@ -84,9 +84,9 @@ def get_edge_config():
 
 @app.get("/status/cloud-config")
 def get_cloud_config():
-    """Return cloud-derived config for the status UI, such as the Cloud Dashboard base
-    URL used to build detector links."""
-    return {"dashboard_url": cloud_dashboard_url()}
+    """Return cloud-derived config for the status UI: the upstream cloud endpoint, and the
+    Cloud Dashboard base URL used to build detector links."""
+    return {"upstream_endpoint": upstream_endpoint(), "dashboard_url": cloud_dashboard_url()}
 
 
 @app.get("/status")

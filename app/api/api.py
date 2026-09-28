@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from app.api.naming import path_prefix, tag
-from app.api.routes import edge_config, edge_detector_readiness, health, image_queries, ping
+from app.api.routes import edge_config, edge_detector_readiness, edge_info, health, image_queries, ping
 from app.core.edge_endpoint_auth import require_valid_token
 
 IMAGE_QUERIES = "image-queries"
@@ -40,3 +40,11 @@ edge_detector_readiness_router = APIRouter(dependencies=[Depends(require_valid_t
 edge_detector_readiness_router.include_router(
     edge_detector_readiness.router, prefix=EDGE_DETECTOR_READINESS_PREFIX, tags=[EDGE_DETECTOR_READINESS_TAG]
 )
+
+EDGE_INFO = "edge-info"
+EDGE_INFO_PREFIX = path_prefix(EDGE_INFO)
+EDGE_INFO_TAG = tag(EDGE_INFO)
+
+# Ungated so a caller whose token is rejected can still see which cloud rejected it.
+edge_info_router = APIRouter()
+edge_info_router.include_router(edge_info.router, prefix=EDGE_INFO_PREFIX, tags=[EDGE_INFO_TAG])

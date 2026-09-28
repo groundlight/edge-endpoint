@@ -8,7 +8,7 @@ from groundlight import ApiTokenError, Groundlight, GroundlightClientError
 from groundlight_openapi_client.exceptions import ApiException
 from pydantic import ValidationError
 
-from app.core.groundlight_client import groundlight_client
+from app.core.groundlight_client import groundlight_client, upstream_endpoint
 
 
 class EdgeEndpointAuthManager:
@@ -23,6 +23,7 @@ class EdgeEndpointAuthManager:
     def __init__(self) -> None:
         self._gl = groundlight_client()
         self._group_id = self._gl.me().group.id
+        self._upstream_endpoint = upstream_endpoint()
         # TODO: entries never expire, so a token revoked in cloud stays accepted until
         # this process restarts.
         self._validated: set[str] = set()
@@ -41,11 +42,11 @@ class EdgeEndpointAuthManager:
         try:
             group_id = self._group_id_for_token(api_token)
         except ApiTokenError as e:
-            raise HTTPException(status_code=401, detail="Invalid API token.") from e
+            raise HTTPException(status_code=401, detail=f"Invalid API token for {self._upstream_endpoint}.") from e
         except (GroundlightClientError, ApiException, ValidationError, AttributeError) as e:
             raise HTTPException(
                 status_code=503,
-                detail="Unable to validate API token with Groundlight cloud.",
+                detail=f"Unable to validate API token with Groundlight cloud at {self._upstream_endpoint}.",
             ) from e
 
         if group_id != self._group_id:

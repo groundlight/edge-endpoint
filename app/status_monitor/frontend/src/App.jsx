@@ -221,6 +221,7 @@ export default function App() {
   const [edgeConfig, setEdgeConfig] = useState(null);
   const [edgeConfigError, setEdgeConfigError] = useState(false);
   const [dashboardUrl, setDashboardUrl] = useState("https://dashboard.groundlight.ai");
+  const [upstreamEndpoint, setUpstreamEndpoint] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const intervalRef = useRef(null);
@@ -261,13 +262,14 @@ export default function App() {
     }
   }, []);
 
-  // The dashboard URL is static deployment config, so fetch it once on mount rather
-  // than on every poll. Falls back to the prod dashboard if the request fails.
+  // Cloud config is static deployment config, so fetch it once on mount rather than on
+  // every poll. Falls back to the prod dashboard if the request fails.
   useEffect(() => {
     fetch("/status/cloud-config")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.dashboard_url) setDashboardUrl(data.dashboard_url);
+        if (data?.upstream_endpoint) setUpstreamEndpoint(data.upstream_endpoint);
       })
       .catch(() => {});
   }, []);
@@ -307,16 +309,23 @@ export default function App() {
   return (
     <>
       <header className="app-header">
-        <Group gap="sm">
-          <img
-            src="/status/static/icon_gold_dark.svg"
-            alt="Groundlight logo"
-            className="header-logo"
-          />
-          <Title order={2} fw={400} c="var(--yellow)">
-            Groundlight Edge Endpoint Status
-          </Title>
-        </Group>
+        <Stack gap={4} align="center">
+          <Group gap="sm">
+            <img
+              src="/status/static/icon_gold_dark.svg"
+              alt="Groundlight logo"
+              className="header-logo"
+            />
+            <Title order={2} fw={400} c="var(--yellow)">
+              Groundlight Edge Endpoint Status
+            </Title>
+          </Group>
+          {upstreamEndpoint && (
+            <Text size="sm" c="rgba(255,255,255,0.7)">
+              Upstream cloud: {upstreamEndpoint}
+            </Text>
+          )}
+        </Stack>
       </header>
 
       <Container size="lg" py="xl">

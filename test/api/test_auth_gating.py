@@ -6,7 +6,7 @@ import pytest
 from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
 
-from app.api.api import HEALTH, IMAGE_QUERIES, PING
+from app.api.api import EDGE_INFO, HEALTH, IMAGE_QUERIES, PING
 from app.api.naming import full_path, path_prefix
 from app.escalation_queue.queue_writer import QueueWriter
 from app.main import app
@@ -59,7 +59,7 @@ def test_gated_routes_require_api_token(enforcing_auth_client: TestClient, metho
     assert response.json()["detail"] == "Missing x-api-token header."
 
 
-def test_health_and_ping_remain_ungated(enforcing_auth_client: TestClient):
+def test_health_ping_and_edge_info_remain_ungated(enforcing_auth_client: TestClient):
     live = enforcing_auth_client.get(path_prefix(HEALTH) + "/live")
     assert live.status_code == status.HTTP_200_OK
 
@@ -68,3 +68,6 @@ def test_health_and_ping_remain_ungated(enforcing_auth_client: TestClient):
 
     ping = enforcing_auth_client.get(path_prefix(PING))
     assert ping.status_code == status.HTTP_200_OK
+
+    edge_info = enforcing_auth_client.get(path_prefix(EDGE_INFO))
+    assert edge_info.status_code == status.HTTP_200_OK

@@ -11,6 +11,8 @@ from starlette.requests import Request
 
 from app.core.edge_endpoint_auth import EdgeEndpointAuthManager
 
+UPSTREAM = "https://api.groundlight.dev.axon.com"
+
 
 def _request_with_token(token: str | None) -> Request:
     headers = []
@@ -21,8 +23,9 @@ def _request_with_token(token: str | None) -> Request:
 
 
 @pytest.fixture
-def auth_manager() -> EdgeEndpointAuthManager:
-    """Build an auth manager with a mocked device client and fixed group id."""
+def auth_manager(monkeypatch: pytest.MonkeyPatch) -> EdgeEndpointAuthManager:
+    """Build an auth manager with a mocked device client, fixed group id, and fixed upstream."""
+    monkeypatch.setenv("GROUNDLIGHT_ENDPOINT", UPSTREAM)
     with patch("app.core.edge_endpoint_auth.groundlight_client") as mock_device_client:
         mock_gl = MagicMock()
         mock_gl.me.return_value.group.id = "group-edge"
@@ -43,6 +46,7 @@ def test_invalid_token_returns_401(auth_manager: EdgeEndpointAuthManager):
         with pytest.raises(HTTPException) as exc_info:
             auth_manager.validate_request(_request_with_token("tok_bad"))
     assert exc_info.value.status_code == 401
+    assert UPSTREAM in exc_info.value.detail
     assert len(auth_manager._validated) == 0  # rejections are not cached
 
 
@@ -51,6 +55,7 @@ def test_cloud_unreachable_returns_503(auth_manager: EdgeEndpointAuthManager):
         with pytest.raises(HTTPException) as exc_info:
             auth_manager.validate_request(_request_with_token("tok_ok"))
     assert exc_info.value.status_code == 503
+    assert UPSTREAM in exc_info.value.detail
 
 
 def test_api_exception_from_me_returns_503(auth_manager: EdgeEndpointAuthManager):

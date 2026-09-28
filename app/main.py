@@ -12,7 +12,14 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 from groundlight.edge import EdgeEndpointConfig
 
-from app.api.api import api_router, edge_config_router, edge_detector_readiness_router, health_router, ping_router
+from app.api.api import (
+    api_router,
+    edge_config_router,
+    edge_detector_readiness_router,
+    edge_info_router,
+    health_router,
+    ping_router,
+)
 from app.api.naming import API_BASE_PATH
 from app.core.app_state import AppState
 from app.core.edge_config_manager import EdgeConfigManager, reconcile_config
@@ -42,6 +49,7 @@ app.include_router(router=ping_router)
 app.include_router(router=health_router)
 app.include_router(router=edge_config_router)
 app.include_router(router=edge_detector_readiness_router)
+app.include_router(router=edge_info_router)
 
 
 @app.on_event("startup")

@@ -45,6 +45,7 @@ How URLs are handled:
 | `/image-queries`                  | `POST`  | Edge endpoint, may escalate to cloud |
 | `/health/live`<br>`/health/ready` | `GET`   | Edge endpoint                        |
 | `/ping`                           | `GET`   | Edge endpoint                        |
+| `/edge-info`                      | `GET`   | Edge endpoint                        |
 | `/status`                         | `GET`   | Status monitor                       |
 | all others                        | all     | Forward to cloud                     |
 
