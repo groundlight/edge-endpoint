@@ -100,7 +100,7 @@ Tests the Edge Endpoint's resilience under memory pressure by spawning multiple 
 
 #### Configuration
 You can experiment with different edge configurations in `configs/edge-config.yaml`. Generally, it's worthwhile to at least test the following configurations:
-1. No configurations: let the Edge Endpoint spawn inference pods as they are requested.
+1. No configurations: install with `--set requireConfiguredDetectors=false` so the Edge Endpoint spawns inference pods as they are requested. With the default (`true`), queries for detectors that are not in the edge config are rejected.
 1. Edge Answers with escalation: add the following configuration for each of your detectors. 
     ```
     detectors:

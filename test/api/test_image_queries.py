@@ -5,6 +5,7 @@ from unittest import mock
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
+from groundlight.edge import DEFAULT, EdgeEndpointConfig
 from groundlight.encodings import url_encode_dict
 from model import (
     BinaryClassificationResult,
@@ -22,11 +23,12 @@ from PIL import Image
 
 from app.api.api import IMAGE_QUERIES
 from app.api.naming import full_path
+from app.core.edge_config_manager import EdgeConfigManager
 from app.core.utils import pil_image_to_bytes
 
 url = full_path(IMAGE_QUERIES)
 
-DETECTOR_ID = "det_abcdefghijklmnopqrstuvwxyz"
+DETECTOR_ID = "det_abcdefghijklmnopqrstuvwxyza"
 
 
 # TODO: Add missing tests for the following functionality:
@@ -157,8 +159,14 @@ def enable_edge_inference(
 #
 
 
-def test_post_image_query(test_client: TestClient, detector: Detector):
-    """Test that submitting an image query using the edge server proceeds without failure."""
+def _allow_unconfigured_detectors(monkeypatch):
+    """Restore cloud fallback for detectors that are not in the edge config."""
+    monkeypatch.setenv("REQUIRE_CONFIGURED_DETECTORS", "false")
+
+
+def test_post_image_query(test_client: TestClient, detector: Detector, monkeypatch):
+    """An unconfigured detector is sent to the cloud when the device allows it."""
+    _allow_unconfigured_detectors(monkeypatch)
     image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
     threshold = 0.87
 
@@ -178,8 +186,9 @@ def test_post_image_query(test_client: TestClient, detector: Detector):
             assert "id" in response_data, "Response should contain an 'id' field"
 
 
-def test_post_image_query_with_async_request(test_client: TestClient, detector: Detector):
+def test_post_image_query_with_async_request(test_client: TestClient, detector: Detector, monkeypatch):
     """Test submitting an image query with want_async set to true."""
+    _allow_unconfigured_detectors(monkeypatch)
     image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
 
     with assert_escalated_to_gl(
@@ -196,8 +205,9 @@ def test_post_image_query_with_async_request(test_client: TestClient, detector: 
         assert "id" in response_data, "Response should contain an 'id' field"
 
 
-def test_post_image_query_with_confident_audit(test_client: TestClient, detector: Detector):
+def test_post_image_query_with_confident_audit(test_client: TestClient, detector: Detector, monkeypatch):
     """Test submitting an image query that should be audited."""
+    _allow_unconfigured_detectors(monkeypatch)
     image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
 
     with assert_escalated_to_gl(
@@ -219,7 +229,9 @@ def test_post_image_query_with_confident_audit(test_client: TestClient, detector
             assert response.status_code == status.HTTP_200_OK, response.json()["detail"]
 
 
-def test_post_image_query_forwards_user_metadata_to_cloud(test_client: TestClient, detector: Detector):
+def test_post_image_query_forwards_user_metadata_to_cloud(test_client: TestClient, detector: Detector, monkeypatch):
+    """Caller metadata is forwarded when an unconfigured detector is allowed to reach the cloud."""
+    _allow_unconfigured_detectors(monkeypatch)
     image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
 
     with assert_escalated_to_gl(
@@ -241,7 +253,9 @@ def test_post_image_query_forwards_user_metadata_to_cloud(test_client: TestClien
     assert response.status_code == status.HTTP_200_OK, response.json()["detail"]
 
 
-def test_post_image_query_async_forwards_user_metadata(test_client: TestClient, detector: Detector):
+def test_post_image_query_async_forwards_user_metadata(test_client: TestClient, detector: Detector, monkeypatch):
+    """Async caller metadata is forwarded when an unconfigured detector is allowed to reach the cloud."""
+    _allow_unconfigured_detectors(monkeypatch)
     image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
 
     with assert_escalated_to_gl(
@@ -265,8 +279,9 @@ def test_post_image_query_async_forwards_user_metadata(test_client: TestClient, 
 
 # TODO: This test doesn't seem to actually test this behavior, since it was passing when it should have failed.
 # It should get removed once this behavior is tested in the live environment.
-def test_post_image_query_with_human_review(test_client: TestClient, detector: Detector):
+def test_post_image_query_with_human_review(test_client: TestClient, detector: Detector, monkeypatch):
     """Test submitting an image query with human review set to ALWAYS."""
+    _allow_unconfigured_detectors(monkeypatch)
     image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
 
     with assert_escalated_to_gl(
@@ -316,8 +331,10 @@ def test_post_image_query_invalid_image_data(test_client: TestClient, detector: 
 
 
 @pytest.mark.xfail(reason="Known issue - 404 is not returned when detector is not found")
-def test_post_image_query_with_invalid_detector_id(test_client: TestClient, detector: Detector):
+def test_post_image_query_with_invalid_detector_id(test_client: TestClient, detector: Detector, monkeypatch):
     """Test submitting an image query with an invalid detector ID."""
+    # Keep this on the cloud lookup path. The default rejects an unconfigured id with 403 first.
+    _allow_unconfigured_detectors(monkeypatch)
     image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
 
     with assert_not_escalated_to_gl(detector=None):
@@ -335,13 +352,14 @@ def test_post_image_query_with_invalid_detector_id(test_client: TestClient, dete
     assert response.json() == {"detail": "Detector with id 'invalid_id' not found"}
 
 
-def test_post_image_query_canonicalizes_miscased_detector_id(test_client: TestClient, detector: Detector):
+def test_post_image_query_canonicalizes_miscased_detector_id(test_client: TestClient, detector: Detector, monkeypatch):
     """A mis-cased detector_id is accepted but tracked under the canonical casing.
 
     The cloud resolves detector IDs case-insensitively, so the edge mirrors that leniency. To avoid a single
     detector being split across two case variants in edge metrics, the handler canonicalizes the ID up front
     so every activity record is keyed on the canonical casing regardless of how the caller spelled it.
     """
+    _allow_unconfigured_detectors(monkeypatch)
     image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
     miscased_id = detector.id.upper()  # same KSUID, wrong casing
     assert miscased_id != detector.id
@@ -360,6 +378,63 @@ def test_post_image_query_canonicalizes_miscased_detector_id(test_client: TestCl
     assert response.status_code == status.HTTP_200_OK, response.json()["detail"]
     recorded_ids = {call.args[0] for call in mock_record.call_args_list}
     assert recorded_ids == {detector.id}, f"metrics keyed on non-canonical IDs: {recorded_ids}"
+
+
+def test_post_image_query_rejects_unconfigured_detector(test_client: TestClient, detector: Detector, monkeypatch):
+    """A detector absent from the edge config is rejected, with no cloud call and no inference pod."""
+    monkeypatch.delenv("REQUIRE_CONFIGURED_DETECTORS", raising=False)
+    image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
+    mock_gl = mock.MagicMock()
+
+    with (
+        _patch_device_groundlight_client(mock_gl),
+        mock.patch(
+            "app.core.database.DatabaseManager.create_or_update_inference_deployment_record",
+        ) as create_record,
+    ):
+        response = test_client.post(
+            url,
+            headers={"Content-Type": "image/jpeg"},
+            content=image_bytes,
+            params={"detector_id": detector.id},
+        )
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN, response.text
+    assert response.json() == {
+        "detail": (
+            f"Detector {detector.id} is not configured on this Edge Endpoint. "
+            "This Edge Endpoint can only serve inference requests for configured detectors."
+        )
+    }
+    mock_gl.get_detector.assert_not_called()
+    mock_gl.submit_image_query.assert_not_called()
+    create_record.assert_not_called()
+
+
+def test_post_image_query_accepts_miscased_id_when_detector_is_configured(
+    test_client: TestClient, detector: Detector, monkeypatch
+):
+    """A configured detector is accepted even when the request spells its id in a different case."""
+    monkeypatch.delenv("REQUIRE_CONFIGURED_DETECTORS", raising=False)
+    previous = EdgeConfigManager.active()
+    config = EdgeEndpointConfig()
+    config.add_detector(detector.id, DEFAULT)
+    EdgeConfigManager.save(config)
+    image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
+
+    try:
+        with assert_escalated_to_gl(detector=detector, sdk_response=confident_cloud_iq):
+            with enable_edge_inference(assert_didnt_run=True):
+                response = test_client.post(
+                    url,
+                    headers={"Content-Type": "image/jpeg"},
+                    content=image_bytes,
+                    params={"detector_id": detector.id.upper()},
+                )
+    finally:
+        EdgeConfigManager.save(previous)
+
+    assert response.status_code == status.HTTP_200_OK, response.text
 
 
 def test_post_image_query_with_invalid_field(test_client: TestClient, detector: Detector):

@@ -30,6 +30,13 @@ useMinimalImage: false
 # /opt/groundlight/device/edge-profiling/ as JSONL files. Disabled by default.
 enableProfiling: false
 
+# Image queries are accepted only for detectors listed in the active edge config.
+# A detector that is not listed is rejected. This device does not start an
+# inference pod for it and does not send the image to the cloud.
+# Set to false to accept an unlisted detector: the device starts an inference pod
+# for it and sends the image to the cloud until that pod is ready.
+requireConfiguredDetectors: true
+
 # The image pull policy for the containers.
 # The default value is "Always" which means that Kubernetes will always check to see if there's 
 # a new version of the image with the requested tag available when starting containers.

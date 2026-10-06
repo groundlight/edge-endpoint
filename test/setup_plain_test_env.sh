@@ -13,6 +13,7 @@
 # > docker run --name groundlight-edge \
 #      -e LOG_LEVEL=DEBUG \
 #      -e EDGE_CONFIG \
+#      -e REQUIRE_CONFIGURED_DETECTORS \
 #      -e GROUNDLIGHT_API_TOKEN \
 #      --rm -it -p 30101:30101 edge-endpoint
 
@@ -41,3 +42,7 @@ EOM
 )
 
 export EDGE_CONFIG
+
+# Live and SDK docker tests submit detectors that are not in EDGE_CONFIG and expect a cloud answer.
+# Helm installs default requireConfiguredDetectors to true.
+export REQUIRE_CONFIGURED_DETECTORS=false

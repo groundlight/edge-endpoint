@@ -224,6 +224,8 @@ spec:
           value: "{{ .Values.useMinimalImage }}"
         - name: ENABLE_PROFILING
           value: "{{ .Values.enableProfiling }}"
+        - name: REQUIRE_CONFIGURED_DETECTORS
+          value: "{{ .Values.requireConfiguredDetectors }}"
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config

@@ -147,7 +147,7 @@ helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint
 
 #### Variation: Custom Edge Endpoint Configuration
 
-You might want to customize the edge config file to include the detector ID's you want to run. See [the guide to configuring detectors](/CONFIGURING-DETECTORS.md) for more information. Adding detector ID's to the config file will cause inference pods to be initialized automatically for each detector and provides you finer-grained control over each detector's behavior. Even if detectors aren't configured in the config file, edge inference will be set up for each detector ID for which the Groundlight service receives requests (note that it takes some time for each inference pod to become available for the first time).
+You might want to customize the edge config file to include the detector ID's you want to run. See [the guide to configuring detectors](/CONFIGURING-DETECTORS.md) for more information. Adding detector ID's to the config file will cause inference pods to be initialized automatically for each detector and provides you finer-grained control over each detector's behavior. By default, image queries for a detector that is not in the config are rejected. Set `requireConfiguredDetectors` to `false` to accept those queries, start an inference pod for the detector, and send the image to the cloud until the pod is ready.
 
 You can find an example edge config file here: [edge-config.yaml](https://github.com/groundlight/edge-endpoint/blob/clone-free-install/configs/edge-config.yaml). The easiest path is to download that file and modify it to your needs.
 

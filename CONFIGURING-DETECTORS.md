@@ -2,7 +2,9 @@
 
 ## Do I need to configure my detectors?
 
-Detector-specific configuration is NOT necessary for basic use of the edge endpoint. Once the edge endpoint is running, submitting an image query to it will create an edge inference pod for the specified detector. This inference pod will be created with the default settings. Note that it will take some time for the inference pod to start, especially the first time the edge endpoint is set up, and requests sent to the corresponding detector during that time will be redirected to the cloud. Once the inference pod has loaded the edge model and is ready to serve requests, it will begin attempting to process image queries on the edge. If the answer from the edge model has confidence above the confidence threshold for the detector, you'll receive the answer from the edge model. Otherwise, it will escalate the query to the cloud. 
+Yes. By default, an image query is accepted only when its detector is listed in the edge config. A detector that is not listed is rejected: the device does not start an inference pod for it and does not send the image to the cloud.
+
+To restore the previous behavior, install or upgrade with `--set requireConfiguredDetectors=false`. An unlisted detector is then accepted. The device starts an inference pod for it, and requests sent before that pod is ready are sent to the cloud. Once the pod is ready, an answer at or above the detector's confidence threshold comes from the edge model. A lower-confidence answer is escalated to the cloud. 
 
 ## Why would I want to configure detectors?
 

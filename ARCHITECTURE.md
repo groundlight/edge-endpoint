@@ -115,6 +115,7 @@ nginx-->>client: result
 The general idea of the inference request flow is that the edge endpoint will handle most requests locally, but if the confidence of the result is low, it will escalate the request to the cloud service. 
 
 However, there are a number of special cases to consider:
+- By default, a detector that is not listed in the active edge config is rejected with HTTP 403. The device does not start an inference pod for it and does not send the image to the cloud. Set Helm `requireConfiguredDetectors` to `false` to accept an unlisted detector.
 - Async inference requests are always sent to the cloud.
 - If the edge endpoint is not able to handle the request locally (e.g. the model is not available), it will forward the request to the cloud service.
 - If escalation is not allowed (by the configuration), the endpoint will always handle the request locally, even if the confidence is low. If there is no local model available, the request will return an error (this will always happen on the first inference attempts if the model was not pre-loaded by the configuration).

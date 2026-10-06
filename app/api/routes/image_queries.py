@@ -12,7 +12,7 @@ from app.core.app_state import (
     get_detector_metadata,
     refresh_detector_metadata_if_needed,
 )
-from app.core.edge_config_manager import EdgeConfigManager
+from app.core.edge_config_manager import EdgeConfigManager, require_configured_detectors
 from app.core.groundlight_client import groundlight_client
 from app.core.naming import get_edge_inference_model_name
 from app.core.utils import (
@@ -81,7 +81,9 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     Submit an image query for a given detector.
 
     This function attempts to run inference locally on the edge, if possible,
-    before potentially escalating to the cloud.
+    before potentially escalating to the cloud. When require_configured_detectors
+    is enabled (the default), a detector that is not listed in the active edge
+    config is rejected.
 
     Args:
         detector_id (str): The unique identifier of the detector to use, e.g., 'det_12345'.
@@ -111,6 +113,9 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
 
     Raises:
         HTTPException: If there are issues with the request parameters or processing.
+            403 when the detector is not listed in the active edge config and
+            unlisted detectors are rejected. 404 and 422 are not used for that
+            rejection because nginx proxies those statuses to the cloud.
     """
     await validate_query_params_for_edge(request)
 
@@ -122,6 +127,17 @@ async def post_image_query(  # noqa: PLR0913, PLR0915, PLR0912
     # The request ID is automatically set on requests from the Groundlight SDK. If it doesn't exist (e.g., if this
     # request was sent directly and not through the SDK) we generate one in the same way that the SDK does.
     request_id = request.headers.get("x-request-id") or generate_request_id()
+
+    if require_configured_detectors() and not EdgeConfigManager.detector_is_configured(
+        EdgeConfigManager.active(), detector_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Detector {detector_id} is not configured on this Edge Endpoint. "
+                "This Edge Endpoint can only serve inference requests for configured detectors."
+            ),
+        )
 
     gl = groundlight_client()
 

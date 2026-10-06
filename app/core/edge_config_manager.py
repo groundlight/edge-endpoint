@@ -64,6 +64,21 @@ class EdgeConfigManager:
                 return config.edge_inference_configs[d.edge_inference_config]
         return None
 
+    @staticmethod
+    def detector_is_configured(config: EdgeEndpointConfig, detector_id: str) -> bool:
+        """Return whether detector_id is listed in the edge config, ignoring case."""
+        requested = detector_id.lower()
+        return any(entry.detector_id.lower() == requested for entry in config.detectors)
+
+
+def require_configured_detectors() -> bool:
+    """Return whether image queries are limited to detectors listed in the active edge config.
+
+    Unset means limited. REQUIRE_CONFIGURED_DETECTORS=false accepts an unlisted detector,
+    which starts an inference pod and may send the image to the cloud.
+    """
+    return os.environ.get("REQUIRE_CONFIGURED_DETECTORS", "true").lower() == "true"
+
 
 def get_active_detector_ids(db_manager: DatabaseManager) -> set[str]:
     """Return detector IDs that are not pending deletion."""
