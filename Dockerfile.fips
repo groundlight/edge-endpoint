@@ -101,11 +101,17 @@ RUN apk add --no-cache uv
 # Stage nginx into a chroot so it can be COPYed into distroless. Same package names as
 # gep/glruntime/Dockerfile.fips: Wolfi has no plain `nginx` package, and `nginx-config`
 # is ambiguous without pinning nginx-mainline-config.
+#
+# Stay on 1.31.6-r2. That build links libssl.so.3, which the distroless image
+# already has from the FIPS base. 1.31.6-r3 links libssl.so.4, and those
+# libraries are not copied into the image.
 RUN mkdir -p /runtime-apks/etc/apk && \
     cp /etc/apk/repositories /runtime-apks/etc/apk/repositories && \
     cp -r /etc/apk/keys /runtime-apks/etc/apk/keys && \
     apk add --no-cache --no-scripts --initdb --root /runtime-apks \
-        nginx-mainline nginx-mainline-config
+        'nginx-mainline=1.31.6-r2' 'nginx-mainline-config=1.31.6-r2' && \
+    readelf -d /runtime-apks/usr/bin/nginx | grep -q 'libssl.so.3' \
+      || (echo "FIPS VIOLATION: nginx does not link libssl.so.3" && exit 1)
 
 RUN /usr/bin/openssl-fips-test && \
     test -f /etc/ssl/fipsmodule.cnf && \
