@@ -14,6 +14,7 @@ concurrency:
   group: sweeper-eeut
 env:
   PYTHON_VERSION: "3.11"
+  PULUMI_VERSION: "3.268.0"
 
 jobs:
   destroy-expired-eeut-stacks:
@@ -51,7 +52,7 @@ jobs:
           # HOME is not set on the self-hosted runners, so resolve it before running
           # the installer: otherwise it lands in /.pulumi and the PATH entry misses it.
           export HOME=$(eval echo ~$(whoami))
-          curl -fsSL https://get.pulumi.com | sh
+          curl -fsSL https://get.pulumi.com | sh -s -- --version "${{ env.PULUMI_VERSION }}"
           echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
 
       - name: Check that pulumi is installed and authenticated

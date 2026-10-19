@@ -51,10 +51,10 @@ ENV PATH "${PATH}:/root/.arkade/bin/"
 RUN arkade version && \
     arkade get --progress=false \
     flux@v0.39.0 \
-    helm@v3.11.1 \
+    helm@v3.22.0 \
     k3sup@0.12.12 \
     k9s@v0.27.2 \
-    kubectl@v1.26.2
+    kubectl@v1.28.8
 
 COPY src/ /app/src/
 RUN echo "source ./src/kube-bash.sh" >> /root/.bashrc

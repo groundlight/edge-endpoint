@@ -193,6 +193,11 @@ echo '##########################################################################
 echo '# Installing k3s'
 echo '##################################################################################'
 
+# The k3s version running in production. Keep in sync with K3S_TAG in
+# axon-groundlight/gep (deploy/bin/render-server-dockerfile.sh), which determines
+# how vision cores are deployed.
+K3S_VERSION="v1.28.8+k3s1"
+
 check_k3s_is_running() {
     local TIMEOUT=30 # Maximum wait time of 30 seconds
     local COUNT=0
@@ -228,7 +233,7 @@ else
     # down any partial install first so a retry doesn't see k3s as "installed".
     run_k3s_installer() {
         /usr/local/bin/k3s-uninstall.sh >/dev/null 2>&1 || true
-        curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" sh -s - --disable=traefik
+        curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="${K3S_VERSION}" K3S_KUBECONFIG_MODE="644" sh -s - --disable=traefik
     }
     if ! retry 3 10 -- run_k3s_installer; then
         echo "ERROR: k3s installer failed after 3 attempts (transient CDN download failure?)." >&2

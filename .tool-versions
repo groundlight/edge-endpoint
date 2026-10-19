@@ -1,0 +1,14 @@
+# Comments list the other places the same version is pinned.
+python 3.11.17     # pyproject.toml, load-testing/pyproject.toml, Dockerfile, Dockerfile.fips, PYTHON_VERSION in pipeline/auto-format/sweeper-eeut/test-k3s-helm workflows, validate-workflow-files.yaml
+uv 0.8.4           # Dockerfile, UV_VERSION in pipeline/auto-format/test-k3s-helm workflows
+nodejs 20.20.2     # Dockerfile, Dockerfile.fips
+helm 3.22.0        # pipeline.yaml (setup-helm), deploy/balena-k3s/bastion/Dockerfile
+kubectl 1.28.8     # deploy/balena-k3s/bastion/Dockerfile; matches the k3s version in deploy/bin/install-k3s.sh and deploy/balena-k3s/server/Dockerfile*
+jq 1.7.1
+make 4.3
+pulumi 3.268.0     # PULUMI_VERSION in sweeper-eeut.yaml and pipeline.yaml
+yamllint 1.38.0    # YAMLLINT_VERSION in validate-workflow-files.yaml
+actionlint 1.7.12  # ACTIONLINT_VERSION in validate-workflow-files.yaml
+awscli 2.38.0
+yq 4.54.1
+shellcheck 0.11.0
