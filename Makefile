@@ -25,8 +25,9 @@ test-with-k3s-helm:
 validate-setup-helm:
 	test/validate_setup_helm.sh
 
-test-helm-template:  ## Render-time assertions for edgeArtifactsMap (no cluster)
+test-helm-template:  ## Render-time assertions for the Helm chart (no cluster)
 	test/helm/test_edge_artifacts_map.sh
+	test/helm/test_inference_server.sh
 
 # Adjust which paths we lint
 LINT_PATHS="app test"

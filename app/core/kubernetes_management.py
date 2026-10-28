@@ -10,6 +10,7 @@ from kubernetes.client import V1Deployment
 
 from .edge_inference import get_current_model_version
 from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH, MODEL_REPOSITORY_PATH
+from .inference_server import INFERENCE_SERVER_ANNOTATION, InferenceServer
 from .naming import get_edge_inference_deployment_name, get_edge_inference_model_name, get_edge_inference_service_name
 
 logger = logging.getLogger(__name__)
@@ -107,6 +108,11 @@ class InferenceDeploymentManager:
                                the inference deployment is to be created.
             is_oodd (bool): Whether to create an OODD inference deployment.
         """
+        docs = self._render_inference_manifest(detector_id, is_oodd)
+        self._create_from_kube_manifest(namespace=self._target_namespace, manifest=yaml.safe_dump_all(docs))
+
+    def _render_inference_manifest(self, detector_id: str, is_oodd: bool) -> list[dict]:
+        """Render a detector's inference Service and Deployment from the current template."""
         deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd)
         service_name = get_edge_inference_service_name(detector_id, is_oodd)
         model_name = get_edge_inference_model_name(detector_id, is_oodd)
@@ -119,8 +125,37 @@ class InferenceDeploymentManager:
         for doc in docs:
             if doc.get("kind") == "Deployment":
                 self._annotate_pod_template(doc, detector_id, is_oodd, model_version)
+        return docs
 
-        self._create_from_kube_manifest(namespace=self._target_namespace, manifest=yaml.safe_dump_all(docs))
+    @staticmethod
+    def deployment_inference_server(deployment: V1Deployment) -> InferenceServer:
+        """The server a deployment's pods run. Pods from before the annotation existed run FastAPI."""
+        annotations = deployment.spec.template.metadata.annotations or {}
+        return InferenceServer(annotations.get(INFERENCE_SERVER_ANNOTATION, InferenceServer.FASTAPI.value))
+
+    def switch_inference_server(self, detector_id: str, is_oodd: bool = False) -> None:
+        """Replace a deployment's pod template with one rendered from the current template.
+
+        Model rollouts only patch an existing deployment, so its pods keep the server they were
+        created with. Replacing the whole pod template moves them to the configured server without
+        leaving the old server's probes, ports, or volumes behind, and the rolling update starts the
+        new pod before it stops the old one.
+        """
+        deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd)
+        deployment = next(
+            doc for doc in self._render_inference_manifest(detector_id, is_oodd) if doc.get("kind") == "Deployment"
+        )
+        template = deployment["spec"]["template"]
+        # A deployment already on the configured server can render to the template it already has, and a
+        # no-op patch would not roll it. Stamping a restart guarantees a rollout the caller can wait on.
+        template["metadata"]["annotations"]["kubectl.kubernetes.io/restartedAt"] = datetime.now().isoformat()
+        logger.info(f"Moving inference deployment {deployment_name} to the configured inference server")
+        self._app_kube_client.patch_namespaced_deployment(
+            name=deployment_name,
+            namespace=self._target_namespace,
+            # A list body is sent as a JSON patch, which replaces the pod template instead of merging into it.
+            body=[{"op": "replace", "path": "/spec/template", "value": template}],
+        )
 
     def get_inference_deployment(self, deployment_name: str) -> V1Deployment | None:
         """

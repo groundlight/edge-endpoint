@@ -308,3 +308,28 @@ busybox:1.36
   {{- end }}
 {{- end -}}
 
+
+{{/*
+  Settings for the server inference pods run (values.inferenceServer), as JSON. Triton
+  images are published as the FastAPI image's tag plus "-triton", for x86_64 only, and
+  there is no minimal or Jetson Triton image. Other arm64 devices can't be detected at
+  render time. A missing value means "fastapi": `helm upgrade --reuse-values` from a chart
+  that predates the setting keeps the old values without this chart's defaults.
+*/}}
+{{- define "groundlight-edge-endpoint.inferenceServer" -}}
+{{- $name := .Values.inferenceServer | default "fastapi" -}}
+{{- $servers := dict
+  "fastapi" (dict "name" "fastapi" "imageTagSuffix" "" "livePath" "/health/live" "readyPath" "/health/ready")
+  "triton" (dict "name" "triton" "imageTagSuffix" "-triton" "livePath" "/v2/health/live" "readyPath" "/v2/health/ready")
+-}}
+{{- if not (hasKey $servers (toString $name)) -}}
+  {{- fail (printf "inferenceServer must be \"fastapi\" or \"triton\", got %q" (toString $name)) -}}
+{{- end -}}
+{{- if and (eq $name "triton") .Values.useMinimalImage -}}
+  {{- fail "inferenceServer \"triton\" has no minimal image; set useMinimalImage=false" -}}
+{{- end -}}
+{{- if and (eq $name "triton") (eq (include "groundlight-edge-endpoint.inferenceTag" .) "jetson") -}}
+  {{- fail "inferenceServer \"triton\" has no Jetson image; keep Jetson devices on inferenceServer=fastapi" -}}
+{{- end -}}
+{{- get $servers $name | toJson -}}
+{{- end -}}

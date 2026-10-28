@@ -24,6 +24,14 @@ from app.core.edge_config_manager import EdgeConfigManager
 from app.core.escalation_cooldown import reserve_escalation_if_cooldown_elapsed
 from app.core.file_paths import MODEL_REPOSITORY_PATH
 from app.core.groundlight_client import groundlight_client
+from app.core.inference_server import (
+    INFER_PATHS,
+    READINESS_PATHS,
+    InferenceServer,
+    configured_inference_server,
+    decode_triton_infer_response,
+    encode_triton_infer_request,
+)
 from app.core.naming import (
     get_detector_models_dir,
     get_edge_inference_service_name,
@@ -36,7 +44,7 @@ from app.profiling.context import get_current_span, get_current_tracer, trace_sp
 
 logger = logging.getLogger(__name__)
 
-# Simple TTL cache for is_edge_inference_ready checks to avoid having to re-check every time a request is processed.
+# Simple TTL cache for get_ready_inference_server checks to avoid having to re-check every time a request is processed.
 # This will be process-specific, so each edge-endpoint worker will have its own cache instance.
 ttl_cache = TTLCache(maxsize=128, ttl=5)
 
@@ -63,34 +71,66 @@ def verify_downloaded_buffer(model_info: ModelInfoBase, buffer: bytes | None) ->
 
 
 @cached(ttl_cache)
+def get_ready_inference_server(inference_client_url: str) -> InferenceServer | None:
+    """Return the server the inference pod behind `inference_client_url` runs, or None if it is not ready.
+
+    After the configured server changes, a detector's pods keep running the other one until the model
+    updater moves them over, one detector at a time. The configured server is probed first.
+    """
+    configured = configured_inference_server()
+    for server in (configured, *(s for s in InferenceServer if s is not configured)):
+        ready_url = f"http://{inference_client_url}{READINESS_PATHS[server]}"
+        try:
+            response = requests.get(ready_url, timeout=2)
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"Failed to connect to {ready_url}: {e}")
+            return None
+        if response.status_code == status.HTTP_200_OK:
+            return server
+    return None
+
+
 def is_edge_inference_ready(inference_client_url: str) -> bool:
-    model_ready_url = f"http://{inference_client_url}/health/ready"
-    try:
-        response = requests.get(model_ready_url, timeout=2)
-        return response.status_code == status.HTTP_200_OK
-    except requests.exceptions.RequestException as e:
-        logger.warning(f"Failed to connect to {model_ready_url}: {e}")
-        return False
+    return get_ready_inference_server(inference_client_url) is not None
+
+
+def _post_inference(
+    inference_client_url: str, server: InferenceServer, image_bytes: bytes, content_type: str, trace_headers: dict
+) -> requests.Response:
+    inference_url = f"http://{inference_client_url}{INFER_PATHS[server]}"
+    if server is InferenceServer.TRITON:
+        body, headers = encode_triton_infer_request(image_bytes)
+    else:
+        body, headers = image_bytes, {"Content-Type": content_type}
+    headers.update(trace_headers)
+    logger.debug(f"Submitting image for inference to {inference_url}")
+    return requests.post(inference_url, data=body, headers=headers)
 
 
 def submit_image_for_inference(inference_client_url: str, image_bytes: bytes, content_type: str) -> dict:
-    inference_url = f"http://{inference_client_url}/infer"
-    headers = {"Content-Type": content_type}
+    server = get_ready_inference_server(inference_client_url) or configured_inference_server()
+    trace_headers = {}
     tracer = get_current_tracer()
     span = get_current_span()
     if tracer is not None and span is not None:
         # Consumed by the inference server's TracingMiddleware to create correlated child spans
-        headers["X-GL-Trace-Id"] = tracer.trace_id
-        headers["X-GL-Parent-Span-Id"] = span.span_id
+        trace_headers = {"X-GL-Trace-Id": tracer.trace_id, "X-GL-Parent-Span-Id": span.span_id}
     try:
-        logger.debug(f"Submitting image for inference to {inference_url}")
-        response = requests.post(inference_url, data=image_bytes, headers=headers)
+        response = _post_inference(inference_client_url, server, image_bytes, content_type, trace_headers)
+        if response.status_code == status.HTTP_404_NOT_FOUND:
+            # While a detector's deployment rolls from one server to the other, its Service routes to pods
+            # of both, and each server answers 404 for the other's inference route.
+            server = next(s for s in InferenceServer if s is not server)
+            logger.info(f"Inference route not found at {inference_client_url}; retrying as {server.value}")
+            response = _post_inference(inference_client_url, server, image_bytes, content_type, trace_headers)
         if response.status_code != status.HTTP_200_OK:
             logger.error(f"Inference server returned an error: {response.status_code} - {response.text}")
             raise RuntimeError(f"Inference server error: {response.status_code} - {response.text}")
+        if server is InferenceServer.TRITON:
+            return decode_triton_infer_response(response.content)
         return response.json()
     except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to connect to {inference_url}: {e}")
+        logger.error(f"Failed to connect to {inference_client_url}: {e}")
         raise RuntimeError("Failed to submit image for inference") from e
 
 

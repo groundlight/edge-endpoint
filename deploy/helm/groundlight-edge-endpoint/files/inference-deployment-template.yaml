@@ -1,3 +1,4 @@
+{{- $server := include "groundlight-edge-endpoint.inferenceServer" . | fromJson }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -37,6 +38,8 @@ spec:
       labels:
         app: inference-server
         instance: placeholder-inference-instance-name
+      annotations:
+        groundlight.dev/inference-server: {{ $server.name | quote }}
     spec:
       hostPID: true  # Allows pynvml to match this process's PID against nvidia-smi PIDs for accurate per-pod VRAM reporting
 {{ if eq .Values.inferenceFlavor "gpu" }}
@@ -48,7 +51,7 @@ spec:
 
       containers:
       - name: inference-server
-        image: {{ include "groundlight-edge-endpoint.ecrRegistry" . }}/gl-edge-inference{{ if .Values.useMinimalImage }}-minimal{{ end }}:{{ include "groundlight-edge-endpoint.inferenceTag" . }}
+        image: {{ include "groundlight-edge-endpoint.ecrRegistry" . }}/gl-edge-inference{{ if .Values.useMinimalImage }}-minimal{{ end }}:{{ include "groundlight-edge-endpoint.inferenceTag" . }}{{ $server.imageTagSuffix }}
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.inferencePullPolicy" . }}"
         env:
         - name: MODEL_REPOSITORY
@@ -95,19 +98,28 @@ spec:
         # Shared volume for profiling traces.
         - name: device-info-volume
           mountPath: /opt/groundlight/device
+{{- if eq $server.name "triton" }}
+        # Triton's Python backend passes tensors to its stub process through shared memory.
+        - name: dshm
+          mountPath: /dev/shm
+{{- end }}
         ports:
         - containerPort: 8000
-          name: http-fastapi
+          name: http
+{{- if eq $server.name "triton" }}
+        - containerPort: 8002
+          name: metrics
+{{- end }}
         startupProbe:
           httpGet:
-            path: /health/live  # Checks if the server is up
+            path: {{ $server.livePath }}  # Checks if the server is up
             port: 8000
           initialDelaySeconds: 10
           periodSeconds: 10
           failureThreshold: {{ .Values.inferenceDeployment.startupProbe.failureThreshold }}  # default 540 × 10s = 90 min
         readinessProbe:
           httpGet:
-            path: /health/ready  # Checks if the server is ready to serve requests
+            path: {{ $server.readyPath }}  # Checks if the server is ready to serve requests
             port: 8000
           initialDelaySeconds: 60
           periodSeconds: 10
@@ -117,7 +129,7 @@ spec:
             # We use "ready" here because the current liveness probe is too simple and
             # doesn't check if the model is loaded.  If the models fail because of GPU memory
             # issues, we need this to fail and restart the pod.
-            path: /health/ready
+            path: {{ $server.readyPath }}
             port: 8000
           initialDelaySeconds: 60
           periodSeconds: 10
@@ -126,7 +138,7 @@ spec:
           preStop:
             exec:
               # Delay SIGTERM so kube-proxy can remove this pod from iptables
-              # before uvicorn stops accepting connections.
+              # before the server stops accepting connections.
               command: ["python", "-c", "import time; time.sleep(10)"]
 
       volumes:
@@ -141,3 +153,9 @@ spec:
         hostPath:
           path: /opt/groundlight/device
           type: DirectoryOrCreate
+{{- if eq $server.name "triton" }}
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: {{ .Values.inferenceDeployment.tritonShmSizeLimit | default "256Mi" }}
+{{- end }}

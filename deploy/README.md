@@ -358,6 +358,21 @@ helm upgrade -i -n default edge-endpoint edge-endpoint/groundlight-edge-endpoint
 Built from zuuul (`predictors/serving/`). See that repo's serving README, then pass
 `--set inferenceTag=<your-image-tag>` (or `inferenceTag=dev` for a local build).
 
+`--set inferenceServer=triton` runs inference pods on NVIDIA Triton Inference Server instead of the
+FastAPI server. It uses the `<inferenceTag>-triton` image (for example `release-triton`), which is
+x86_64 only and has no minimal variant, so keep arm64 and Jetson devices on `fastapi`.
+
+After `helm upgrade` changes `inferenceServer`, the model updater moves each existing detector's
+inference pods to the new server, one detector at a time. The new pod starts before the old one stops,
+and the edge endpoint detects which server each pod runs, so detectors keep serving during the move.
+Setting the value back moves them back.
+
+Until FastAPI is retired, two rules keep older charts working:
+- The plain inference tags (`release`, `pre-release`, `latest`) always point at FastAPI images. Charts
+  from before `inferenceServer` existed pull them and probe FastAPI's `/health/*` endpoints.
+- The edge endpoint keeps its FastAPI client, because devices on older charts also pull the newest
+  edge-endpoint image.
+
 ### Image tag knobs
 
 `imageTag` is the shared default for both images.

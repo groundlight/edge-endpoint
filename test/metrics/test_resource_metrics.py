@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 from kubernetes import client
 
 from app.metrics.resource_metrics import (
+    TRITON_GPU_METRICS_MAX_AGE_SEC,
     _attribute_detector_resources,
     _build_gpu_summary,
     _find_inference_pods,
@@ -18,7 +19,9 @@ from app.metrics.resource_metrics import (
     _parse_eviction_threshold,
     _parse_k8s_cpu,
     _parse_k8s_memory,
+    _parse_triton_gpu_metrics,
     _pick_active_pods,
+    _query_pod_gpu,
 )
 
 DET_A = "det_aaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -445,6 +448,26 @@ class TestBuildGpuSummary:
         assert devices[0]["compute_utilization_pct"] == 30.0
         assert compute_pct == 30.0
 
+    def test_staggered_triton_readings_use_the_most_recent(self):
+        """Triton pods' readings are taken at different moments; the latest one wins, not the highest."""
+        responses = {
+            "pod-a": {"devices": [_gpu_device(used=300, compute_pct=90, memory_bw_pct=40)], "sampled_at": 100.2},
+            "pod-b": {"devices": [_gpu_device(used=200, compute_pct=30, memory_bw_pct=10)], "sampled_at": 100.9},
+            "pod-c": {"devices": [_gpu_device(used=200, compute_pct=60, memory_bw_pct=20)], "sampled_at": 100.5},
+        }
+        devices, total, used, compute_pct, memory_bw_pct = _build_gpu_summary(responses)
+        assert compute_pct == 30.0 and memory_bw_pct == 10.0
+        assert used == 300 and devices[0]["vram_bytes"]["used"] == 300
+
+    def test_current_readings_win_over_published_ones(self):
+        """A FastAPI pod's reading is taken at query time, so it beats a Triton pod's published reading."""
+        responses = {
+            "pod-triton": {"devices": [_gpu_device(compute_pct=80)], "sampled_at": 100.9},
+            "pod-fastapi": {"devices": [_gpu_device(compute_pct=20)]},
+        }
+        _, _, _, compute_pct, _ = _build_gpu_summary(responses)
+        assert compute_pct == 20.0
+
     def test_dedupe_falls_back_to_name_index_when_uuid_missing(self):
         """When uuid is absent, the (name, index) pair is used as the dedupe key."""
         responses = {
@@ -496,3 +519,113 @@ class TestBuildGpuSummary:
         devices, total, used, _, _ = _build_gpu_summary(responses)
         assert [g["name"] for g in devices] == ["NVIDIA A10"]
         assert total == 1500 and used == 250
+
+
+TRITON_METRICS = """# HELP gl_process_vram_used_bytes VRAM used by this inference process
+# TYPE gl_process_vram_used_bytes gauge
+gl_process_vram_used_bytes 249561088
+gl_process_gpu_index 1
+gl_process_gpu_compute_utilization_pct 12.5
+gl_process_gpu_memory_bandwidth_pct 3
+gl_gpu_vram_total_bytes{gpu_index="1",gpu_name="Tesla T4",gpu_uuid="GPU-b"} 16106127360
+gl_gpu_vram_used_bytes{gpu_index="1",gpu_name="Tesla T4",gpu_uuid="GPU-b"} 718536704
+gl_gpu_vram_free_bytes{gpu_index="1",gpu_name="Tesla T4",gpu_uuid="GPU-b"} 15387590656
+gl_gpu_compute_utilization_pct{gpu_index="1",gpu_name="Tesla T4",gpu_uuid="GPU-b"} 40
+gl_gpu_memory_bandwidth_pct{gpu_index="1",gpu_name="Tesla T4",gpu_uuid="GPU-b"} 5
+gl_gpu_vram_total_bytes{gpu_index="0",gpu_name="Tesla T4",gpu_uuid="GPU-a"} 16106127360
+gl_gpu_vram_used_bytes{gpu_index="0",gpu_name="Tesla T4",gpu_uuid="GPU-a"} 0
+gl_gpu_vram_free_bytes{gpu_index="0",gpu_name="Tesla T4",gpu_uuid="GPU-a"} 16106127360
+gl_gpu_compute_utilization_pct{gpu_index="0",gpu_name="Tesla T4",gpu_uuid="GPU-a"} 0
+gl_gpu_memory_bandwidth_pct{gpu_index="0",gpu_name="Tesla T4",gpu_uuid="GPU-a"} 0
+gl_gpu_usage_last_update_timestamp_seconds 1000.5
+nv_inference_request_success{model="edge_model",version="1"} 7
+"""
+
+
+class TestParseTritonGpuMetrics:
+    def test_rebuilds_the_v2_gpu_usage_payload(self):
+        payload = _parse_triton_gpu_metrics(TRITON_METRICS, now=1001.0)
+
+        assert payload == {
+            "schema_version": 2,
+            "process": {
+                "vram_used_bytes": 249561088,
+                "gpu_index": 1,
+                "compute_utilization_pct": 12.5,
+                "memory_bandwidth_pct": 3.0,
+            },
+            "devices": [
+                {
+                    "index": 0,
+                    "uuid": "GPU-a",
+                    "name": "Tesla T4",
+                    "vram_total_bytes": 16106127360,
+                    "vram_used_bytes": 0,
+                    "vram_free_bytes": 16106127360,
+                    "compute_utilization_pct": 0.0,
+                    "memory_bandwidth_pct": 0.0,
+                },
+                {
+                    "index": 1,
+                    "uuid": "GPU-b",
+                    "name": "Tesla T4",
+                    "vram_total_bytes": 16106127360,
+                    "vram_used_bytes": 718536704,
+                    "vram_free_bytes": 15387590656,
+                    "compute_utilization_pct": 40.0,
+                    "memory_bandwidth_pct": 5.0,
+                },
+            ],
+            "sampled_at": 1000.5,
+        }
+
+    def test_stale_gauges_are_treated_as_missing(self):
+        assert _parse_triton_gpu_metrics(TRITON_METRICS, now=1000.5 + TRITON_GPU_METRICS_MAX_AGE_SEC + 1) is None
+
+    def test_missing_process_gauges_are_treated_as_missing(self):
+        text = "\n".join(line for line in TRITON_METRICS.splitlines() if not line.startswith("gl_process_vram"))
+        assert _parse_triton_gpu_metrics(text, now=1001.0) is None
+
+    def test_cpu_pods_report_no_devices(self):
+        text = "\n".join(line for line in TRITON_METRICS.splitlines() if not line.startswith("gl_gpu_v"))
+        text = "\n".join(line for line in text.splitlines() if not line.startswith(("gl_gpu_compute", "gl_gpu_memory")))
+        payload = _parse_triton_gpu_metrics(text, now=1001.0)
+        assert payload is not None
+        assert payload["devices"] == []
+
+
+class TestQueryPodGpu:
+    def test_triton_pods_are_read_from_their_metrics_port(self):
+        pod = _make_inference_pod("inferencemodel-primary-a", pod_ip="10.0.0.7")
+        pod.metadata.annotations["groundlight.dev/inference-server"] = "triton"
+        resp = MagicMock(text=TRITON_METRICS)
+        with (
+            patch("app.metrics.resource_metrics.requests.get", return_value=resp) as get,
+            patch("app.metrics.resource_metrics.time.time", return_value=1001.0),
+        ):
+            payload = _query_pod_gpu(pod)
+
+        get.assert_called_once_with("http://10.0.0.7:8002/metrics", timeout=2)
+        assert payload["process"]["vram_used_bytes"] == 249561088
+
+    def test_unparseable_triton_gauges_are_treated_as_missing(self):
+        """One pod's bad gauges must not fail the whole collection."""
+        pod = _make_inference_pod("inferencemodel-primary-a", pod_ip="10.0.0.7")
+        pod.metadata.annotations["groundlight.dev/inference-server"] = "triton"
+        bad_values = TRITON_METRICS.replace("gl_process_vram_used_bytes 249561088", "gl_process_vram_used_bytes NaN")
+        missing_label = TRITON_METRICS.replace('gpu_name="Tesla T4",', "")
+        for text in (bad_values, missing_label):
+            with (
+                patch("app.metrics.resource_metrics.requests.get", return_value=MagicMock(text=text)),
+                patch("app.metrics.resource_metrics.time.time", return_value=1001.0),
+            ):
+                assert _query_pod_gpu(pod) is None
+
+    def test_other_pods_are_read_from_v2_gpu_usage(self):
+        pod = _make_inference_pod("inferencemodel-primary-a", pod_ip="10.0.0.7")
+        resp = MagicMock()
+        resp.json.return_value = {"schema_version": 2}
+        with patch("app.metrics.resource_metrics.requests.get", return_value=resp) as get:
+            assert _query_pod_gpu(pod) == {"schema_version": 2}
+
+        get.assert_called_once_with("http://10.0.0.7:8000/v2/gpu-usage", timeout=2)

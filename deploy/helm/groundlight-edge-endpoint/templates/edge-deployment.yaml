@@ -222,6 +222,8 @@ spec:
           value: "/opt/groundlight/device/tokens"
         - name: USE_MINIMAL_IMAGE
           value: "{{ .Values.useMinimalImage }}"
+        - name: INFERENCE_SERVER
+          value: {{ (include "groundlight-edge-endpoint.inferenceServer" . | fromJson).name | quote }}
         - name: ENABLE_PROFILING
           value: "{{ .Values.enableProfiling }}"
         - name: REQUIRE_CONFIGURED_DETECTORS
@@ -342,6 +344,9 @@ spec:
           value: "/opt/groundlight/device/tokens"
         - name: USE_MINIMAL_IMAGE
           value: "{{ .Values.useMinimalImage }}"
+        # Existing inference deployments are moved to this server, one detector at a time.
+        - name: INFERENCE_SERVER
+          value: {{ (include "groundlight-edge-endpoint.inferenceServer" . | fromJson).name | quote }}
         - name: ROLLOUT_READY_TIMEOUT_S
           value: "{{ .Values.modelUpdater.rolloutReadyTimeoutSeconds }}"
         volumeMounts:

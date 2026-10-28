@@ -1,6 +1,7 @@
 """Collects per-detector GPU, VRAM, RAM, and CPU usage for the status page.
 
-GPU and VRAM data comes from each inference pod's /v2/gpu-usage HTTP endpoint.
+GPU and VRAM data comes from each inference pod's /v2/gpu-usage HTTP endpoint, or for pods running
+Triton, from the gl_* gauges on its metrics port.
 RAM and CPU data come from the Kubernetes Metrics Server (metrics.k8s.io/v1beta1).
 System-level RAM and CPU capacity use the Kubernetes Node API.
 
@@ -11,20 +12,26 @@ reported as a single `edge_endpoint` bucket on `system.ram_bytes`.
 
 import json
 import logging
+import math
 import os
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal, InvalidOperation
 
 import requests
 from kubernetes import client, config
 
+from app.core.inference_server import INFERENCE_SERVER_ANNOTATION, TRITON_METRICS_PORT, InferenceServer
 from app.metrics.system_metrics import _DATETIME_MIN_UTC, _pod_is_ready, get_namespace
 
 logger = logging.getLogger(__name__)
 
 GPU_ENDPOINT_PORT = 8000
 GPU_ENDPOINT_PATH = "/v2/gpu-usage"
+TRITON_METRICS_PATH = "/metrics"
+# Triton pods refresh their gl_* GPU gauges every second; older values mean the refresh stopped.
+TRITON_GPU_METRICS_MAX_AGE_SEC = 30
 HTTP_TIMEOUT_SEC = 2
 GPU_QUERY_MAX_WORKERS = 16
 
@@ -350,8 +357,89 @@ def _pick_active_pods(pods: list[tuple]) -> set[str]:
     return active
 
 
+_PROMETHEUS_SAMPLE_RE = re.compile(r"^(?P<name>[a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{(?P<labels>[^}]*)\})?\s+(?P<value>\S+)")
+_PROMETHEUS_LABEL_RE = re.compile(r'(?P<key>[a-zA-Z_][a-zA-Z0-9_]*)="(?P<value>(?:[^"\\]|\\.)*)"')
+
+# gl_* gauge -> (/v2/gpu-usage field, type). The gauges are published by zuuul's
+# predictors/serving/triton/gpu_metrics.py.
+_TRITON_PROCESS_GAUGES = {
+    "gl_process_vram_used_bytes": ("vram_used_bytes", int),
+    "gl_process_gpu_index": ("gpu_index", int),
+    "gl_process_gpu_compute_utilization_pct": ("compute_utilization_pct", float),
+    "gl_process_gpu_memory_bandwidth_pct": ("memory_bandwidth_pct", float),
+}
+_TRITON_DEVICE_GAUGES = {
+    "gl_gpu_vram_total_bytes": ("vram_total_bytes", int),
+    "gl_gpu_vram_used_bytes": ("vram_used_bytes", int),
+    "gl_gpu_vram_free_bytes": ("vram_free_bytes", int),
+    "gl_gpu_compute_utilization_pct": ("compute_utilization_pct", float),
+    "gl_gpu_memory_bandwidth_pct": ("memory_bandwidth_pct", float),
+}
+_TRITON_LAST_UPDATE_GAUGE = "gl_gpu_usage_last_update_timestamp_seconds"
+
+
+def _parse_triton_gpu_metrics(metrics_text: str, now: float) -> dict | None:
+    """Rebuild the /v2/gpu-usage payload from a Triton pod's gl_* gauges.
+
+    The payload also carries `sampled_at`, the Unix time the gauges were last
+    refreshed, because unlike a /v2/gpu-usage response it isn't read at query time.
+    Returns None if any process gauge is missing or the gauges are older than
+    TRITON_GPU_METRICS_MAX_AGE_SEC.
+    """
+    process: dict = {}
+    devices: dict[str, dict] = {}
+    last_update: float | None = None
+    for line in metrics_text.splitlines():
+        match = _PROMETHEUS_SAMPLE_RE.match(line)
+        if not match or not match.group("name").startswith("gl_"):
+            continue
+        name, value = match.group("name"), float(match.group("value"))
+        labels = {m.group("key"): m.group("value") for m in _PROMETHEUS_LABEL_RE.finditer(match.group("labels") or "")}
+        if name == _TRITON_LAST_UPDATE_GAUGE:
+            last_update = value
+        elif name in _TRITON_PROCESS_GAUGES:
+            field, cast = _TRITON_PROCESS_GAUGES[name]
+            process[field] = cast(value)
+        elif name in _TRITON_DEVICE_GAUGES:
+            field, cast = _TRITON_DEVICE_GAUGES[name]
+            device = devices.setdefault(
+                labels["gpu_uuid"],
+                {"index": int(labels["gpu_index"]), "uuid": labels["gpu_uuid"], "name": labels["gpu_name"]},
+            )
+            device[field] = cast(value)
+
+    if last_update is None or now - last_update > TRITON_GPU_METRICS_MAX_AGE_SEC:
+        return None
+    if set(process) != {field for field, _ in _TRITON_PROCESS_GAUGES.values()}:
+        return None
+    return {
+        "schema_version": 2,
+        "process": process,
+        "devices": sorted(devices.values(), key=lambda d: d["index"]),
+        "sampled_at": last_update,
+    }
+
+
+def _query_triton_pod_gpu(pod) -> dict | None:
+    """Read a Triton inference pod's gl_* GPU gauges. Returns the /v2/gpu-usage payload or None."""
+    url = f"http://{pod.status.pod_ip}:{TRITON_METRICS_PORT}{TRITON_METRICS_PATH}"
+    try:
+        resp = requests.get(url, timeout=HTTP_TIMEOUT_SEC)
+        resp.raise_for_status()
+        payload = _parse_triton_gpu_metrics(resp.text, time.time())
+    except Exception:
+        logger.debug(f"Failed to query GPU metrics from pod {pod.metadata.name} at {url}")
+        return None
+    if payload is None:
+        logger.debug(f"GPU metrics from pod {pod.metadata.name} at {url} are missing or stale")
+    return payload
+
+
 def _query_pod_gpu(pod) -> dict | None:
-    """HTTP GET /v2/gpu-usage on a single inference pod. Returns parsed JSON or None."""
+    """Query one inference pod's GPU usage. Returns the /v2/gpu-usage payload or None."""
+    annotations = pod.metadata.annotations or {}
+    if annotations.get(INFERENCE_SERVER_ANNOTATION) == InferenceServer.TRITON.value:
+        return _query_triton_pod_gpu(pod)
     url = f"http://{pod.status.pod_ip}:{GPU_ENDPOINT_PORT}{GPU_ENDPOINT_PATH}"
     try:
         resp = requests.get(url, timeout=HTTP_TIMEOUT_SEC)
@@ -384,14 +472,22 @@ def _build_gpu_summary(gpu_responses: dict[str, dict | None]) -> tuple[list, int
     Returns (sorted_devices, total_vram_bytes, used_vram_bytes, avg_compute_pct,
     avg_memory_bw_pct). The utilization averages are simple averages across
     observed devices.
+
+    Each device's utilization comes from the most recent reading of it. FastAPI
+    pods read NVML when queried, so their readings are current. Triton pods
+    publish a reading from up to a second ago, taken at a different moment in
+    each pod, and the highest of those staggered readings is close to the
+    peak of the last second rather than a current value.
     """
     devices_by_key: dict[str, dict] = {}
+    sampled_at_by_key: dict[str, float] = {}
     all_gpus_total = 0
     all_gpus_used = 0
 
     for gpu_data in gpu_responses.values():
         if gpu_data is None:
             continue
+        sampled_at = gpu_data.get("sampled_at", math.inf)
         gpu_devices = gpu_data.get("devices") or []
         pod_total = 0
         pod_used = 0
@@ -423,13 +519,19 @@ def _build_gpu_summary(gpu_responses: dict[str, dict | None]) -> tuple[list, int
                     "compute_utilization_pct": compute_pct,
                     "memory_bandwidth_pct": memory_bw_pct,
                 }
+                sampled_at_by_key[key] = sampled_at
             else:
                 existing_vram = existing["vram_bytes"]
                 existing_vram["total"] = max(existing_vram.get("total", 0), gpu_total)
                 existing_vram["used"] = max(existing_vram.get("used", 0), gpu_used)
                 existing_vram["free"] = max(0, existing_vram["total"] - existing_vram["used"])
-                existing["compute_utilization_pct"] = max(existing.get("compute_utilization_pct", 0.0), compute_pct)
-                existing["memory_bandwidth_pct"] = max(existing.get("memory_bandwidth_pct", 0.0), memory_bw_pct)
+                if sampled_at > sampled_at_by_key[key]:
+                    existing["compute_utilization_pct"] = compute_pct
+                    existing["memory_bandwidth_pct"] = memory_bw_pct
+                    sampled_at_by_key[key] = sampled_at
+                elif sampled_at == sampled_at_by_key[key]:
+                    existing["compute_utilization_pct"] = max(existing["compute_utilization_pct"], compute_pct)
+                    existing["memory_bandwidth_pct"] = max(existing["memory_bandwidth_pct"], memory_bw_pct)
 
         # Every inference pod on a given node sees the same physical GPUs via
         # the nvidia device plugin, so we take the max across pods (dedupe)
