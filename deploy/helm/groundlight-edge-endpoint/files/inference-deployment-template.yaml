@@ -75,7 +75,7 @@ spec:
         - name: INFERENCE_FLAVOR
           value: "{{ .Values.inferenceFlavor }}"
         - name: WORKERS  # Number of uvicorn workers for the inference server
-          value: "1"
+          value: "{{ .Values.inferenceDeployment.workers | default 1 }}"
         - name: EDGE_COMPILE_ENABLED
           value: "{{ .Values.edgeCompileEnabled }}"
         # Cap PyTorch/OpenMP/MKL/OpenBLAS intra-op threads so that many inference pods

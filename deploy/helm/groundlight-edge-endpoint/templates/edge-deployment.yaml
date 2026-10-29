@@ -197,7 +197,8 @@ spec:
         resources:
           requests:
             memory: "700Mi"
-        command: ["python", "-m", "uvicorn", "--workers", "8", "--host", "0.0.0.0", "--port", "6718", "--proxy-headers", "app.main:app"]
+        # The default keeps `helm upgrade --reuse-values` from a chart without uvicornWorkers working.
+        command: ["python", "-m", "uvicorn", "--workers", {{ .Values.uvicornWorkers | default 8 | quote }}, "--host", "0.0.0.0", "--port", "6718", "--proxy-headers", "app.main:app"]
         env:
         - name: LOG_LEVEL
           value: {{ .Values.logLevel | quote }}

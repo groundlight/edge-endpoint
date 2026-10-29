@@ -28,6 +28,7 @@ validate-setup-helm:
 test-helm-template:  ## Render-time assertions for the Helm chart (no cluster)
 	test/helm/test_edge_artifacts_map.sh
 	test/helm/test_inference_server.sh
+	test/helm/test_worker_settings.sh
 
 # Adjust which paths we lint
 LINT_PATHS="app test"

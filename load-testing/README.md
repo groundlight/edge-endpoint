@@ -9,21 +9,9 @@ An edge endpoint should be set up on the machine where you want to perform load 
 ## Advanced Configuration of the Edge Endpoint
 You may want to configure both the edge endpoint and the inference server containers to have the optimal number of workers. A general guideline is that your number of edge endpoint workers shouldn't exceed the number of CPU cores on your machine. Try to set your number of inference workers to maximize GPU utilization (if using a GPU).
 
-**To configure edge endpoint workers**: Edit the `--workers` parameter in [launch-edge-logic-server.sh](/app/bin/launch-edge-logic-server.sh). Change from the default:
-```bash
-uv run --no-sync uvicorn \
-    --workers 8 \  # You can tweak this for load testing
-    --host 0.0.0.0 \
-    --port ${APP_PORT} \
-    --proxy-headers \
-    app.main:app
-```
+**To configure edge endpoint workers**: Set `uvicornWorkers` (default `8`) in [values.yaml](/deploy/helm/groundlight-edge-endpoint/values.yaml), or pass `--set uvicornWorkers=<n>` to the helm command. If NGINX runs out of connections under load, raise `nginxWorkerConnections` (default `256`) the same way.
 
-**To configure inference server workers**: Set the `WORKERS` environment variable in the inference deployment template at [inference-deployment-template.yaml](/deploy/helm/groundlight-edge-endpoint/files/inference-deployment-template.yaml). Change the value from `"1"` to your desired number of workers:
-```yaml
-- name: WORKERS  # Number of uvicorn workers for the inference server
-  value: "4"  # Increase this number for load testing
-```
+**To configure inference server workers** (FastAPI inference pods only; Triton pods ignore it): Set `inferenceDeployment.workers` (default `1`) in [values.yaml](/deploy/helm/groundlight-edge-endpoint/values.yaml), or pass `--set inferenceDeployment.workers=<n>` to the helm command. It applies to inference deployments created after the change, so delete the existing `inferencemodel-*` deployments if you want them to pick it up.
 
 Some trial and error will likely be necessary to figure out the ideal configuration.
 

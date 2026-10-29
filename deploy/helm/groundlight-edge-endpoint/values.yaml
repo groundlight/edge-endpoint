@@ -55,6 +55,14 @@ httpEnabled: false
 edgeEndpointPort: 30101
 edgeEndpointHttpsPort: 30143
 
+# Number of uvicorn worker processes in the edge-endpoint router container. A general guideline is
+# to keep this at or below the number of CPU cores on the device.
+uvicornWorkers: 8
+
+# Maximum simultaneous connections per NGINX worker. This counts connections to the upstream
+# servers as well as to clients, so one proxied request uses two.
+nginxWorkerConnections: 256
+
 # This is used as the base of the name for the PersistentVolume. The full name of the volume is 
 # created by appending the namespace to this value. Generally, this should not be overridden.
 # The PersistentVolume is used to store the model files and other data that the Edge Endpoint wants
@@ -159,6 +167,12 @@ inferenceDeployment:
   # past ~3 detectors). Total compute threads ~= cpuThreads x (2 x num_detectors); keep
   # small (2-4) on dense multi-detector edges. Tune empirically per device.
   cpuThreads: 4
+  # Number of uvicorn worker processes per inference pod. Raising it can improve GPU utilization
+  # under load. Applies to inference deployments created after the change; existing ones keep
+  # their value.
+  # Only the FastAPI server reads it; it has no effect when inferenceServer is "triton".
+  # TODO: Support Triton pods.
+  workers: 1
   # Size of the memory-backed /dev/shm Triton's Python backend uses to pass requests to the model.
   tritonShmSizeLimit: 256Mi
   # Note: inference pods set no CPU requests or limits (BestEffort). Threads are bounded by
