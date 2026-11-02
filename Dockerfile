@@ -39,6 +39,7 @@ COPY --from=uv /uv /uvx /bin/
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     bash \
+    ca-certificates \
     curl \
     nginx \
     openssl \

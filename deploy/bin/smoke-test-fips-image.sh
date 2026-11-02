@@ -68,11 +68,22 @@ NGINX_TMP=$(mktemp)
 # Bind-mounted into the container as uid 65532; mktemp is 0600 by default.
 chmod 644 "$NGINX_TMP"
 trap 'rm -f "$NGINX_TMP"' EXIT
+# The verified proxy makes nginx -t load the CA bundle that the cloud fallback trusts.
+# The upstream is never contacted; nginx -t only parses the config.
 cat > "$NGINX_TMP" <<'EOF'
 events { worker_connections 64; }
 pid /tmp/nginx.pid;
 error_log /dev/stderr;
-http { server { listen 127.0.0.1:18080; return 200; } }
+http {
+    server {
+        listen 127.0.0.1:18080;
+        location / {
+            proxy_pass https://127.0.0.1:18443;
+            proxy_ssl_verify on;
+            proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+        }
+    }
+}
 EOF
 if dr --user 65532 -v "$NGINX_TMP:/opt/nginx/nginx.conf:ro" --entrypoint python "$IMAGE" -c '
 from pathlib import Path
@@ -82,9 +93,9 @@ ns = nameserver_from_resolv_conf(Path("/etc/resolv.conf").read_text())
 write_nginx_conf(Path("/opt/nginx/nginx.conf").read_text(), ns, NGINX_CONF)
 sys.exit(subprocess.call(["nginx", "-t", "-c", str(NGINX_CONF)]))
 '; then
-    pass "launch_nginx renders conf; nginx -t"
+    pass "launch_nginx renders conf; nginx -t loads CA bundle"
 else
-    fail "launch_nginx renders conf; nginx -t"
+    fail "launch_nginx renders conf; nginx -t loads CA bundle"
 fi
 
 if dr --entrypoint python "$IMAGE" -c 'from app.main import app; print(app.title)'; then

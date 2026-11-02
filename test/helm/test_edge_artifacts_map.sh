@@ -110,6 +110,9 @@ echo "=== edgeArtifactsMap helm template matrix ==="
 out="$(render)"
 assert_gl_public "default" "$out"
 assert_contains "edge deployment Recreate" "$out" $'strategy:\n    type: Recreate'
+assert_contains "nginx fallback verifies upstream cert" "$out" "proxy_ssl_verify on;"
+assert_contains "nginx fallback trusts system CA bundle" "$out" "proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;"
+assert_contains "nginx fallback verify depth" "$out" "proxy_ssl_verify_depth 3;"
 
 out="$(render --set upstreamEndpoint=https://api.groundlight.ai)"
 assert_gl_public "prod canonical" "$out"
@@ -128,6 +131,7 @@ assert_gl_public "api.dev.groundlight.ai" "$out"
 
 out="$(render --set upstreamEndpoint=https://api.groundlight.dev.axon.com)"
 assert_axon_dev "AG1 canonical" "$out"
+assert_contains "AG1 nginx fallback sets upstreamHost" "$out" "set \$upstreamHost api.groundlight.dev.axon.com;"
 
 out="$(render --set upstreamEndpoint=https://api.groundlight.dev.axon.com/)"
 assert_axon_dev "AG1 trailing slash" "$out"
