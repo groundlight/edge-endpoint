@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import shutil
+import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -47,6 +48,7 @@ logger = logging.getLogger(__name__)
 # Simple TTL cache for get_ready_inference_server checks to avoid having to re-check every time a request is processed.
 # This will be process-specific, so each edge-endpoint worker will have its own cache instance.
 ttl_cache = TTLCache(maxsize=128, ttl=5)
+ttl_cache_lock = threading.Lock()  # TTLCache is not thread-safe and is hit from many probe/inference threads
 
 MODEL_INTEGRITY_FILENAME = "model.integrity.json"
 
@@ -70,7 +72,7 @@ def verify_downloaded_buffer(model_info: ModelInfoBase, buffer: bytes | None) ->
         raise RuntimeError("Downloaded model payload hash mismatch")
 
 
-@cached(ttl_cache)
+@cached(ttl_cache, lock=ttl_cache_lock)
 def get_ready_inference_server(inference_client_url: str) -> InferenceServer | None:
     """Return the server the inference pod behind `inference_client_url` runs, or None if it is not ready.
 
