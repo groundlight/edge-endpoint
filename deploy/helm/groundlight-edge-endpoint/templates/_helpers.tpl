@@ -333,3 +333,50 @@ busybox:1.36
 {{- end -}}
 {{- get $servers $name | toJson -}}
 {{- end -}}
+
+
+{{/*
+  The GPU sharing inference pods actually get, from values.gpuSharing: "mps" only for Triton pods on
+  GPU devices, otherwise "none". Triton already refuses to render for Jetson (see inferenceServer). An
+  unset value (a `--reuse-values` upgrade from a chart without gpuSharing) means "none".
+*/}}
+{{- define "groundlight-edge-endpoint.gpuSharing" -}}
+{{- $requested := .Values.gpuSharing | default "none" -}}
+{{- if not (has $requested (list "none" "mps")) -}}
+  {{- fail (printf "gpuSharing must be \"none\" or \"mps\", got %q" $requested) -}}
+{{- end -}}
+{{- $server := include "groundlight-edge-endpoint.inferenceServer" . | fromJson -}}
+{{- if and (eq $requested "mps") (eq $server.name "triton") (eq .Values.inferenceFlavor "gpu") -}}
+mps
+{{- else -}}
+none
+{{- end -}}
+{{- end -}}
+
+{{/*
+  The MPS daemon's pipe directory on the host, shared by the daemon and every Triton pod that joins MPS.
+*/}}
+{{- define "groundlight-edge-endpoint.mpsPipeDirectory" -}}
+{{- if not .Values.mps -}}
+  {{- fail "gpuSharing \"mps\" needs the chart's mps values, which a --reuse-values upgrade from an older chart drops; use --reset-then-reuse-values" -}}
+{{- end -}}
+{{- printf "%s/pipe" (trimSuffix "/" .Values.mps.hostDirectory) -}}
+{{- end -}}
+
+{{/*
+  Inference pod settings for the resolved GPU sharing, as JSON: extra env vars, volume mounts and volumes.
+*/}}
+{{- define "groundlight-edge-endpoint.gpuSharingPodSettings" -}}
+{{- if eq (include "groundlight-edge-endpoint.gpuSharing" .) "mps" -}}
+{{- $pipe := include "groundlight-edge-endpoint.mpsPipeDirectory" . -}}
+{{- dict
+  "env" (list
+    (dict "name" "CUDA_MPS_PIPE_DIRECTORY" "value" $pipe)
+    (dict "name" "GL_MPS_MAX_CLIENTS_PER_GPU" "value" (toString .Values.mps.maxClientsPerGpu)))
+  "volumeMounts" (list (dict "name" "mps-pipe" "mountPath" $pipe))
+  "volumes" (list (dict "name" "mps-pipe" "hostPath" (dict "path" $pipe "type" "DirectoryOrCreate")))
+  | toJson -}}
+{{- else -}}
+{{- dict "env" (list) "volumeMounts" (list) "volumes" (list) | toJson -}}
+{{- end -}}
+{{- end -}}

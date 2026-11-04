@@ -345,9 +345,11 @@ spec:
           value: "/opt/groundlight/device/tokens"
         - name: USE_MINIMAL_IMAGE
           value: "{{ .Values.useMinimalImage }}"
-        # Existing inference deployments are moved to this server, one detector at a time.
+        # Existing inference deployments are moved to this server and GPU sharing, one detector at a time.
         - name: INFERENCE_SERVER
           value: {{ (include "groundlight-edge-endpoint.inferenceServer" . | fromJson).name | quote }}
+        - name: GPU_SHARING
+          value: {{ include "groundlight-edge-endpoint.gpuSharing" . | quote }}
         - name: ROLLOUT_READY_TIMEOUT_S
           value: "{{ .Values.modelUpdater.rolloutReadyTimeoutSeconds }}"
         volumeMounts:

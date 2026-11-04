@@ -411,6 +411,55 @@ class TestAttributeDetectorResources:
         assert detectors[0]["gpu"]["vram_bytes"]["primary"] == 100
         assert detectors[0]["ram_bytes"]["primary"] == 1000
 
+    def test_mps_clients_add_vram_but_no_gpu_utilization(self):
+        """NVML attributes an MPS client's utilization to the MPS server, so its 0% must not count as a reading."""
+        primary = _make_inference_pod("primary-pod")
+        oodd = _make_inference_pod("oodd-pod", is_oodd=True)
+        loading = _make_inference_pod("loading-pod")
+        mps_process = _gpu_process(100, compute_pct=0, memory_bw_pct=0)
+        mps_process["process"]["mps_client"] = True
+        loading_mps_process = _gpu_process(300, compute_pct=0, memory_bw_pct=0)
+        loading_mps_process["process"]["mps_client"] = True
+        detectors, loading_vram, _, loading_gpu_compute, loading_gpu_memory, _ = _attribute_detector_resources(
+            inference_pods=[(primary, DET_A, False, True), (oodd, DET_A, True, True), (loading, DET_A, False, False)],
+            active_pods={"primary-pod", "oodd-pod"},
+            gpu_responses={
+                "primary-pod": mps_process,
+                "oodd-pod": _gpu_process(50, compute_pct=5, memory_bw_pct=3),
+                "loading-pod": loading_mps_process,
+            },
+            pod_resources={},
+            total_cpu_millicores=1000,
+        )
+
+        assert detectors[0]["gpu"] == {
+            "vram_bytes": {"primary": 100, "oodd": 50, "total": 150},
+            "compute_utilization_pct": {"primary": None, "oodd": 5.0, "total": 5.0},
+            "memory_bandwidth_pct": {"primary": None, "oodd": 3.0, "total": 3.0},
+        }
+        assert loading_vram == 300
+        assert loading_gpu_compute == 0.0 and loading_gpu_memory == 0.0
+
+    def test_a_detector_with_only_mps_clients_has_no_utilization_total(self):
+        """With no utilization reading in either slot, the total is null rather than a false 0."""
+        primary = _make_inference_pod("primary-pod")
+        oodd = _make_inference_pod("oodd-pod", is_oodd=True)
+        mps_process = _gpu_process(100, compute_pct=0, memory_bw_pct=0)
+        mps_process["process"]["mps_client"] = True
+        detectors, *_ = _attribute_detector_resources(
+            inference_pods=[(primary, DET_A, False, True), (oodd, DET_A, True, True)],
+            active_pods={"primary-pod", "oodd-pod"},
+            gpu_responses={"primary-pod": mps_process, "oodd-pod": mps_process},
+            pod_resources={},
+            total_cpu_millicores=1000,
+        )
+
+        assert detectors[0]["gpu"] == {
+            "vram_bytes": {"primary": 100, "oodd": 100, "total": 200},
+            "compute_utilization_pct": {"primary": None, "oodd": None, "total": None},
+            "memory_bandwidth_pct": {"primary": None, "oodd": None, "total": None},
+        }
+
     def test_missing_gpu_data_yields_zero_vram(self):
         """A pod with no GPU response contributes 0 VRAM but still picks up RAM from Metrics Server."""
         pod = _make_inference_pod("p")
@@ -553,6 +602,7 @@ class TestParseTritonGpuMetrics:
                 "gpu_index": 1,
                 "compute_utilization_pct": 12.5,
                 "memory_bandwidth_pct": 3.0,
+                "mps_client": False,
             },
             "devices": [
                 {
@@ -578,6 +628,11 @@ class TestParseTritonGpuMetrics:
             ],
             "sampled_at": 1000.5,
         }
+
+    def test_reads_mps_membership(self):
+        payload = _parse_triton_gpu_metrics(TRITON_METRICS + "gl_process_mps_client 1\n", now=1001.0)
+
+        assert payload["process"]["mps_client"] is True
 
     def test_stale_gauges_are_treated_as_missing(self):
         assert _parse_triton_gpu_metrics(TRITON_METRICS, now=1000.5 + TRITON_GPU_METRICS_MAX_AGE_SEC + 1) is None

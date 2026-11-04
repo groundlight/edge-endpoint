@@ -1,0 +1,84 @@
+{{- if eq (include "groundlight-edge-endpoint.gpuSharing" .) "mps" }}
+{{- $pipe := include "groundlight-edge-endpoint.mpsPipeDirectory" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "groundlight-edge-endpoint.fullname" . }}-mps-control-daemon
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+data:
+  mps_control_daemon.py: |-
+{{ .Files.Get "files/mps_control_daemon.py" | indent 4 }}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "groundlight-edge-endpoint.fullname" . }}-mps-control-daemon
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: mps-control-daemon
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: mps-control-daemon
+  # Stopping the daemon breaks every MPS client on the node, so a helm upgrade never replaces its pod;
+  # only deleting the pod (or restarting the node) does.
+  updateStrategy:
+    type: OnDelete
+  template:
+    metadata:
+      labels:
+        app: mps-control-daemon
+    spec:
+      runtimeClassName: nvidia
+      # The MPS server finds its own PID through /proc, and inference pods (also hostPID) see the same PIDs.
+      hostPID: true
+      priorityClassName: system-node-critical
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      imagePullSecrets:
+      - name: registry-credentials
+      containers:
+      - name: mps-control-daemon
+        # The Triton image the node already pulls supplies python; the NVIDIA runtime injects the MPS
+        # binaries from the host driver.
+        image: {{ include "groundlight-edge-endpoint.ecrRegistry" . }}/gl-edge-inference:{{ include "groundlight-edge-endpoint.inferenceTag" . }}-triton
+        imagePullPolicy: "{{ include "groundlight-edge-endpoint.inferencePullPolicy" . }}"
+        command: ["python", "/opt/groundlight/mps/mps_control_daemon.py"]
+        env:
+        - name: CUDA_MPS_PIPE_DIRECTORY
+          value: {{ $pipe | quote }}
+        - name: CUDA_MPS_LOG_DIRECTORY
+          value: /var/log/nvidia-mps
+        - name: NVIDIA_VISIBLE_DEVICES
+          value: all
+        - name: NVIDIA_DRIVER_CAPABILITIES
+          value: compute,utility
+        readinessProbe:
+          exec:
+            command: ["python", "-c", "import os, sys; sys.exit(not os.path.exists({{ printf "%s/gl-ready" $pipe | squote }}))"]
+          periodSeconds: 10
+        resources:
+          requests:
+            memory: "64Mi"
+        volumeMounts:
+        - name: mps-pipe
+          mountPath: {{ $pipe }}
+        - name: mps-log
+          mountPath: /var/log/nvidia-mps
+        - name: mps-control-daemon
+          mountPath: /opt/groundlight/mps
+          readOnly: true
+      volumes:
+      - name: mps-pipe
+        hostPath:
+          path: {{ $pipe }}
+          type: DirectoryOrCreate
+      - name: mps-log
+        emptyDir: {}
+      - name: mps-control-daemon
+        configMap:
+          name: {{ include "groundlight-edge-endpoint.fullname" . }}-mps-control-daemon
+{{- end }}

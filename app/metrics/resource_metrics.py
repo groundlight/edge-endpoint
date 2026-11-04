@@ -132,6 +132,9 @@ class ResourceMetricsCollector:
             active_pods = _pick_active_pods(inference_pods)
             gpu_responses = _query_all_pod_gpus(inference_pods)
             gpu_devices, total_vram, used_vram, gpu_compute_pct, gpu_memory_bw_pct = _build_gpu_summary(gpu_responses)
+            mps_client_pods = sum(
+                1 for data in gpu_responses.values() if data and (data.get("process") or {}).get("mps_client")
+            )
             (
                 detectors,
                 loading_vram,
@@ -149,6 +152,7 @@ class ResourceMetricsCollector:
         else:
             gpu_devices, total_vram, used_vram = [], 0, 0
             gpu_compute_pct, gpu_memory_bw_pct = 0.0, 0.0
+            mps_client_pods = 0
             detectors, loading_vram, loading_ram = [], 0, 0
             loading_gpu_compute_pct, loading_gpu_memory_bw_pct = 0.0, 0.0
             loading_cpu_millicores = 0.0
@@ -169,8 +173,9 @@ class ResourceMetricsCollector:
         detector_ram = sum(det["ram_bytes"]["total"] for det in detectors)
         detector_vram = sum(det["gpu"]["vram_bytes"]["total"] for det in detectors)
         detector_cpu_pct = sum(det["cpu_utilization_pct"]["total"] for det in detectors)
-        detector_gpu_compute_pct = sum(det["gpu"]["compute_utilization_pct"]["total"] for det in detectors)
-        detector_gpu_memory_bw_pct = sum(det["gpu"]["memory_bandwidth_pct"]["total"] for det in detectors)
+        # A detector whose pods are all MPS clients has no utilization reading, so it adds nothing here.
+        detector_gpu_compute_pct = sum(det["gpu"]["compute_utilization_pct"]["total"] or 0.0 for det in detectors)
+        detector_gpu_memory_bw_pct = sum(det["gpu"]["memory_bandwidth_pct"]["total"] or 0.0 for det in detectors)
         edge_endpoint_cpu_pct = _percentage(edge_endpoint_cpu_millicores, node_resources["cpu"]["total_millicores"])
         loading_cpu_pct = _percentage(loading_cpu_millicores, node_resources["cpu"]["total_millicores"])
         other_cpu_pct = max(
@@ -222,6 +227,9 @@ class ResourceMetricsCollector:
                         "other": 0.0,
                     },
                     "devices": gpu_devices,
+                    # Inference pods that share their GPU through CUDA MPS. Their GPU utilization is only
+                    # counted in the device totals.
+                    "mps_client_pods": mps_client_pods,
                 },
             },
             "detectors": detectors,
@@ -376,6 +384,9 @@ _TRITON_DEVICE_GAUGES = {
     "gl_gpu_memory_bandwidth_pct": ("memory_bandwidth_pct", float),
 }
 _TRITON_LAST_UPDATE_GAUGE = "gl_gpu_usage_last_update_timestamp_seconds"
+# 1 for a pod that is a CUDA MPS client. NVML then attributes the pod's GPU utilization to the MPS server, so
+# its process utilization gauges read 0 and mean "unavailable". Images from before MPS don't publish it.
+_TRITON_MPS_CLIENT_GAUGE = "gl_process_mps_client"
 
 
 def _parse_triton_gpu_metrics(metrics_text: str, now: float) -> dict | None:
@@ -389,6 +400,7 @@ def _parse_triton_gpu_metrics(metrics_text: str, now: float) -> dict | None:
     process: dict = {}
     devices: dict[str, dict] = {}
     last_update: float | None = None
+    mps_client = False
     for line in metrics_text.splitlines():
         match = _PROMETHEUS_SAMPLE_RE.match(line)
         if not match or not match.group("name").startswith("gl_"):
@@ -397,6 +409,8 @@ def _parse_triton_gpu_metrics(metrics_text: str, now: float) -> dict | None:
         labels = {m.group("key"): m.group("value") for m in _PROMETHEUS_LABEL_RE.finditer(match.group("labels") or "")}
         if name == _TRITON_LAST_UPDATE_GAUGE:
             last_update = value
+        elif name == _TRITON_MPS_CLIENT_GAUGE:
+            mps_client = bool(value)
         elif name in _TRITON_PROCESS_GAUGES:
             field, cast = _TRITON_PROCESS_GAUGES[name]
             process[field] = cast(value)
@@ -412,6 +426,7 @@ def _parse_triton_gpu_metrics(metrics_text: str, now: float) -> dict | None:
         return None
     if set(process) != {field for field, _ in _TRITON_PROCESS_GAUGES.values()}:
         return None
+    process["mps_client"] = mps_client
     return {
         "schema_version": 2,
         "process": process,
@@ -557,6 +572,12 @@ def _build_gpu_summary(gpu_responses: dict[str, dict | None]) -> tuple[list, int
     return sorted_devices, all_gpus_total, all_gpus_used, compute_pct, memory_bw_pct
 
 
+def _sum_known_pct(*values: float | None) -> float | None:
+    """Sum the percentages that have readings, capped at 100, or None when none has one."""
+    known = [value for value in values if value is not None]
+    return min(sum(known), 100.0) if known else None
+
+
 def _attribute_detector_resources(
     inference_pods: list[tuple],
     active_pods: set[str],
@@ -591,6 +612,8 @@ def _attribute_detector_resources(
         gpu_data = gpu_responses.get(pod.metadata.name)
         process_info = (gpu_data.get("process") or {}) if gpu_data else {}
         process_vram = process_info.get("vram_used_bytes") or 0
+        # NVML can't attribute GPU utilization to an MPS client, so such a pod adds none rather than a false 0.
+        utilization_known = not process_info.get("mps_client")
         process_compute_pct = float(process_info.get("compute_utilization_pct") or 0.0)
         process_memory_bw_pct = float(process_info.get("memory_bandwidth_pct") or 0.0)
         pod_resource = pod_resources.get(pod.metadata.name, {})
@@ -602,8 +625,9 @@ def _attribute_detector_resources(
             loading_vram_bytes += process_vram
             loading_ram_bytes += process_ram
             loading_cpu_millicores += process_cpu_millicores
-            loading_gpu_compute_pct = min(loading_gpu_compute_pct + process_compute_pct, 100.0)
-            loading_gpu_memory_bw_pct = min(loading_gpu_memory_bw_pct + process_memory_bw_pct, 100.0)
+            if utilization_known:
+                loading_gpu_compute_pct = min(loading_gpu_compute_pct + process_compute_pct, 100.0)
+                loading_gpu_memory_bw_pct = min(loading_gpu_memory_bw_pct + process_memory_bw_pct, 100.0)
             continue
 
         if det_id not in detectors:
@@ -618,14 +642,15 @@ def _attribute_detector_resources(
         det["cpu_utilization_pct"][slot] = (det["cpu_utilization_pct"][slot] or 0.0) + process_cpu_pct
         det["ram_bytes"][slot] = (det["ram_bytes"][slot] or 0) + process_ram
         det["gpu"]["vram_bytes"][slot] = (det["gpu"]["vram_bytes"][slot] or 0) + process_vram
-        det["gpu"]["compute_utilization_pct"][slot] = min(
-            (det["gpu"]["compute_utilization_pct"][slot] or 0.0) + process_compute_pct,
-            100.0,
-        )
-        det["gpu"]["memory_bandwidth_pct"][slot] = min(
-            (det["gpu"]["memory_bandwidth_pct"][slot] or 0.0) + process_memory_bw_pct,
-            100.0,
-        )
+        if utilization_known:
+            det["gpu"]["compute_utilization_pct"][slot] = min(
+                (det["gpu"]["compute_utilization_pct"][slot] or 0.0) + process_compute_pct,
+                100.0,
+            )
+            det["gpu"]["memory_bandwidth_pct"][slot] = min(
+                (det["gpu"]["memory_bandwidth_pct"][slot] or 0.0) + process_memory_bw_pct,
+                100.0,
+            )
         det["cpu_utilization_pct"]["total"] = (det["cpu_utilization_pct"]["primary"] or 0.0) + (
             det["cpu_utilization_pct"]["oodd"] or 0.0
         )
@@ -633,16 +658,8 @@ def _attribute_detector_resources(
         det["gpu"]["vram_bytes"]["total"] = (det["gpu"]["vram_bytes"]["primary"] or 0) + (
             det["gpu"]["vram_bytes"]["oodd"] or 0
         )
-        det["gpu"]["compute_utilization_pct"]["total"] = min(
-            (det["gpu"]["compute_utilization_pct"]["primary"] or 0.0)
-            + (det["gpu"]["compute_utilization_pct"]["oodd"] or 0.0),
-            100.0,
-        )
-        det["gpu"]["memory_bandwidth_pct"]["total"] = min(
-            (det["gpu"]["memory_bandwidth_pct"]["primary"] or 0.0)
-            + (det["gpu"]["memory_bandwidth_pct"]["oodd"] or 0.0),
-            100.0,
-        )
+        for metric in ("compute_utilization_pct", "memory_bandwidth_pct"):
+            det["gpu"][metric]["total"] = _sum_known_pct(det["gpu"][metric]["primary"], det["gpu"][metric]["oodd"])
 
     return (
         list(detectors.values()),

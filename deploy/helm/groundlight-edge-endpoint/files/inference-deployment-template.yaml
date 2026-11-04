@@ -1,4 +1,5 @@
 {{- $server := include "groundlight-edge-endpoint.inferenceServer" . | fromJson }}
+{{- $sharing := include "groundlight-edge-endpoint.gpuSharingPodSettings" . | fromJson }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -40,6 +41,7 @@ spec:
         instance: placeholder-inference-instance-name
       annotations:
         groundlight.dev/inference-server: {{ $server.name | quote }}
+        groundlight.dev/gpu-sharing: {{ include "groundlight-edge-endpoint.gpuSharing" . | quote }}
     spec:
       hostPID: true  # Allows pynvml to match this process's PID against nvidia-smi PIDs for accurate per-pod VRAM reporting
 {{ if eq .Values.inferenceFlavor "gpu" }}
@@ -86,6 +88,9 @@ spec:
           value: "{{ .Values.inferenceDeployment.cpuThreads }}"
         - name: OPENBLAS_NUM_THREADS
           value: "{{ .Values.inferenceDeployment.cpuThreads }}"
+{{- with $sharing.env }}
+        {{- toYaml . | nindent 8 }}
+{{- end }}
         # No CPU requests or limits: inference pods run BestEffort. Threads are bounded by
         # cpuThreads and most detectors are idle at any instant, so the scheduler launches
         # every detector and the OS time-slices the occasional simultaneous burst.
@@ -102,6 +107,9 @@ spec:
         # Triton's Python backend passes tensors to its stub process through shared memory.
         - name: dshm
           mountPath: /dev/shm
+{{- end }}
+{{- with $sharing.volumeMounts }}
+        {{- toYaml . | nindent 8 }}
 {{- end }}
         ports:
         - containerPort: 8000
@@ -158,4 +166,7 @@ spec:
         emptyDir:
           medium: Memory
           sizeLimit: {{ .Values.inferenceDeployment.tritonShmSizeLimit | default "256Mi" }}
+{{- end }}
+{{- with $sharing.volumes }}
+      {{- toYaml . | nindent 6 }}
 {{- end }}

@@ -82,6 +82,24 @@ edgeCompileEnabled: false
 # server one detector at a time.
 inferenceServer: "fastapi"
 
+# How Triton inference pods share each GPU: "none", where the GPU time-slices between the pods' separate
+# CUDA contexts, or "mps", where one CUDA MPS daemon per node lets the kernels of every pod that joins run
+# side by side. "mps" takes effect only with inferenceServer "triton" on an x86_64 GPU device; anywhere
+# else it renders as "none". After a change, the model updater moves existing inference pods one detector
+# at a time. Turning MPS off stops its daemon right away; a Triton pod whose next CUDA call needs the MPS
+# server then restarts once and comes back time-sliced, and every detector is moved afterwards.
+gpuSharing: "none"
+
+mps:
+  # Host directory holding the MPS daemon's pipe directory. Never /tmp/nvidia-mps: the NVIDIA container
+  # toolkit mounts that path into every GPU container, which would pull FastAPI pods into MPS too.
+  hostDirectory: /run/groundlight/mps
+  # A Triton pod runs time-sliced instead of joining MPS once every GPU has this many MPS clients. NVIDIA's
+  # limit per MPS server depends on the GPU architecture: 16 before Volta, 48 on Volta and Turing, and 60
+  # on Ampere and later since CUDA 13.0 (R580 drivers). The default of 44 keeps 4 slots free below Volta
+  # and Turing's 48 for rolling updates. Pre-Volta GPUs never join MPS, so the limit doesn't apply to them.
+  maxClientsPerGpu: 44
+
 # The user must provide the Groundlight API token as input or the deployment will fail
 groundlightApiToken: ""
 

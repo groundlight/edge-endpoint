@@ -5,7 +5,6 @@ import time
 from app.core.database import DatabaseManager
 from app.core.edge_config_manager import EdgeConfigManager
 from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions
-from app.core.inference_server import InferenceServer, configured_inference_server
 from app.core.kubernetes_management import InferenceDeploymentManager
 from app.core.naming import get_edge_inference_deployment_name, get_edge_inference_model_name
 
@@ -65,12 +64,12 @@ def _start_rollout(
     detector_id: str,
     deployment_manager: InferenceDeploymentManager,
     separate_oodd_inference: bool,
-    switch_to: InferenceServer | None,
+    rerender: bool,
 ) -> None:
-    """Start rolling out a detector's inference deployments: move them to `switch_to`, or patch in a new model."""
-    if switch_to is not None:
-        logger.info(f"Moving inference deployment(s) for {detector_id} to the {switch_to.value} server")
-        start = deployment_manager.switch_inference_server
+    """Start rolling out a detector's inference deployments: re-render their pod templates, or patch in a new model."""
+    if rerender:
+        logger.info(f"Moving inference deployment(s) for {detector_id} to the configured server and GPU sharing")
+        start = deployment_manager.rerender_inference_deployment
     else:
         # Update inference deployment and rollout a new pod
         logger.info(f"Updating inference deployment for {detector_id}")
@@ -123,26 +122,26 @@ def _check_new_models_and_inference_deployments(
             deployment_manager.create_inference_deployment(detector_id=detector_id, is_oodd=True)
             deployment_created = True
 
-    # Model rollouts only patch an existing deployment, so after the configured inference server changes
-    # (Helm value `inferenceServer`), a detector's deployments keep the server they were created with until
-    # they are moved here. Moving them re-renders their pod templates, which also rolls out any new model.
-    configured_server = configured_inference_server()
-    switch_server = any(
-        deployment is not None and deployment_manager.deployment_inference_server(deployment) != configured_server
+    # Model rollouts only patch an existing deployment, so after the configured inference server or GPU sharing
+    # changes (Helm values `inferenceServer` and `gpuSharing`), a detector's deployments keep the pod template
+    # they were created with until they are moved here. Moving them re-renders their pod templates, which also
+    # rolls out any new model.
+    rerender = any(
+        deployment is not None and deployment_manager.pod_template_is_outdated(deployment)
         for deployment in (edge_deployment, oodd_deployment)
     )
 
-    # Only need to roll out the deployment if there is a new model or a server change and the deployment wasn't
+    # Only need to roll out the deployment if there is a new model or a template change and the deployment wasn't
     # just created. Attempting to update a recently created deployment can result in a Kubernetes 409 exception,
     # so it's best to avoid this. During start up this step will be skipped because deployment_created = True,
     # which has the nice effect that inference pods will all come online right away, thus saving time. Subsequent
     # rollouts will become single-threaded in order to manage memory/CPU more wisely.
-    if (new_model or switch_server) and not deployment_created:
+    if (new_model or rerender) and not deployment_created:
         _start_rollout(
             detector_id=detector_id,
             deployment_manager=deployment_manager,
             separate_oodd_inference=separate_oodd_inference,
-            switch_to=configured_server if switch_server else None,
+            rerender=rerender,
         )
 
         # Poll until the deployment rollout begins

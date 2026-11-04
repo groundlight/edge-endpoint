@@ -367,6 +367,50 @@ inference pods to the new server, one detector at a time. The new pod starts bef
 and the edge endpoint detects which server each pod runs, so detectors keep serving during the move.
 Setting the value back moves them back.
 
+`--set gpuSharing=mps` lets Triton inference pods share each GPU through CUDA MPS. Without it the GPU
+time-slices between the pods' separate CUDA contexts; with it their kernels run side by side.
+- **Where it applies.** Only with `inferenceServer=triton` on x86_64 GPU devices. Anywhere else (FastAPI,
+  `inferenceFlavor=cpu`, Jetson) it renders as `none` without failing, so it is safe to set fleet-wide.
+- **The daemon.** The chart runs one MPS control daemon per node (`edge-endpoint-mps-control-daemon`,
+  using the Triton image). The NVIDIA runtime supplies the MPS binaries from the host driver.
+  - It only reports ready after a test client has joined MPS.
+  - If the host driver install lacks `nvidia-cuda-mps-control` or `nvidia-cuda-mps-server` (on Ubuntu they
+    come from `nvidia-compute-utils-<version>`), the daemon logs which one is missing, writes the reason to
+    `gl-unavailable` in its pipe directory, and stays up without becoming ready instead of crash-looping.
+  - A Triton pod waits for the daemon before joining. If the daemon reports MPS unavailable, never becomes
+    ready, or every GPU has `mps.maxClientsPerGpu` MPS clients, the pod runs time-sliced and its
+    `gl_process_mps_client` gauge reads 0. An unavailable daemon doesn't make the pod wait.
+- **Restarts.** `helm upgrade` never replaces the daemon's pod (`updateStrategy: OnDelete`), because when
+  the daemon stops, its MPS server stops with it.
+  - A Triton pod whose next CUDA call needs that server fails it. The image then stops tritonserver, so the
+    pod restarts and rejoins MPS, or comes back time-sliced if no daemon is ready.
+  - Other pods keep serving until they make such a call or are moved.
+  - If the daemon pod crashes or is deleted, the DaemonSet recreates it in seconds.
+  - Turning MPS on moves existing detectors one at a time, as for `inferenceServer`. Turning it off removes
+    the daemon right away, and the model updater then moves every detector to a time-sliced pod.
+  - After a host driver upgrade, delete the daemon's pod or reboot the node. The old daemon keeps serving
+    the driver version it started with, which the pods' newly loaded `libcuda` can't join.
+- **Shared GPU faults.** On Volta and newer, a fatal GPU fault in one MPS client (an illegal memory access or a
+  device-side assert) is reported to every client on that GPU, so one bad detector restarts every Triton pod on
+  its GPU. Time-sliced pods keep such a fault to the pod that caused it. The pods recover by restarting, as when
+  the daemon restarts.
+- **Driver and GPU.** The chart doesn't check the driver version. Nothing about MPS changes the driver the
+  Triton image already needs to run CUDA.
+  - The MPS client is part of `libcuda`, so it should talk to the MPS server of the same driver version. The
+    NVIDIA runtime injects `nvidia-cuda-mps-control` and `libcuda` from the host driver into both the daemon
+    and the pods, so they match. The Triton image must not ship its own `libcuda` (for example a
+    `cuda-compat` package) ahead of the injected one on the library path. The daemon runs the same image,
+    so its test client would then fail to join MPS, the daemon would never become ready, and the pods would
+    run time-sliced.
+  - NVIDIA caps the clients per MPS server by GPU architecture: 16 before Volta, 48 on Volta and Turing, 60 on
+    Ampere and later (CUDA 13.0, R580 drivers). The default `mps.maxClientsPerGpu=44` suits Volta and
+    newer. Pods never join MPS on an older GPU; they run time-sliced there.
+  - The daemon's test client logs `NVIDIA driver <version>` before it tries to join MPS, so `kubectl logs`
+    on the daemon pod names the driver even when the test fails.
+- **Status page.** `/status/resources.json` counts MPS pods in `system.gpu.mps_client_pods`. NVML can't
+  attribute GPU utilization to an MPS client, so such a pod's per-detector utilization is `null`. Its
+  VRAM is still reported.
+
 Until FastAPI is retired, two rules keep older charts working:
 - The plain inference tags (`release`, `pre-release`, `latest`) always point at FastAPI images. Charts
   from before `inferenceServer` existed pull them and probe FastAPI's `/health/*` endpoints.

@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 
 def _make_manager():
     """Create an InferenceDeploymentManager with mocked-out __init__."""
@@ -115,7 +117,62 @@ class TestDeploymentInferenceServer:
             assert InferenceDeploymentManager.deployment_inference_server(dep) is InferenceServer.FASTAPI
 
 
-class TestSwitchInferenceServer:
+class TestDeploymentGpuSharing:
+    def test_reads_the_pod_template_annotation(self):
+        from app.core.gpu_sharing import GpuSharing
+        from app.core.kubernetes_management import InferenceDeploymentManager
+
+        dep = _deployment_with_annotations({"groundlight.dev/gpu-sharing": "mps"})
+        assert InferenceDeploymentManager.deployment_gpu_sharing(dep) is GpuSharing.MPS
+
+    def test_pods_without_the_annotation_do_not_use_mps(self):
+        from app.core.gpu_sharing import GpuSharing
+        from app.core.kubernetes_management import InferenceDeploymentManager
+
+        for annotations in (None, {"groundlight.dev/inference-server": "triton"}):
+            dep = _deployment_with_annotations(annotations)
+            assert InferenceDeploymentManager.deployment_gpu_sharing(dep) is GpuSharing.NONE
+
+
+class TestPodTemplateIsOutdated:
+    @pytest.mark.parametrize(
+        "annotations, server, sharing, outdated",
+        [
+            (
+                {"groundlight.dev/inference-server": "triton", "groundlight.dev/gpu-sharing": "mps"},
+                "triton",
+                "mps",
+                False,
+            ),
+            (
+                {"groundlight.dev/inference-server": "triton", "groundlight.dev/gpu-sharing": "none"},
+                "triton",
+                "mps",
+                True,
+            ),
+            ({"groundlight.dev/inference-server": "triton"}, "triton", "mps", True),
+            (
+                {"groundlight.dev/inference-server": "triton", "groundlight.dev/gpu-sharing": "mps"},
+                "triton",
+                "none",
+                True,
+            ),
+            ({"groundlight.dev/inference-server": "fastapi"}, "triton", "none", True),
+            ({"groundlight.dev/inference-server": "fastapi"}, "fastapi", "none", False),
+            (None, "fastapi", "none", False),
+        ],
+    )
+    def test_compares_both_annotations_with_the_configuration(
+        self, monkeypatch: pytest.MonkeyPatch, annotations, server, sharing, outdated
+    ):
+        monkeypatch.setenv("INFERENCE_SERVER", server)
+        monkeypatch.setenv("GPU_SHARING", sharing)
+        mgr = _make_manager()
+
+        assert mgr.pod_template_is_outdated(_deployment_with_annotations(annotations)) is outdated
+
+
+class TestRerenderInferenceDeployment:
     def test_replaces_the_pod_template_with_one_rendered_from_the_current_template(self):
         """A JSON patch replaces the whole pod template, so nothing from the old server is merged in."""
         from app.core.naming import get_edge_inference_deployment_name, get_edge_inference_model_name
@@ -123,7 +180,7 @@ class TestSwitchInferenceServer:
         mgr = _make_manager()
         mgr._inference_deployment_template = TEMPLATE
         with patch("app.core.kubernetes_management.get_current_model_version", return_value=7):
-            mgr.switch_inference_server("det_abc", is_oodd=True)
+            mgr.rerender_inference_deployment("det_abc", is_oodd=True)
 
         kwargs = mgr._app_kube_client.patch_namespaced_deployment.call_args.kwargs
         assert kwargs["name"] == get_edge_inference_deployment_name("det_abc", is_oodd=True)
@@ -148,7 +205,7 @@ class TestSwitchInferenceServer:
             patch("app.core.kubernetes_management.datetime") as dt,
         ):
             dt.now.return_value.isoformat.return_value = "2026-10-20T12:00:00"
-            mgr.switch_inference_server("det_abc")
+            mgr.rerender_inference_deployment("det_abc")
 
         [op] = mgr._app_kube_client.patch_namespaced_deployment.call_args.kwargs["body"]
         annotations = op["value"]["metadata"]["annotations"]

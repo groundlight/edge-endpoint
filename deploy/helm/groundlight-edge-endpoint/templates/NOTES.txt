@@ -27,3 +27,8 @@ or pass disable_tls_verification=True to the Groundlight() constructor.
 
 NOTE: HTTP access is disabled. Only HTTPS is available on port {{ .Values.edgeEndpointHttpsPort }}.
 {{- end }}
+{{- if and (eq (.Values.gpuSharing | default "none") "mps") (eq (include "groundlight-edge-endpoint.gpuSharing" .) "none") }}
+
+NOTE: gpuSharing is "mps", but CUDA MPS only applies to Triton inference pods on x86_64 GPU devices
+(inferenceServer="triton", inferenceFlavor="gpu"). Inference pods on this device are time-sliced.
+{{- end }}
