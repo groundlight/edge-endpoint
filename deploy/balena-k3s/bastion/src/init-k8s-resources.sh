@@ -42,7 +42,7 @@ trap cleanup EXIT
 # Run before cd so relative paths in -f args resolve correctly
 "$(dirname $0)"/env-to-config-map.sh "$@" > $env_data
 
-passed_in_api_token=$(grep -E '^GROUNDLIGHT_API_TOKEN:' $env_data | cut -d: -f2-)
+passed_in_api_token=$(grep -E '^"?GROUNDLIGHT_API_TOKEN"?:' $env_data | cut -d: -f2-)
 if [ -n "$passed_in_api_token" ]; then
     export GROUNDLIGHT_API_TOKEN=$(echo $passed_in_api_token | tr -d ' "')
 fi
@@ -52,10 +52,10 @@ if [ -z "$GROUNDLIGHT_API_TOKEN" ]; then
     exit 1
 fi
 
-sed -i '/^GROUNDLIGHT_API_TOKEN:/d' $env_data
+sed -i -E '/^"?GROUNDLIGHT_API_TOKEN"?:/d' $env_data
 
 # Extract GROUNDLIGHT_ENDPOINT
-passed_upstream_endpoint=$(grep -E '^GROUNDLIGHT_ENDPOINT:' $env_data | cut -d: -f2-)
+passed_upstream_endpoint=$(grep -E '^"?GROUNDLIGHT_ENDPOINT"?:' $env_data | cut -d: -f2-)
 if [ -n "$passed_upstream_endpoint" ]; then
     export GROUNDLIGHT_ENDPOINT=$(echo $passed_upstream_endpoint | tr -d ' "')
 fi
@@ -63,16 +63,19 @@ fi
 GROUNDLIGHT_ENDPOINT_OPTION=""
 if [ -n "${GROUNDLIGHT_ENDPOINT:-}" ]; then
     GROUNDLIGHT_ENDPOINT_OPTION="--set upstreamEndpoint=${GROUNDLIGHT_ENDPOINT}"
-    sed -i '/^GROUNDLIGHT_ENDPOINT:/d' $env_data
+    sed -i -E '/^"?GROUNDLIGHT_ENDPOINT"?:/d' $env_data
 fi
 
 echo; echo
-echo "Passthrough environment variables (sanitized):"
-cat $env_data
+# Print variable names only. Values can hold secrets (e.g. legacy per-detector api_token entries in
+# EDGE_CONFIG, or arbitrary helm --set pairs in EDGE_ENDPOINT_VALUES). Lines of multi-line values show up
+# in $env_data as pseudo-keys like "api_token: ..."; the pattern only matches real variable names.
+echo "Passthrough environment variables (names only):"
+grep -oE '^"[A-Za-z_][A-Za-z0-9_]*":' $env_data | tr -d '":'
 echo; echo
 
 # Extract RUN_EDGE_ENDPOINT
-passed_run_edge_endpoint=$(grep -E '^RUN_EDGE_ENDPOINT:' $env_data | cut -d: -f2-)
+passed_run_edge_endpoint=$(grep -E '^"?RUN_EDGE_ENDPOINT"?:' $env_data | cut -d: -f2-)
 if [ -n "$passed_run_edge_endpoint" ]; then
     export RUN_EDGE_ENDPOINT=$(echo $passed_run_edge_endpoint | tr -d ' "')
 fi
