@@ -144,6 +144,8 @@ RUN rm /etc/nginx/sites-enabled/default
 RUN ln -sf /dev/stdout /var/log/nginx/access.log && \
     ln -sf /dev/stderr /var/log/nginx/error.log
 
+RUN python deploy/bin/check_distrusted_roots.py /usr/local/aws-cli/v2/current/dist/awscli/botocore/cacert.pem
+
 CMD ["/bin/bash", "-c", "./app/bin/launch-edge-logic-server.sh"]
 
 # Document the exposed port, which is configured in nginx.conf

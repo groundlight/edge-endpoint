@@ -10,7 +10,7 @@
 # WHY THIS EXISTS
 #
 # A `-fips` tag is a claim, not evidence. Two things can silently break it:
-#   * `apk add` of anything linking OpenSSL can move libcrypto3/libssl3 out from under the
+#   * `apk add` of anything linking OpenSSL can move libcrypto/libssl out from under the
 #     FIPS provider, leaving an image that is tagged -fips but is not FIPS.
 #   * A Python wheel can vendor its own OpenSSL, bypassing the system provider entirely
 #     (including a static link inside cryptography that never produces a libssl* file).
@@ -123,27 +123,65 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 4. The negative test that actually proves FIPS is *active* rather than merely
-#    installed: MD5 must be refused for security use, but allowed when the caller
-#    explicitly opts out. If the first call succeeds, FIPS is not being enforced; if
-#    the second fails, the image is broken rather than strict.
+# 4. Prove FIPS is *active* rather than merely installed, by asking libcrypto which
+#    provider serves what:
+#      - FIPS mode is on (default_properties = fips=yes).
+#      - OpenSSL's non-FIPS `default` provider is not loaded at all.
+#      - Approved digests (SHA-256) come from the fips provider.
+#      - MD5 comes only from Chainguard's legacy-allowed provider (identity
+#        chainguard-fips-allowed in openssl.cnf), and works with usedforsecurity=False
+#        (libraries rely on that for non-security checksums).
+#
+#    The OpenSSL 4 base activates openssl-provider-legacy-allowed by default
+#    (CHAINGUARD_LEGACY_ALLOWED = 1 in openssl.cnf). It serves MD5, MD4, SHA-1 and
+#    AES-ECB for non-security uses (FIPS 140-3 IG 2.4.A) and registers them under
+#    fips=yes, so hashlib.md5(b"x") succeeds and cannot tell a FIPS image from a
+#    broken one. CHAINGUARD_LEGACY_ALLOWED=0 is not a fix: Python then falls back to
+#    its built-in MD5, which no provider policy governs.
+#
+#    libcrypto is reached through _hashlib's own handle, so no soname is hardcoded and
+#    this is the same libcrypto hashlib itself uses.
 # ---------------------------------------------------------------------------
-if dr --entrypoint python "$IMAGE" -c '
-import hashlib, sys
-try:
-    hashlib.md5(b"x")
-except ValueError:
-    pass
-else:
-    sys.exit("md5 was permitted for security use: FIPS is not enforced")
+if provider_report=$(dr --entrypoint python "$IMAGE" -c '
+import ctypes, hashlib, sys, _hashlib
+
+lib = ctypes.CDLL(_hashlib.__file__)
+lib.EVP_MD_fetch.restype = ctypes.c_void_p
+lib.EVP_MD_fetch.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
+lib.EVP_MD_get0_provider.restype = ctypes.c_void_p
+lib.EVP_MD_get0_provider.argtypes = [ctypes.c_void_p]
+lib.OSSL_PROVIDER_get0_name.restype = ctypes.c_char_p
+lib.OSSL_PROVIDER_get0_name.argtypes = [ctypes.c_void_p]
+lib.OSSL_PROVIDER_available.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+lib.EVP_MD_free.argtypes = [ctypes.c_void_p]
+
+def provider_of(digest):
+    md = lib.EVP_MD_fetch(None, digest, None)
+    if not md:
+        return None
+    name = lib.OSSL_PROVIDER_get0_name(lib.EVP_MD_get0_provider(md)).decode()
+    lib.EVP_MD_free(md)
+    return name
+
+if not _hashlib.get_fips_mode():
+    sys.exit("FIPS mode is off: default properties do not require fips=yes")
+if lib.OSSL_PROVIDER_available(None, b"default"):
+    sys.exit("the non-FIPS default provider is loaded")
+sha256 = provider_of(b"SHA2-256")
+if sha256 != "fips":
+    sys.exit(f"SHA-256 is served by {sha256!r}, not the fips provider")
+md5 = provider_of(b"MD5")
+if md5 != "chainguard-fips-allowed":
+    sys.exit(f"MD5 is served by {md5!r}, expected only legacy-allowed")
 try:
     hashlib.md5(b"x", usedforsecurity=False)
 except Exception as e:
-    sys.exit(f"md5(usedforsecurity=False) failed, image looks broken: {e}")
-' >/dev/null 2>&1; then
-    pass "MD5 refused for security use, permitted with usedforsecurity=False"
+    sys.exit(f"md5(usedforsecurity=False) failed, image looks broken: {e!r}")
+' 2>&1); then
+    pass "FIPS mode on, default provider absent, SHA-256 from fips, MD5 only from legacy-allowed"
 else
-    fail "MD5 enforcement behaved unexpectedly (FIPS not active, or image broken)"
+    fail "FIPS provider routing behaved unexpectedly (FIPS not active, or image broken)"
+    echo "$provider_report" | tail -3 | sed 's/^/        /'
 fi
 
 # ---------------------------------------------------------------------------

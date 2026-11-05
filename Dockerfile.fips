@@ -14,13 +14,13 @@
 # FIPS GEP. mount-s3 is privileged and runAsUser 0 in the chart (FUSE).
 #
 # Base image pins: MUST be date-stamped tags, never mutable ones. The mutable
-# python-fips:3.11 tag is frozen at 2025-08-22 (~11 months stale) and its OpenSSL
-# (3.5.2-r1) is older than the apk repo the image points at (3.6.3-r3), so `apk add` there
-# silently upgrades libcrypto out from under the FIPS provider. Same-date dev and non-dev
-# pins keep the builder and prod OpenSSL/Python identical.
+# python-fips:3.11 tag stopped updating in August 2025, so its OpenSSL is older than the
+# apk repo the image points at, and `apk add` there silently upgrades libcrypto out from
+# under the FIPS provider. Same-date dev and non-dev pins keep the builder and prod
+# OpenSSL/Python identical.
 # Re-resolve with: deploy/bin/resolve-chainguard-tag.sh python-fips 3.11-dev
-ARG PY_FIPS_DEV=cgr.dev/axon.com/python-fips:3.11-dev-202607290026@sha256:6b0bf611cd0cbd1416f72cac1e42ef53494c1ecd25ccf18cab65165242e61e65
-ARG PY_FIPS=cgr.dev/axon.com/python-fips:3.11-202607290027@sha256:c111eb2b12b2fa86c6bb9c3c9e0f11daeb895d8a58509504805d1d81b5213f12
+ARG PY_FIPS_DEV=cgr.dev/axon.com/python-fips:3.11-dev-202611031100@sha256:a702ad603d29028313a11e75d2faa03147f9da288020fef68d43724939306d53
+ARG PY_FIPS=cgr.dev/axon.com/python-fips:3.11-202611031059@sha256:7527023ea57c6eddfd62a6da30122a19a2faebf328aff4b5060388a4e94091e2
 
 ARG NGINX_PORT=30101
 ARG NGINX_PORT_OLD=6717
@@ -42,7 +42,7 @@ RUN npm run build
 ########################################
 # Mountpoint for S3 is published as a glibc Debian package, not a Wolfi apk. Stage it
 # and its loader/libs under /opt/aws-mount-s3 so they cannot overwrite the FIPS
-# libcrypto3/libssl3 in /usr/lib. The Python launcher invokes the glibc loader with
+# libcrypto/libssl in /usr/lib. The Python launcher invokes the glibc loader with
 # an isolated --library-path.
 #
 # Residual risk: TLS inside mount-s3 is AWS's crypto, not Chainguard's FIPS Python
@@ -102,21 +102,21 @@ RUN apk add --no-cache uv
 # gep/glruntime/Dockerfile.fips: Wolfi has no plain `nginx` package, and `nginx-config`
 # is ambiguous without pinning nginx-mainline-config.
 #
-# Stay on 1.31.6-r2. That build links libssl.so.3, which the distroless image
-# already has from the FIPS base. 1.31.6-r3 links libssl.so.4, and those
-# libraries are not copied into the image.
+# nginx is copied without its own OpenSSL, so the pinned build must link the
+# libssl soname the FIPS base ships (libssl.so.4 on OpenSSL 4). Re-pin it
+# whenever the base moves to a new OpenSSL major version.
 RUN mkdir -p /runtime-apks/etc/apk && \
     cp /etc/apk/repositories /runtime-apks/etc/apk/repositories && \
     cp -r /etc/apk/keys /runtime-apks/etc/apk/keys && \
     apk add --no-cache --no-scripts --initdb --root /runtime-apks \
-        'nginx-mainline=1.31.6-r2' 'nginx-mainline-config=1.31.6-r2' && \
-    readelf -d /runtime-apks/usr/bin/nginx | grep -q 'libssl.so.3' \
-      || (echo "FIPS VIOLATION: nginx does not link libssl.so.3" && exit 1)
+        'nginx-mainline=1.31.6-r3' 'nginx-mainline-config=1.31.6-r3' && \
+    readelf -d /runtime-apks/usr/bin/nginx | grep -q 'libssl.so.4' \
+      || (echo "FIPS VIOLATION: nginx does not link libssl.so.4" && exit 1)
 
 RUN /usr/bin/openssl-fips-test && \
     test -f /etc/ssl/fipsmodule.cnf && \
     test -f /usr/lib/ossl-modules/fips.so && \
-    apk info -v libcrypto3 && apk info -v libssl3
+    apk info -W /usr/lib/libcrypto.so.4 /usr/lib/libssl.so.4
 
 WORKDIR ${APP_ROOT}
 
@@ -162,6 +162,8 @@ ARG UVICORN_PORT
 COPY --from=builder /runtime-apks/usr/bin/nginx /usr/bin/nginx
 COPY --from=builder /runtime-apks/usr/lib/nginx/ /usr/lib/nginx/
 COPY --from=builder /runtime-apks/usr/lib/libpcre2-8.so.0* /usr/lib/
+# Fails the build if nginx cannot load a shared library from this base.
+RUN ["/usr/bin/nginx", "-v"]
 
 COPY --from=builder --chown=65532:65532 /runtime-apks/etc/nginx/ /etc/nginx/
 COPY --from=builder --chown=65532:65532 /runtime-apks/var/lib/nginx/ /var/lib/nginx/
@@ -188,6 +190,8 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR ${APP_ROOT}
 USER 65532
+
+RUN ["python", "deploy/bin/check_distrusted_roots.py"]
 
 LABEL ai.groundlight.fips="true"
 
