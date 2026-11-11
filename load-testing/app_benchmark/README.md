@@ -21,9 +21,13 @@ Workers generate a fresh synthetic image per frame via the helpers in
 `load-testing/image_helpers.py` and pass the ndarray directly to
 `gl.ask_ml` — the SDK handles JPEG encoding internally.
 
-For `bbox_to_binary`, one small (224×224) binary image is generated once at
-worker startup and resubmitted `objects` times per frame; the SDK re-encodes
-per call, which at that size is negligible.
+For `bbox_to_binary`, each of the `objects` downstream calls per frame gets
+a freshly generated small (224×224) binary image. Every binary image (in
+both binary lens types) is stamped with a unique
+`{worker_number}-{request_number}` tag, so no two requests share pixels.
+This matters because the binary and OODD pipelines cache backbone features
+keyed on image pixels: a resubmitted image skips the backbone entirely and
+makes the binary stage look far cheaper than it is with real ROI crops.
 
 The `objects` downstream binary calls within a frame are submitted
 **concurrently** (one bbox detect, then a parallel fan-out over the

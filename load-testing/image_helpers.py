@@ -136,8 +136,14 @@ def generate_fixed_objects_image(
 def generate_random_binary_image(
     image_width: int = 640,
     image_height: int = 480,
+    tag: str | None = None,
 ) -> tuple[np.ndarray, str, None]:
-    """Generate a random black or white image with a timestamp overlay and matching YES/NO label."""
+    """Generate a random black or white image with a timestamp overlay and matching YES/NO label.
+
+    `tag`, if given, is drawn after the timestamp. Pass a per-request unique tag when every image must have
+    distinct pixels: the millisecond timestamp alone can repeat across calls, and identical pixels hit the
+    edge model's feature cache.
+    """
     image_shape = (image_height, image_width, 3)
 
     if random.choice([True, False]):
@@ -150,13 +156,14 @@ def generate_random_binary_image(
         label = "NO"
 
     timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+    text = timestamp if tag is None else f"{timestamp} {tag}"
     font = cv2.FONT_HERSHEY_SIMPLEX
     # Scale relative to the 640x480 baseline so text occupies the same fraction of any image size.
     font_scale = min(image_width / 640.0, image_height / 480.0)
     thickness = max(1, round(font_scale * 2))
-    (_, text_h), _ = cv2.getTextSize(timestamp, font, font_scale, thickness)
+    (_, text_h), _ = cv2.getTextSize(text, font, font_scale, thickness)
     margin = max(5, round(image_height * 0.02))
-    cv2.putText(image, timestamp, (margin, margin + text_h), font, font_scale, text_color, thickness)
+    cv2.putText(image, text, (margin, margin + text_h), font, font_scale, text_color, thickness)
 
     return image, label, None
 

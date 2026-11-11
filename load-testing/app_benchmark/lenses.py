@@ -4,12 +4,13 @@ Three lens types — each entry point is a multiprocessing.Process target.
 Every HTTP inference is logged as one JSONL "request" event in the schema
 parse_load_test_logs consumes (matches multiple_client_throughput_test.py).
 
-Image strategy: generate a fresh ndarray per frame from the helpers in
+Image strategy: generate a fresh ndarray per request from the helpers in
 load-testing/image_helpers.py and pass it straight to the Groundlight SDK
-(`ask_ml` accepts np.ndarray and handles JPEG encoding internally). For the
-chained `bbox_to_binary` lens, the small downstream binary image is built
-once at lens startup and re-submitted N times per frame — the SDK
-re-encodes per call, which at 224x224 is negligible.
+(`ask_ml` accepts np.ndarray and handles JPEG encoding internally). Binary
+images are stamped with a `{worker_number}-{request_number}` tag so every
+request has distinct pixels: the binary and OODD pipelines cache backbone
+features keyed on image pixels, and a repeated image would skip the
+backbone and overstate throughput.
 
 Within a `bbox_to_binary` frame the N downstream binary calls are
 submitted CONCURRENTLY (one bbox detect, then a parallel fan-out over
@@ -153,8 +154,8 @@ def run_single_binary(  # noqa: PLR0913
 ) -> None:
     """multiprocessing.Process target for a `single_binary` lens worker.
 
-    Generates a fresh random binary image (black/white with timestamp
-    overlay) per frame and submits one inference. Loops until
+    Generates a fresh random binary image (black/white with timestamp and
+    unique-tag overlay) per frame and submits one inference. Loops until
     `duration_seconds` elapses.
 
     Args:
@@ -182,7 +183,7 @@ def run_single_binary(  # noqa: PLR0913
     with open(log_file, "a", buffering=1, encoding="utf-8") as log:
         while time.time() < deadline:
             frame_start = time.time()
-            image, _, _ = imgh.generate_random_binary_image(w, h)
+            image, _, _ = imgh.generate_random_binary_image(w, h, tag=f"{worker_number}-{request_number}")
             _submit_and_log(
                 gl, detector_id, image,
                 log_handle=log, lens_name=lens_name, camera=camera,
@@ -272,16 +273,17 @@ def run_bbox_to_binary(  # noqa: PLR0913
       1. Generate a fresh `image_size` image with exactly `objects`
          placed entities (via image_helpers.generate_fixed_objects_image)
          and submit one bbox inference (logged with stage=bbox).
-      2. Submit a cached small (224x224) binary image `objects` times
+      2. Submit `objects` fresh small (224x224) binary images
          CONCURRENTLY (each logged with stage=binary). The ROIs are
          independent, so the downstream calls fan out across a thread
          pool and the frame waits for all of them — this drives the
          edge to its real throughput ceiling rather than serializing
          on per-request round-trip latency.
 
-    The cached downstream image is generated once at worker startup; the
-    SDK re-encodes it per call, which at 224x224 is cheap. The SDK
-    client is shared across the fan-out threads — the same pattern
+    Each downstream image carries a unique tag, so — like real ROI crops —
+    no two calls share pixels and every call pays for a backbone pass
+    instead of hitting the edge's feature cache. The SDK client is shared
+    across the fan-out threads — the same pattern
     groundlight_helpers.prime_detector already relies on.
 
     Args:
@@ -305,9 +307,6 @@ def run_bbox_to_binary(  # noqa: PLR0913
     gl = ExperimentalApi(endpoint=edge_url)
     w, h = image_size
     bw, bh = BINARY_DOWNSTREAM_SIZE
-    # One small binary image, reused for every downstream call. The SDK
-    # encodes each request, but 224x224 encoding is cheap (~ms).
-    binary_image, _, _ = imgh.generate_random_binary_image(bw, bh)
     _silence_stderr()
     period = 1.0 / target_fps if target_fps > 0 else 0.0
     deadline = time.time() + duration_seconds
@@ -340,6 +339,7 @@ def run_bbox_to_binary(  # noqa: PLR0913
             for _ in range(objects):
                 rn = request_number
                 request_number += 1
+                binary_image, _, _ = imgh.generate_random_binary_image(bw, bh, tag=f"{worker_number}-{rn}")
                 futures.append(pool.submit(
                     _submit_and_log,
                     gl, binary_detector_id, binary_image,

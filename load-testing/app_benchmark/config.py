@@ -280,8 +280,8 @@ class SingleBboxLens(_LensBase):
 class BboxToBinaryLens(_LensBase):
     """Chained inference: 1 bbox call + N binary calls per frame. Models a
     "detect objects, then classify each ROI" pipeline. Each frame submits
-    the bbox image once and then resubmits a small cached binary image
-    `objects` times.
+    the bbox image once and then `objects` fresh, pixel-distinct small
+    binary images.
 
     Attributes:
         bbox_pipeline: Optional pipeline config for the bbox stage.
