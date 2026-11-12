@@ -1,3 +1,4 @@
+{{- if (hasKey .Values "createNamespace" | ternary .Values.createNamespace true) }}
 {{ include "validate.namespace" . }}
 ---
 apiVersion: v1
@@ -6,3 +7,4 @@ metadata:
   name: {{ .Values.namespace }}
   labels:
     {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+{{- end }}

@@ -1,3 +1,28 @@
+{{- $hasSharedModelRepo := false }}
+{{- if hasKey .Values "sharedModelRepo" }}
+  {{- if hasKey .Values.sharedModelRepo "storageClassName" }}
+    {{- $hasSharedModelRepo = not (empty .Values.sharedModelRepo.storageClassName) }}
+  {{- end }}
+{{- end }}
+{{- if $hasSharedModelRepo }}
+# In the EKS / shared-cluster flavor (values-eks.yaml), the edge-endpoint pod and inference pods
+# can be scheduled across different cluster nodes. The model repo must therefore be a dynamically
+# provisioned ReadWriteMany claim (e.g. on shared EFS), rather than a node-local hostPath.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: edge-endpoint-pvc
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "groundlight-edge-endpoint.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: {{ .Values.sharedModelRepo.storageClassName | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.sharedModelRepo.size }}
+{{- else }}
 # All this precise matching is considered poor practice in K8s, but it makes
 # things more reliable here.
 apiVersion: v1 
@@ -31,3 +56,4 @@ spec:
   selector:
     matchLabels:
       edge-pv-for-namespace: {{ .Values.namespace }}
+{{- end }}

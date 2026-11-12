@@ -1,3 +1,10 @@
+{{- $regCredsEnabled := true }}
+{{- if hasKey .Values "registryCredentials" }}
+  {{- if hasKey .Values.registryCredentials "enabled" }}
+    {{- $regCredsEnabled = .Values.registryCredentials.enabled }}
+  {{- end }}
+{{- end }}
+{{- if $regCredsEnabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -10,3 +17,4 @@ spec:
   template:
     spec:
     {{- include "edge-endpoint.registry-credentials.podSpec" . | nindent 6 }}
+{{- end }}

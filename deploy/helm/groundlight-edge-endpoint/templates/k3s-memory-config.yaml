@@ -1,3 +1,10 @@
+{{- $k3sEnabled := true }}
+{{- if hasKey .Values "k3sConfig" }}
+  {{- if hasKey .Values.k3sConfig "enabled" }}
+    {{- $k3sEnabled = .Values.k3sConfig.enabled }}
+  {{- end }}
+{{- end }}
+{{- if $k3sEnabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -38,3 +45,4 @@ spec:
       restartPolicy: OnFailure
       nodeSelector:
         node-role.kubernetes.io/control-plane: "true"
+{{- end }}

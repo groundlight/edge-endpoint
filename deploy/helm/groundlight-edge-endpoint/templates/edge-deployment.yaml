@@ -1,5 +1,27 @@
 {{ include "validate.timeouts" . }}
-{{- if and (eq .Values.inferenceFlavor "gpu") (not (lookup "node.k8s.io/v1" "RuntimeClass" "" "nvidia")) }}
+{{ include "validate.modelsVolume" . }}
+{{- /*
+  With a shared model repo (sharedModelRepo.storageClassName), SQLite and the active edge
+  config live in per-pod emptyDirs instead of on the shared volume: SQLite WAL must not
+  live on a network filesystem.
+*/}}
+{{- $sqliteVol := "edge-endpoint-persistent-volume" }}
+{{- $configVol := "edge-endpoint-persistent-volume" }}
+{{- $hasSharedModelRepo := false }}
+{{- if hasKey .Values "sharedModelRepo" }}
+  {{- if hasKey .Values.sharedModelRepo "storageClassName" }}
+    {{- $hasSharedModelRepo = not (empty .Values.sharedModelRepo.storageClassName) }}
+  {{- end }}
+{{- end }}
+{{- if $hasSharedModelRepo }}
+{{- $sqliteVol = "edge-sqlite" }}
+{{- $configVol = "edge-config-state" }}
+{{- end }}
+{{- $nvidiaRuntimeClass := true }}
+{{- if hasKey .Values "nvidiaRuntimeClass" }}
+  {{- $nvidiaRuntimeClass = .Values.nvidiaRuntimeClass }}
+{{- end }}
+{{- if and (eq .Values.inferenceFlavor "gpu") $nvidiaRuntimeClass (not (lookup "node.k8s.io/v1" "RuntimeClass" "" "nvidia")) }}
 # Required runtime class for GPU use in k3s
 # Pods must have `runtimeClassName: nvidia` set to access GPU
 apiVersion: node.k8s.io/v1
@@ -10,6 +32,12 @@ metadata:
     "helm.sh/resource-policy": keep
 handler: nvidia
 ---
+{{- end }}
+{{- $serviceType := "NodePort" }}
+{{- if hasKey .Values "service" }}
+  {{- if hasKey .Values.service "type" }}
+    {{- $serviceType = .Values.service.type }}
+  {{- end }}
 {{- end }}
 apiVersion: v1
 kind: Service
@@ -27,14 +55,18 @@ spec:
       # Service port for NGINX
       port: 30101
       name: http
+      {{- if eq $serviceType "NodePort" }}
       nodePort: {{ .Values.edgeEndpointPort }}
+      {{- end }}
     {{- end }}
     - protocol: TCP
       # HTTPS port for NGINX
       port: 443
       name: https
+      {{- if eq $serviceType "NodePort" }}
       nodePort: {{ .Values.edgeEndpointHttpsPort }}
-  type: NodePort
+      {{- end }}
+  type: {{ $serviceType }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -67,8 +99,17 @@ spec:
         (dict "name" "nginx-certs" "mountPath" "/etc/nginx/certs")
         (dict "name" "device-info-volume" "mountPath" "/opt/groundlight/device")
         (dict "name" "escalation-queue-volume" "mountPath" "/opt/groundlight/queue")
-        (dict "name" "edge-endpoint-persistent-volume" "mountPath" "/opt/groundlight/edge" "exclude" $s3Exclude)
       }}
+      {{- if $hasSharedModelRepo }}
+      {{- /* The storage class owns the shared claim's ownership (e.g. an EFS access point), and
+             chown on it is refused. Chown the per-pod state volumes instead. */}}
+      {{- $chownMounts = concat $chownMounts (list
+        (dict "name" $sqliteVol "mountPath" "/opt/groundlight/edge/sqlite")
+        (dict "name" $configVol "mountPath" "/opt/groundlight/edge/config")
+      ) }}
+      {{- else }}
+      {{- $chownMounts = append $chownMounts (dict "name" "edge-endpoint-persistent-volume" "mountPath" "/opt/groundlight/edge" "exclude" $s3Exclude) }}
+      {{- end }}
       {{- include "groundlight-edge-endpoint.chownHostPaths.initContainer" $chownMounts | nindent 6 }}
       - name: generate-tls-cert
         image: &edgeEndpointImage {{ include "groundlight-edge-endpoint.ecrRegistry" . }}/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
@@ -81,7 +122,7 @@ spec:
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
         volumeMounts:
-        - name: edge-endpoint-persistent-volume
+        - name: {{ $sqliteVol }}
           mountPath: /opt/groundlight/edge/sqlite
         command: ["python", "-m", "app.runtime.setup_db"]
       - name: apply-edge-config
@@ -92,11 +133,18 @@ spec:
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
-        - name: edge-endpoint-persistent-volume
+        - name: {{ $configVol }}
           mountPath: /opt/groundlight/edge/config
         command: ["/bin/sh", "/etc/groundlight/edge-config/apply-edge-config.sh"]
 
       containers:
+      {{- $s3Enabled := true }}
+      {{- if hasKey .Values "s3Mount" }}
+        {{- if hasKey .Values.s3Mount "enabled" }}
+          {{- $s3Enabled = .Values.s3Mount.enabled }}
+        {{- end }}
+      {{- end }}
+      {{- if $s3Enabled }}
       - name: mount-s3
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
@@ -132,6 +180,7 @@ spec:
         - name: aws-credentials
           mountPath: /root/.aws
           readOnly: true
+      {{- end }}
       - name: nginx
         image: *edgeEndpointImage
         imagePullPolicy: "{{ include "groundlight-edge-endpoint.edgeEndpointPullPolicy" . }}"
@@ -232,9 +281,9 @@ spec:
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config
-        - name: edge-endpoint-persistent-volume
+        - name: {{ $sqliteVol }}
           mountPath: /opt/groundlight/edge/sqlite
-        - name: edge-endpoint-persistent-volume
+        - name: {{ $configVol }}
           mountPath: /opt/groundlight/edge/config
         # Needed by run_inference() to read {detector}/{primary,oodd}/{version}/model_id.txt
         # and stamp the MLB KSUID into edge_result for cloud-side debugging.
@@ -287,7 +336,7 @@ spec:
             mountPath: /opt/groundlight/device
           - name: edge-endpoint-persistent-volume
             mountPath: /opt/groundlight/edge/serving/model-repo
-          - name: edge-endpoint-persistent-volume
+          - name: {{ $configVol }}
             mountPath: /opt/groundlight/edge/config
           - name: escalation-queue-volume
             mountPath: /opt/groundlight/queue
@@ -368,27 +417,44 @@ spec:
         # two different paths in the inference-model-updater container.
         # This allows the container to access both the sqlite database and
         # the path to the model repository without needing to create an extra PV and PVC.
-        - name: edge-endpoint-persistent-volume
+        - name: {{ $sqliteVol }}
           mountPath: /opt/groundlight/edge/sqlite
 
         - name: edge-endpoint-persistent-volume
           mountPath: /opt/groundlight/edge/serving/model-repo
-        - name: edge-endpoint-persistent-volume
+        - name: {{ $configVol }}
           mountPath: /opt/groundlight/edge/config
 
         - name: device-info-volume
           mountPath: /opt/groundlight/device
 
+      {{- $regCredsEnabled := true }}
+      {{- if hasKey .Values "registryCredentials" }}
+        {{- if hasKey .Values.registryCredentials "enabled" }}
+          {{- $regCredsEnabled = .Values.registryCredentials.enabled }}
+        {{- end }}
+      {{- end }}
+      {{- if $regCredsEnabled }}
       imagePullSecrets:
       - name: registry-credentials
+      {{- end }}
 
       volumes:
+      {{- $hostPathVolEnabled := true }}
+      {{- if hasKey .Values "hostPathVolumes" }}
+        {{- $hostPathVolEnabled = .Values.hostPathVolumes }}
+      {{- end }}
+      {{- if $hostPathVolEnabled }}
       # Pinned to the device so the self-signed TLS cert stays stable across pod
       # restarts, rather than being regenerated on every boot.
       - name: nginx-certs
         hostPath:
           path: /opt/groundlight/device/certs
           type: DirectoryOrCreate
+      {{- else }}
+      - name: nginx-certs
+        emptyDir: {}
+      {{- end }}
       - name: edge-config-volume
         configMap:
           name: edge-config
@@ -404,6 +470,13 @@ spec:
       - name: edge-endpoint-persistent-volume
         persistentVolumeClaim:
           claimName: edge-endpoint-pvc
+      {{- if $hasSharedModelRepo }}
+      - name: {{ $sqliteVol }}
+        emptyDir: {}
+      - name: {{ $configVol }}
+        emptyDir: {}
+      {{- end }}
+      {{- if $hostPathVolEnabled }}
       - name: device-info-volume
         hostPath:
           path: /opt/groundlight/device
@@ -412,6 +485,13 @@ spec:
         hostPath:
           path: /opt/groundlight/queue/{{ .Values.namespace }}
           type: DirectoryOrCreate
+      {{- else }}
+      - name: device-info-volume
+        emptyDir: {}
+      - name: escalation-queue-volume
+        emptyDir: {}
+      {{- end }}
+      {{- if $s3Enabled }}
       - name: pinamod-mount
         hostPath:
           path: {{ .Values.s3Mount.mountPath }}
@@ -427,3 +507,4 @@ spec:
         hostPath:
           path: /
           type: Directory
+      {{- end }}

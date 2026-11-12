@@ -58,7 +58,15 @@ spec:
         mountPath: /opt/groundlight/device
   volumes:
   - name: device-info-volume
+    {{- $hostPathVolEnabled := true }}
+    {{- if hasKey .Values "hostPathVolumes" }}
+      {{- $hostPathVolEnabled = .Values.hostPathVolumes }}
+    {{- end }}
+    {{- if $hostPathVolEnabled }}
     hostPath:
       path: /opt/groundlight/device
       type: DirectoryOrCreate
+    {{- else }}
+    emptyDir: {}
+    {{- end }}
   restartPolicy: Never

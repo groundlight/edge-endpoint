@@ -1,0 +1,40 @@
+# Values for running the Edge Endpoint in a namespace of a shared Kubernetes cluster (e.g. EKS)
+# that enforces the Pod Security "baseline" standard, instead of on a single-node k3s host.
+#
+# Use together with the cluster-specific values the chart cannot know:
+#   helm install ... -f values-eks.yaml \
+#     --set groundlightApiToken=... --set upstreamEndpoint=... --set edgeArtifactsProfile=... \
+#     --set ecrRegistry=... --set sharedModelRepo.storageClassName=... \
+#     --set-json 'inferenceDeployment.modelsVolume={"nfs":{...}}'
+#
+# The namespace must already exist, and the nodes must be able to pull the images.
+
+createNamespace: false
+nodeMetricsRbac: false
+validateApiToken: false
+registryCredentials:
+  enabled: false
+nvidiaRuntimeClass: false
+hostPathVolumes: false
+s3Mount:
+  enabled: false
+k3sConfig:
+  enabled: false
+networkHealer:
+  enabled: false
+service:
+  type: ClusterIP
+inferenceDeployment:
+  hostPID: false
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule

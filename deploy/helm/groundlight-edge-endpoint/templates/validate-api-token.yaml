@@ -1,3 +1,4 @@
+{{- if (hasKey .Values "validateApiToken" | ternary .Values.validateApiToken true) }}
 {{- $check := required "You must supply a Groundlight API token!" .Values.groundlightApiToken }}
 ---
 apiVersion: batch/v1
@@ -78,3 +79,4 @@ metadata:
 type: Opaque
 data:
   GROUNDLIGHT_API_TOKEN: {{ .Values.groundlightApiToken | b64enc | quote }}
+{{- end }}

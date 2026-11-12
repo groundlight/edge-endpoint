@@ -1,4 +1,10 @@
-{{- if .Values.k3sConfig.enabled }}
+{{- $k3sEnabled := true }}
+{{- if hasKey .Values "k3sConfig" }}
+  {{- if hasKey .Values.k3sConfig "enabled" }}
+    {{- $k3sEnabled = .Values.k3sConfig.enabled }}
+  {{- end }}
+{{- end }}
+{{- if $k3sEnabled }}
 # ServiceAccount and RBAC for the k3s memory configuration job.
 # This creates a dedicated service account with cluster-admin privileges
 # needed for the k3s-memory-config job

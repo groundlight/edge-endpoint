@@ -4,6 +4,11 @@
 #
 # A CronJob (not an in-process scheduler) so the schedule is wall-clock owned: a restart or crash-loop
 # of the edge-endpoint pod can't reset a timer and silently starve the retention guarantee.
+{{- $hostPathVolEnabled := true }}
+{{- if hasKey .Values "hostPathVolumes" }}
+  {{- $hostPathVolEnabled = .Values.hostPathVolumes }}
+{{- end }}
+{{- if $hostPathVolEnabled }}
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -24,8 +29,16 @@ spec:
             app: queue-retention
         spec:
           restartPolicy: Never
+          {{- $regCredsEnabled := true }}
+          {{- if hasKey .Values "registryCredentials" }}
+            {{- if hasKey .Values.registryCredentials "enabled" }}
+              {{- $regCredsEnabled = .Values.registryCredentials.enabled }}
+            {{- end }}
+          {{- end }}
+          {{- if $regCredsEnabled }}
           imagePullSecrets:
           - name: registry-credentials
+          {{- end }}
           containers:
           - name: queue-retention
             image: {{ include "groundlight-edge-endpoint.ecrRegistry" . }}/edge-endpoint:{{ include "groundlight-edge-endpoint.edgeEndpointTag" . }}
@@ -45,3 +58,4 @@ spec:
             hostPath:
               path: /opt/groundlight/queue/{{ .Values.namespace }}
               type: DirectoryOrCreate
+{{- end }}

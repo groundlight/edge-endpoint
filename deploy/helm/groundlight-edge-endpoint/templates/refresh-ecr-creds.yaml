@@ -1,3 +1,10 @@
+{{- $regCredsEnabled := true }}
+{{- if hasKey .Values "registryCredentials" }}
+  {{- if hasKey .Values.registryCredentials "enabled" }}
+    {{- $regCredsEnabled = .Values.registryCredentials.enabled }}
+  {{- end }}
+{{- end }}
+{{- if $regCredsEnabled }}
 # Cron job to refresh our local credentials
 apiVersion: batch/v1
 kind: CronJob
@@ -20,3 +27,4 @@ spec:
             app: refresh-ecr-creds
         spec:
           {{- include "edge-endpoint.registry-credentials.podSpec" . | nindent 10 }}
+{{- end }}

@@ -39,6 +39,17 @@ assert_contains() {
   fi
 }
 
+assert_not_contains() {
+  local label="$1" haystack="$2" needle="$3"
+  if grep -qE -- "$needle" <<<"$haystack"; then
+    echo "FAIL $label: unexpectedly contains '$needle'"
+    fail=$((fail + 1))
+  else
+    echo "OK  $label"
+    pass=$((pass + 1))
+  fi
+}
+
 assert_render_fails() {
   local label="$1"
   shift
@@ -176,11 +187,46 @@ out="$(render \
   --set awsRegion=eu-west-1)"
 assert_contains "non-ECR override falls back to explicit awsRegion" "$out" "get-login-password --region eu-west-1"
 
+# edgeArtifactsProfile: an in-cluster http upstream borrows an edgeArtifactsMap entry.
+out="$(render \
+  --set upstreamEndpoint=http://janzu.test.svc.cluster.local \
+  --set edgeArtifactsProfile=https://api.dev.groundlight.ai)"
+assert_gl_public "http upstream via edgeArtifactsProfile" "$out"
+assert_contains "http upstream is passed to the edge endpoint" "$out" 'value: "http://janzu.test.svc.cluster.local"'
+
+out="$(render \
+  --set upstreamEndpoint=https://api.groundlight.dev.axon.com \
+  --set edgeArtifactsProfile=https://api.dev.groundlight.ai)"
+assert_gl_public "edgeArtifactsProfile wins over an https upstream" "$out"
+
+# The shared-cluster flavor drops everything Pod Security "baseline" forbids.
+out="$(render -f "${CHART}/values-eks.yaml" \
+  --set upstreamEndpoint=http://janzu.test.svc.cluster.local \
+  --set edgeArtifactsProfile=https://api.dev.groundlight.ai \
+  --set sharedModelRepo.storageClassName=efs-test \
+  --set inferenceDeployment.modelsVolume.emptyDir="{}")"
+assert_not_contains "eks flavor: no privileged containers" "$out" "privileged: true"
+assert_not_contains "eks flavor: no hostPID" "$out" "hostPID"
+assert_not_contains "eks flavor: no hostNetwork" "$out" "hostNetwork"
+assert_not_contains "eks flavor: no cluster-scoped RBAC" "$out" "kind: ClusterRole"
+assert_not_contains "eks flavor: no Namespace" "$out" "kind: Namespace"
+assert_not_contains "eks flavor: no RuntimeClass" "$out" "kind: RuntimeClass"
+assert_not_contains "eks flavor: no mount-s3" "$out" "name: mount-s3"
+assert_not_contains "eks flavor: no PersistentVolume" "$out" "^kind: PersistentVolume[[:space:]]*$"
+assert_contains "eks flavor: shared model repo claim" "$out" "- ReadWriteMany"
+assert_contains "eks flavor: ClusterIP service" "$out" "type: ClusterIP"
+assert_contains "eks flavor: inference pods request a GPU" "$out" "nvidia.com/gpu: 1"
+assert_not_contains "eks flavor: shared claim root is not chowned" "$out" "chown 65532:65532 /opt/groundlight/edge;"
+
 assert_render_fails "unknown host" --set upstreamEndpoint=https://api.example.invalid
 assert_render_fails "lookalike host" --set upstreamEndpoint=https://api.groundlight.dev.axon.com.evil.example
 assert_render_fails "typo host" --set upstreamEndpoint=https://apii.groundlight.dev.axon.com
 assert_render_fails "usa lookalike host" --set upstreamEndpoint=https://api.groundlight.usa.axon.com.evil.example
 assert_render_fails "malformed URL" --set upstreamEndpoint=not-a-url
+assert_render_fails "http upstream without edgeArtifactsProfile" --set upstreamEndpoint=http://janzu.test.svc.cluster.local
+assert_render_fails "unknown edgeArtifactsProfile" \
+  --set upstreamEndpoint=http://janzu.test.svc.cluster.local \
+  --set edgeArtifactsProfile=https://api.example.invalid
 
 echo
 echo "Passed: $pass  Failed: $fail"

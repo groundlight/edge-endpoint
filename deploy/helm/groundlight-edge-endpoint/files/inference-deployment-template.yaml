@@ -26,10 +26,14 @@ metadata:
 spec:
   replicas: 1
   strategy:
+{{- if .Values.inferenceDeployment.strategy }}
+    {{- toYaml .Values.inferenceDeployment.strategy | nindent 4 }}
+{{- else }}
     type: RollingUpdate
     rollingUpdate:
       maxSurge: 1
       maxUnavailable: 0
+{{- end }}
   selector:
     matchLabels:
       app: inference-server
@@ -43,13 +47,27 @@ spec:
         groundlight.dev/inference-server: {{ $server.name | quote }}
         groundlight.dev/gpu-sharing: {{ include "groundlight-edge-endpoint.gpuSharing" . | quote }}
     spec:
+{{- if (hasKey .Values.inferenceDeployment "hostPID" | ternary .Values.inferenceDeployment.hostPID true) }}
       hostPID: true  # Allows pynvml to match this process's PID against nvidia-smi PIDs for accurate per-pod VRAM reporting
-{{ if eq .Values.inferenceFlavor "gpu" }}
+{{- end }}
+{{ if and (eq .Values.inferenceFlavor "gpu") (hasKey .Values "nvidiaRuntimeClass" | ternary .Values.nvidiaRuntimeClass true) }}
       runtimeClassName: nvidia  # Required for GPU use in k3s
 {{- end }}
       serviceAccountName: edge-endpoint-service-account
+{{- $regCredsEnabled := true }}
+{{- if hasKey .Values "registryCredentials" }}
+  {{- if hasKey .Values.registryCredentials "enabled" }}
+    {{- $regCredsEnabled = .Values.registryCredentials.enabled }}
+  {{- end }}
+{{- end }}
+{{- if $regCredsEnabled }}
       imagePullSecrets:
       - name: registry-credentials
+{{- end }}
+{{- with .Values.inferenceDeployment.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+{{- end }}
 
       containers:
       - name: inference-server
@@ -94,6 +112,11 @@ spec:
         # No CPU requests or limits: inference pods run BestEffort. Threads are bounded by
         # cpuThreads and most detectors are idle at any instant, so the scheduler launches
         # every detector and the OS time-slices the occasional simultaneous burst.
+        {{- with .Values.inferenceDeployment.resources }}
+        # Set on shared clusters, where the scheduler must place each pod on a node with a GPU.
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
         volumeMounts:
         - name: edge-endpoint-persistent-volume
           mountPath: *modelRepository
@@ -154,13 +177,25 @@ spec:
         persistentVolumeClaim:
           claimName: edge-endpoint-pvc
       - name: pinamod-mount
+        {{- if .Values.inferenceDeployment.modelsVolume }}
+        {{- toYaml .Values.inferenceDeployment.modelsVolume | nindent 8 }}
+        {{- else }}
         hostPath:
           path: {{ .Values.s3Mount.mountPath }}
           type: Directory
+        {{- end }}
       - name: device-info-volume
+        {{- $hostPathVolEnabled := true }}
+        {{- if hasKey .Values "hostPathVolumes" }}
+          {{- $hostPathVolEnabled = .Values.hostPathVolumes }}
+        {{- end }}
+        {{- if $hostPathVolEnabled }}
         hostPath:
           path: /opt/groundlight/device
           type: DirectoryOrCreate
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
 {{- if eq $server.name "triton" }}
       - name: dshm
         emptyDir:

@@ -118,7 +118,10 @@ awsRegion: "us-west-2"
 # mount-s3 mounts the S3 bucket as a local filesystem with local disk caching.
 # bucket/region default from edgeArtifactsMap via upstreamEndpoint; set explicitly
 # to override. mountPath/cachePath are host paths and are not environment-specific.
+# enabled=false removes the privileged mount-s3 FUSE container (not allowed under the Pod
+# Security "baseline" standard); inferenceDeployment.modelsVolume must then supply the models.
 s3Mount:
+  enabled: true
   bucket: ""
   region: ""
   mountPath: "/opt/groundlight/edge/pinamod-mount"
@@ -179,6 +182,18 @@ modelUpdater:
 
 # inference pod (inferencemodel-*) behavior
 inferenceDeployment:
+  # Run inference pods with hostPID so pynvml can match PIDs against nvidia-smi for per-pod
+  # VRAM reporting. Not allowed under the Pod Security "baseline" standard.
+  hostPID: true
+  # Kubernetes `resources` for the inference container, e.g. {limits: {nvidia.com/gpu: 1}}.
+  # Needed on shared clusters, where each pod must be scheduled onto a node with a GPU.
+  resources: {}
+  # Kubernetes `tolerations` for inference pods, e.g. to run on tainted GPU nodes.
+  tolerations: []
+  # Kubernetes volume source (e.g. {nfs: {server: ..., path: ..., readOnly: true}}) mounted
+  # at /opt/models (pinamod + pretrained-weights) in inference pods. Empty = the hostPath
+  # the mount-s3 container populates (s3Mount.mountPath).
+  modelsVolume: {}
   # CPU thread cap per inference pod for PyTorch/OpenMP/MKL/OpenBLAS intra-op parallelism.
   # Without this each pod defaults to ALL node cores, so N pods spawn N x cores threads
   # that thrash under load (observed: per-request CPU cost grew 5x and throughput collapsed
@@ -446,3 +461,51 @@ opentelemetry-collector:
 networkHealer:
   enabled: true
   checkIntervalSeconds: 10
+
+# ---------------------------------------------------------------------------------------
+# Shared Kubernetes cluster support (e.g. EKS). The defaults below are the single-node k3s
+# device deployment; values-eks.yaml turns each of them off. Pod Security "baseline" forbids
+# hostPath, hostPID, privileged containers and cluster-admin-style hooks, so a namespace that
+# enforces it needs all of these.
+# ---------------------------------------------------------------------------------------
+
+# The edgeArtifactsMap origin (e.g. "https://api.dev.groundlight.ai") whose ECR, S3 and tag
+# defaults to use. When set, upstreamEndpoint may be any http(s) URL, such as an in-cluster
+# service. When empty, upstreamEndpoint itself must be an https key of edgeArtifactsMap.
+edgeArtifactsProfile: ""
+
+# Create and own the namespace. Set false when the namespace already exists.
+createNamespace: true
+
+# Create the ClusterRole/ClusterRoleBinding that lets the status monitor read node metrics.
+# Without it the status monitor shows no node-level resource usage.
+nodeMetricsRbac: true
+
+# Run the pre-install hook that validates the API token against the upstream.
+validateApiToken: true
+
+# Create and refresh the `registry-credentials` image pull secret from temporary credentials
+# issued by the upstream. Disable when the nodes can already pull the images (e.g. from the
+# cluster's own ECR).
+registryCredentials:
+  enabled: true
+
+# Create the cluster-scoped `nvidia` RuntimeClass and set it on pods. Disable where the nodes'
+# default container runtime already exposes the GPU.
+nvidiaRuntimeClass: true
+
+# Use hostPath volumes for device info, the escalation queue and the TLS certs. When false
+# they are per-pod emptyDirs.
+hostPathVolumes: true
+
+# The model repo shared by the edge-endpoint pod and the inference pods. Empty = a hostPath
+# PersistentVolume on the node. A StorageClass name = a dynamically provisioned ReadWriteMany
+# claim, so inference pods can run on other nodes; SQLite and the active edge config then
+# move to per-pod emptyDirs.
+sharedModelRepo:
+  storageClassName: ""
+  size: 2Gi
+
+# Service type for edge-endpoint-service: NodePort or ClusterIP.
+service:
+  type: NodePort

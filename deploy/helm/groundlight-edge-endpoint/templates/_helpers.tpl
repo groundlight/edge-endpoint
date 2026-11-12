@@ -78,9 +78,22 @@ Create the name of the service account to use
 
 {{/*
   Canonical origin (scheme://host) of upstreamEndpoint for edgeArtifactsMap lookup.
-  Drops path, query, and trailing slash. Requires an absolute HTTPS URL.
+  Drops path, query, and trailing slash. Requires an absolute HTTPS URL, unless
+  edgeArtifactsProfile names the edgeArtifactsMap origin to use instead. In that case
+  upstreamEndpoint may be any absolute http(s) URL (e.g. an in-cluster service).
 */}}
 {{- define "groundlight-edge-endpoint.upstreamOrigin" -}}
+{{- if .Values.edgeArtifactsProfile -}}
+{{- $profile := urlParse .Values.edgeArtifactsProfile -}}
+{{- if or (ne (index $profile "scheme") "https") (not (index $profile "host")) -}}
+{{- fail (printf "edgeArtifactsProfile %q must be an absolute HTTPS URL" .Values.edgeArtifactsProfile) -}}
+{{- end -}}
+{{- $upstream := urlParse .Values.upstreamEndpoint -}}
+{{- if or (not (has (index $upstream "scheme") (list "http" "https"))) (not (index $upstream "host")) -}}
+{{- fail (printf "upstreamEndpoint %q must be an absolute http or https URL" .Values.upstreamEndpoint) -}}
+{{- end -}}
+{{- printf "%s://%s" (index $profile "scheme") (index $profile "host") -}}
+{{- else -}}
 {{- $parsed := urlParse .Values.upstreamEndpoint -}}
 {{- $scheme := index $parsed "scheme" -}}
 {{- $host := index $parsed "host" -}}
@@ -88,6 +101,7 @@ Create the name of the service account to use
 {{- fail (printf "upstreamEndpoint %q must be an absolute HTTPS URL" .Values.upstreamEndpoint) -}}
 {{- end -}}
 {{- printf "%s://%s" $scheme $host -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -246,6 +260,41 @@ Never
 {{- $parsed := fromYaml $raw -}}
 {{- if and (kindIs "map" $parsed) (hasKey $parsed "Error") (eq (len $parsed) 1) (hasPrefix "error converting YAML to JSON:" (toString (index $parsed "Error"))) -}}
   {{- fail (printf "edge-config.yaml contains invalid YAML:\n%s" (index $parsed "Error")) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+  Validate that models are provided when s3Mount is disabled.
+*/}}
+{{- define "validate.modelsVolume" -}}
+{{- $s3Enabled := true -}}
+{{- if hasKey .Values "s3Mount" -}}
+  {{- if hasKey .Values.s3Mount "enabled" -}}
+    {{- $s3Enabled = .Values.s3Mount.enabled -}}
+  {{- end -}}
+{{- end -}}
+{{- $hasModelsVol := false -}}
+{{- if hasKey .Values "inferenceDeployment" -}}
+  {{- if hasKey .Values.inferenceDeployment "modelsVolume" -}}
+    {{- $hasModelsVol = not (empty .Values.inferenceDeployment.modelsVolume) -}}
+  {{- end -}}
+{{- end -}}
+{{- if and (not $s3Enabled) (not $hasModelsVol) -}}
+  {{- fail "When s3Mount.enabled is false, inferenceDeployment.modelsVolume must be specified to provide /opt/models." -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+  Helper to check if a feature flag or map value is enabled, defaulting to true if unset.
+*/}}
+{{- define "groundlight.valueOrDefaultTrue" -}}
+{{- $val := index . 0 -}}
+{{- if kindIs "invalid" $val -}}
+true
+{{- else if kindIs "bool" $val -}}
+{{- $val -}}
+{{- else -}}
+true
 {{- end -}}
 {{- end -}}
 
