@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.10, <4.0"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -549,7 +549,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -706,7 +706,7 @@ wheels = [
 
 [[package]]
 name = "groundlight"
-version = "0.32.0"
+version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
@@ -721,16 +721,15 @@ dependencies = [
     { name = "typer" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1f/1d/7a07dfe03e9e237302b7e48a3fd31ddc582a8a6c58bd7e1d1789d05a9fa4/groundlight-0.32.0.tar.gz", hash = "sha256:d07e382aeaa44ad5325f6d7102b25635ef80bc6c20f043cbca72f8c7b79ef26e", size = 134988, upload-time = "2026-08-12T22:12:00.532Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/10/c9/29a25e0e2fcc962a92323f3eaac0d36a529102af4ccea77f507aa494d376/groundlight-1.3.1.tar.gz", hash = "sha256:cae01995be23bf987fa321dd1d8760a9543a5bf3be75d150ec49de3d997c1363", size = 142960, upload-time = "2026-10-22T00:01:46.386Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/12/66/eb0c0d186fdae579afc98d0acbb1c34199d0245291c7be70cedd32a70893/groundlight-0.32.0-py3-none-any.whl", hash = "sha256:b1d7c9ea5f2e3f5fe9d772ea36c7e7f74f0958a053cd89c4a1fe46cfee29b3df", size = 405311, upload-time = "2026-08-12T22:11:59.232Z" },
+    { url = "https://files.pythonhosted.org/packages/aa/66/7b14404a2e6e8e1b71a33651f375f10400f408a7cf4f78e5ba133953d9e5/groundlight-1.3.1-py3-none-any.whl", hash = "sha256:49abf725aed02cc55e8560dc0c2e35ed9b915883bb05fc93f9d1690e0caf0eb3", size = 422024, upload-time = "2026-10-22T00:01:44.735Z" },
 ]
 
 [[package]]
 name = "groundlight-edge"
 version = "0.1.0"
 source = { virtual = "." }
-default-groups = ["dev", "lint"]
 dependencies = [
     { name = "apscheduler" },
     { name = "cachetools" },
@@ -781,7 +780,7 @@ requires-dist = [
     { name = "cachetools", specifier = ">=5.3.1,<6.0.0" },
     { name = "cryptography", specifier = ">=44.0.0,<49.0.0" },
     { name = "fastapi", specifier = ">=0.115.0,<0.116.0" },
-    { name = "groundlight", specifier = ">=0.32.0,<0.33.0" },
+    { name = "groundlight", specifier = ">=1.3.1,<2.0.0" },
     { name = "httpx", specifier = ">=0.27.2,<0.28.0" },
     { name = "jinja2", specifier = ">=3.1.6,<4.0.0" },
     { name = "kubernetes", specifier = ">=27.2.0,<28.0.0" },
@@ -2066,7 +2065,7 @@ name = "pyzmq"
 version = "27.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cffi", marker = "implementation_name == 'pypy'" },
+    { name = "cffi", marker = "python_full_version < '3.15' and implementation_name == 'pypy'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/04/0b/3c9baedbdf613ecaa7aa07027780b8867f57b6293b6ee50de316c9f3222b/pyzmq-27.1.0.tar.gz", hash = "sha256:ac0765e3d44455adb6ddbf4417dcce460fc40a05978c08efdf2948072f6db540", size = 281750, upload-time = "2025-09-08T23:10:18.157Z" }
 wheels = [
