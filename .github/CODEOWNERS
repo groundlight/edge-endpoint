@@ -1,4 +1,2 @@
-# This file defines the github usernames (or group names) who are
-# allowed to approve PR's for the code.
-
-* @htung_axoncorp @fwright_axoncorp @thuff_axoncorp
+# Intentionally no code owners, so reviews aren't auto-requested.
+# If unsure who to ask for review, try: htung_axoncorp, fwright_axoncorp, thuff_axoncorp.
