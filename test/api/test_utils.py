@@ -450,6 +450,30 @@ class TestCreateIQ:
             query="Test query",
         )
         assert "edge_result" not in iq.metadata
+        assert iq.result.model_binary_id is None
+
+    @pytest.mark.parametrize(
+        "mode, mode_configuration",
+        [
+            (ModeEnum.BINARY, None),
+            (ModeEnum.COUNT, {"max_count": 5, "class_name": "test_class"}),
+            (ModeEnum.MULTI_CLASS, {"class_names": ["0", "1"]}),
+            (ModeEnum.BOUNDING_BOX, {"max_num_bboxes": 5, "class_name": "test_class"}),
+        ],
+    )
+    def test_create_iq_sets_model_binary_id_from_primary_mlb_key(self, mode, mode_configuration):
+        iq = create_iq(
+            detector_id=prefixed_ksuid("det_"),
+            mode=mode,
+            mode_configuration=mode_configuration,
+            result_value=1,
+            confidence=0.8,
+            confidence_threshold=self.confidence_threshold,
+            is_done_processing=True,
+            mlb_key="mlb_primary_abc",
+            oodd_mlb_key="mlb_oodd_xyz",
+        )
+        assert iq.result.model_binary_id == "mlb_primary_abc"
 
     def test_create_iq_stamps_only_primary_mlb_key(self):
         """When OODD is disabled, only mlb_key is populated under edge_result."""

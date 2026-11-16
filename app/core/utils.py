@@ -117,7 +117,7 @@ def create_iq(  # noqa: PLR0913
     """
     if patience_time is None:
         patience_time = constants.DEFAULT_PATIENCE_TIME
-    result_type, result = _mode_to_result_and_type(mode, mode_configuration, confidence, result_value)
+    result_type, result = _mode_to_result_and_type(mode, mode_configuration, confidence, result_value, mlb_key)
 
     metadata: dict[str, Any] = {**(user_metadata or {}), "is_from_edge": True}
     edge_result: dict[str, Any] = {}
@@ -146,7 +146,11 @@ def create_iq(  # noqa: PLR0913
 
 
 def _mode_to_result_and_type(
-    mode: ModeEnum, mode_configuration: dict[str, Any] | None, confidence: float, result_value: int
+    mode: ModeEnum,
+    mode_configuration: dict[str, Any] | None,
+    confidence: float,
+    result_value: int,
+    mlb_key: str | None = None,
 ) -> tuple[ResultTypeEnum, BinaryClassificationResult | CountingResult | MultiClassificationResult | BoundingBoxResult]:
     """
     Maps the detector mode to the corresponding result type and generates the result object
@@ -156,6 +160,7 @@ def _mode_to_result_and_type(
     :param mode_configuration:
     :param confidence: The confidence of the predicted value.
     :param result_value: The predicted value.
+    :param mlb_key: KSUID of the ML binary that produced the prediction, returned as `model_binary_id`.
 
     :return: A tuple of the result type and the generated result object.
     """
@@ -167,6 +172,7 @@ def _mode_to_result_and_type(
             confidence=confidence,
             source=source,
             from_edge=True,
+            model_binary_id=mlb_key,
             label=label,
         )
     elif mode == ModeEnum.COUNT:
@@ -183,6 +189,7 @@ def _mode_to_result_and_type(
             confidence=confidence,
             source=source,
             from_edge=True,
+            model_binary_id=mlb_key,
             count=result_value,
             greater_than_max=greater_than_max,
         )
@@ -195,6 +202,7 @@ def _mode_to_result_and_type(
             confidence=confidence,
             source=source,
             from_edge=True,
+            model_binary_id=mlb_key,
             label=multi_class_mode_configuration.class_names[result_value],
         )
     elif mode == ModeEnum.BOUNDING_BOX:
@@ -204,6 +212,7 @@ def _mode_to_result_and_type(
             confidence=confidence,
             source=source,
             from_edge=True,
+            model_binary_id=mlb_key,
             label=label,
         )
     else:

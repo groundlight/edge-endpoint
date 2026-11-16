@@ -706,7 +706,7 @@ wheels = [
 
 [[package]]
 name = "groundlight"
-version = "1.3.1"
+version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
@@ -721,9 +721,9 @@ dependencies = [
     { name = "typer" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/10/c9/29a25e0e2fcc962a92323f3eaac0d36a529102af4ccea77f507aa494d376/groundlight-1.3.1.tar.gz", hash = "sha256:cae01995be23bf987fa321dd1d8760a9543a5bf3be75d150ec49de3d997c1363", size = 142960, upload-time = "2026-10-22T00:01:46.386Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/14/63/851be7de4ba79fa2991d87e0e7d4ef75668d55221292deff524a289b9831/groundlight-1.4.0.tar.gz", hash = "sha256:ff9e0cc6b598df806af4b8460e85c5be93347bb82e4d59c8984cea3868acbdf4", size = 135911, upload-time = "2026-11-16T18:33:08.332Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/aa/66/7b14404a2e6e8e1b71a33651f375f10400f408a7cf4f78e5ba133953d9e5/groundlight-1.3.1-py3-none-any.whl", hash = "sha256:49abf725aed02cc55e8560dc0c2e35ed9b915883bb05fc93f9d1690e0caf0eb3", size = 422024, upload-time = "2026-10-22T00:01:44.735Z" },
+    { url = "https://files.pythonhosted.org/packages/34/f0/f93c625c97e45a6309994223357c1a435dab35ad523223f262201eb10778/groundlight-1.4.0-py3-none-any.whl", hash = "sha256:dd0334b0dc45b2f8891ef64c0dfa02cef819ddc99a947282116f0d786958a83e", size = 368070, upload-time = "2026-11-16T18:33:06.703Z" },
 ]
 
 [[package]]
@@ -780,7 +780,7 @@ requires-dist = [
     { name = "cachetools", specifier = ">=5.3.1,<6.0.0" },
     { name = "cryptography", specifier = ">=44.0.0,<49.0.0" },
     { name = "fastapi", specifier = ">=0.115.0,<0.116.0" },
-    { name = "groundlight", specifier = ">=1.3.1,<2.0.0" },
+    { name = "groundlight", specifier = ">=1.4.0,<2.0.0" },
     { name = "httpx", specifier = ">=0.27.2,<0.28.0" },
     { name = "jinja2", specifier = ">=3.1.6,<4.0.0" },
     { name = "kubernetes", specifier = ">=27.2.0,<28.0.0" },
