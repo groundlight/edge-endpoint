@@ -144,6 +144,23 @@ class TestDeploymentGpuSharing:
             assert InferenceDeploymentManager.deployment_gpu_sharing(dep) is GpuSharing.NONE
 
 
+class TestDeploymentGpuPlacement:
+    def test_reads_the_pod_template_annotation(self):
+        from app.core.gpu_placement import GpuPlacement
+        from app.core.kubernetes_management import InferenceDeploymentManager
+
+        dep = _deployment_with_annotations({"groundlight.dev/gpu-placement": "ledger"})
+        assert InferenceDeploymentManager.deployment_gpu_placement(dep) is GpuPlacement.LEDGER
+
+    def test_pods_without_the_annotation_do_not_use_the_ledger(self):
+        from app.core.gpu_placement import GpuPlacement
+        from app.core.kubernetes_management import InferenceDeploymentManager
+
+        for annotations in (None, {"groundlight.dev/inference-server": "triton"}):
+            dep = _deployment_with_annotations(annotations)
+            assert InferenceDeploymentManager.deployment_gpu_placement(dep) is GpuPlacement.NONE
+
+
 class TestPodTemplateIsOutdated:
     @pytest.mark.parametrize(
         "annotations, server, sharing, outdated",
@@ -172,11 +189,36 @@ class TestPodTemplateIsOutdated:
             (None, "fastapi", "none", False),
         ],
     )
-    def test_compares_both_annotations_with_the_configuration(
+    def test_compares_server_and_sharing_annotations_with_the_configuration(
         self, monkeypatch: pytest.MonkeyPatch, annotations, server, sharing, outdated
     ):
         monkeypatch.setenv("INFERENCE_SERVER", server)
         monkeypatch.setenv("GPU_SHARING", sharing)
+        monkeypatch.delenv("GPU_PLACEMENT", raising=False)
+        mgr = _make_manager()
+
+        assert mgr.pod_template_is_outdated(_deployment_with_annotations(annotations)) is outdated
+
+    @pytest.mark.parametrize(
+        "placement_annotation, placement, outdated",
+        [
+            ("ledger", "ledger", False),
+            (None, "ledger", True),  # Created before the chart mounted the ledger.
+            ("none", "ledger", True),
+            ("ledger", "none", True),
+            ("none", "none", False),
+            (None, "none", False),
+        ],
+    )
+    def test_compares_the_gpu_placement_annotation_with_the_configuration(
+        self, monkeypatch: pytest.MonkeyPatch, placement_annotation, placement, outdated
+    ):
+        monkeypatch.setenv("INFERENCE_SERVER", "triton")
+        monkeypatch.setenv("GPU_SHARING", "mps")
+        monkeypatch.setenv("GPU_PLACEMENT", placement)
+        annotations = {"groundlight.dev/inference-server": "triton", "groundlight.dev/gpu-sharing": "mps"}
+        if placement_annotation is not None:
+            annotations["groundlight.dev/gpu-placement"] = placement_annotation
         mgr = _make_manager()
 
         assert mgr.pod_template_is_outdated(_deployment_with_annotations(annotations)) is outdated

@@ -1,5 +1,6 @@
 {{- $server := include "groundlight-edge-endpoint.inferenceServer" . | fromJson }}
 {{- $sharing := include "groundlight-edge-endpoint.gpuSharingPodSettings" . | fromJson }}
+{{- $placement := include "groundlight-edge-endpoint.gpuPlacementPodSettings" . | fromJson }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -46,6 +47,7 @@ spec:
       annotations:
         groundlight.dev/inference-server: {{ $server.name | quote }}
         groundlight.dev/gpu-sharing: {{ include "groundlight-edge-endpoint.gpuSharing" . | quote }}
+        groundlight.dev/gpu-placement: {{ include "groundlight-edge-endpoint.gpuPlacement" . | quote }}
     spec:
 {{- if (hasKey .Values.inferenceDeployment "hostPID" | ternary .Values.inferenceDeployment.hostPID true) }}
       hostPID: true  # Allows pynvml to match this process's PID against nvidia-smi PIDs for accurate per-pod VRAM reporting
@@ -109,6 +111,9 @@ spec:
 {{- with $sharing.env }}
         {{- toYaml . | nindent 8 }}
 {{- end }}
+{{- with $placement.env }}
+        {{- toYaml . | nindent 8 }}
+{{- end }}
         # No CPU requests or limits: inference pods run BestEffort. Threads are bounded by
         # cpuThreads and most detectors are idle at any instant, so the scheduler launches
         # every detector and the OS time-slices the occasional simultaneous burst.
@@ -132,6 +137,9 @@ spec:
           mountPath: /dev/shm
 {{- end }}
 {{- with $sharing.volumeMounts }}
+        {{- toYaml . | nindent 8 }}
+{{- end }}
+{{- with $placement.volumeMounts }}
         {{- toYaml . | nindent 8 }}
 {{- end }}
         ports:
@@ -203,5 +211,8 @@ spec:
           sizeLimit: {{ .Values.inferenceDeployment.tritonShmSizeLimit | default "256Mi" }}
 {{- end }}
 {{- with $sharing.volumes }}
+      {{- toYaml . | nindent 6 }}
+{{- end }}
+{{- with $placement.volumes }}
       {{- toYaml . | nindent 6 }}
 {{- end }}

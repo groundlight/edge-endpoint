@@ -411,6 +411,26 @@ time-slices between the pods' separate CUDA contexts; with it their kernels run 
   attribute GPU utilization to an MPS client, so such a pod's per-detector utilization is `null`. Its
   VRAM is still reported.
 
+Triton inference pods on GPU devices spread their model instances (`inferenceDeployment.workers`) across GPUs,
+with or without MPS.
+- **The placement ledger.** Pods that start together, after a node restart or a new edge config, all see the
+  same NVML state, because a pod's instances only appear in NVML once their stubs have initialized CUDA. So
+  each pod chooses its GPUs under a lock on a ledger in `/run/groundlight/gpu-placement`, a hostPath every
+  Triton GPU pod mounts, and records its choice before tritonserver starts. `/run` is tmpfs, so the ledger
+  empties whenever the node's pods all stop. Entries for pods that have exited are dropped at the next
+  placement.
+- **Where it applies.** The ledger identifies each pod by its tritonserver's host PID, so it needs
+  `inferenceDeployment.hostPID` as well as `hostPathVolumes`. With either off, as in `values-eks.yaml`,
+  Triton pods don't get the ledger and each places its instances on its own.
+- **Upgrading.** Inference pods created by an older chart don't mount the ledger. On its first start with a
+  chart that does, the model updater moves every existing Triton detector to the new pod template one
+  detector at a time, as when `inferenceServer` changes. With the default rollout strategy, each move starts
+  the detector's new pod before it stops the old one, so the device needs memory for one extra inference pod
+  while it runs. On a device with many detectors this takes a while, and it also picks up the current
+  `inferenceTag` and `inferenceDeployment.workers`. FastAPI and CPU devices aren't affected.
+- **Older images.** An inference image that predates the ledger ignores it. An image that uses it, run by a
+  chart that doesn't mount it, spreads each pod's instances from a random starting GPU.
+
 Until FastAPI is retired, two rules keep older charts working:
 - The plain inference tags (`release`, `pre-release`, `latest`) always point at FastAPI images. Charts
   from before `inferenceServer` existed pull them and probe FastAPI's `/health/*` endpoints.

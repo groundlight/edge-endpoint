@@ -11,7 +11,7 @@ You may want to configure both the edge endpoint and the inference server contai
 
 **To configure edge endpoint workers**: Set `uvicornWorkers` (default `8`) in [values.yaml](/deploy/helm/groundlight-edge-endpoint/values.yaml), or pass `--set uvicornWorkers=<n>` to the helm command. If NGINX runs out of connections under load, raise `nginxWorkerConnections` (default `256`) the same way.
 
-**To configure inference server workers** (FastAPI inference pods only; Triton pods ignore it): Set `inferenceDeployment.workers` (default `1`) in [values.yaml](/deploy/helm/groundlight-edge-endpoint/values.yaml), or pass `--set inferenceDeployment.workers=<n>` to the helm command. It applies to inference deployments created after the change, so delete the existing `inferencemodel-*` deployments if you want them to pick it up.
+**To configure inference server workers** (uvicorn workers for FastAPI inference pods, model instances for Triton): Set `inferenceDeployment.workers` (default `1`) in [values.yaml](/deploy/helm/groundlight-edge-endpoint/values.yaml), or pass `--set inferenceDeployment.workers=<n>` to the helm command. It applies to inference deployments created after the change, so delete the existing `inferencemodel-*` deployments if you want them to pick it up.
 
 Some trial and error will likely be necessary to figure out the ideal configuration.
 

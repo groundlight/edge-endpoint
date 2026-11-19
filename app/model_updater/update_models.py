@@ -91,7 +91,7 @@ def _start_rollout(
 ) -> None:
     """Start rolling out a detector's inference deployments: re-render their pod templates, or patch in a new model."""
     if rerender:
-        logger.info(f"Moving inference deployment(s) for {detector_id} to the configured server and GPU sharing")
+        logger.info(f"Moving inference deployment(s) for {detector_id} to the configured pod template")
         start = deployment_manager.rerender_inference_deployment
     else:
         # Update inference deployment and rollout a new pod
@@ -145,10 +145,10 @@ def _check_new_models_and_inference_deployments(
             deployment_manager.create_inference_deployment(detector_id=detector_id, is_oodd=True)
             deployment_created = True
 
-    # Model rollouts only patch an existing deployment, so after the configured inference server or GPU sharing
-    # changes (Helm values `inferenceServer` and `gpuSharing`), a detector's deployments keep the pod template
-    # they were created with until they are moved here. Moving them re-renders their pod templates, which also
-    # rolls out any new model.
+    # Model rollouts only patch an existing deployment, so after the configured inference server, GPU sharing or
+    # GPU placement changes (set by the chart from Helm values such as `inferenceServer` and `gpuSharing`), a
+    # detector's deployments keep the pod template they were created with until they are moved here. Moving them
+    # re-renders their pod templates, which also rolls out any new model.
     rerender = any(
         deployment is not None and deployment_manager.pod_template_is_outdated(deployment)
         for deployment in (edge_deployment, oodd_deployment)

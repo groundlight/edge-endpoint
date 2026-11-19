@@ -186,7 +186,9 @@ modelUpdater:
 # inference pod (inferencemodel-*) behavior
 inferenceDeployment:
   # Run inference pods with hostPID so pynvml can match PIDs against nvidia-smi for per-pod
-  # VRAM reporting. Not allowed under the Pod Security "baseline" standard.
+  # VRAM reporting. Not allowed under the Pod Security "baseline" standard. Triton pods on GPU
+  # devices also need it, with hostPathVolumes, for the GPU placement ledger (see deploy/README.md);
+  # without either, each pod places its model instances on its own.
   hostPID: true
   # Kubernetes `resources` for the inference container, e.g. {limits: {nvidia.com/gpu: 1}}.
   # Needed on shared clusters, where each pod must be scheduled onto a node with a GPU.
@@ -203,11 +205,10 @@ inferenceDeployment:
   # past ~3 detectors). Total compute threads ~= cpuThreads x (2 x num_detectors); keep
   # small (2-4) on dense multi-detector edges. Tune empirically per device.
   cpuThreads: 4
-  # Number of uvicorn worker processes per inference pod. Raising it can improve GPU utilization
-  # under load. Applies to inference deployments created after the change; existing ones keep
-  # their value.
-  # Only the FastAPI server reads it; it has no effect when inferenceServer is "triton".
-  # TODO: Support Triton pods.
+  # Number of uvicorn worker processes per FastAPI inference pod, or of model instances per Triton
+  # inference pod, spread across the node's GPUs. Raising it can improve GPU utilization under
+  # load. Applies to inference deployments created after the change; changing it alone doesn't
+  # reach existing ones until the model updater moves them to a new pod template.
   workers: 1
   # Size of the memory-backed /dev/shm Triton's Python backend uses to pass requests to the model.
   tritonShmSizeLimit: 256Mi
@@ -498,7 +499,7 @@ registryCredentials:
 nvidiaRuntimeClass: true
 
 # Use hostPath volumes for device info, the escalation queue and the TLS certs. When false
-# they are per-pod emptyDirs.
+# they are per-pod emptyDirs, and Triton pods don't get the GPU placement ledger.
 hostPathVolumes: true
 
 # The model repo shared by the edge-endpoint pod and the inference pods. Empty = a hostPath

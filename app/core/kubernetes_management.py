@@ -10,6 +10,7 @@ from kubernetes.client import V1Deployment, V1Service
 
 from .edge_inference import get_current_model_version
 from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH, MODEL_REPOSITORY_PATH
+from .gpu_placement import GPU_PLACEMENT_ANNOTATION, GpuPlacement, configured_gpu_placement
 from .gpu_sharing import GPU_SHARING_ANNOTATION, GpuSharing, configured_gpu_sharing
 from .inference_server import INFERENCE_SERVER_ANNOTATION, InferenceServer, configured_inference_server
 from .naming import (
@@ -155,20 +156,28 @@ class InferenceDeploymentManager:
         annotations = deployment.spec.template.metadata.annotations or {}
         return GpuSharing(annotations.get(GPU_SHARING_ANNOTATION, GpuSharing.NONE.value))
 
+    @staticmethod
+    def deployment_gpu_placement(deployment: V1Deployment) -> GpuPlacement:
+        """How a deployment's pods choose their GPUs. Pods from before the annotation existed don't use the ledger."""
+        annotations = deployment.spec.template.metadata.annotations or {}
+        return GpuPlacement(annotations.get(GPU_PLACEMENT_ANNOTATION, GpuPlacement.NONE.value))
+
     def pod_template_is_outdated(self, deployment: V1Deployment) -> bool:
-        """True if a deployment's pods run a different inference server or GPU sharing than configured."""
+        """True if a deployment's pods run a different inference server, GPU sharing or GPU placement than
+        configured."""
         return (
             self.deployment_inference_server(deployment) != configured_inference_server()
             or self.deployment_gpu_sharing(deployment) != configured_gpu_sharing()
+            or self.deployment_gpu_placement(deployment) != configured_gpu_placement()
         )
 
     def rerender_inference_deployment(self, detector_id: str, is_oodd: bool = False) -> None:
         """Replace a deployment's pod template with one rendered from the current template.
 
-        Model rollouts only patch an existing deployment, so its pods keep the inference server and GPU
-        sharing they were created with. Replacing the whole pod template moves them to the configured
-        ones without leaving the old settings' probes, ports, env, or volumes behind, and the rolling
-        update starts the new pod before it stops the old one.
+        Model rollouts only patch an existing deployment, so its pods keep the inference server, GPU
+        sharing and GPU placement they were created with. Replacing the whole pod template moves them to
+        the configured ones without leaving the old settings' probes, ports, env, or volumes behind, and
+        the rolling update starts the new pod before it stops the old one.
         """
         deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd)
         deployment = next(

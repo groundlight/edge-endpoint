@@ -29,6 +29,7 @@ test-helm-template:  ## Render-time assertions for the Helm chart (no cluster)
 	test/helm/test_edge_artifacts_map.sh
 	test/helm/test_inference_server.sh
 	test/helm/test_gpu_sharing.sh
+	test/helm/test_gpu_placement.sh
 	test/helm/test_worker_settings.sh
 	test/helm/test_require_configured_detectors.sh
 

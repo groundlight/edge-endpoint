@@ -429,3 +429,38 @@ none
 {{- dict "env" (list) "volumeMounts" (list) "volumes" (list) | toJson -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+  How inference pods choose their GPUs: "ledger" for Triton pods on GPU devices, which record their placement in
+  a node-wide ledger so that pods starting together spread across GPUs, otherwise "none". It applies with or
+  without MPS. Triton already refuses to render for Jetson (see inferenceServer). The ledger is a hostPath, and
+  it identifies each pod by its tritonserver's host PID, so it also needs hostPathVolumes and
+  inferenceDeployment.hostPID. An unset value counts as on, as elsewhere in the chart.
+*/}}
+{{- define "groundlight-edge-endpoint.gpuPlacement" -}}
+{{- $server := include "groundlight-edge-endpoint.inferenceServer" . | fromJson -}}
+{{- $hostPathVolumes := hasKey .Values "hostPathVolumes" | ternary .Values.hostPathVolumes true -}}
+{{- $hostPID := hasKey .Values.inferenceDeployment "hostPID" | ternary .Values.inferenceDeployment.hostPID true -}}
+{{- if and (eq $server.name "triton") (eq .Values.inferenceFlavor "gpu") $hostPathVolumes $hostPID -}}
+ledger
+{{- else -}}
+none
+{{- end -}}
+{{- end -}}
+
+{{/*
+  Inference pod settings for the resolved GPU placement, as JSON: extra env vars, volume mounts and volumes. The
+  ledger directory is on /run, which is tmpfs, so the ledger empties whenever the node's pods all stop.
+*/}}
+{{- define "groundlight-edge-endpoint.gpuPlacementPodSettings" -}}
+{{- if eq (include "groundlight-edge-endpoint.gpuPlacement" .) "ledger" -}}
+{{- $directory := "/run/groundlight/gpu-placement" -}}
+{{- dict
+  "env" (list (dict "name" "GL_GPU_PLACEMENT_DIRECTORY" "value" $directory))
+  "volumeMounts" (list (dict "name" "gpu-placement" "mountPath" $directory))
+  "volumes" (list (dict "name" "gpu-placement" "hostPath" (dict "path" $directory "type" "DirectoryOrCreate")))
+  | toJson -}}
+{{- else -}}
+{{- dict "env" (list) "volumeMounts" (list) "volumes" (list) | toJson -}}
+{{- end -}}
+{{- end -}}

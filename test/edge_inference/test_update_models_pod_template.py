@@ -1,4 +1,4 @@
-"""The model updater moves existing inference deployments to the configured inference server and GPU sharing."""
+"""The model updater moves existing inference deployments to the configured pod template."""
 
 from unittest.mock import MagicMock, patch
 
