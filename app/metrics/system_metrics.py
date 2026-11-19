@@ -12,6 +12,7 @@ from kubernetes import client, config
 from app.core.edge_config_manager import EdgeConfigManager
 from app.core.edge_inference import get_current_pipeline_config, get_predictor_metadata
 from app.core.file_paths import MODEL_REPOSITORY_PATH
+from app.core.kubernetes_management import DETECTOR_ID_ANNOTATION
 from app.core.naming import get_primary_edge_model_dir
 
 logger = logging.getLogger(__name__)
@@ -301,7 +302,7 @@ def get_detector_details() -> str:
     # Index pods by detector-id for quick lookup (primary pods only)
     pods_by_detector: dict[str, list[client.V1Pod]] = {}
     for pod in all_pods.items:
-        det_id = _get_annotation(pod, "groundlight.dev/detector-id")
+        det_id = _get_annotation(pod, DETECTOR_ID_ANNOTATION)
         if det_id and _get_annotation(pod, "groundlight.dev/model-name") == f"{det_id}/primary":
             pods_by_detector.setdefault(det_id, []).append(pod)
 
@@ -309,7 +310,7 @@ def get_detector_details() -> str:
     detector_details: dict[str, dict] = {}
 
     for dep in deployments.items:
-        det_id = _get_template_annotation(dep, "groundlight.dev/detector-id")
+        det_id = _get_template_annotation(dep, DETECTOR_ID_ANNOTATION)
         if not det_id:
             continue
         if _get_template_annotation(dep, "groundlight.dev/model-name") != f"{det_id}/primary":

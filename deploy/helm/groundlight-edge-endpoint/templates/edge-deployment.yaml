@@ -401,6 +401,9 @@ spec:
           value: {{ include "groundlight-edge-endpoint.gpuSharing" . | quote }}
         - name: ROLLOUT_READY_TIMEOUT_S
           value: "{{ .Values.modelUpdater.rolloutReadyTimeoutSeconds }}"
+        # While true, inference deployments for detectors missing from the active edge config are deleted.
+        - name: REQUIRE_CONFIGURED_DETECTORS
+          value: "{{ .Values.requireConfiguredDetectors }}"
         volumeMounts:
         - name: edge-config-volume
           mountPath: /etc/groundlight/edge-config

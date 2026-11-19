@@ -12,6 +12,16 @@ def get_edge_inference_deployment_name(detector_id: str, is_oodd: bool = False) 
     return f"inferencemodel-{'oodd' if is_oodd else 'primary'}-{detector_id.replace('_', '-').lower()}"
 
 
+def is_edge_inference_service_name(name: str) -> bool:
+    """Whether name has the form get_edge_inference_service_name produces."""
+    return name.startswith(("inference-service-primary-", "inference-service-oodd-"))
+
+
+def is_edge_inference_deployment_name(name: str) -> bool:
+    """Whether name has the form get_edge_inference_deployment_name produces."""
+    return name.startswith(("inferencemodel-primary-", "inferencemodel-oodd-"))
+
+
 def get_edge_inference_model_name(detector_id: str, is_oodd: bool = False) -> str:
     return os.path.join(detector_id, "primary" if not is_oodd else "oodd")
 

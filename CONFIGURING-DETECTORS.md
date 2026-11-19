@@ -100,6 +100,17 @@ Add a new entry for each detector that you want to configure. Each entry must in
 
 Edge inference configs can be applied to as many detectors as you'd like, so if you want multiple detectors to have the same configuration, just assign them the same inference config. Make sure you don't have multiple entries for the same detector - in this case, the edge endpoint will error when starting up.
 
+### Removing a detector
+
+Remove the detector's entry from the config and apply the config again, either by re-running Helm with the new `configFile` or by sending it with the SDK (`PUT /edge-config`). The inference model updater then deletes the detector's inference pods, which frees their RAM and GPU memory:
+
+- **Helm (`configFile`):** the edge endpoint restarts with the new config. While `requireConfiguredDetectors` is `true` (the default), the model updater deletes the inference pods of every detector that is not in the active config. It checks when it starts and again on every model update pass (every `refresh_rate` seconds), so this also removes pods left over from earlier configs.
+- **SDK (`PUT /edge-config`):** the removed detector's inference pods are deleted on the model updater's next pass, whatever `requireConfiguredDetectors` is set to.
+
+With `requireConfiguredDetectors=false`, an unlisted detector gets an inference pod when it is queried, so the device can't tell whether a pod for a detector that is not in the config is still wanted. A detector removed with Helm then keeps its pods until you delete them. They are named `inferencemodel-{primary,oodd}-<detector-id>` (Deployments) and `inference-service-{primary,oodd}-<detector-id>` (Services), with the detector ID lowercased and `_` replaced by `-`.
+
+The device only deletes inference pods in its own namespace, so edge endpoints installed in different namespaces on one cluster don't affect each other.
+
 ## Reference: Edge Inference Parameters
 
 ### `enabled` - default `true`

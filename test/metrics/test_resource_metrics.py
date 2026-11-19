@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 
 from kubernetes import client
 
+from app.core.kubernetes_management import DETECTOR_ID_ANNOTATION
 from app.metrics.resource_metrics import (
     TRITON_GPU_METRICS_MAX_AGE_SEC,
     _attribute_detector_resources,
@@ -48,7 +49,7 @@ def _make_inference_pod(
     pod.metadata.creation_timestamp = creation_timestamp
     annotations = {}
     if detector_id is not None:
-        annotations["groundlight.dev/detector-id"] = detector_id
+        annotations[DETECTOR_ID_ANNOTATION] = detector_id
         if not drop_model_name:
             annotations["groundlight.dev/model-name"] = f"{detector_id}/oodd" if is_oodd else f"{detector_id}/primary"
     pod.metadata.annotations = annotations

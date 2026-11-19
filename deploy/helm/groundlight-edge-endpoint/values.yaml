@@ -33,6 +33,9 @@ enableProfiling: false
 # Image queries are accepted only for detectors listed in the active edge config.
 # A detector that is not listed is rejected. This device does not start an
 # inference pod for it and does not send the image to the cloud.
+# While this is true, the inference pods of any detector that is not in the active
+# edge config are deleted, whether it was removed with Helm (configFile) or the SDK
+# (PUT /edge-config). The model updater checks on every pass (every refresh_rate).
 # Set to false to accept an unlisted detector: the device starts an inference pod
 # for it and sends the image to the cloud until that pod is ready.
 requireConfiguredDetectors: true

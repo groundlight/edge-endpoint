@@ -6,15 +6,25 @@ import yaml
 from fastapi import status
 from kubernetes import client as kube_client
 from kubernetes import config
-from kubernetes.client import V1Deployment
+from kubernetes.client import V1Deployment, V1Service
 
 from .edge_inference import get_current_model_version
 from .file_paths import INFERENCE_DEPLOYMENT_TEMPLATE_PATH, KUBERNETES_NAMESPACE_PATH, MODEL_REPOSITORY_PATH
 from .gpu_sharing import GPU_SHARING_ANNOTATION, GpuSharing, configured_gpu_sharing
 from .inference_server import INFERENCE_SERVER_ANNOTATION, InferenceServer, configured_inference_server
-from .naming import get_edge_inference_deployment_name, get_edge_inference_model_name, get_edge_inference_service_name
+from .naming import (
+    get_edge_inference_deployment_name,
+    get_edge_inference_model_name,
+    get_edge_inference_service_name,
+    is_edge_inference_deployment_name,
+    is_edge_inference_service_name,
+)
 
 logger = logging.getLogger(__name__)
+
+# The `app` label on inference pods, which inference Deployments and Services select on.
+INFERENCE_SERVER_APP_LABEL = "inference-server"
+DETECTOR_ID_ANNOTATION = "groundlight.dev/detector-id"
 
 
 class InferenceDeploymentManager:
@@ -24,7 +34,7 @@ class InferenceDeploymentManager:
 
     def _set_runtime_annotations(self, ann: dict, detector_id: str, is_oodd: bool, model_version: int | None) -> None:
         """Populate standard runtime annotations for inference pods."""
-        ann["groundlight.dev/detector-id"] = detector_id
+        ann[DETECTOR_ID_ANNOTATION] = detector_id
         ann["groundlight.dev/model-name"] = get_edge_inference_model_name(detector_id, is_oodd)
         ann["groundlight.dev/model-version"] = str(model_version)
 
@@ -52,6 +62,11 @@ class InferenceDeploymentManager:
         with open(KUBERNETES_NAMESPACE_PATH, "r") as f:
             self._target_namespace = f.read().strip()
         logger.info(f"Using {self._target_namespace} namespace.")
+
+    @property
+    def namespace(self) -> str:
+        """The namespace every inference resource is listed, created, and deleted in."""
+        return self._target_namespace
 
     def _load_inference_deployment_template(self) -> str:
         """Loads the inference deployment template."""
@@ -265,23 +280,67 @@ class InferenceDeploymentManager:
         )
         return True
 
-    def delete_inference_deployment(self, detector_id: str, is_oodd: bool = False) -> None:
-        """Delete the K8s Deployment and Service for a detector. 404s are ignored."""
-        deployment_name = get_edge_inference_deployment_name(detector_id, is_oodd)
-        service_name = get_edge_inference_service_name(detector_id, is_oodd)
+    def list_inference_deployments(self) -> list[V1Deployment]:
+        """Return the inference Deployments in this manager's namespace.
 
-        for name, delete_fn in [
-            (deployment_name, lambda n: self._app_kube_client.delete_namespaced_deployment(n, self._target_namespace)),
-            (service_name, lambda n: self._core_kube_client.delete_namespaced_service(n, self._target_namespace)),
-        ]:
+        A Deployment counts only if it has an inference deployment name and selects inference-server pods.
+        """
+        deployments = self._app_kube_client.list_namespaced_deployment(namespace=self._target_namespace).items
+        return [
+            d
+            for d in deployments
+            if is_edge_inference_deployment_name(d.metadata.name)
+            and (d.spec.selector.match_labels or {}).get("app") == INFERENCE_SERVER_APP_LABEL
+        ]
+
+    def list_inference_services(self) -> list[V1Service]:
+        """Return the inference Services in this manager's namespace.
+
+        A Service counts only if it has an inference service name and selects inference-server pods.
+        """
+        services = self._core_kube_client.list_namespaced_service(namespace=self._target_namespace).items
+        return [
+            s
+            for s in services
+            if is_edge_inference_service_name(s.metadata.name)
+            and (s.spec.selector or {}).get("app") == INFERENCE_SERVER_APP_LABEL
+        ]
+
+    def delete_inference_resources(self, deployment_name: str | None = None, service_name: str | None = None) -> None:
+        """Delete an inference Deployment and/or Service by name. 404s are ignored."""
+        deletions = []
+        if deployment_name is not None:
+            deletions.append((deployment_name, self._app_kube_client.delete_namespaced_deployment))
+        if service_name is not None:
+            deletions.append((service_name, self._core_kube_client.delete_namespaced_service))
+
+        for name, delete_fn in deletions:
             try:
-                delete_fn(name)
+                delete_fn(name=name, namespace=self._target_namespace)
                 logger.info(f"Deleted {name} in namespace {self._target_namespace}")
             except kube_client.rest.ApiException as e:
                 if e.status == status.HTTP_404_NOT_FOUND:
                     logger.debug(f"{name} not found in namespace {self._target_namespace}, skipping deletion")
                 else:
                     raise
+
+    def delete_inference_deployment(self, detector_id: str, is_oodd: bool = False) -> None:
+        """Delete the K8s Deployment and Service for a detector. 404s are ignored."""
+        self.delete_inference_resources(
+            deployment_name=get_edge_inference_deployment_name(detector_id, is_oodd),
+            service_name=get_edge_inference_service_name(detector_id, is_oodd),
+        )
+
+    def inference_pods_gone(self, instance_label: str) -> bool:
+        """Return True when no inference-server pods with this `instance` label remain in the namespace."""
+        pod_list = self._core_kube_client.list_namespaced_pod(
+            namespace=self._target_namespace,
+            label_selector=f"app={INFERENCE_SERVER_APP_LABEL},instance={instance_label}",
+        )
+        if pod_list.items:
+            logger.debug(f"{len(pod_list.items)} pod(s) with instance={instance_label} still running")
+            return False
+        return True
 
     def is_inference_deployment_fully_deleted(self, detector_id: str, is_oodd: bool = False) -> bool:
         """Return True only when the Deployment is gone AND zero pods remain (RAM/VRAM freed)."""
@@ -290,14 +349,7 @@ class InferenceDeploymentManager:
             return False
 
         instance_label = f"instance-{get_edge_inference_model_name(detector_id, is_oodd).replace('/', '-')}"
-        label_str = f"app=inference-server,instance={instance_label}"
-        pod_list = self._core_kube_client.list_namespaced_pod(
-            namespace=self._target_namespace, label_selector=label_str
-        )
-        if len(pod_list.items) > 0:
-            logger.debug(f"Deployment {deployment_name} is gone but {len(pod_list.items)} pod(s) still running")
-            return False
-        return True
+        return self.inference_pods_gone(instance_label)
 
     def is_inference_deployment_rollout_complete(self, deployment_name: str) -> bool:
         """

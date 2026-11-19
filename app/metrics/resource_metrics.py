@@ -23,6 +23,7 @@ import requests
 from kubernetes import client, config
 
 from app.core.inference_server import INFERENCE_SERVER_ANNOTATION, TRITON_METRICS_PORT, InferenceServer
+from app.core.kubernetes_management import DETECTOR_ID_ANNOTATION
 from app.metrics.system_metrics import _DATETIME_MIN_UTC, _pod_is_ready, get_namespace
 
 logger = logging.getLogger(__name__)
@@ -332,7 +333,7 @@ def _find_inference_pods(pod_list) -> list[tuple]:
         if not pod.status.pod_ip:
             continue
         annotations = pod.metadata.annotations or {}
-        det_id = annotations.get("groundlight.dev/detector-id")
+        det_id = annotations.get(DETECTOR_ID_ANNOTATION)
         model_name = annotations.get("groundlight.dev/model-name")
 
         # Pods lacking det_id and model_name annotations are not inference pods

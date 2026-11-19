@@ -7,6 +7,11 @@ from app.core.edge_config_manager import EdgeConfigManager
 from app.core.edge_inference import EdgeInferenceManager, delete_old_model_versions
 from app.core.kubernetes_management import InferenceDeploymentManager
 from app.core.naming import get_edge_inference_deployment_name, get_edge_inference_model_name
+from app.model_updater.prune import (
+    prune_unconfigured_inference_resources,
+    pruning_enabled,
+    wait_for_startup_reconciliation,
+)
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
@@ -16,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 TEN_MINUTES = 60 * 10
 POD_DELETION_TIMEOUT_SECONDS = 60 * 3
+STARTUP_RECONCILE_TIMEOUT_S = 60 * 5
 # Max seconds to wait for a single inference-pod rollout to become Ready before giving up
 # and letting the for-loop move on. Must comfortably exceed realistic cold-load time on the
 # slowest link the device must support; otherwise the next outer-loop pass can stack a
@@ -58,6 +64,23 @@ def _wait_for_next_cycle(
         time_remaining = deadline - time.time()
         sleep_duration = min(DETECTOR_CONFIG_CHANGE_POLL_INTERVAL_S, max(0.0, time_remaining))
         time.sleep(sleep_duration)
+
+
+def _prune_unconfigured_inference_resources(
+    deployment_manager: InferenceDeploymentManager,
+    db_manager: DatabaseManager,
+    separate_oodd_inference: bool,
+) -> None:
+    """Delete inference pods for detectors missing from the active edge config. Never raises."""
+    try:
+        prune_unconfigured_inference_resources(
+            deployment_manager=deployment_manager,
+            db_manager=db_manager,
+            separate_oodd_inference=separate_oodd_inference,
+            timeout_s=POD_DELETION_TIMEOUT_SECONDS,
+        )
+    except Exception:
+        logger.error("Failed to prune inference deployments for unconfigured detectors", exc_info=True)
 
 
 def _start_rollout(
@@ -230,8 +253,11 @@ def manage_update_models(
         sleep_forever("Edge inference is disabled globally... sleeping forever.")
         return
 
+    # The first pass must not act on the DB from before this pod started.
+    wait_for_startup_reconciliation(db_manager, timeout_s=STARTUP_RECONCILE_TIMEOUT_S)
     while True:
-        # Process pending deletions before any creation, freeing up resources before creating new pods
+        # Prune and process pending deletions before any creation, freeing up resources before creating new pods
+        _prune_unconfigured_inference_resources(deployment_manager, db_manager, separate_oodd_inference)
         pending_deletions = frozenset(db_manager.get_pending_deletions())
         if pending_deletions:
             logger.info(f"Processing deletion of {len(pending_deletions)} detector(s): {pending_deletions}")
@@ -320,6 +346,10 @@ if __name__ == "__main__":
     logger.info("Creating edge inference manager, deployment manager, and database manager.")
     edge_inference_manager = EdgeInferenceManager(verbose=True)
     deployment_manager = InferenceDeploymentManager()
+    logger.info(
+        f"Pruning inference deployments for detectors missing from the active edge config is "
+        f"{'enabled' if pruning_enabled() else 'disabled'} in namespace {deployment_manager.namespace}."
+    )
 
     # We will delegate creation of database tables to the edge-endpoint container.
     # So here we don't run a task to create the tables if they don't already exist.

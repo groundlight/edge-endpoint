@@ -1,6 +1,16 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from kubernetes.client import (
+    V1Deployment,
+    V1DeploymentSpec,
+    V1LabelSelector,
+    V1ObjectMeta,
+    V1PodTemplateSpec,
+    V1Service,
+    V1ServiceSpec,
+)
+from kubernetes.client.rest import ApiException
 
 
 def _make_manager():
@@ -210,3 +220,153 @@ class TestRerenderInferenceDeployment:
         [op] = mgr._app_kube_client.patch_namespaced_deployment.call_args.kwargs["body"]
         annotations = op["value"]["metadata"]["annotations"]
         assert annotations["kubectl.kubernetes.io/restartedAt"] == "2026-10-20T12:00:00"
+
+
+def _deployment(name: str, selector: dict | None) -> V1Deployment:
+    return V1Deployment(
+        metadata=V1ObjectMeta(name=name),
+        spec=V1DeploymentSpec(selector=V1LabelSelector(match_labels=selector), template=V1PodTemplateSpec()),
+    )
+
+
+def _service(name: str, selector: dict | None) -> V1Service:
+    return V1Service(metadata=V1ObjectMeta(name=name), spec=V1ServiceSpec(selector=selector))
+
+
+INFERENCE_SELECTOR = {"app": "inference-server", "instance": "instance-det_x-primary"}
+
+
+class TestListInferenceResources:
+    def test_lists_only_inference_deployments(self):
+        mgr = _make_manager()
+        mgr._app_kube_client.list_namespaced_deployment.return_value.items = [
+            _deployment("edge-endpoint", {"app": "edge-logic-server"}),
+            _deployment("edge-endpoint-network-healer", {"app": "edge-endpoint-network-healer"}),
+            _deployment("inferencemodel-primary-det-a", {"app": "something-else"}),
+            _deployment("inferencemodel-primary-det-b", None),
+            _deployment("inferencemodel-primary-det-c", INFERENCE_SELECTOR),
+            _deployment("inferencemodel-oodd-det-c", INFERENCE_SELECTOR),
+            _deployment("my-inferencemodel-primary-det-d", INFERENCE_SELECTOR),
+        ]
+
+        names = [d.metadata.name for d in mgr.list_inference_deployments()]
+
+        assert names == ["inferencemodel-primary-det-c", "inferencemodel-oodd-det-c"]
+
+    def test_lists_only_inference_services(self):
+        mgr = _make_manager()
+        mgr._core_kube_client.list_namespaced_service.return_value.items = [
+            _service("edge-endpoint-service", {"app": "edge-logic-server"}),
+            _service("inference-service-primary-det-a", None),
+            _service("inference-service-primary-det-b", {"app": "something-else"}),
+            _service("inference-service-primary-det-c", INFERENCE_SELECTOR),
+            _service("inference-service-oodd-det-c", INFERENCE_SELECTOR),
+        ]
+
+        names = [s.metadata.name for s in mgr.list_inference_services()]
+
+        assert names == ["inference-service-primary-det-c", "inference-service-oodd-det-c"]
+
+
+class TestNamespaceScoping:
+    """One edge-endpoint must never see or delete another namespace's inference pods."""
+
+    def test_every_call_uses_the_namespace_from_the_namespace_file(self, tmp_path):
+        namespace_file = tmp_path / "namespace"
+        namespace_file.write_text("edge-2\n")
+        with (
+            patch("app.core.kubernetes_management.KUBERNETES_NAMESPACE_PATH", str(namespace_file)),
+            patch("app.core.kubernetes_management.config.load_incluster_config"),
+            patch("app.core.kubernetes_management.kube_client.AppsV1Api") as apps_api,
+            patch("app.core.kubernetes_management.kube_client.CoreV1Api") as core_api,
+            patch(
+                "app.core.kubernetes_management.InferenceDeploymentManager._load_inference_deployment_template",
+                return_value="",
+            ),
+        ):
+            from app.core.kubernetes_management import InferenceDeploymentManager
+
+            mgr = InferenceDeploymentManager()
+        apps, core = apps_api.return_value, core_api.return_value
+
+        mgr.list_inference_deployments()
+        mgr.list_inference_services()
+        mgr.delete_inference_resources(deployment_name="inferencemodel-primary-det-x", service_name="svc")
+        mgr.delete_inference_deployment("det_x", is_oodd=True)
+        mgr.inference_pods_gone("instance-det_x-primary")
+        mgr.is_inference_deployment_fully_deleted("det_x")
+
+        assert mgr.namespace == "edge-2"
+        # Direct calls on the API clients, not on the objects they return.
+        calls = [c for c in apps.mock_calls + core.mock_calls if c[0] and "." not in c[0] and "(" not in c[0]]
+        assert calls and all(c.kwargs["namespace"] == "edge-2" for c in calls)
+        assert {c[0] for c in calls} == {
+            "list_namespaced_deployment",
+            "list_namespaced_service",
+            "list_namespaced_pod",
+            "read_namespaced_deployment",
+            "delete_namespaced_deployment",
+            "delete_namespaced_service",
+        }
+
+
+class TestDeleteInferenceResources:
+    def test_deletes_only_what_is_named(self):
+        mgr = _make_manager()
+        mgr.delete_inference_resources(service_name="inference-service-primary-det-x")
+
+        mgr._app_kube_client.delete_namespaced_deployment.assert_not_called()
+        mgr._core_kube_client.delete_namespaced_service.assert_called_once_with(
+            name="inference-service-primary-det-x", namespace="edge"
+        )
+
+    def test_ignores_resources_that_are_already_gone(self):
+        mgr = _make_manager()
+        mgr._app_kube_client.delete_namespaced_deployment.side_effect = ApiException(status=404)
+        mgr._core_kube_client.delete_namespaced_service.side_effect = ApiException(status=404)
+
+        mgr.delete_inference_resources(deployment_name="d", service_name="s")
+
+    def test_raises_other_errors(self):
+        mgr = _make_manager()
+        mgr._app_kube_client.delete_namespaced_deployment.side_effect = ApiException(status=403)
+
+        with pytest.raises(ApiException):
+            mgr.delete_inference_resources(deployment_name="d")
+
+    def test_delete_inference_deployment_deletes_the_detectors_deployment_and_service(self):
+        mgr = _make_manager()
+        mgr.delete_inference_deployment("det_AbC", is_oodd=True)
+
+        mgr._app_kube_client.delete_namespaced_deployment.assert_called_once_with(
+            name="inferencemodel-oodd-det-abc", namespace="edge"
+        )
+        mgr._core_kube_client.delete_namespaced_service.assert_called_once_with(
+            name="inference-service-oodd-det-abc", namespace="edge"
+        )
+
+
+class TestInferencePodsGone:
+    def test_selects_inference_pods_by_instance(self):
+        mgr = _make_manager()
+        mgr._core_kube_client.list_namespaced_pod.return_value = _make_pod_list(0)
+
+        assert mgr.inference_pods_gone("instance-det_AbC-primary") is True
+        mgr._core_kube_client.list_namespaced_pod.assert_called_once_with(
+            namespace="edge", label_selector="app=inference-server,instance=instance-det_AbC-primary"
+        )
+
+    def test_false_while_pods_remain(self):
+        mgr = _make_manager()
+        mgr._core_kube_client.list_namespaced_pod.return_value = _make_pod_list(1)
+        assert mgr.inference_pods_gone("instance-det_x-primary") is False
+
+    def test_fully_deleted_needs_the_deployment_and_its_pods_gone(self):
+        mgr = _make_manager()
+        mgr.get_inference_deployment = MagicMock(return_value=None)
+        mgr._core_kube_client.list_namespaced_pod.return_value = _make_pod_list(0)
+
+        assert mgr.is_inference_deployment_fully_deleted("det_AbC", is_oodd=True) is True
+        mgr._core_kube_client.list_namespaced_pod.assert_called_once_with(
+            namespace="edge", label_selector="app=inference-server,instance=instance-det_AbC-oodd"
+        )

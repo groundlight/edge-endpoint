@@ -1,5 +1,7 @@
+import contextlib
 import logging
 import os
+import tempfile
 
 import yaml
 from groundlight.edge import EdgeEndpointConfig, InferenceConfig
@@ -22,10 +24,38 @@ class EdgeConfigManager:
 
     @classmethod
     def save(cls, config: EdgeEndpointConfig) -> None:
-        """Write the active config to disk."""
-        os.makedirs(os.path.dirname(ACTIVE_EDGE_CONFIG_PATH), exist_ok=True)
-        with open(ACTIVE_EDGE_CONFIG_PATH, "w") as f:
-            yaml.dump(config.to_payload(), f, default_flow_style=False)
+        """Write the active config to disk atomically, so a concurrent reader never sees a partial file."""
+        config_dir = os.path.dirname(ACTIVE_EDGE_CONFIG_PATH)
+        os.makedirs(config_dir, exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(dir=config_dir, prefix=".active-edge-config-", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                yaml.dump(config.to_payload(), f, default_flow_style=False)
+            # mkstemp creates the file as 0600; the active config is meant to be world-readable.
+            os.chmod(tmp_path, 0o644)
+            os.replace(tmp_path, ACTIVE_EDGE_CONFIG_PATH)
+        except BaseException:
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(tmp_path)
+            raise
+
+    @staticmethod
+    def load_strict() -> EdgeEndpointConfig:
+        """Read the active config from disk, bypassing the cache.
+
+        Unlike active(), which falls back to the cached or default (empty) config, this raises
+        FileNotFoundError if the file is missing and ValueError if it is empty or invalid.
+        """
+        with open(ACTIVE_EDGE_CONFIG_PATH, "r", encoding="utf-8") as f:
+            content = f.read()
+        try:
+            payload = yaml.safe_load(content)
+        except yaml.YAMLError as e:
+            raise ValueError(f"Active edge config at {ACTIVE_EDGE_CONFIG_PATH} is not valid YAML") from e
+        # A saved config always has its top-level keys, even with no detectors.
+        if not isinstance(payload, dict) or not payload:
+            raise ValueError(f"Active edge config at {ACTIVE_EDGE_CONFIG_PATH} is empty or not a mapping")
+        return EdgeEndpointConfig.from_payload(payload)
 
     @classmethod
     @trace_span
