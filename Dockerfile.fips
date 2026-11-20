@@ -104,12 +104,13 @@ RUN apk add --no-cache uv
 #
 # nginx is copied without its own OpenSSL, so the pinned build must link the
 # libssl soname the FIPS base ships (libssl.so.4 on OpenSSL 4). Re-pin it
-# whenever the base moves to a new OpenSSL major version.
+# whenever the base moves to a new OpenSSL major version. Never pin below
+# 1.31.9-r0: earlier builds lack the fixes for CVE-2026-118899 and CVE-2026-123634.
 RUN mkdir -p /runtime-apks/etc/apk && \
     cp /etc/apk/repositories /runtime-apks/etc/apk/repositories && \
     cp -r /etc/apk/keys /runtime-apks/etc/apk/keys && \
     apk add --no-cache --no-scripts --initdb --root /runtime-apks \
-        'nginx-mainline=1.31.6-r3' 'nginx-mainline-config=1.31.6-r3' && \
+        'nginx-mainline=1.31.9-r0' 'nginx-mainline-config=1.31.9-r0' && \
     readelf -d /runtime-apks/usr/bin/nginx | grep -q 'libssl.so.4' \
       || (echo "FIPS VIOLATION: nginx does not link libssl.so.4" && exit 1)
 
