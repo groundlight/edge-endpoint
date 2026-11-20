@@ -25,7 +25,7 @@ metadata:
   labels:
     name: placeholder-inference-deployment-name
 spec:
-  replicas: 1
+  replicas: {{ .Values.inferenceDeployment.replicas | default 1 }}
   strategy:
 {{- if .Values.inferenceDeployment.strategy }}
     {{- toYaml .Values.inferenceDeployment.strategy | nindent 4 }}

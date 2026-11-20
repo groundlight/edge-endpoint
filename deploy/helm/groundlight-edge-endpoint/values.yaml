@@ -205,6 +205,9 @@ inferenceDeployment:
   # past ~3 detectors). Total compute threads ~= cpuThreads x (2 x num_detectors); keep
   # small (2-4) on dense multi-detector edges. Tune empirically per device.
   cpuThreads: 4
+  # Number of replicas per detector-specific inference Deployment. Applies to inference deployments
+  # created after the change; existing ones keep their value.
+  replicas: 1
   # Number of uvicorn worker processes per FastAPI inference pod, or of model instances per Triton
   # inference pod, spread across the node's GPUs. Raising it can improve GPU utilization under
   # load. Applies to inference deployments created after the change; changing it alone doesn't

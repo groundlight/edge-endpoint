@@ -41,23 +41,30 @@ inference_workers_env() {
   printf 'name: WORKERS  # Number of uvicorn workers for the inference server\n              value: "%s"' "$1"
 }
 
+inference_replicas() {
+  printf '    spec:\n      replicas: %s' "$1"
+}
+
 out="$(render)"
 assert_contains "default uvicorn workers" "$out" "\"--workers\", \"8\", ${EDGE_ENDPOINT_PORT_ARGS}"
 assert_contains "default nginx worker_connections" "$out" "worker_connections 256;"
 assert_contains "default inference workers" "$out" "$(inference_workers_env 1)"
+assert_contains "default inference replicas" "$out" "$(inference_replicas 1)"
 
-out="$(render --set uvicornWorkers=3 --set nginxWorkerConnections=1024 --set inferenceDeployment.workers=4)"
+out="$(render --set uvicornWorkers=3 --set nginxWorkerConnections=1024 --set inferenceDeployment.workers=4 --set inferenceDeployment.replicas=3)"
 assert_contains "uvicornWorkers override" "$out" "\"--workers\", \"3\", ${EDGE_ENDPOINT_PORT_ARGS}"
 assert_contains "nginxWorkerConnections override" "$out" "worker_connections 1024;"
 assert_contains "inferenceDeployment.workers override" "$out" "$(inference_workers_env 4)"
+assert_contains "inferenceDeployment.replicas override" "$out" "$(inference_replicas 3)"
 assert_contains "status monitor keeps one worker" "$out" "$STATUS_MONITOR_CMD"
 
 # `helm upgrade --reuse-values` from a chart that predates these values keeps the old values
 # without this chart's defaults; null removes a value the same way.
-out="$(render --set uvicornWorkers=null --set nginxWorkerConnections=null --set inferenceDeployment.workers=null)"
+out="$(render --set uvicornWorkers=null --set nginxWorkerConnections=null --set inferenceDeployment.workers=null --set inferenceDeployment.replicas=null)"
 assert_contains "missing uvicornWorkers means 8" "$out" "\"--workers\", \"8\", ${EDGE_ENDPOINT_PORT_ARGS}"
 assert_contains "missing nginxWorkerConnections means 256" "$out" "worker_connections 256;"
 assert_contains "missing inferenceDeployment.workers means 1" "$out" "$(inference_workers_env 1)"
+assert_contains "missing inferenceDeployment.replicas means 1" "$out" "$(inference_replicas 1)"
 
 echo
 echo "Passed: $pass  Failed: $fail"
