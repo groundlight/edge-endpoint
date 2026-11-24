@@ -1,5 +1,6 @@
 import logging
 import os
+import threading
 import time
 
 import cachetools
@@ -21,36 +22,44 @@ STALE_METADATA_THRESHOLD_SEC = 60  # 60 seconds
 
 USE_MINIMAL_IMAGE = os.environ.get("USE_MINIMAL_IMAGE", "false") == "true"
 
+_metadata_refresh_lock = threading.Lock()
+
 
 @trace_span
 def refresh_detector_metadata_if_needed(detector_id: str) -> None:
-    """Refresh detector metadata from cloud when the cached value is older than the stale threshold."""
-    metadata_cache: TimestampedCache = get_detector_metadata.cache
-    cached_value_timestamp = metadata_cache.get_timestamp(detector_id)
-    if cached_value_timestamp is not None:
-        cached_value_age = time.monotonic() - cached_value_timestamp
-        if cached_value_age > STALE_METADATA_THRESHOLD_SEC:
-            logger.info(f"Detector metadata for {detector_id=} is stale. Attempting to refresh...")
-            metadata_cache.suspend_cached_value(detector_id)
+    """Refresh detector metadata from cloud when the cached value is older than the stale threshold.
 
-            try:
-                # Repopulate the cache with fresh metadata
-                get_detector_metadata(detector_id=detector_id)
-                metadata_cache.delete_suspended_value(detector_id)
-                logger.info(f"Detector metadata for {detector_id=} refreshed successfully.")
-            except KeyError:
-                # This shouldn't happen, but if we fail to delete the suspended value we don't want to try to restore it
-                logger.warning(
-                    f"After fetching new metadata, did not successfully delete suspended value for {detector_id=}. "
-                    "This is unexpected."
-                )
-            except Exception as e:
-                logger.error(
-                    f"Failed to refresh detector metadata for {detector_id=}: {e}. Restoring stale cached metadata."
-                )
-                # The timestamp of the restored value will be updated to the time of restoration. This avoids trying to
-                # refresh the metadata again right away, in case the failure was due to a temporary network outage.
-                metadata_cache.restore_suspended_value(detector_id)
+    The cached value keeps being served while the refresh is in flight and is only replaced if the fetch succeeds.
+    """
+    metadata_cache: TimestampedCache = get_detector_metadata.cache
+    with _metadata_refresh_lock:
+        cached_value_timestamp = metadata_cache.get_timestamp(detector_id)
+        if cached_value_timestamp is None:
+            return
+        if time.monotonic() - cached_value_timestamp <= STALE_METADATA_THRESHOLD_SEC:
+            return
+        # Re-stamping before the fetch claims this refresh, so concurrent callers in this process skip it instead of
+        # each calling the cloud. If the fetch fails, it also delays the next attempt by a full stale interval.
+        metadata_cache.touch(detector_id)
+
+    logger.info(f"Detector metadata for {detector_id=} is stale. Attempting to refresh...")
+    try:
+        detector = _fetch_detector_metadata(detector_id)
+    except Exception as e:
+        logger.error(f"Failed to refresh detector metadata for {detector_id=}: {e}. Keeping stale cached metadata.")
+        return
+    metadata_cache[detector_id] = detector
+    logger.info(f"Detector metadata for {detector_id=} refreshed successfully.")
+
+
+@trace_span
+def _fetch_detector_metadata(detector_id: str) -> Detector:
+    """Fetch detector metadata from the Groundlight API, bypassing the cache."""
+    # Short timeouts so a slow or unreachable cloud does not stall metadata lookup
+    # (and thus request handling) for long. Values are somewhat arbitrary.
+    connect_timeout, read_timeout = 2, 3
+    gl = groundlight_client()
+    return safe_call_sdk(gl.get_detector, id=detector_id, request_timeout=(connect_timeout, read_timeout))
 
 
 @trace_span
@@ -60,12 +69,7 @@ def refresh_detector_metadata_if_needed(detector_id: str) -> None:
 )
 def get_detector_metadata(detector_id: str) -> Detector:
     """Return detector metadata from the Groundlight API, cached by detector_id."""
-    # Short timeouts so a slow or unreachable cloud does not stall metadata lookup
-    # (and thus request handling) for long. Values are somewhat arbitrary.
-    connect_timeout, read_timeout = 2, 3
-    gl = groundlight_client()
-    detector = safe_call_sdk(gl.get_detector, id=detector_id, request_timeout=(connect_timeout, read_timeout))
-    return detector
+    return _fetch_detector_metadata(detector_id)
 
 
 class AppState:

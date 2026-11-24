@@ -1,3 +1,5 @@
+import threading
+import time
 from contextlib import contextmanager
 from datetime import datetime
 from unittest import mock
@@ -5,7 +7,7 @@ from unittest import mock
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
-from groundlight.edge import DEFAULT, EdgeEndpointConfig
+from groundlight.edge import DEFAULT, EDGE_ANSWERS_WITH_ESCALATION, EdgeEndpointConfig, GlobalConfig
 from groundlight.encodings import url_encode_dict
 from model import (
     BinaryClassificationResult,
@@ -23,8 +25,15 @@ from PIL import Image
 
 from app.api.api import IMAGE_QUERIES
 from app.api.naming import full_path
+from app.core.app_state import (
+    STALE_METADATA_THRESHOLD_SEC,
+    get_app_state,
+    get_detector_metadata,
+    refresh_detector_metadata_if_needed,
+)
 from app.core.edge_config_manager import EdgeConfigManager
 from app.core.utils import pil_image_to_bytes
+from app.main import app
 
 url = full_path(IMAGE_QUERIES)
 
@@ -435,6 +444,62 @@ def test_post_image_query_accepts_miscased_id_when_detector_is_configured(
         EdgeConfigManager.save(previous)
 
     assert response.status_code == status.HTTP_200_OK, response.text
+
+
+def test_post_image_query_returns_edge_answer_while_metadata_refresh_is_stuck(
+    test_client: TestClient, detector: Detector, monkeypatch
+):
+    """An always-edge detector keeps answering while a metadata refresh is stuck on an unreachable cloud."""
+    monkeypatch.delenv("REQUIRE_CONFIGURED_DETECTORS", raising=False)
+    previous = EdgeConfigManager.active()
+    config = EdgeEndpointConfig(global_config=GlobalConfig(confident_audit_rate=0.0))
+    config.add_detector(detector.id, EDGE_ANSWERS_WITH_ESCALATION)
+    EdgeConfigManager.save(config)
+
+    edge_inference_manager = mock.Mock()
+    edge_inference_manager.inference_is_available.return_value = True
+    edge_inference_manager.run_inference.return_value = {"confidence": 0.95, "label": 0, "text": None, "rois": None}
+    app.dependency_overrides[get_app_state] = lambda: mock.Mock(edge_inference_manager=edge_inference_manager)
+
+    metadata_cache = get_detector_metadata.cache
+    stale_timestamp = time.monotonic() - STALE_METADATA_THRESHOLD_SEC - 1
+    metadata_cache.__setitem__(detector.id, detector, timestamp=stale_timestamp)
+
+    refresh_started, release_refresh = threading.Event(), threading.Event()
+    refresher = threading.Thread(target=refresh_detector_metadata_if_needed, args=(detector.id,))
+
+    def unreachable_cloud(*_args, **_kwargs):
+        if threading.current_thread() is refresher:
+            refresh_started.set()
+            release_refresh.wait(timeout=5)
+        raise ConnectionError("cloud unreachable")
+
+    mock_gl = mock.MagicMock()
+    mock_gl.get_detector.side_effect = unreachable_cloud
+    image_bytes = pil_image_to_bytes(img=Image.open("test/assets/dog.jpeg"))
+
+    try:
+        with _patch_device_groundlight_client(mock_gl):
+            refresher.start()
+            assert refresh_started.wait(timeout=5)
+            response = test_client.post(
+                url,
+                headers={"Content-Type": "image/jpeg"},
+                content=image_bytes,
+                params={"detector_id": detector.id},
+            )
+            release_refresh.set()
+            refresher.join(timeout=5)
+    finally:
+        release_refresh.set()
+        app.dependency_overrides.pop(get_app_state, None)
+        EdgeConfigManager.save(previous)
+        metadata_cache.pop(detector.id, None)
+
+    assert response.status_code == status.HTTP_200_OK, response.text
+    assert response.json()["result"]["source"] == Source.ALGORITHM.value
+    mock_gl.get_detector.assert_called_once()  # only the stuck refresh reached the cloud
+    mock_gl.submit_image_query.assert_not_called()
 
 
 def test_post_image_query_with_invalid_field(test_client: TestClient, detector: Detector):

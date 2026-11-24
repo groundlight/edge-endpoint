@@ -354,12 +354,11 @@ def pil_image_to_bytes(img: Image.Image, format: str = "JPEG") -> bytes:
 
 
 class TimestampedCache(cachetools.Cache):
-    """Cache subclass that tracks when items were added to the cache, and supports suspending and restoring values."""
+    """Cache subclass that tracks when each item was last stored or touched."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._timestamps: dict[Any, float] = {}  # Store timestamps for each key
-        self._suspended_values: dict[Any, Any] = {}
 
     def __setitem__(self, key, value, timestamp: float | None = None):
         """Overrides the __setitem__ method to track the timestamp of when an item was added to the cache."""
@@ -378,48 +377,10 @@ class TimestampedCache(cachetools.Cache):
         """Get the timestamp of when an item was added to the cache. Returns None if the key is not in the cache."""
         return self._timestamps.get(key, None)
 
-    def suspend_cached_value(self, key: Any) -> bool:
-        """
-        Suspend a value from the cache such that it can be restored later.
-
-        Returns True if the value was successfully suspended.
-        Raises KeyError if the key is not in the cache.
-        """
-        timestamp = self._timestamps.get(key, None)
-        item = self.pop(key, None)
-        if item is not None and timestamp is not None:
-            self._suspended_values[key] = item
-            return True
-        raise KeyError(f"Key {key} not found in cache")
-
-    def restore_suspended_value(self, key: Any) -> bool:
-        """
-        Restore a suspended value to the cache.
-        If the key is already in the cache, the existing value will be overwritten.
-        The restored value's timestamp will be updated to the time of restoration.
-
-        Returns True if the value was successfully restored.
-        Raises KeyError if the key is not in the suspended values.
-        """
-        item = self._suspended_values.pop(key, None)
-        if item is not None:
-            if key in self:
-                logger.warning(f"Key {key} already in cache, overwriting with suspended value")
-            self.__setitem__(key, item)  # Restore the value but update the timestamp to the current time.
-            return True
-        raise KeyError(f"Key {key} not found in suspended values")
-
-    def delete_suspended_value(self, key: Any) -> bool:
-        """
-        Delete a suspended value.
-
-        Returns True if the value was successfully deleted.
-        Raises KeyError if the key is not in the suspended values.
-        """
-        item = self._suspended_values.pop(key, None)
-        if item is not None:
-            return True
-        raise KeyError(f"Key {key} not found in suspended values")
+    def touch(self, key: Any) -> None:
+        """Reset a cached item's timestamp to now without changing its value. Does nothing if the key is not cached."""
+        if key in self:
+            self._timestamps[key] = time.monotonic()
 
 
 # Utilities for parsing the fetch models response
